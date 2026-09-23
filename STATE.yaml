@@ -212,9 +212,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 563
-  passed: 563
-  duration_s: 133
+  total: 571
+  passed: 571
+  duration_s: 124
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -231,6 +231,7 @@ tests:
   h9_inprocess4_delta: "+12 tests in-process CLI runner (knowledge refresh: 4 + knowledge compile: 4 + knowledge trace: 4). Cubre happy paths + error paths documentando comportamiento real de wrappers (UnknownSourceError y FileNotFoundError se propagan; ValidationError de overflow_strategy se propaga porque la validacion ocurre antes del try/except del wrapper). 2 bugs menores de UX conocidos documentados sin tocar produccion."
   h9_coverage1_delta: "+17 tests cobertura graph_expansion.py (89% -> 98%): Either API unwrap/unwrap_err (2) + InvalidProposal.to_dict (1) + propose validations empty/whitespace operations/author/problem_observed (4) + validate attachment inexistente (1) + _find_capable false + Authorization (2) + cycle detection bfs_cycle/_cycle_source_nodes (2) + RemoveTransition filter apply_expansion (2) + W1 warning remove_transition active node (1). _Ok/_Err accedidos por nombre cualificado porque no estan en __all__. Spec: specs/h9-coverage-graph-expansion.md."
   h9_coverage2_delta: "+10 tests cobertura pack_loader.py 78% -> 97%: _make_schema_validator cubre refs passthrough (1) + list_of value no-lista (1) + number mismatch (1) + boolean mismatch (1) + dict no soportado (1) + schema tipo invalido (1) + declare_types_from_pack cubre types no-lista (1) + entry no-dict (1) + kind vacio (1) + schema no-dict (1). Sin tocar codigo de produccion. Spec: specs/h9-coverage-pack-loader.md."
+  h9_coverage3_delta: "+8 tests cobertura skill_importer.py 89% -> 98%: _classify cubre yaml_config (.yaml/.yml, 2) + plain_text por mimetype text/* (1) + unknown cuando mimetypes no detecta (1) + _read_text_safely UnicodeDecodeError returns None (1) + analyze_skill root.is_file() (1) + analyze_skill kind=unknown produce ambiguous entry (1) + register_imported_skill locator_extra merge (1). Smoke empirico revelo que mimetypes.guess_type('.xyz') devuelve 'chemical/x-xyz' en Linux (no None), asi que se usa '.foobar' para forzar la rama unknown. Stmt 134 (mimetype text/* con extension fuera de sets) y brpart 252->205 restantes. Spec: specs/h9-coverage-skill-importer.md."
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -282,6 +283,7 @@ tests:
     - tests/test_h9_cli_inproc_knowledge_refresh_compile_trace.py: 12   # H9-InProcess-4: knowledge refresh/compile/trace
     - tests/test_h9_coverage_graph_expansion.py: 17   # H9-Coverage-1: cobertura graph_expansion.py (89%->98%)
     - tests/test_h9_coverage_pack_loader.py: 10   # H9-Coverage-2: cobertura pack_loader.py (78%->97%)
+    - tests/test_h9_coverage_skill_importer.py: 8   # H9-Coverage-3: cobertura skill_importer.py (89%->98%)
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -297,9 +299,9 @@ tests:
     knowledge_invalidator.py: 88%
     registry.py: 88%
     bricks.py: 91%
-    skill_importer.py: 89%
     graph_expansion.py: 98%  # ANTES 86%. +17 tests cubren Either API unwrap/unwrap_err, _require_problem/_require_attachment, _find_capable, cycle detection, RemoveTransition filter, Authorization, W1 warning. 5 ramas BrPart + stmt 533-539 restantes: defensive branches de RemoveTransition application (state guard unreachable por diseño cuando nuevas transiciones no se aplican a nodos activos eliminados) y línea 533-539 es un assert interno de _sort_nodes_topologically en un caso limite sin disparar en la suite actual.
     pack_loader.py: 97%  # ANTES 78%. +10 tests cubren _make_schema_validator (refs passthrough, list_of no-lista, number/boolean mismatch, dict no soportado, schema tipo invalido) y declare_types_from_pack (types no-lista, entry no-dict, kind vacio, schema no-dict). Stmt 61 (list_of elemento tipo no primitivo) y brpart 87->54 restantes.
+    skill_importer.py: 98%  # ANTES 89%. +8 tests cubren _classify (yaml_config .yaml/.yml + plain_text mimetype text/* + unknown mimetypes None) + _read_text_safely UnicodeDecodeError + analyze_skill root.is_file() + kind=unknown produce ambiguous entry + register_imported_skill locator_extra merge. Stmt 134 y brpart 252->205 restantes.
     context_controller.py: 81%
     paths.py: 81%   # ANTES 59%. Refactor + test_paths.py cubrio XDG y helpers.
     parser.py: 100%  # ANTES 77%. Tests focalizados en 12 ramas de error (test_parser.py, 12 tests).

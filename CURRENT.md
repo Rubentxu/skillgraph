@@ -708,3 +708,32 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
 - **Spec**: `specs/h9-coverage-pack-loader.md`.
 - **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos.
 - **Próximo paso**: seleccionar siguiente slice del roadmap.
+
+## UPDATE 2026-09-23 21:34 — H9-Coverage-3 cerrado
+
+- **Slice**: cobertura de `src/skillgraph/domain/skill_importer.py`
+  del 89% al 98% con 8 tests focales. Sin tocar código de
+  producción.
+- **Ramas cubiertas**:
+  - `_classify`: `.yaml`/`.yml` → `yaml_config` (2 tests);
+    `plain_text` por mimetype text/* (1);
+    `unknown` cuando mimetypes no detecta (1).
+  - `_read_text_safely`: returns None on UnicodeDecodeError (1).
+  - `analyze_skill`: `root.is_file()` (1 archivo suelto, no dir).
+  - `analyze_skill`: kind=unknown produce `AmbiguousEntry`
+    con `ambiguity='unparsed'` y razón "Extension desconocida".
+  - `register_imported_skill`: `locator_extra` agrega campos
+    al locator registrado en storage.
+- **Smoke empírico**: `mimetypes.guess_type('.xyz')` devuelve
+  `'chemical/x-xyz'` en Linux (no None). Por eso se usa `.foobar`
+  para forzar la rama unknown.
+- **Resultado**: 571/571 tests verde (`scripts/ci.sh` 124s).
+  `ruff check` All checks passed.
+- **Lo que queda sin cubrir** (1 stmt + 1 brpart):
+  stmt 134 (mimetype text/* con extensión fuera de sets —
+  requiere `.log` u otra extensión que mimetypes mapee a
+  text/plain pero no esté en `_TEXT_SUFFIXES`) y brpart 252->205.
+- **Spec**: `specs/h9-coverage-skill-importer.md`.
+- **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos.
+- **Próximo paso**: cobertura de `knowledge/context_controller.py`
+  81% (rama que requiere refactor SQL directo → Storage API).

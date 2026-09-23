@@ -2085,3 +2085,43 @@ no funcionalidad.
 - Brpart 87->54: ya cubierto implícitamente por línea 102 (rama
   else cuando no es str ni dict).
 
+
+### H9-Coverage-3 — cobertura `skill_importer.py` 89% → 98% (2026-09-23 21:34)
+
+**Slice**: 8 tests focales para cubrir las ramas no ejercitadas
+del módulo `domain/skill_importer.py` (H5 skill_import).
+
+**Spec**: `specs/h9-coverage-skill-importer.md`.
+
+**Tests añadidos** (`tests/test_h9_coverage_skill_importer.py`,
+215 líneas, 8 tests):
+
+- `_classify` (4 tests):
+  - `yaml_config` por `.yaml` y `.yml`
+  - `unknown` cuando mimetypes no detecta (`.foobar`)
+  - `plain_text` por mimetype text/* (cubre la rama final
+    cuando extension está fuera de sets)
+- `_read_text_safely`: returns None on bytes no-UTF-8
+- `analyze_skill` sobre archivo único (no directorio)
+- `analyze_skill`: kind=unknown → `entries_ambiguous` con
+  `ambiguity='unparsed'` y razón "Extension desconocida"
+- `register_imported_skill`: `locator_extra` se merge con
+  el locator base y persiste en `sources.locator_json`
+
+**Smoke empírico**:
+
+- `mimetypes.guess_type('.xyz')` → `('chemical/x-xyz', None)`
+  en Linux (no None como en teoría). Cambio a `.foobar`.
+- `Storage.initialize_schema()` no existe; el schema se aplica
+  automáticamente en `__init__` via `_migrate()`. Cambio helper.
+- `Storage.db_path` no existe; el atributo público es `.path`.
+
+**Verificación**:
+
+- `pytest tests/test_h9_coverage_skill_importer.py`:
+  8/8 verde en 0.25s.
+- `pytest --cov=skillgraph.domain.skill_importer`:
+  126 stmts, 1 miss, 32 br, 2 brpart → **98%** (objetivo ≥95%).
+- `scripts/ci.sh`: **571/571 verde en 124s**.
+- `ruff check src tests`: All checks passed.
+
