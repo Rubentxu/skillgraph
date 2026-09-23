@@ -293,3 +293,50 @@ Tras el release, vuelvo a la decisión material pendiente:
 5. **NUEVO**: stewardship de `cli.py` con tests in-process para
    mejorar la cobertura visible (no la real, que ya está cubierta
    por E2E subprocess).
+
+## RELEASE 2026-09-23 15:13 — Tag v0.4.0 emitido (APPLIED marker)
+
+### Decisión
+
+Tras E2E real contra CLI publico, detecté que `list --stage APPLIED`
+retornaba vacío. Era un gap declarado en `specs/h4-slice-3.md`
+limitación 3. Lo cerré con criterio y emití v0.4.0.
+
+### Análisis SEMVER
+
+- Commit `162a708`: `feat(h4-slice-3)` → MINOR bump (regla 4).
+- Compatibilidad hacia atrás: 100% mantenida (sin cambios en exit
+  codes, firmas, ni formatos del plan persistido).
+- Tag v0.4.0 anotado en `1f1ec2f`.
+
+### Verificación legal (regla 2)
+
+- 368 tests pytest verde en 90.39s.
+- ruff format+check limpios.
+- `scripts/ci.sh` OK.
+- E2E real contra CLI publico (bash .e2e_fix.sh) confirma:
+  - apply crea `prop-...json` + `prop-...json.applied`.
+  - list muestra `stage=APPLIED`.
+  - `list --stage APPLIED` ya no está vacío.
+  - show incluye `"stage": "APPLIED"` en payload.
+  - archive promueve a `stage=ARCHIVED` (precedencia OK).
+- 5 tests focales nuevos en `test_h4_expansion_cli_slice3.py`.
+
+### Estado de los goals
+
+- h4-slice-3-applied-marker: ✅ completed (commit 162a708).
+- state-sync: pendiente (este turno).
+
+### Limitaciones NO ocultas
+
+- UAT-12 H6: BLOCKED honesto (sin spec operador).
+- UAT-13 H7: BLOCKED honesto (sin spec operador).
+- H4 slice-4 deferred.
+
+### Siguiente ciclo
+
+Mismas opciones que tras v0.3.0:
+1. Cerrar iniciativa (ahora con 2 releases emitidas).
+2. H6 o H7 (necesita spec operador o auto-propón).
+3. Audit transversal (UAT-MATRIX + ARCHITECTURE.md).
+4. cli.py stewardship (debatible).

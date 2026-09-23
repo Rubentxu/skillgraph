@@ -151,6 +151,11 @@ workstreams:
     status: completed
     commits: ["629be65"]
     nota: "Stewardship: recipe.py 73% -> 100% cobertura. 22 tests focalizados: ObligatorySelector (kind/value invalidos), ContextRecipe.__post_init__ (recipe_ref/freshness/token_budget/overflow/revision invalidos), from_dict (raw no-dict, obligatory/optional no-list, selector no-dict, kind/value/label no-str, relation_selectors no-list-of-str). 0 LoC produccion modificado. Cierre del TERCER modulo critico con cobertura <80% en este turno. Total: parser+plan_loader+recipe todos al 100%."
+  - id: h4-slice-3-applied-marker-fix
+    items: [h4-applied-marker, h4-show-stage-field]
+    status: completed
+    commits: ["162a708"]
+    nota: "Cierra gap declarado en specs/h4-slice-3.md limitacion 3: 'list --stage APPLIED retornaba vacio'. Cambios: (1) cmd_expansion_apply persiste propuesta en expansion_proposals/<id>.json (si no existe) + crea marker <id>.json.applied. (2) cmd_expansion_list y cmd_expansion_show leen markers con precedencia ARCHIVED > APPLIED > REJECTED > PROPOSED. (3) cmd_expansion_show incluye 'stage' en payload JSON. Refactor: extrae _infer_proposal_stage() y _collect_rejection_ids(). +391/-25 LoC. Compatibilidad hacia atras mantenida (sin cambios en exit codes ni firmas). E2E real verificado contra CLI publico. Tag v0.4.0 (MINOR por feat) emitido."
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
     status: completed
@@ -184,9 +189,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 362
-  passed: 362
-  duration_s: 282
+  total: 368
+  passed: 368
+  duration_s: 90
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -218,6 +223,7 @@ tests:
     - tests/test_parser.py: 12   # ramas de error parser Markdown+YAML (coverage 77% -> 100%)
     - tests/test_plan_loader.py: 13  # load_plan_file happy + 9 error branches (coverage 48% -> 100%)
     - tests/test_recipe.py: 22   # validaciones __post_init__ + from_dict (coverage 73% -> 100%)
+    - tests/test_h4_expansion_cli_slice3.py: 15   # +6 focales APPLIED marker (5 nuevos + 1 refactor) en v0.4.0
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -311,14 +317,23 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader + Recipe coverage stewardship cerrada: 21 commits. Total tests: 362 passed in 282s. Cobertura: parser 100%, plan_loader 100%, recipe 100% (los 3 modulos criticos con <80% cerrados al 100% con tests focalizados, 0 LoC produccion modificado en cada uno). 14/16 UAT PASS. 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12, Character/StoryArc, sin spec), (c) H7 promocion entre bases (UAT-13, sin spec). Sin mas stewardship de cobertura de valor real: modulos restantes >=81% en ramas testeables (agents 89%, reconciler 89%, dispatcher 88%, context_controller 81%, paths 81%). Decisiones posibles: 1) cerrar iniciativa aqui (no quedan gaps materiales de cobertura, 2 H's en BLOCKED honesto por falta de spec del operador), 2) ejecutar H6 o H7 (necesita spec del operador o AUTO-mode investigacion+propuesta sin spec, requiere decision), 3) audit transversal final de todo el proyecto (UAT-MATRIX + ARCHITECTURE.md + roadmap sync)."
+next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader + Recipe coverage stewardship + v0.4.0 APPLIED marker cerrada. 23 commits. 2 releases taggeadas (v0.3.0 y v0.4.0). 368 tests verde. Cobertura: parser 100%, plan_loader 100%, recipe 100%. 14/16 UAT PASS. Bugfix funcional: gap declarado en specs/h4-slice-3.md limitacion 3 cerrado con APPLIED marker. 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12, Character/StoryArc, sin spec), (c) H7 promocion entre bases (UAT-13, sin spec). Sin mas stewardship de cobertura de valor real. Decisiones posibles: 1) cerrar iniciativa (releases emitidas, criterios verificados, sin gaps materiales de cobertura), 2) ejecutar H6 o H7 (necesita spec operador o consigna auto-propón), 3) audit transversal final (UAT-MATRIX + ARCHITECTURE.md sync), 4) cli.py stewardship (cubrir in-process gaps, debatable)."
 
 
 release:
-  tag: v0.3.0
+  tag: v0.4.0
   fecha: 2026-09-23
   semver_bump: MINOR
-  rationale: "0 breaking changes + 17 feat commits + 3 fix commits. Primera release taggeada del proyecto."
+  rationale: "0 breaking + 18 feat commits + 3 fix. feat(h4-slice-3) APPLIED marker + show.stage field cierra gap declarado en specs/h4-slice-3.md limitacion 3."
+  releases:
+    - tag: v0.3.0
+      fecha: 2026-09-23
+      sha: "3f3c2352cc6cb467efe6a513e45b714a47fdb475"
+      nota: "primera release taggeada"
+    - tag: v0.4.0
+      fecha: 2026-09-23
+      sha: "1f1ec2f2ca009b0565e28f3155a8f751752e48d9"
+      nota: "APPLIED marker + show.stage field"
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
@@ -326,15 +341,18 @@ release:
     - H3_Conocimiento_incremental
     - H4_Expansion_controlada_slice_1_2_3
     - H5_Adopcion_de_skills
+    - h4_slice_3_applied_marker    # v0.4.0
+    - h4_slice_3_show_stage_field  # v0.4.0
   uat_al_release:
     PASS: 14
     BLOCKED: 2   # UAT-12 H6, UAT-13 H7 (sin spec operador)
     FAIL: 0
   evidencia:
     CHANGELOG: CHANGELOG.md
-    tag_sha: "v0.3.0 -> 3f3c2352cc6cb467efe6a513e45b714a47fdb475"
-    tests_pytest: "362 passed in 72.59s"
+    tag_sha: "v0.4.0 -> 1f1ec2f2ca009b0565e28f3155a8f751752e48d9"
+    tests_pytest: "368 passed in 90.39s (362 -> 368, delta +6 focales)"
     scripts_ci: OK
     ruff: "format+check limpios"
+    e2e_real: "expansion apply good rc=0, apply bad rc=10, list --stage APPLIED funciona, show incluye stage, archive promueve a ARCHIVED"
   push: false   # sin remote; orden operador
 

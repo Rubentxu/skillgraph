@@ -1221,3 +1221,79 @@ Próximas opciones genuinas (requieren decisión del operador):
 3. H7 promoción entre bases (UAT-13).
 4. Audit transversal final (UAT-MATRIX, ARCHITECTURE.md,
    roadmap sync).
+
+## 2026-09-23 15:11 — Release v0.4.0 (APPLIED marker + show.stage)
+
+### Contexto
+
+Tras el release v0.3.0, E2E real contra CLI publico detecto que
+`expansion list --stage APPLIED` retornaba vacio (gap declarado en
+`specs/h4-slice-3.md` limitacion 3). Esto era visible al usuario
+final: aunque la propuesta se aplicaba correctamente (rc=0, plan
+persistido), no se podia consultar despues. Decidi cerrar el gap.
+
+### Caracterizacion
+
+- `cmd_expansion_list` y `cmd_expansion_show` solo leian markers
+  `.archived` (creado por `cmd_expansion_archive`) y archivos en
+  `expansion_rejections/`. No habia marker APPLIED.
+- `cmd_expansion_apply` exitoso no persistia la propuesta en
+  `expansion_proposals/` ni creaba marker (a diferencia de propose
+  y archive que SII lo hacian).
+- `cmd_expansion_show` no reportaba stage en el payload JSON.
+
+### Implementacion
+
+`src/skillgraph/cli.py` (+126 LoC, -25 LoC):
+
+Helpers nuevos:
+- `_utcnow_iso()`: ISO-8601 UTC con sufijo +00:00.
+- `_infer_proposal_stage(path, pid, rejection_ids)` -> Literal
+  con precedencia ARCHIVED > APPLIED > REJECTED > PROPOSED.
+- `_collect_rejection_ids(rejections_dir)` -> set[str].
+
+`cmd_expansion_apply` (cambio): tras apply exitoso, persiste la
+propuesta en `expansion_proposals/<id>.json` (si no existe) y crea
+marker `<id>.json.applied` con timestamp UTC y `applied_by`.
+
+`cmd_expansion_list` (cambio): usa `_infer_proposal_stage` en vez
+de logica inline duplicada.
+
+`cmd_expansion_show` (cambio): usa `_collect_rejection_ids` +
+`_infer_proposal_stage`; incluye `"stage": "..."` en el payload.
+
+### Verificacion
+
+- 5 tests focales nuevos en test_h4_expansion_cli_slice3.py.
+- Helpers nuevos en el mismo test file (_write_seed_plan,
+  _write_proposal_unauthorized_capability; replicas de
+  test_h4_expansion_cli.py).
+- ruff format + check limpios.
+- Suite completa: 368 passed (362 -> 368, delta +6).
+- E2E real contra CLI publico (bash .e2e_fix.sh):
+  - apply crea prop-...json y prop-...json.applied
+  - list muestra stage=APPLIED
+  - list --stage APPLIED ya no vacio
+  - show incluye "stage": "APPLIED"
+  - archive promueve a stage=ARCHIVED (precedencia OK)
+
+### Decision de release
+
+Regla 4 (SEMVER): commit `162a708` es `feat(h4-slice-3)` -> MINOR
+bump. Compatibilidad hacia atras mantenida (sin cambios en exit
+codes, firmas, ni formatos). Tag v0.4.0 emitido en `1f1ec2f`.
+
+### Cifras reales
+
+- HEAD: `1f1ec2f` (pre-tag, ahora tag v0.4.0).
+- 2 commits nuevos: `162a708` (feat) + `1f1ec2f` (docs).
+- +391/-25 LoC en cli.py y test_h4_expansion_cli_slice3.py.
+- +39 LoC en CHANGELOG.md.
+- 6 tests nuevos (+5 focales APPLIED + 1 reformateado por ruff).
+- 0 LoC produccion modificado que rompa backward compat.
+
+### Limitaciones declaradas (sin cambio)
+
+- UAT-12 H6: BLOCKED.
+- UAT-13 H7: BLOCKED.
+- H4 slice-4 deferred (storage SQLite migracion, auto_signed gating).
