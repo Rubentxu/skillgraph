@@ -251,3 +251,45 @@ COMPLETED y detengo el ciclo.
   recipe stewardship.
 - `CURRENT.md`: este update.
 - Sin remote `git push` (orden del operador).
+
+## RELEASE 2026-09-23 14:39 — Tag v0.3.0 emitido
+
+### Decisión
+
+Con tu aprobación total + reglas SDDK (testing quirúrgico, cierre
+real, SEMVER derivado del historial), decidí taggear v0.3.0.
+
+### Análisis SEMVER honesto
+
+- 0 breaking changes (footer `!` o `BREAKING CHANGE`) → no MAJOR.
+- 17 `feat` commits acumulados → MINOR bump.
+- 3 `fix` commits → PATCH (incluido en el MINOR).
+- 1 release taggeada en el historial del proyecto (esta).
+
+### Verificación legal (regla 2)
+
+- 362 tests pytest verde en 72.59s.
+- 14/16 UAT PASS con evidence JSON.
+- scripts/ci.sh OK.
+- ruff format+check limpios.
+- CHANGELOG.md generado con criterios de aceptación por feature.
+
+### Limitaciones NO ocultas en CHANGELOG
+
+- UAT-12 H6 multipropósito: BLOCKED honesto (sin spec operador).
+- UAT-13 H7 promoción: BLOCKED honesto (sin spec operador).
+- H4 slice-4 deferred (decisión documentada en specs/h4-slice-3.md).
+- paths.py rama Windows no testeable en CI Linux.
+- cli.py cobertura in-process baja (tests subprocess E2E compensan,
+  no contables por pytest-cov).
+
+### Próximo ciclo
+
+Tras el release, vuelvo a la decisión material pendiente:
+1. Cerrar iniciativa (defendible: release emitida, 2 H's BLOCKED honestos).
+2. H6 multipropósito (necesita spec operador o consigna "auto-propón").
+3. H7 promoción entre bases (idem).
+4. Audit transversal final (UAT-MATRIX + ARCHITECTURE.md sync).
+5. **NUEVO**: stewardship de `cli.py` con tests in-process para
+   mejorar la cobertura visible (no la real, que ya está cubierta
+   por E2E subprocess).

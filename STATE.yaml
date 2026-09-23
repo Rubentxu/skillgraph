@@ -312,3 +312,29 @@ deuda_tecnica_residual:
 blockers: []
 
 next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader + Recipe coverage stewardship cerrada: 21 commits. Total tests: 362 passed in 282s. Cobertura: parser 100%, plan_loader 100%, recipe 100% (los 3 modulos criticos con <80% cerrados al 100% con tests focalizados, 0 LoC produccion modificado en cada uno). 14/16 UAT PASS. 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12, Character/StoryArc, sin spec), (c) H7 promocion entre bases (UAT-13, sin spec). Sin mas stewardship de cobertura de valor real: modulos restantes >=81% en ramas testeables (agents 89%, reconciler 89%, dispatcher 88%, context_controller 81%, paths 81%). Decisiones posibles: 1) cerrar iniciativa aqui (no quedan gaps materiales de cobertura, 2 H's en BLOCKED honesto por falta de spec del operador), 2) ejecutar H6 o H7 (necesita spec del operador o AUTO-mode investigacion+propuesta sin spec, requiere decision), 3) audit transversal final de todo el proyecto (UAT-MATRIX + ARCHITECTURE.md + roadmap sync)."
+
+
+release:
+  tag: v0.3.0
+  fecha: 2026-09-23
+  semver_bump: MINOR
+  rationale: "0 breaking changes + 17 feat commits + 3 fix commits. Primera release taggeada del proyecto."
+  capacidades_entregadas:
+    - H0_Blueprint_validado
+    - H1_Recursos_persistentes
+    - H2_Ejecucion_recuperable
+    - H3_Conocimiento_incremental
+    - H4_Expansion_controlada_slice_1_2_3
+    - H5_Adopcion_de_skills
+  uat_al_release:
+    PASS: 14
+    BLOCKED: 2   # UAT-12 H6, UAT-13 H7 (sin spec operador)
+    FAIL: 0
+  evidencia:
+    CHANGELOG: CHANGELOG.md
+    tag_sha: "v0.3.0 -> 3f3c2352cc6cb467efe6a513e45b714a47fdb475"
+    tests_pytest: "362 passed in 72.59s"
+    scripts_ci: OK
+    ruff: "format+check limpios"
+  push: false   # sin remote; orden operador
+
