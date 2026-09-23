@@ -22,7 +22,7 @@ from datetime import UTC
 from pathlib import Path
 from typing import Any
 
-from skillgraph.core.errors import IdentityConflictError, ValidationError
+from skillgraph.core.errors import IdentityConflictError, NotFoundError, ValidationError
 from skillgraph.knowledge.graph import (
     Claim,
     Entity,
@@ -1038,6 +1038,88 @@ class Storage:
         if row is None:
             return None
         return row["run_id"]
+
+    # ----- lecturas del ciclo de vida de un Run (H9-BSlice3-S1) -----
+
+    def load_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Carga la fila de `workflow_runs` para (tenant, project, run).
+
+        Lanza ``NotFoundError`` si no existe. Sustituye a la lectura
+        directa sobre ``self._conn.execute(...)`` que realizaba
+        ``RunController._load_run``. Es una lectura pura: no participa
+        en transacciones compartidas con ``EventLog.append``.
+
+        No expone SQL al caller; la conversión de Row a dict es interna.
+        """
+        row = self._conn.execute(
+            """
+            SELECT * FROM workflow_runs
+            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
+            """,
+            (tenant_id, project_id, run_id),
+        ).fetchone()
+        if row is None:
+            raise NotFoundError(f"run no encontrado: {run_id}")
+        return dict(row)
+
+    def list_node_executions(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        node_name: str,
+    ) -> list[dict[str, Any]]:
+        """Lista NodeExecutions de un (run, node_name) ordenadas por
+        ``started_at ASC``.
+
+        Sustituye a la lectura directa que realizaba
+        ``RunController._node_executions_for``. Lectura pura:
+        orden estable, sin filtrado por estado (la query del
+        RunController original tampoco filtraba).
+        """
+        rows = self._conn.execute(
+            """
+            SELECT * FROM node_executions
+            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
+              AND node_name = ?
+            ORDER BY started_at ASC
+            """,
+            (tenant_id, project_id, run_id, node_name),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_executed_node_names(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> tuple[str, ...]:
+        """Devuelve los `node_name` DISTINCT con ``state='SUCCEEDED'``
+        para un run, ordenados alfabéticamente.
+
+        Sustituye a la lectura directa que realizaba
+        ``RunController._executed_node_names``. Lectura pura: el orden
+        alfabético hace el resultado determinista y testeable sin
+        depender del orden de inserción.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT DISTINCT node_name FROM node_executions
+            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
+              AND state = 'SUCCEEDED'
+            ORDER BY node_name ASC
+            """,
+            (tenant_id, project_id, run_id),
+        ).fetchall()
+        return tuple(r["node_name"] for r in rows)
 
     def list_promotions(
         self,

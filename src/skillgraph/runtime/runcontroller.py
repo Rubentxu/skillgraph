@@ -31,7 +31,6 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from skillgraph.core.errors import NotFoundError
 from skillgraph.core.runtime_types import RunState, is_terminal_run_state
 from skillgraph.platform.storage import Storage
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
@@ -311,16 +310,8 @@ class RunController:
     # ---------- internals ----------
 
     def _load_run(self, tenant_id: str, project_id: str, run_id: str) -> dict[str, Any]:
-        row = self._conn.execute(
-            """
-            SELECT * FROM workflow_runs
-            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
-            """,
-            (tenant_id, project_id, run_id),
-        ).fetchone()
-        if row is None:
-            raise NotFoundError(f"run no encontrado: {run_id}")
-        return dict(row)
+        # Lectura pura: delega en `Storage.load_run` (H9-BSlice3-S1).
+        return self._storage.load_run(tenant_id=tenant_id, project_id=project_id, run_id=run_id)
 
     def _set_run_state(
         self,
@@ -634,16 +625,14 @@ class RunController:
     def _node_executions_for(
         self, tenant_id: str, project_id: str, run_id: str, node_name: str
     ) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            """
-            SELECT * FROM node_executions
-            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
-              AND node_name = ?
-            ORDER BY started_at ASC
-            """,
-            (tenant_id, project_id, run_id, node_name),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        # Lectura pura: delega en `Storage.list_node_executions`
+        # (H9-BSlice3-S1). Orden por `started_at ASC` estable.
+        return self._storage.list_node_executions(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_name=node_name,
+        )
 
     def _latest_node_execution(
         self, tenant_id: str, project_id: str, run_id: str, node_name: str
@@ -660,16 +649,13 @@ class RunController:
         return len(self._executed_node_names(tenant_id, project_id, run_id))
 
     def _executed_node_names(self, tenant_id: str, project_id: str, run_id: str) -> tuple[str, ...]:
-        rows = self._conn.execute(
-            """
-            SELECT DISTINCT node_name FROM node_executions
-            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
-              AND state = 'SUCCEEDED'
-            ORDER BY node_name ASC
-            """,
-            (tenant_id, project_id, run_id),
-        ).fetchall()
-        return tuple(r["node_name"] for r in rows)
+        # Lectura pura: delega en `Storage.list_executed_node_names`
+        # (H9-BSlice3-S1). DISTINCT + ORDER BY node_name ASC determinista.
+        return self._storage.list_executed_node_names(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+        )
 
     def _snapshot(self, tenant_id: str, project_id: str, run_id: str) -> RunSnapshot:
         run = self._load_run(tenant_id, project_id, run_id)

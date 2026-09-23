@@ -212,14 +212,15 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 467
-  passed: 467
-  duration_s: 103
+  total: 479
+  passed: 479
+  duration_s: 157
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
   h9_inprocess3_delta: "+11 tests (8 in-process knowledge/brick + 3 acceptance real subprocess)"
   h9_bslice3_characterization_delta: "+6 tests de caracterizacion de las 10 SQL sites de RunController (T1-T6: T1 atomicidad idempotency, T2 happy path state+events, T3 recover all running, T4 state+events consistentes, T5 ordering node_executions, T6 distinct sorted executed_nodes)"
+  h9_bslice3_s1_reads_delta: "+12 tests de las 3 APIs lectura nuevas en Storage (load_run, list_node_executions, list_executed_node_names). 3 tests de no-regresion introspeccionan que el RunController ya no contiene SQL directo en esas 3 lecturas."
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -260,6 +261,7 @@ tests:
     - tests/test_h9_storage_find_active_run.py: 13   # H9-BSlice2: find_active_run + invariantes
     - tests/test_h9_cli_inproc_knowledge_brick.py: 11   # H9-InProcess-3: knowledge + brick + acceptance real
     - tests/test_h9_runcontroller_characterization.py: 6   # H9-BSlice3: caracterizacion 10 SQL sites (T1-T6)
+    - tests/test_h9_storage_run_reads.py: 12   # H9-BSlice3-S1: load_run, list_node_executions, list_executed_node_names
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -334,6 +336,7 @@ nota_honesta_revision: >
   CI pasa de 9/16 (manuales) a 16/16 (todos con test pytest vivo).
 
 deuda_tecnica_residual:
+  - "H9-BSlice3-S1 cerrado: 3 lecturas puras migradas de SQL directo en RunController a APIs publicas de Storage (load_run, list_node_executions, list_executed_node_names). RunController sigue dependiendo de sqlite3.Connection para S3..S7 (escrituras mixtas con EventLog): siguen acopladas, pero el siguiente slice abordara storage.create_run_atomic + storage.start_node_execution_atomic que requieren decision arquitectonica sobre donde vive la transaccion. RunController NO se ha reducido mas alla de las lecturas en S1. +12 tests (9 API + 3 introspeccion no-regresion). 479/479 verde. SIN release (refactor sin bump)."
   - "H9-BSlice3 PARTE 1 cerrado (S0 caracterizacion): documento docs/architecture/h9-bslice3-runcontroller-storage.md con inventario de las 10 SQL sites (S1-S9) y 6 tests T1-T6 que documentan el comportamiento observable actual. Grieta de no-atomicidad confirmada entre workflow_runs (RunController) y runtime_events (EventLog): el INSERT se commitea antes de que el append del evento pueda lanzar IdempotencyError. NO se introduce fix: el refactor de verdad necesitara operaciones transaccionales de Storage (siguientes slices de H9-BSlice3), y esos tests serviran de red de seguridad para detectar regresiones."
   - "H9-InProcess-3 cerrado: cobertura in-process para knowledge stale (3 escenarios), knowledge invalidate (2 escenarios), brick register (3 escenarios) + 3 acceptance path real (subprocess) sobre los mismos comandos. +11 tests. Asunciones defectuosas corregidas tras smoke empirico: (a) stale claim no se siembra directo con freshness='stale', necesita invalidate_from_source previo; (b) knowledge invalidate con source ghost lanza UnknownSourceError cuando se invoca el cmd_ directo (sin captura), pero el wrapper CLI main() traduce correctamente a EXIT_DOMAIN (10) y stderr formateado. NO requiere fix: contrato externo cumple spec. El test in-process documenta la ruta directa; el test subprocess documenta el contrato publico. Cobertura in-process CLI: ampliada a 7 comandos (4 InProcess-2 + 3 InProcess-3)."
   - "H9-BSlice2 cerrado (commits 54d9015 + 3fe5940): API publica Storage.find_active_run(tenant_id, project_id); el runner delega en metodos public Storage en 3 helpers antes con SQL directo. +13 tests (10 API + 3 invariantes sobre acceso a storage._conn en helpers). Limitacion storage._conn en runner CERRADA para los 3 helpers de dominio (queda 1 sitio en cmd_run para RunController, scope aparte)."

@@ -531,3 +531,35 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
   2. H9-InProcess-4: cobertura in-process del CLI restante
      (`knowledge compile/trace/refresh`, `run`).
   3. Cerrar iniciativa con la deuda documentada.
+
+## UPDATE 2026-09-23 18:30 — H9-BSlice3-S1 (lecturas) cerrado
+
+- **Slice**: 3 lecturas puras del RunController delegadas en APIs
+  nuevas de Storage. Las elegidas son las que NO participan en
+  transacciones compartidas con EventLog (no rompen atomicidad):
+  - `_load_run` → `Storage.load_run(*, tenant_id, project_id, run_id)`
+  - `_node_executions_for` → `Storage.list_node_executions(...)`
+  - `_executed_node_names` → `Storage.list_executed_node_names(...)`
+- **NO se introduce `Storage.connection()`** (consigna explícita).
+- **`RunController` sigue recibiendo `conn=storage._conn`** en el
+  `__init__` (todavía lo necesita para S3..S7 que son escrituras
+  mixtas). Su retirada es S8..S9 (no comprometidas en este slice).
+- **+12 tests nuevos** (9 de API de Storage + 3 introspección):
+  - Los 9 de API cubren: contrato del dict devuelto, NotFoundError,
+    aislamiento por tenant+project, orden por started_at ASC,
+    DISTINCT+ORDER, tipo tuple vs list.
+  - Los 3 introspección verifican que los 3 métodos privados del
+    RunController ya NO contienen `SELECT` ni `_conn` en su código
+    fuente. Esto blinda una regresión típica (alguien "deshace"
+    la delegación).
+- **479/479 verde** en `scripts/ci.sh` (~157s).
+- **Próximo S2** (si es factible): Storage.load_run ya está. El
+  siguiente candidato es ¿añadir un `Storage.transition_run_state`
+  como escritura sin event? La consigna dice "NO lo incluyas
+  en lecturas seguras". Voy a parar y consultar antes, porque
+  `transition_run_state` se invoca en puntos donde también se
+  emiten eventos — escribirla sin atomicidad es el siguiente paso
+  engañoso.
+- **Sigue respetando contrato**: ningún cambio de comportamiento
+  observable. Las pruebas T1..T6 de caracterización siguen verdes
+  sin tocar nada.

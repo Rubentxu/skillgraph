@@ -1722,3 +1722,48 @@ coste bajo. (1), (3), (4) mantienen su prioridad documentada.
 | Sin refactor de producción | git diff src/ | confirmado (solo docs + tests nuevos) |
 | ruff check + format | `ruff check src tests && ruff format --check src tests` | All checks passed |
 | `scripts/ci.sh` | `bash scripts/ci.sh` | 467 passed in ~103s, OK |
+
+---
+
+## UPDATE 2026-09-23 18:30 — H9-BSlice3-S1 (lecturas) cerrado
+
+- **Slice**: 3 lecturas puras del RunController delegadas en APIs
+  nuevas de Storage:
+  - `_load_run` (S2 del inventario) → `Storage.load_run(...)`
+  - `_node_executions_for` (S8) → `Storage.list_node_executions(...)`
+  - `_executed_node_names` (S9) → `Storage.list_executed_node_names(...)`
+- **NO se introduce `Storage.connection()`**: las 3 APIs nuevas
+  encapsulan el SQL y devuelven tipos de dominio Python.
+- **RunController sigue con `conn=storage._conn`** en su `__init__`.
+  El cierre de `self._conn` total viene con S8..S9, no aquí.
+- **Cero cambio en el comportamiento observable**: las pruebas T1..T6
+  de caracterización siguen verdes; los 10 tests previos de
+  `test_runcontroller.py` siguen verdes; todo en el mismo orden.
+- **+12 tests nuevos** (`tests/test_h9_storage_run_reads.py`):
+  - 9 tests de API (3 por método × 3 métodos):
+    contrato del dict/resultado, errores tipados (`NotFoundError`),
+    aislamiento por tenant+project, orden estable, tipo tuple.
+  - 3 tests de no-regresión por introspección: verifican que el
+    código fuente de los métodos privados del RunController ya NO
+    contiene `SELECT` ni `_conn`. Blindan contra una reversión
+    accidental del refactor.
+- **Decisiones bajo criterio propio**:
+  - Preferí delegar y dejar las 3 lecturas como métodos privados
+    `_load_run`, `_node_executions_for`, `_executed_node_names` en
+    el RunController (shims triviales) en lugar de cambiarlas a
+    llamadas directas en cada sitio. Mantiene el call site del
+    RunController legible y los tests introspección son especificos.
+  - Para `list_executed_node_names` mantengo tipo `tuple[str, ...]`
+    (inmutable) coherente con el original.
+- **Limitación confirmada**: el `__init__` de RunController aún
+  exige `conn=`. Eso es intencional en S1; cambiarlo es S8..S9.
+- **Mapa requisito -> check**:
+| Requisito | Check | Resultado |
+|---|---|---|
+| 3 lecturas delegadas en Storage API | inspeccion de codigo en runcontroller.py | OK (3 sites S2, S8, S9) |
+| No exponer `Storage.connection()` | inspeccion | OK (3 metodos nuevos en Storage, no connexion getter) |
+| Comportamiento preservado | T1..T6 + test_runcontroller.py completo | 16/16 PASS |
+| No romper atomicidad existente | T1..T6 verdes sin tocar | OK |
+| 12 tests nuevos verdes | `pytest tests/test_h9_storage_run_reads.py` | 12/12 PASS |
+| ruff format+check | `ruff format src tests && ruff check src tests` | All checks passed |
+| `scripts/ci.sh` | `bash scripts/ci.sh` | 479 passed in ~157s, OK |
