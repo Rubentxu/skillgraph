@@ -450,27 +450,22 @@ class RunController:
             )
         )
 
-        # Insertar NodeExecution en RUNNING
-        with self._conn:
-            self._conn.execute(
-                """
-                INSERT INTO node_executions
-                    (node_execution_id, run_id, tenant_id, project_id,
-                     node_name, attempt, state, context_hash, handoff_json,
-                     started_at)
-                VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, datetime('now'))
-                """,
-                (
-                    node_execution_id,
-                    run_id,
-                    tenant_id,
-                    project_id,
-                    node_name,
-                    attempt,
-                    context_hash,
-                    json.dumps(handoff.to_dict(), sort_keys=False),
-                ),
-            )
+        # H9-BSlice3-S5: delega el INSERT del NodeExecution RUNNING
+        # en `Storage.start_node_execution`. La emision del evento
+        # `node_started` queda inmediatamente despues, fuera de la
+        # transaccion (storage no coordina eventos). Mantener la
+        # separacion evita acoplar Storage al emisor (decision
+        # arquitectonica del 2026-09-23 18:24).
+        self._storage.start_node_execution(
+            node_execution_id=node_execution_id,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_name=node_name,
+            attempt=attempt,
+            context_hash=context_hash,
+            handoff_json=json.dumps(handoff.to_dict(), sort_keys=False),
+        )
 
         self._events.append(events.node_started(run_id=run_id, node_execution_id=node_execution_id))
 

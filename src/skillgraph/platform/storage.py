@@ -1189,6 +1189,51 @@ class Storage:
                 (state, current_node, tenant_id, project_id, run_id),
             )
 
+    def start_node_execution(
+        self,
+        *,
+        node_execution_id: str,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        node_name: str,
+        attempt: int,
+        context_hash: str,
+        handoff_json: str,
+    ) -> None:
+        """Inserta un NodeExecution en estado ``RUNNING``.
+
+        Sustituye a la parte INSERT del RunController._execute_one.
+        El ``node_execution_id`` lo genera el llamador (ver
+        ``new_node_execution_id``); el state queda fijado a
+        ``RUNNING`` y ``started_at`` se materializa en SQL con
+        ``datetime('now')``.
+
+        No emite eventos. La coordinación con
+        ``EventLog.append(events.node_started(...))`` sigue siendo
+        del llamador (RunController._execute_one).
+        """
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO node_executions
+                    (node_execution_id, run_id, tenant_id, project_id,
+                     node_name, attempt, state, context_hash, handoff_json,
+                     started_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, datetime('now'))
+                """,
+                (
+                    node_execution_id,
+                    run_id,
+                    tenant_id,
+                    project_id,
+                    node_name,
+                    attempt,
+                    context_hash,
+                    handoff_json,
+                ),
+            )
+
     def list_promotions(
         self,
         status: str | None = None,
