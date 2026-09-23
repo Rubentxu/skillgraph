@@ -1104,16 +1104,10 @@ def cmd_promotion_list(args: argparse.Namespace) -> int:
 
     storage = Storage(Path(project["db_path"]))
     try:
-        if args.pending:
-            rows = storage.list_pending_promotions()
-        else:
-            rows = [
-                dict(r)
-                for r in storage._conn.execute(
-                    "SELECT proposal_id, tenant_id, source_project, target_catalog,"
-                    " knowledge_ref, status FROM promotion_outbox ORDER BY created_at"
-                ).fetchall()
-            ]
+        # list_promotions() es la API publica; status='PENDING' devuelve solo
+        # PENDING (no IN_PROGRESS). list_pending_promotions() conserva el
+        # compat con IN_PROGRESS para callers internos (cmd_promotion_reconcile).
+        rows = storage.list_pending_promotions() if args.pending else storage.list_promotions()
     finally:
         storage.close()
     if not rows:

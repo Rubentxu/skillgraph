@@ -36,6 +36,12 @@ from skillgraph.resources.bricks import Brick
 SCHEMA_VERSION = 1
 
 
+# Estados validos del outbox de promocion (CHECK constraint de la tabla).
+# Exportado como frozenset para que Storage.list_promotions() valide
+# inputs sin acoplarse a la implementacion del schema.
+PROMOTION_STATUSES: frozenset[str] = frozenset({"PENDING", "IN_PROGRESS", "PUBLISHED", "FAILED"})
+
+
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
@@ -970,8 +976,13 @@ class Storage:
         return d
 
     def list_pending_promotions(self) -> list[dict[str, Any]]:
-        """Lista propuestas con status IN ('PENDING', 'IN_PROGRESS') para reconciliacion."""
-        import json as _json
+        """Lista propuestas con status IN ('PENDING', 'IN_PROGRESS') para reconciliacion.
+
+        Equivalente a ``list_promotions(status="PENDING")`` mas los registros
+        ``IN_PROGRESS`` (los dejados por un crash previo). Conservado para
+        compatibilidad con callers existentes.
+        """
+        import json as _json  # local import por consistencia con resto del modulo
 
         rows = self._conn.execute(
             """
@@ -980,6 +991,44 @@ class Storage:
             ORDER BY created_at ASC
             """
         ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["payload"] = _json.loads(d.pop("payload_json"))
+            result.append(d)
+        return result
+
+    def list_promotions(
+        self,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Lista propuestas del outbox, opcionalmente filtradas por ``status``.
+
+        - ``status=None`` -> todas las propuestas, ordenadas por ``created_at`` ASC.
+        - ``status='PENDING'`` -> solo PENDING; equivalente a la rama
+          ``list_promotions(status='PENDING')`` (sin IN_PROGRESS).
+        - Cualquier otro status valido (``IN_PROGRESS``, ``PUBLISHED``,
+          ``FAILED``) filtra exactamente por ese valor.
+
+        Lanza ``ValidationError`` si ``status`` no esta en
+        ``PROMOTION_STATUSES``. No expone SQL al caller.
+        """
+        import json as _json  # local import por consistencia con resto del modulo
+
+        if status is not None and status not in PROMOTION_STATUSES:
+            raise ValidationError(
+                f"status de promocion invalido: {status!r}; validos={sorted(PROMOTION_STATUSES)}"
+            )
+
+        if status is None:
+            rows = self._conn.execute(
+                "SELECT * FROM promotion_outbox ORDER BY created_at ASC"
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM promotion_outbox WHERE status = ? ORDER BY created_at ASC",
+                (status,),
+            ).fetchall()
         result = []
         for row in rows:
             d = dict(row)
