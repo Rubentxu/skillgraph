@@ -318,14 +318,14 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader + Recipe coverage stewardship + v0.4.0 APPLIED marker + v0.4.1 portability fixes cerrada. 3 releases taggeadas (v0.3.0, v0.4.0, v0.4.1). 368 tests verde. Cobertura: parser 100%, plan_loader 100%, recipe 100%. 14/16 UAT PASS. 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12, Character/StoryArc, sin spec), (c) H7 promocion entre bases (UAT-13, sin spec). Sin mas stewardship de cobertura de valor real. Deuda nueva detectada en sesion: tests/uat_audit.py main() destructivo por defecto (anotada en CHANGELOG v0.4.1; arreglar en v0.4.2 o v0.5.0 si surge). Decisiones posibles: 1) cerrar iniciativa (3 releases emitidas, criterios verificados, sin gaps materiales de cobertura), 2) ejecutar H6 o H7 (necesita spec operador o consigna auto-propón), 3) audit transversal final (UAT-MATRIX + ARCHITECTURE.md sync), 4) cli.py stewardship (cubrir in-process gaps, debatable), 5) arreglar main() destructivo de uat_audit.py (deuda anotada, bajo riesgo)."
+next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader + Recipe coverage stewardship + v0.4.0 APPLIED marker + v0.4.1 portability fixes + v0.5.0 CLI safety cerrada. 4 releases taggeadas (v0.3.0, v0.4.0, v0.4.1, v0.5.0). 373 tests verde (368 -> 373, +5 CLI safety). Cobertura: parser 100%, plan_loader 100%, recipe 100%. 14/16 UAT PASS. Footgun de uat_audit.py main() destructivo: RESUELTO en v0.5.0 (default read-only, --write opt-in, --yes para stubs). 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12, Character/StoryArc, sin spec), (c) H7 promocion entre bases (UAT-13, sin spec). Sin mas stewardship de cobertura de valor real. Decisiones posibles: 1) cerrar iniciativa (4 releases emitidas, criterios verificados, sin gaps materiales de cobertura), 2) ejecutar H6 o H7 (necesita spec operador o consigna auto-propón), 3) audit transversal final (UAT-MATRIX + ARCHITECTURE.md sync), 4) cli.py stewardship (cubrir in-process gaps, debatable)."
 
 
 release:
-  tag: v0.4.1
+  tag: v0.5.0
   fecha: 2026-09-23
-  semver_bump: PATCH
-  rationale: "0 breaking + 0 feat + 2 fix commits (regla 4 SEMVER). Fixes de portabilidad/trazabilidad del modulo tests/uat_audit.py: SHA real en evidencia (7b81df7) y REPO_ROOT portable desde __file__ (edb19b0). Sin cambios de comportamiento observable ni en API publica."
+  semver_bump: MINOR
+  rationale: "0 breaking + 1 feat + 0 fix desde v0.4.1 (regla 4 SEMVER). feat(uat) CLI safety en tests/uat_audit.py: argparse con --write/--dry-run/--help/--yes, subset selection, exit codes 0/2/3, default read-only que cierra el footgun documentado en v0.4.1 CHANGELOG. Nueva capacidad CLI observable; sin cambios en API publica ni codigo de produccion."
   releases:
     - tag: v0.3.0
       fecha: 2026-09-23
@@ -339,6 +339,10 @@ release:
       fecha: 2026-09-23
       sha: "2262ac47759de0c5ca8ae215e3a73f84936d142a"
       nota: "portability fixes (REPO_ROOT hardcode + UAT SHA literal)"
+    - tag: v0.5.0
+      fecha: 2026-09-23
+      sha: "dd16d4929229a831a4331b0430aef3e380a42e16"
+      nota: "CLI safety en tests/uat_audit.py (read-only default, --write opt-in)"
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
@@ -349,17 +353,19 @@ release:
     - h4_slice_3_applied_marker    # v0.4.0
     - h4_slice_3_show_stage_field  # v0.4.0
     - uat_evidence_sha_real        # v0.4.1 (7b81df7)
-    - uat_audit_portable            # v0.4.1 (edb19b0)
+    - uat_audit_portable           # v0.4.1 (edb19b0)
+    - uat_audit_cli_safe           # v0.5.0 (233431b)
   uat_al_release:
     PASS: 14
     BLOCKED: 2   # UAT-12 H6, UAT-13 H7 (sin spec operador)
     FAIL: 0
   evidencia:
     CHANGELOG: CHANGELOG.md
-    tag_sha: "v0.4.1 -> 2262ac47759de0c5ca8ae215e3a73f84936d142a"
-    tests_pytest: "368 passed in 63.34s (sin delta vs v0.4.0)"
+    tag_sha: "v0.5.0 -> dd16d4929229a831a4331b0430aef3e380a42e16"
+    tests_pytest: "373 passed in 77s (368 -> 373, delta +5 CLI safety)"
     scripts_ci: OK
     ruff: "format+check limpios"
-    e2e_real: "expansion apply good rc=0, apply bad rc=10, list --stage APPLIED funciona, show incluye stage (validado en v0.4.0 y revalidado en v0.4.1 contra SHA edb19b0)"
+    footgun_cerrado: "verificado: 'python tests/uat_audit.py' ya NO modifica working tree (git status antes/despues identico)"
+    e2e_real: "expansion apply good rc=0, apply bad rc=10, list --stage APPLIED funciona, show incluye stage (revalidado en cada release)"
   push: false   # sin remote; orden operador
 
