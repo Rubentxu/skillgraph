@@ -1,18 +1,22 @@
 """CLI de SkillGraph (Etapa 1).
 
 Esta capa es deliberadamente delgada: el grueso de la lógica vive
-en `skillgraph.storage`, `skillgraph.catalog` y `skillgraph.parser`.
-Aquí solo se traduce argv -> llamadas + se formatea la salida.
+en `skillgraph.storage`, `skillgraph.catalog`, `skillgraph.parser`
+y `skillgraph.runcontroller`.
+
+Aqui solo se traduce argv -> llamadas + se formatea la salida.
 
 Auditoria de duplicacion:
 - No reimplements validacion de esquemas (eso vive en registry.py).
 - No reimplements logica SQL (eso vive en storage.py y catalog.py).
+- No reimplements el bucle del run (eso vive en runcontroller.py).
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from skillgraph import (
@@ -37,6 +41,69 @@ from skillgraph.paths import (
 )
 from skillgraph.storage import Storage
 
+# --- Codigos de salida tipados (AGENTS.md §11.15 / contrato CLI) -------------
+#  0 OK
+#  1 argumento desconocido o falta subcomando
+#  2 nombre de proyecto invalido
+#  3 proyecto ya existe
+#  4 proyecto no existe
+#  5 base de datos ausente
+#  6 plan no encontrado
+# 10 error de dominio SkillGraph (catch-all)
+# 11 parse error (workflow o brick)
+# 12 validacion semantica (kind desconocido o regla violada)
+# 20 run FAILED
+# 21 run no terminal tras max-iterations (CANCELLED / WAITING / ACTIVE)
+EXIT_OK = 0
+EXIT_USAGE = 1
+EXIT_BAD_NAME = 2
+EXIT_PROJECT_EXISTS = 3
+EXIT_PROJECT_NOT_FOUND = 4
+EXIT_DB_MISSING = 5
+EXIT_PLAN_NOT_FOUND = 6
+EXIT_DOMAIN = 10
+EXIT_PARSE = 11
+EXIT_VALIDATION = 12
+EXIT_RUN_FAILED = 20
+EXIT_RUN_INCOMPLETE = 21
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectResolver:
+    """Encapsula la apertura del catalogo + lookup de proyecto.
+
+    Elimina los 4 subcomandos que duplicaban `open_catalog ->
+    get_project -> return 4`. Cada metodo devuelve el `Storage`
+    cerrado o un exit code si algo falla.
+    """
+
+    data_root: Path
+    tenant_id: str = DEFAULT_TENANT
+
+    def with_default_root(self) -> ProjectResolver:
+        return ProjectResolver(
+            data_root=resolve_data_root(self.data_root),
+            tenant_id=self.tenant_id,
+        )
+
+    def lookup(self, project_name: str) -> tuple[dict[str, str], int | None]:
+        """Busca un proyecto. Devuelve (project_row, None) o ({}, exit_code)."""
+        cat = open_catalog(catalog_path(self.data_root))
+        try:
+            project = cat.get_project(
+                tenant_id=self.tenant_id, name=project_name
+            )
+        finally:
+            cat.close()
+        if project is None:
+            print(
+                f"ERROR: proyecto {project_name!r} no existe para tenant {self.tenant_id!r}",
+                file=sys.stderr,
+            )
+            return {}, EXIT_PROJECT_NOT_FOUND
+        return project, None
+
+
 # ---------------------------------------------------------------------------
 # Subcomandos
 # ---------------------------------------------------------------------------
@@ -50,7 +117,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     # El directorio del tenant por defecto se crea al registrar el primer proyecto.
     print(f"Catálogo inicializado en: {cat_path}")
     print(f"Raíz de datos: {root}")
-    return 0
+    return EXIT_OK
 
 
 def cmd_project_create(args: argparse.Namespace) -> int:
@@ -60,7 +127,7 @@ def cmd_project_create(args: argparse.Namespace) -> int:
             "Use solo [a-z0-9-_] y hasta 64 caracteres.",
             file=sys.stderr,
         )
-        return 2
+        return EXIT_BAD_NAME
 
     root = resolve_data_root(args.data_root)
     cat = open_catalog(catalog_path(root))
@@ -71,7 +138,7 @@ def cmd_project_create(args: argparse.Namespace) -> int:
                 f"ERROR: proyecto {args.name!r} ya existe para tenant {DEFAULT_TENANT!r}",
                 file=sys.stderr,
             )
-            return 3
+            return EXIT_PROJECT_EXISTS
 
         db = project_db_path(root, args.name, tenant=DEFAULT_TENANT)
         db.parent.mkdir(parents=True, exist_ok=True)
@@ -81,7 +148,7 @@ def cmd_project_create(args: argparse.Namespace) -> int:
     finally:
         cat.close()
     print(f"Proyecto {args.name!r} creado en: {db}")
-    return 0
+    return EXIT_OK
 
 
 def cmd_project_list(args: argparse.Namespace) -> int:
@@ -93,41 +160,37 @@ def cmd_project_list(args: argparse.Namespace) -> int:
         cat.close()
     if not projects:
         print("(sin proyectos)")
-        return 0
+        return EXIT_OK
     for p in projects:
         print(f"{p['name']}\t{p['db_path']}\t{p['created_at']}")
-    return 0
+    return EXIT_OK
 
 
 def cmd_project_inspect(args: argparse.Namespace) -> int:
-    root = resolve_data_root(args.data_root)
-    cat = open_catalog(catalog_path(root))
+    resolver = ProjectResolver(
+        data_root=resolve_data_root(args.data_root)
+    ).with_default_root()
+    project, err = resolver.lookup(args.name)
+    if err is not None:
+        return err
+
+    db_path = Path(project["db_path"])
+    if not db_path.exists():
+        print(
+            f"ERROR: base de datos ausente: {db_path}",
+            file=sys.stderr,
+        )
+        return EXIT_DB_MISSING
+
+    storage = Storage(db_path)
     try:
-        project = cat.get_project(tenant_id=DEFAULT_TENANT, name=args.name)
-        if project is None:
-            print(
-                f"ERROR: proyecto {args.name!r} no existe para tenant {DEFAULT_TENANT!r}",
-                file=sys.stderr,
-            )
-            return 4
-        db_path = Path(project["db_path"])
-        if not db_path.exists():
-            print(
-                f"ERROR: base de datos ausente: {db_path}",
-                file=sys.stderr,
-            )
-            return 5
-        storage = Storage(db_path)
-        try:
-            counts = _count_resources(
-                storage,
-                tenant_id=project["tenant_id"],
-                project_id=project["name"],
-            )
-        finally:
-            storage.close()
+        counts = _count_resources(
+            storage,
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+        )
     finally:
-        cat.close()
+        storage.close()
 
     print(f"Proyecto: {project['name']}")
     print(f"Tenant:   {project['tenant_id']}")
@@ -136,7 +199,7 @@ def cmd_project_inspect(args: argparse.Namespace) -> int:
     print(f"Recursos: {counts['total']} total")
     for kind, n in sorted(counts["by_kind"].items()):
         print(f"  {kind}: {n}")
-    return 0
+    return EXIT_OK
 
 
 def _count_resources(storage: Storage, *, tenant_id: str, project_id: str) -> dict[str, object]:
@@ -222,11 +285,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.version:
         print(f"skillgraph {__version__}")
-        return 0
+        return EXIT_OK
 
     if args.command is None:
         parser.print_help()
-        return 0
+        return EXIT_OK
 
     try:
         if args.command == "init":
@@ -243,53 +306,50 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_run(args)
     except SkillGraphError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-        return 10
+        return EXIT_DOMAIN
 
     parser.print_help()
-    return 1
+    return EXIT_USAGE
 
 
 def cmd_brick_register(args: argparse.Namespace) -> int:
     """Registra un brick en un proyecto, validándolo primero."""
-    root = resolve_data_root(args.data_root)
-    cat = open_catalog(catalog_path(root))
+    resolver = ProjectResolver(
+        data_root=resolve_data_root(args.data_root)
+    ).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return err
+
+    db_path = Path(project["db_path"])
+    registry: BrickRegistry = load_defaults()
+    identity = ResourceIdentity(
+        tenant_id=project["tenant_id"],
+        project_id=args.project,
+        namespace="(pending)",
+        kind="(pending)",
+        name="(pending)",
+    )
     try:
-        project = cat.get_project(tenant_id=DEFAULT_TENANT, name=args.project)
-        if project is None:
-            print(
-                f"ERROR: proyecto {args.project!r} no existe",
-                file=sys.stderr,
-            )
-            return 4
-        db_path = Path(project["db_path"])
-        registry: BrickRegistry = load_defaults()
-        identity = ResourceIdentity(
-            tenant_id=project["tenant_id"],
-            project_id=args.project,
-            namespace="(pending)",
-            kind="(pending)",
-            name="(pending)",
-        )
-        try:
-            brick = parse_file(args.path, identity=identity)
-        except ParseError as exc:
-            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-            return 11
-        try:
-            registry.validate(brick)
-        except (UnknownKindError, ValidationError) as exc:
-            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-            return 12
-        storage = Storage(db_path)
-        try:
-            uid = storage.upsert_resource(brick)
-        finally:
-            storage.close()
+        brick = parse_file(args.path, identity=identity)
+    except ParseError as exc:
+        print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+        return EXIT_PARSE
+    try:
+        registry.validate(brick)
+    except (UnknownKindError, ValidationError) as exc:
+        print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+        return EXIT_VALIDATION
+    storage = Storage(db_path)
+    try:
+        uid = storage.upsert_resource(brick)
     finally:
-        cat.close()
-    print(f"Brick registrado: {brick.kind}/{brick.identity.namespace}/{brick.identity.name}")
+        storage.close()
+    print(
+        f"Brick registrado: {brick.kind}/{brick.identity.namespace}/{brick.identity.name}"
+    )
     print(f"UID: {uid}")
-    return 0
+    return EXIT_OK
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -301,93 +361,82 @@ def cmd_run(args: argparse.Namespace) -> int:
     from skillgraph.paths import agents_root
     from skillgraph.plan_loader import load_plan_file
     from skillgraph.runcontroller import RunController
+    from skillgraph.runtime_types import is_terminal_run_state
 
-    root = resolve_data_root(args.data_root)
-    cat = open_catalog(catalog_path(root))
+    resolver = ProjectResolver(
+        data_root=resolve_data_root(args.data_root)
+    ).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return err
+    if not args.plan.is_file():
+        print(
+            f"ERROR: plan no encontrado: {args.plan}",
+            file=sys.stderr,
+        )
+        return EXIT_PLAN_NOT_FOUND
     try:
-        project = cat.get_project(tenant_id=DEFAULT_TENANT, name=args.project)
-        if project is None:
-            print(
-                f"ERROR: proyecto {args.project!r} no existe",
-                file=sys.stderr,
-            )
-            return 4
-        if not args.plan.is_file():
-            print(
-                f"ERROR: plan no encontrado: {args.plan}",
-                file=sys.stderr,
-            )
-            return 6
-        try:
-            plan = load_plan_file(args.plan)
-        except ParseError as exc:
-            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-            return 11
-        db_path = Path(project["db_path"])
-        if not db_path.exists():
-            print(
-                f"ERROR: base de datos ausente: {db_path}",
-                file=sys.stderr,
-            )
-            return 5
-        fixtures_root = args.fixtures_root or agents_root(root)
-        fixtures_root.mkdir(parents=True, exist_ok=True)
-        adapter = FakeAgentAdapter(fixtures_root)
-        storage = Storage(db_path)
-        try:
-            ctl = RunController(
-                storage=storage,
-                adapter=adapter,
-                conn=storage._conn,  # type: ignore[attr-defined]
-            )
-            run_id = ctl.create_run(
-                tenant_id=project["tenant_id"],
-                project_id=project["name"],
-                plan=plan,
-            )
+        plan = load_plan_file(args.plan)
+    except ParseError as exc:
+        print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+        return EXIT_PARSE
+    db_path = Path(project["db_path"])
+    if not db_path.exists():
+        print(
+            f"ERROR: base de datos ausente: {db_path}",
+            file=sys.stderr,
+        )
+        return EXIT_DB_MISSING
+
+    fixtures_root = args.fixtures_root or agents_root(resolver.data_root)
+    fixtures_root.mkdir(parents=True, exist_ok=True)
+    adapter = FakeAgentAdapter(fixtures_root)
+    storage = Storage(db_path)
+    try:
+        ctl = RunController(
+            storage=storage,
+            adapter=adapter,
+            conn=storage._conn,  # type: ignore[attr-defined]
+        )
+        run_id = ctl.create_run(
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+            plan=plan,
+        )
+        snap = ctl.reconcile_run(
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+            run_id=run_id,
+        )
+        iterations = 0
+        while not is_terminal_run_state(snap.state) and iterations < args.max_iterations:
+            iterations += 1
             snap = ctl.reconcile_run(
                 tenant_id=project["tenant_id"],
                 project_id=project["name"],
                 run_id=run_id,
             )
-            # Loop hasta terminal (current_node agotado).
-            iterations = 0
-            while (
-                snap.state not in {"COMPLETED", "FAILED", "CANCELLED"}
-                and iterations < args.max_iterations
-            ):
-                iterations += 1
-                snap = ctl.reconcile_run(
-                    tenant_id=project["tenant_id"],
-                    project_id=project["name"],
-                    run_id=run_id,
-                )
-            if (
-                snap.state not in {"COMPLETED", "FAILED", "CANCELLED"}
-                and iterations >= args.max_iterations
-            ):
-                print(
-                    f"WARN: max-iterations alcanzado ({args.max_iterations}); "
-                    f"estado={snap.state} current={snap.current_node}",
-                    file=sys.stderr,
-                )
-        finally:
-            storage.close()
+        if not is_terminal_run_state(snap.state) and iterations >= args.max_iterations:
+            print(
+                f"WARN: max-iterations alcanzado ({args.max_iterations}); "
+                f"estado={snap.state} current={snap.current_node}",
+                file=sys.stderr,
+            )
     finally:
-        cat.close()
+        storage.close()
 
     print(f"Run: {run_id}")
     print(f"Estado: {snap.state}")
     print(f"Nodos ejecutados: {', '.join(snap.executed_nodes) or '(ninguno)'}")
     print(f"Eventos emitidos: {snap.events_emitted}")
     print(f"Fixtures de agente: {fixtures_root}")
-    # Devolvemos codigos distintos segun estado para que el shell
-    # pueda ramificar sin parsear la salida.
+    # Codigos distintos segun estado para que el shell pueda
+    # ramificar sin parsear la salida.
     if snap.state == "COMPLETED":
-        return 0
+        return EXIT_OK
     if snap.state == "FAILED":
-        return 20
-    return 21
+        return EXIT_RUN_FAILED
+    return EXIT_RUN_INCOMPLETE
 
 
 if __name__ == "__main__":
