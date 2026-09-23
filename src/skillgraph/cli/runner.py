@@ -33,6 +33,7 @@ from skillgraph.core.errors import (
     UnknownKindError,
     ValidationError,
 )
+from skillgraph.domain.pack_loader import declare_types_from_pack
 from skillgraph.governance.graph_expansion import (
     AddNode,
     AddTransition,
@@ -497,6 +498,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Ruta donde escribir el informe JSON. Default: stdout.",
     )
+    pl = pp_sub.add_parser(
+        "load",
+        help="Carga un Domain Pack en un proyecto: declara sus tipos (H8).",
+    )
+    pl.add_argument("project", help="Proyecto destino (donde se persiste el pack).")
+    pl.add_argument("path", type=Path, help="Ruta al archivo Markdown del Domain Pack.")
 
     rp = sub.add_parser(
         "run",
@@ -668,6 +675,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_brick_register(args)
         if args.command == "pack" and args.pack_command == "import":
             return cmd_pack_import(args)
+        if args.command == "pack" and args.pack_command == "load":
+            return cmd_pack_load(args)
         if args.command == "run":
             return cmd_run(args)
         if args.command == "knowledge":
@@ -722,8 +731,59 @@ def _route_expansion(args: argparse.Namespace) -> int:
     return EXIT_USAGE  # unreachable
 
 
-def cmd_brick_register(args: argparse.Namespace) -> int:
-    """Registra un brick en un proyecto, validándolo primero."""
+def _build_registry_for_project(
+    storage: Storage, *, tenant_id: str, project_id: str
+) -> BrickRegistry:
+    """Registry del nucleo + tipos declarados por los Domain Packs
+    persistidos del proyecto (H8, ADR-0013-anexo).
+
+    Los packs adoptados viven en la tabla `resources` con
+    kind='DomainPack'; aqui se re-declaran sus tipos sobre
+    `load_defaults()`. Sin ejecutar codigo del pack: la declaracion
+    es solo el schema declarativo (declare_types_from_pack).
+    """
+    import json as _json
+
+    from skillgraph.resources.bricks import Brick
+
+    reg = load_defaults()
+    for row in storage.list_resources(
+        tenant_id=tenant_id, project_id=project_id, kind="DomainPack"
+    ):
+        try:
+            spec = _json.loads(row.get("spec_json", "{}") or "{}")
+        except (ValueError, TypeError):
+            spec = {}
+        try:
+            declare_types_from_pack(
+                reg,
+                Brick(
+                    identity=ResourceIdentity(
+                        tenant_id=tenant_id,
+                        project_id=project_id,
+                        namespace=row.get("namespace", "shared"),
+                        kind="DomainPack",
+                        name=row.get("name", "?"),
+                    ),
+                    api_version=row.get("api_version", "skillgraph.dev/v1alpha1"),
+                    kind="DomainPack",
+                    spec=spec or {},
+                ),
+            )
+        except SkillGraphError:
+            # Un pack corrupto no debe impedir arrancar el comando:
+            # los tipos core siguen disponibles. Se omite el pack.
+            continue
+    return reg
+
+
+def cmd_pack_load(args: argparse.Namespace) -> int:
+    """Carga un Domain Pack en un proyecto (H8, UAT-12 ruta publica).
+
+    Persiste el pack como resource kind='DomainPack'. Los tipos que
+    declara quedan disponibles para futuros comandos del proyecto via
+    `_build_registry_for_project`.
+    """
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.project)
     if err is not None:
@@ -739,17 +799,76 @@ def cmd_brick_register(args: argparse.Namespace) -> int:
         name="(pending)",
     )
     try:
-        brick = parse_file(args.path, identity=identity)
+        pack = parse_file(args.path, identity=identity)
     except ParseError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
         return EXIT_PARSE
+
+    # Solo se acepta un DomainPack; validar que sus tipos son declarables
+    # ANTES de persistir (fail-fast, sin dejar pack roto persistido).
+    if pack.kind != "DomainPack":
+        print(
+            f"ERROR ({ValidationError.code}): se esperaba kind='DomainPack', recibio {pack.kind!r}",
+            file=sys.stderr,
+        )
+        return EXIT_VALIDATION
     try:
-        registry.validate(brick)
-    except (UnknownKindError, ValidationError) as exc:
+        declared = declare_types_from_pack(registry, pack)
+    except ValidationError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
         return EXIT_VALIDATION
+
     storage = Storage(db_path)
     try:
+        # Re-declaracion contra el registry del proyecto ya persistido:
+        # evita shadowing con packs cargados previamente.
+        project_reg = _build_registry_for_project(
+            storage, tenant_id=project["tenant_id"], project_id=args.project
+        )
+        try:
+            declare_types_from_pack(project_reg, pack)
+        except ValidationError as exc:
+            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+            return EXIT_VALIDATION
+        uid = storage.upsert_resource(pack)
+    finally:
+        storage.close()
+    print(f"Domain Pack cargado: {pack.identity.namespace}/{pack.identity.name}")
+    print(f"Tipos declarados: {', '.join(declared)}")
+    print(f"UID: {uid}")
+    return EXIT_OK
+
+
+def cmd_brick_register(args: argparse.Namespace) -> int:
+    """Registra un brick en un proyecto, validándolo primero."""
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return err
+
+    db_path = Path(project["db_path"])
+    storage = Storage(db_path)
+    try:
+        registry: BrickRegistry = _build_registry_for_project(
+            storage, tenant_id=project["tenant_id"], project_id=args.project
+        )
+        identity = ResourceIdentity(
+            tenant_id=project["tenant_id"],
+            project_id=args.project,
+            namespace="(pending)",
+            kind="(pending)",
+            name="(pending)",
+        )
+        try:
+            brick = parse_file(args.path, identity=identity)
+        except ParseError as exc:
+            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+            return EXIT_PARSE
+        try:
+            registry.validate(brick)
+        except (UnknownKindError, ValidationError) as exc:
+            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+            return EXIT_VALIDATION
         uid = storage.upsert_resource(brick)
     finally:
         storage.close()
