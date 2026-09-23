@@ -1,0 +1,45 @@
+{
+  "uat_id": "UAT-02",
+  "revision": "f4618b2bf6da1340b170860e92bd6278bc0c182a",
+  "timestamp": "2026-09-23T08:49:49Z",
+  "scenario": "Dados dos proyectos del mismo tenant (alpha, beta), cuando se crea un brick solo en alpha, entonces beta no lo ve.",
+  "expected": "alpha tiene 1 brick alpha-secret; beta tiene 0 bricks alpha-secret; inspect de beta NO muestra alpha-secret",
+  "observed": "alpha=1, beta=0; inspect beta tiene alpha-secret: False",
+  "steps": [
+    {
+      "cmd": "init",
+      "returncode": "0",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-i065_hrc/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat02-i065_hrc/data\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "project create alpha",
+      "returncode": "0",
+      "stdout": "Proyecto 'alpha' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-i065_hrc/data/tenants/default/projects/alpha/project.sqlite\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "project create beta",
+      "returncode": "0",
+      "stdout": "Proyecto 'beta' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-i065_hrc/data/tenants/default/projects/beta/project.sqlite\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "brick alpha /home/rubentxu/.jcode/scratch/sg-uat02-i065_hrc/alpha-only.md",
+      "returncode": "0",
+      "stdout": "Brick registrado: DecisionNode/software/alpha-secret\nUID: default/alpha/skillgraph.dev/v1alpha1/DecisionNode/software/alpha-secret\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "project inspect beta",
+      "returncode": "0",
+      "stdout": "Proyecto: beta\nTenant:   default\nDB:       /var/home/rubentxu/.jcode/scratch/sg-uat02-i065_hrc/data/tenants/default/projects/beta/project.sqlite\nCreado:   2026-09-23T08:49:49.300668+00:00\nRecursos: 0 total\n",
+      "stderr": ""
+    }
+  ],
+  "artifacts": [
+    "/home/rubentxu/.jcode/scratch/sg-uat02-i065_hrc"
+  ],
+  "status": "PASS",
+  "notes": "Aislamiento via tenant_id+project_id en Storage. UNIQUE constraints separados por proyecto."
+}

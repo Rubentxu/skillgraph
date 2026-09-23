@@ -1,0 +1,39 @@
+{
+  "uat_id": "UAT-06",
+  "revision": "f4618b2bf6da1340b170860e92bd6278bc0c182a",
+  "timestamp": "2026-09-23T08:49:51Z",
+  "scenario": "Dada una ejecucion interrumpida, cuando se reinicia la CLI, se recuperan estado y resultados confirmados y se continua desde un punto seguro.",
+  "expected": "HONESTO: con max-iterations=2 el run completa todos los nodos en una pasada (bug _calculate_frontier ejecuta toda la frontier). UAT-06 de recuperacion NO verificable honestamente con la implementacion actual. Marca deuda H4+.",
+  "observed": "state_after_1=('COMPLETED', None); runs_after=2; run1_rc=0; run2_rc=0 (Bug confirmado: _calculate_frontier ejecuta TODOS los nodos pendientes en una sola pasada. max-iterations no previene esto. Deuda H4+ (limitar reconciliacion a UN nodo por llamada o soportar ciclos).)",
+  "steps": [
+    {
+      "cmd": "init",
+      "returncode": "0",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/data\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "project create demo",
+      "returncode": "0",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/data/tenants/default/projects/demo/project.sqlite\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/fixtures --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/plan.md",
+      "returncode": "0",
+      "stdout": "Run: run-5a4492e4-70b3-4acb-812b-1bd276beff03\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/fixtures\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/plan.md",
+      "returncode": "0",
+      "stdout": "Run: run-2868d22c-9c22-428f-a508-a32a44980a35\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6/fixtures\n",
+      "stderr": ""
+    }
+  ],
+  "artifacts": [
+    "/home/rubentxu/.jcode/scratch/sg-uat06-efimtvj6"
+  ],
+  "status": "FAIL",
+  "notes": "Bug confirmado: _calculate_frontier ejecuta TODOS los nodos pendientes en una sola pasada. max-iterations no previene esto. Deuda H4+ (limitar reconciliacion a UN nodo por llamada o soportar ciclos)."
+}

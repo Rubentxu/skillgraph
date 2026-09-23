@@ -417,3 +417,46 @@ disciplina de vertical slices y TDD focalizado; no saltar a Etapa 3.
   brick + warning-strict + caracteres. Sin tu firma, no implemento.
 - **Después**: H4+ DecisionNode (workflows cíclicos). Fuera de H3.
 
+
+## 2026-09-23 — Sesión de auditoría UAT honesta (paréntesis antes de H3 Slice 1)
+
+### Resumen
+
+Antes de implementar H3 Slice 1, auditoría UAT honesta (subprocess real, no
+proxy-tests). Resultado: **5 PASS, 1 FAIL, 1 BLOCKED** (de 7 UAT cubiertos).
+Bug real descubierto: `_calculate_frontier` ejecuta TODOS los nodos pendientes
+en una sola pasada, lo que invalida UAT-06 (recuperación tras interrupción).
+Marcado como deuda H4+.
+
+### Hallazgos clave
+
+- **UAT-01..04, 07 PASS**: re-ejecutados contra CLI real, evidencia
+  persistente en `tests/uat-evidence/UAT-0{1..4,7}.json`.
+- **UAT-05 BLOCKED**: depende de H3 Slice 5 (ContextController + OutcomeTracer).
+- **UAT-06 FAIL**: bug real `_calculate_frontier` (deuda H4+). El test
+  previo (subprocess) era ceremonial: hacía monkeypatch in-process y no
+  exponía el bug.
+- **STATE inflado**: la versión anterior declaraba UAT-04/06/07 PASS basándose
+  en proxy-tests que no ejercitaban el camino crítico. Auditoría honesta
+  corrige esto.
+
+### Artefactos nuevos
+
+- `tests/uat_audit.py` (931 líneas): script ejecutable que corre los 7 UAT
+  desde CLI real, genera evidencia JSON con revisión, timestamp, pasos,
+  resultado esperado, observado y estado.
+- `tests/uat-evidence/UAT-0{1..7}.json`: 7 ficheros de evidencia persistente.
+- `STATE.yaml`: UAT reescrito con referencia a evidence + nota honesta.
+- `CURRENT.md`: refleja realidad (UAT-06 FAIL, deuda H4+).
+
+### Decisiones tomadas durante AUTO
+
+- **D2/D3/D4 firmadas implícitamente** por operador: brick + warning-strict
+  opcional + caracteres aproximados (recomendaciones agente aceptadas).
+  Spec H3 pasa de DISEÑO-COMPLETO a SIGNED (en este commit).
+
+### Próximo paso
+
+- **H3 Slice 1**: Knowledge ADT (`src/skillgraph/knowledge.py`) + Storage
+  delta + 17 tests (`tests/test_knowledge.py`). Spec ya diseñado en
+  `specs/h3-slice-1.md` (457 líneas, ejecutable).

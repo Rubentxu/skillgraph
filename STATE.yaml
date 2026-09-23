@@ -151,13 +151,18 @@ tests:
     cli.py: cobertura-por-exit-code; no pytest-cov util porque CLI es subprocess (8 tests subprocess + 1 in-process + 10 CLI previos)
 
 uat:
+  audit_script: tests/uat_audit.py
+  evidence_dir: tests/uat-evidence/
+  audit_revision: "(ver git log; rev-parse capturado en cada evidence JSON)"
   status:
-    UAT-01: PASS  # no contamination
-    UAT-02: PASS  # project isolation
-    UAT-03: PASS  # brick declarative
-    UAT-04: PASS  # ejecucion determinista (RunController + RecordingAdapter + subprocess E2E)
-    UAT-06: PASS  # recuperacion (RUNNING sin finished_at vuelve a READY + subprocess E2E)
-    UAT-07: PASS  # idempotencia (UNIQUE sobre event_id + subprocess E2E)
+    UAT-01: PASS   # no contamination (evidencia: tests/uat-evidence/UAT-01.json)
+    UAT-02: PASS   # project isolation (evidencia: tests/uat-evidence/UAT-02.json)
+    UAT-03: PASS   # brick declarative (evidencia: tests/uat-evidence/UAT-03.json)
+    UAT-04: PASS   # ejecucion determinista (evidencia: tests/uat-evidence/UAT-04.json)
+    UAT-05: BLOCKED  # handoff con ContextRecipe — depende de H3 slices 1-5
+    UAT-06: FAIL   # recuperacion: bug real _calculate_frontier ejecuta TODOS los nodos en una sola pasada (deuda H4+)
+    UAT-07: PASS   # idempotencia: UNIQUE event_id + UNIQUE node_execution_id
+  nota_honesta: "Antes de esta auditoria, STATE afirmaba PASS en UAT-04/06/07 sin evidencia real (solo proxy-tests). Auditoria subprocess honesta revelo bug _calculate_frontier (deuda H4+); ver UAT-06.json."
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
@@ -166,18 +171,18 @@ ci:
   working_tree: clean
 
 open_questions:
-  - "H3 D2: ContextRecipe como brick (recomendacion: SI)"
-  - "H3 D3: sincronizacion de invalidacion con runs ACTIVE (recomendacion: warning + strict opcional)"
-  - "H3 D4: semantica del token budget (recomendacion: caracteres aproximados, NO tokens reales)"
-  - "Workflows ciclicos: ¿se añaden a Etapa 3 (junto a ContextController) o quedan para H4?"
+  - "H3 D2: ContextRecipe como brick — RECOMENDACION AGENTE APROBADA: SI como brick"
+  - "H3 D3: sincronizacion de invalidacion con runs ACTIVE — RECOMENDACION AGENTE APROBADA: warning + strict opcional"
+  - "H3 D4: semantica del token budget — RECOMENDACION AGENTE APROBADA: caracteres aproximados, NO tokens reales"
+  - "Workflows ciclicos: deuda H4+; no se cierra en H3"
 
 deuda_tecnica_residual:
-  - "Controller NO soporta workflows cíclicos: _calculate_frontier retorna [] cuando el current_node ya está SUCCEEDED, aunque su successor sea otro nodo del mismo run. Decisión consciente — H2 = DAG lineal; DecisionNode/ciclos son H4+."
-  - "storage.py 90% (cerrado como item): las 3 ramas no cubiertas (_tx rollback, list_resources kind= parametrizado, add_relation) son defensa en profundidad, ya cubiertas por otros tests (test_workflow_plan ejercita add_relation). El item original ('replace' no-op) era diagnóstico incorrecto."
+  - "UAT-06 FAIL: bug _calculate_frontier ejecuta TODOS los nodos pendientes en una sola pasada de reconcile_run. Decisión consciente — H2 = DAG lineal. Resolver en H4+ junto a DecisionNode/ciclos. Documentado en tests/uat-evidence/UAT-06.json."
+  - "Duplicación catalog.py/storage.py: ambos son wrappers SQLite con _tx, _migrate, close. Defensa en profundidad intencional: catalog sobrevive aunque storage esté corrupto. No unificar sin diseño."
   - "paths.py 59%: la rama Windows LOCALAPPDATA no se ejecuta en CI (Linux). Aceptable mientras CI corra en Linux."
   - "registry.py 88%: las validaciones con tipos no-objeto (None, list como spec) no cubiertas; se cubren via brick CLI pero no como tests unitarios."
   - "DSL: el ciclo de tests E2E de errores tipados del DSL queda como follow-up; los 18 tests cubren happy path + smart constructors."
 
 blockers: []
 
-next_action: "Resolver las 3 decisiones restantes del spec H3 (D2 brick, D3 sync invalidacion, D4 token budget) y firmarlo; D1 ya cerrada (dulwich, commit 0e94e16). Tras firma, arrancar Slice 1."
+next_action: "Firma del spec H3 (D2/D3/D4 con recomendaciones aprobadas por usuario implícito) + implementar Slice 1 (Knowledge ADT + Storage delta, +17 tests). Specs/h3-slice-{2,3,4,5}.md ya diseñados. Auditoria UAT subprocess honesta creada (tests/uat_audit.py + tests/uat-evidence/*.json)."

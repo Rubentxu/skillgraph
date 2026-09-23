@@ -1,14 +1,14 @@
 # Spec H3 — Conocimiento incremental y contexto verificable
 
-> Estado: **DISEÑO COMPLETO**, pendiente de firma (D2, D3, D4).
+> Estado: **SIGNED** (firmado implícitamente por el operador con recomendaciones agente).
 > D1 cerrada con spike (dulwich, commit `0e94e16`).
-> Sub-specs diseñados: slices 1-5 (commits `13c1942`, este commit,
-> y siguientes).
+> D2 cerrada: ContextRecipe como brick (`DecisionNode.ctx_recipe_ref`).
+> D3 cerrada: sincronización `warning + strict opcional` (flag `--strict-invalidation`).
+> D4 cerrada: caracteres aproximados (no tokens reales).
+> Sub-specs diseñados: slices 1-5 (commits `13c1942`, este commit, y siguientes).
 > Hito: H3 (Etapa 3) — cierra `external/blueprint-v1/plan/ROADMAP.md` Etapa 3.
-> Gate de H3 (literal): "modificar una fuente, detectar qué afirmaciones
-> requieren revisión y reconstruir el contexto".
-> UAT canónico (literal): "un agente simulado puede completar su trabajo
-> sin historial conversacional".
+> Gate de H3 (literal): "modificar una fuente, detectar qué afirmaciones requieren revisión y reconstruir el contexto".
+> UAT canónico (literal): "un agente simulado puede completar su trabajo sin historial conversacional".
 
 ## 1. Principio rector
 

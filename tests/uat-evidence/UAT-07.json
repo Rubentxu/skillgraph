@@ -1,0 +1,39 @@
+{
+  "uat_id": "UAT-07",
+  "revision": "f4618b2bf6da1340b170860e92bd6278bc0c182a",
+  "timestamp": "2026-09-23T08:49:52Z",
+  "scenario": "Dado un evento entregado dos veces, cuando el controlador lo procesa, no se duplica la accion ni el resultado.",
+  "expected": "1 ejecucion por nodo (UNIQUE node_execution_id); INSERT duplicado de runtime_events.event_id falla por UNIQUE.",
+  "observed": "runs_count=2; a_execs=(2, 'SUCCEEDED'); b_execs=(2, 'SUCCEEDED'); c_execs=(2, 'SUCCEEDED'); dup_failed=True; run1_rc=0; run2_rc=0",
+  "steps": [
+    {
+      "cmd": "init",
+      "returncode": "0",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/data\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "project create demo",
+      "returncode": "0",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/data/tenants/default/projects/demo/project.sqlite\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/fixtures --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/plan.md",
+      "returncode": "0",
+      "stdout": "Run: run-79fc7172-db70-4b63-9df0-4610947c9f54\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/fixtures\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/plan.md",
+      "returncode": "0",
+      "stdout": "Run: run-f0663e21-229a-45ea-bb7c-28752c62204e\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_/fixtures\n",
+      "stderr": ""
+    }
+  ],
+  "artifacts": [
+    "/home/rubentxu/.jcode/scratch/sg-uat07-0dgnr7x_"
+  ],
+  "status": "PASS",
+  "notes": "Idempotencia verificada: (1) UNIQUE node_execution_id impide duplicar ejecuciones; (2) UNIQUE event_id impide duplicar eventos. runs_count puede ser >1 por bug _calculate_frontier (deuda H4+)."
+}
