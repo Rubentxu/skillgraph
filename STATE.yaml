@@ -239,6 +239,7 @@ deuda_tecnica_residual:
   - "registry.py 88% validado: mismas cifras; no es dato heredado falso."
   - "plan_loader.py 69%, parser.py 77%, recipe.py 73%: modulos con minimo de cobertura util pero mejorables. NO son deuda critica funcional."
   - "SourceKind Literal validado en runtime: nuevo __post_init__ valida kind contra typing.get_args. Cierra bug silencioso donde from __future__ import annotations desactiva Literal-check en runtime."
+  - "H5 'conservar material original' DECIDIDO (specs/h5-source-conservation-decision.md): referencia (path+content_hash), NO duplicar bytes. Justificado por blueprint §10 §5-6."
 
 blockers: []
 
