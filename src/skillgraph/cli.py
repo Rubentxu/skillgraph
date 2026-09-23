@@ -90,9 +90,7 @@ class ProjectResolver:
         """Busca un proyecto. Devuelve (project_row, None) o ({}, exit_code)."""
         cat = open_catalog(catalog_path(self.data_root))
         try:
-            project = cat.get_project(
-                tenant_id=self.tenant_id, name=project_name
-            )
+            project = cat.get_project(tenant_id=self.tenant_id, name=project_name)
         finally:
             cat.close()
         if project is None:
@@ -167,9 +165,7 @@ def cmd_project_list(args: argparse.Namespace) -> int:
 
 
 def cmd_project_inspect(args: argparse.Namespace) -> int:
-    resolver = ProjectResolver(
-        data_root=resolve_data_root(args.data_root)
-    ).with_default_root()
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.name)
     if err is not None:
         return err
@@ -210,9 +206,7 @@ def _count_resources(storage: Storage, *, tenant_id: str, project_id: str) -> di
     return {"total": len(rows), "by_kind": by_kind}
 
 
-def _find_active_run_id(
-    storage: Storage, *, tenant_id: str, project_id: str
-) -> str | None:
+def _find_active_run_id(storage: Storage, *, tenant_id: str, project_id: str) -> str | None:
     """Devuelve el run_id del Run mas reciente en estado no terminal
     para (tenant, project), o None si no hay ninguno.
 
@@ -341,9 +335,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def cmd_brick_register(args: argparse.Namespace) -> int:
     """Registra un brick en un proyecto, validándolo primero."""
-    resolver = ProjectResolver(
-        data_root=resolve_data_root(args.data_root)
-    ).with_default_root()
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.project)
     if err is not None:
         return err
@@ -372,9 +364,7 @@ def cmd_brick_register(args: argparse.Namespace) -> int:
         uid = storage.upsert_resource(brick)
     finally:
         storage.close()
-    print(
-        f"Brick registrado: {brick.kind}/{brick.identity.namespace}/{brick.identity.name}"
-    )
+    print(f"Brick registrado: {brick.kind}/{brick.identity.namespace}/{brick.identity.name}")
     print(f"UID: {uid}")
     return EXIT_OK
 
@@ -390,9 +380,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from skillgraph.runcontroller import RunController
     from skillgraph.runtime_types import is_terminal_run_state
 
-    resolver = ProjectResolver(
-        data_root=resolve_data_root(args.data_root)
-    ).with_default_root()
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.project)
     if err is not None:
         return err
