@@ -47,3 +47,21 @@ class NotFoundError(SkillGraphError):
     """Un recurso o fixture solicitada no existe."""
 
     code = "sg_not_found"
+
+
+class OutcomeInvalidError(ValidationError):
+    """El outcome del agente no esta declarado en el WorkflowPlan."""
+
+    code = "sg_outcome_invalid"
+
+
+class StateTransitionError(ValidationError):
+    """Una transicion de estado no es legal."""
+
+    code = "sg_state_transition"
+
+
+class MaxIterationsExceeded(SkillGraphError):
+    """El bucle de reconciliacion agoto el presupuesto de iteraciones."""
+
+    code = "sg_max_iterations"

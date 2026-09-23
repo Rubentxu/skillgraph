@@ -64,3 +64,13 @@ def is_safe_name(name: str) -> bool:
     if not name or len(name) > 64:
         return False
     return all(ch.isascii() and (ch.isalnum() or ch in "-_") for ch in name)
+
+
+def agents_root(data_root: Path) -> Path:
+    """Raíz de fixtures de agentes (estructura: <tenant>/<project>/<node>.json).
+
+    Vive fuera de los proyectos para que el usuario pueda mantener
+    fixtures compartidas entre proyectos. Por defecto cuelga de
+    la raíz de datos como subdirectorio `agents/`.
+    """
+    return data_root / "agents"
