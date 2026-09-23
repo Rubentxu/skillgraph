@@ -1,11 +1,11 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 10:47 (Europe/Madrid).
-> Revisión: `05dcb58 spec(h3): sub-specs slices 2-5 + spec padre compactado`.
+> Última verificación: 2026-09-23 11:24 (Europe/Madrid).
+> Revisión: `0529e77 H3 slice 5: ContextController + OutcomeTracer + CLI knowledge`.
 
 ## Goal
 
-Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0 + S1) → Etapa 1 → Etapa 2.
+Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0 + S1) → Etapa 1 → Etapa 2 → Etapa 3.
 Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1/README.md`,
 `external/blueprint-v1/adr/`.
 
@@ -16,43 +16,60 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 - H2 (Ejecución local) **cerrado** con la nota honesta: **UAT-06 FAIL**
   (bug `_calculate_frontier` ejecuta TODOS los nodos en una sola pasada;
   deuda H4+). Evidencia en `tests/uat-evidence/UAT-06.json`.
-- Trabajo activo: **H3 firma del spec + Slice 1 (Knowledge ADT + Storage)**.
-  Auditoría UAT honesta creada (`tests/uat_audit.py` + 7 evidencias JSON).
-- Siguiente desbloqueado: **Slice 1** (`specs/h3-slice-1.md`, +17 tests).
+- **H3 (Knowledge & Context) CERRADO**. 5 slices implementadas y verificadas.
+  Auditoría UAT honesta: **6/7 PASS, 0 BLOCKED, 1 FAIL (UAT-06 deuda H4+)**.
+- Siguiente desbloqueado: **H4-draft** (DecisionNode, workflows cíclicos,
+  fix `_calculate_frontier`, Adapter real para tokens si se exige).
 
 ## Último estado comprobado
 
-- Repo: rama `main`, **27 commits limpios, lint verde, 161 tests verdes**.
-- Working tree: limpio (con cambios sin commitear en `tests/uat_audit.py`,
-  `tests/uat-evidence/`, `STATE.yaml`, `CURRENT.md`).
-- CI pasa localmente con `scripts/ci.sh` (~43s).
+- Repo: rama `main`, **32 commits limpios, lint verde, 234 tests verdes**.
+- Working tree: cambios sin commitear en `STATE.yaml`, `CURRENT.md`,
+  `SESSION-JOURNAL.md` (cierre de docs H3).
+- CI pasa localmente con `scripts/ci.sh` (91.26s).
 - Python 3.13.15 via `mise`; `uv` para resolver venv reproducible.
 - Bootstrap del paquete: `hatchling`, `py.typed`, dev deps PEP 735.
-- **Auditoría UAT honesta** (subprocess real) ejecutada: 5 PASS, 1 FAIL
-  (UAT-06 bug `_calculate_frontier`), 1 BLOCKED (UAT-05 H3 pendiente).
-  Evidencias en `tests/uat-evidence/UAT-0{1..7}.json`.
-- AGENTS.md cerrado: Section 11 (Haskell-inspired functional programming)
-  con 15 subsecciones.
-- Spec H3 diseño completo (`specs/h3-knowledge.md`).
-  - D1 cerrada con spike (`dulwich`, commit `0e94e16`).
-  - D2/D3/D4 firmadas implícitamente por el usuario con recomendaciones agente:
-    brick + warning-strict + caracteres.
-  - 5 sub-specs (slices 1-5) diseñados y commiteados.
-  - Total tests previstos tras firma: **161 → 225**.
+
+### H3 — slices implementadas
+
+| Slice | Commit | Contenido | Tests |
+|---|---|---|---|
+| 1 | `b06cc15` | Knowledge ADT + Storage delta (`knowledge.py` + storage columns + `tests/test_knowledge.py`) | +17 |
+| 2 | `dd2f7a7` | KnowledgeController con CRUD de Claims/Entities/Evidences/Sources | +17 |
+| 3 | `01dd3ac` | Git fingerprinting con dulwich (`git_source.py`) + tests spike→TDD | +8 |
+| 4 | `2d8cad0` | Invalidación transitiva + `KnowledgeInvalidated` event (`knowledge_invalidator.py`) | +10 |
+| 5 | `0529e77` | ContextController + OutcomeTracer + `ContextRecipe` + CLI `knowledge {stale,invalidate,refresh,compile,trace}` | +18 (13 unit + 5 e2e) |
+
+**Total H3: 70 tests nuevos. Acumulado repo: 161 → 234.**
+
+### Decisiones H3 firmadas
+
+- **D1-git-lib** → `dulwich` (lazy import + `set_dulwich_import_failed` hook).
+- **D2-contextrecipe-brick** → brick cerrado (`from_dict` valida esquema).
+- **D3-invalidacion-sync** → warning + strict opcional (`CyclicDependencyWarning` separada de `CyclicDependencyError`).
+- **D4-token-budget** → caracteres aproximados (`approx_chars` heurística;
+  tiktoken solo si H4+ exige Adapter real).
+
+### Auditoría UAT (subprocess honesta)
+
+- UAT-01..04: PASS (no contamination / project isolation / brick declarative / ejecución determinista).
+- UAT-05: **PASS** (reescrito en slice 5; antes BLOCKED). Handoff con
+  ContextRecipe: stale → invalidate → compile strict (exit=10) → trace (exit=0).
+- UAT-06: FAIL (deuda H4+; bug `_calculate_frontier` documentado).
+- UAT-07: PASS (idempotencia).
+
+Evidencias en `tests/uat-evidence/UAT-0{1..7}.json`.
 
 ## Decisiones del operador registradas
 
 1. SDDK **on** en este workspace (intento fallido por bug externo del binario
    `sddk` que devuelve `workspace_id` distinto por invocación). Workaround:
-   continuamos sin SDDK porque las Etapas 0..2 no dependen de él.
+   continuamos sin SDDK porque S0..S5 + Etapas 0..2 no dependen de él.
 2. `.zip` y `create.py` se conservan hasta confirmar versión de la copia descomprimida.
 3. Python 3.13.15 (runtime local; 3.14 disponible en sistema).
 4. **No Rust en el bootstrap**: solo cuando un cuello de botella justifique
-   la integración, detrás de interfaz Python. Tabla de triggers GO en este mismo archivo.
-5. **Ciclos en workflows NO se soportan** en H2. El controller calcula
-   frontier por current_node y termina cuando el current ya está SUCCEEDED
-   incluso si su successor es otro nodo del mismo run. Es deuda H4+,
-   se documenta aquí.
+   la integración, detrás de interfaz Python. Tabla de triggers GO abajo.
+5. **Ciclos en workflows NO se soportan** en H2. Es deuda H4+.
 6. **D2/D3/D4 firmadas implícitamente** (operador aprueba recomendaciones del
    agente: brick + warning-strict + caracteres).
 
@@ -60,24 +77,16 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 
 - **b3 (SDDK adopción real)** bloqueado por bug del binario SDDK:
   cada invocación de `sddk config resolve --cwd` devuelve un `workspace_id`
-  distinto, así que el `set on --workspace` no se encuentra con el
-  `resolve`. Confirmado reproduciendo. **No es un gate del usuario**; es
-  bug de toolchain. Workaround aplicado: continuamos sin SDDK porque
-  S0..S5 + Etapas 0..2 no dependen de él.
-- **UAT-06 FAIL**: bug `_calculate_frontier` (deuda H4+, no bloquea H3).
+  distinto. No es gate del usuario; workaround: continuamos sin SDDK.
+- **UAT-06 FAIL**: bug `_calculate_frontier` (deuda H4+, NO bloquea H3 cerrado).
 
 ## Próxima acción concreta
 
-1. ~~Auditoría UAT honesta subprocess con sistema de evidencias.~~ Hecho
-   (`tests/uat_audit.py` + `tests/uat-evidence/`).
-2. ~~Firma del spec H3 (D2/D3/D4).~~ Recomendaciones agente aprobadas por
-   operador implícito. Spec pasa de DISEÑO-COMPLETO a SIGNED.
-3. **Implementar Slice 1** (`specs/h3-slice-1.md`): Knowledge ADT en
-   `src/skillgraph/knowledge.py` + Storage delta + 17 tests en
-   `tests/test_knowledge.py`. Cerrar slice → commit → verificar que los
-   161 tests siguen verdes y los 17 nuevos pasan.
-4. Mantener `scripts/ci.sh` ejecutándose localmente en cada commit hasta
-   que haya runner externo configurado.
+1. ~~Slices 1-5 H3.~~ Hecho (commits `b06cc15`/`dd2f7a7`/`01dd3ac`/`2d8cad0`/`0529e77`).
+2. ~~UAT-05 re-audito.~~ Hecho: PASS tras slice 5.
+3. **Push rama remota** (workstream H3 completo, pendiente `git push origin main`).
+4. **H4-draft**: spec para DecisionNode + workflows cíclicos + fix
+   `_calculate_frontier` + Adapter real de tokens si aplica.
 
 ## Valoración Rust (decisión operador 2026-09-23)
 
@@ -88,9 +97,9 @@ spike demuestre cuello de botella real en uno de estos 5 puntos:
 |---|---|---|---|
 | 1 | Validación de esquemas de recursos (bricks) | >100 ms / brick sobre 5k schemas | Spike S4 pendiente |
 | 2 | Hash + serialización de handoff inmutable | >200 ms / materialización | Etapa 2 — NO se disparó |
-| 3 | Invalidación incremental de conocimiento (DFS tipado) | >500 ms sobre 10k Claims + 50k Relations | Etapa 3 |
+| 3 | Invalidación incremental de conocimiento (DFS tipado) | >500 ms sobre 10k Claims + 50k Relations | Etapa 3 — implementado Python, no se disparó |
 | 4 | Cálculo de frontera de workflow | >200 ms sobre 1k nodos | Etapa 2 — NO se disparó |
-| 5 | Fingerprinting Git incremental | >1 s por 1k archivos cambiados | Etapa 3 |
+| 5 | Fingerprinting Git incremental | >1 s por 1k archivos cambiados | Etapa 3 — dulwich Python, no se disparó |
 
 **Forma de integración (cuando entre):** binario CLI o PyO3 detrás de
 interfaz Python (`Storage`, `Validator`, `HandoffHasher`, `FrontierResolver`).

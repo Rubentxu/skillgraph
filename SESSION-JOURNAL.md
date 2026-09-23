@@ -460,3 +460,67 @@ Marcado como deuda H4+.
 - **H3 Slice 1**: Knowledge ADT (`src/skillgraph/knowledge.py`) + Storage
   delta + 17 tests (`tests/test_knowledge.py`). Spec ya diseñado en
   `specs/h3-slice-1.md` (457 líneas, ejecutable).
+
+
+## 2026-09-23 — H3 Knowledge & Context: 5 slices cerradas, UAT-05 PASS
+
+### Resumen
+
+H3 cerrado. 5 slices implementadas y verificadas (commits
+`b06cc15`/`dd2f7a7`/`01dd3ac`/`2d8cad0`/`0529e77`). UAT-05 pasa de
+BLOCKED a PASS tras slice 5. Total acumulado: **161 → 234 tests
+verdes** (+73). UAT final: **6/7 PASS, 0 BLOCKED, 1 FAIL** (UAT-06,
+deuda H4+ documentada).
+
+### Por slice
+
+- **Slice 1 (`b06cc15`)**: Knowledge ADT (`Claim`, `Entity`, `Evidence`,
+  `Source`, `Relation`) en `src/skillgraph/knowledge.py` + delta de
+  Storage (4 tablas nuevas). 17 tests (`tests/test_knowledge.py`).
+- **Slice 2 (`dd2f7a7`)**: KnowledgeController con CRUD + helpers de
+  evidencia compartida. 17 tests (`tests/test_knowledge_controller.py`).
+  Bug crítico descubierto: el `upsert_entity` debe ignorar PK conflict
+  si `stable_key` ya existe con mismo `entity_id`.
+- **Slice 3 (`01dd3ac`)**: `GitSource` ADT (`git_source.py`) con
+  dulwich (lazy import + hook para tests). 8 tests (`tests/test_git_source.py`).
+  Spike dulwich descubrió 2 bugs: `entry.items()` requiere paréntesis;
+  `entry.path` viene SIN `/` final (off-by-one solucionado).
+- **Slice 4 (`2d8cad0`)**: `knowledge_invalidator.py` con BFS vía
+  evidencias compartidas + `KnowledgeInvalidated` event. 10 tests.
+  Cycle handling via `visited_claims` set + `CyclicDependencyWarning`
+  separada de `CyclicDependencyError`.
+- **Slice 5 (`0529e77`)**: `ContextController` + `ContextRecipe` ADT +
+  `OutcomeTracer.from_run` (extrae refs sin duplicar contenido) + CLI
+  `knowledge {stale,invalidate,refresh,compile,trace}`. 18 tests
+  (13 unit + 5 e2e). UAT-05 reescrito: ahora PASS.
+
+### Decisiones H3 aplicadas
+
+- D1-git-lib → dulwich (lazy import + hook).
+- D2-contextrecipe → brick cerrado con validación de esquema.
+- D3-invalidacion-sync → warning + strict opcional (BFS robusto).
+- D4-token-budget → `approx_chars` heurística (NO tokens reales).
+- Cycles → `visited_claims` set (no aborta traversal).
+- Tokens obligatorios NO se truncan; overflow=fail solo aplica a optional.
+- MissingObligatory solo aplica a selectors entity/source con 0 resultados.
+
+### Artefactos H3
+
+- `specs/h3-knowledge.md` (compactado en commit `05dcb58`).
+- `specs/h3-slice-{1..5}.md` (5 sub-specs firmadas, ejecutables).
+- `src/skillgraph/knowledge.py` (ADTs).
+- `src/skillgraph/knowledge_controller.py` (CRUD).
+- `src/skillgraph/git_source.py` (dulwich fingerprinting).
+- `src/skillgraph/knowledge_invalidator.py` (BFS + events).
+- `src/skillgraph/context_controller.py` (compile/refresh + tracer).
+- `src/skillgraph/recipe.py` (ContextRecipe ADT).
+- 5 nuevas tablas SQLite en `storage.py`.
+- 5 errores nuevos en `errors.py`.
+- CLI: 5 subcommands nuevos (`knowledge` namespace).
+- Tests: 4 ficheros nuevos, 70 tests nuevos.
+
+### Próximo paso
+
+- **H4-draft**: DecisionNode, workflows cíclicos, fix
+  `_calculate_frontier` (1 nodo por llamada o soporte ciclos),
+  Adapter real para tokens (tiktoken si se exige budget estricto).

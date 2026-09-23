@@ -16,12 +16,12 @@ goal:
   adr_index: external/blueprint-v1/adr/
 
 roadmap:
-  current_stage: 2
+  current_stage: 3
   current_spike: null
-  current_hito: H3-draft
-  next_milestone_gate: H3-firma
-  current_workitem: h3-spec-borrador + h3-slice-1-subspec (903f252, 0e94e16, 13c1942)
-  next_workitem: firma-spec-h3 + slice-1-impl (Knowledge ADT + Storage delta)
+  current_hito: H3-cerrado
+  next_milestone_gate: H4-draft
+  current_workitem: h3-cerrado (slices 1-5)
+  next_workitem: H4 diseno (DecisionNode / workflows ciclicos / _calculate_frontier fix)
 
 python:
   minimum: "3.11"
@@ -71,7 +71,7 @@ workstreams:
     commits: ["3bc66d9", "6011f60"]
   - id: spec-h3-borrador
     items: [knowledge-adt, context-controller, knowledge-controller, git-fingerprint, invalidation, outcome-trace]
-    status: design-complete
+    status: completed
     commits: ["903f252", "0e94e16", "13c1942", "f6432ed", "05dcb58"]
     spec: specs/h3-knowledge.md
     sub_specs:
@@ -80,9 +80,15 @@ workstreams:
       - specs/h3-slice-3.md   # Git fingerprinting dulwich (8 tests)
       - specs/h3-slice-4.md   # Invalidacion transitiva (10 tests)
       - specs/h3-slice-5.md   # ContextController + OutcomeTracer (15 tests)
-    pending_decisions: [D2-contextrecipe-brick, D3-invalidacion-sync, D4-token-budget]
     closed_decisions:
       D1-git-lib: {choice: dulwich, commit: 0e94e16, evidence: spike /tmp/sg-git-spike}
+      D2-contextrecipe: {choice: brick cerrado, commit: 0529e77}
+      D3-invalidacion-sync: {choice: warning + strict opcional, commit: 0529e77}
+      D4-token-budget: {choice: caracteres aproximados (NO tokens reales), commit: 0529e77}
+  - id: h3-slices-impl
+    items: [slice-1-knowledge-adt, slice-2-knowledge-controller, slice-3-git-dulwich, slice-4-invalidation, slice-5-context-controller]
+    status: completed
+    commits: ["b06cc15", "dd2f7a7", "01dd3ac", "2d8cad0", "0529e77"]
   - id: ci-minimo
     items: [scripts-ci-sh]
     status: completed
@@ -116,15 +122,15 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 161
-  passed: 161
-  duration_s: 20.89
+  total: 234
+  passed: 234
+  duration_s: 91.26
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
     - tests/test_cli_uat.py: 10
     - tests/test_cli_run_uat.py: 8
-    - tests/test_cli_branches.py: 8
+    - tests/test_cli_branches.py: 13
     - tests/test_registry_branches.py: 13
     - tests/test_runtime_events.py: 19
     - tests/test_handoff.py: 23
@@ -132,6 +138,9 @@ tests:
     - tests/test_workflow_plan.py: 19
     - tests/test_runcontroller.py: 10
     - tests/test_dsl.py: 18
+    - tests/test_git_source.py: 8
+    - tests/test_knowledge_invalidation.py: 10
+    - tests/test_context_controller.py: 13
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -153,36 +162,33 @@ tests:
 uat:
   audit_script: tests/uat_audit.py
   evidence_dir: tests/uat-evidence/
-  audit_revision: "(ver git log; rev-parse capturado en cada evidence JSON)"
+  audit_revision: "0529e77 (slice 5 commit)"
   status:
     UAT-01: PASS   # no contamination (evidencia: tests/uat-evidence/UAT-01.json)
     UAT-02: PASS   # project isolation (evidencia: tests/uat-evidence/UAT-02.json)
     UAT-03: PASS   # brick declarative (evidencia: tests/uat-evidence/UAT-03.json)
     UAT-04: PASS   # ejecucion determinista (evidencia: tests/uat-evidence/UAT-04.json)
-    UAT-05: BLOCKED  # handoff con ContextRecipe — depende de H3 slices 1-5
+    UAT-05: PASS   # handoff con ContextRecipe (H3 slices 1-5 CERRADAS; reescrito en slice 5)
     UAT-06: FAIL   # recuperacion: bug real _calculate_frontier ejecuta TODOS los nodos en una sola pasada (deuda H4+)
     UAT-07: PASS   # idempotencia: UNIQUE event_id + UNIQUE node_execution_id
-  nota_honesta: "Antes de esta auditoria, STATE afirmaba PASS en UAT-04/06/07 sin evidencia real (solo proxy-tests). Auditoria subprocess honesta revelo bug _calculate_frontier (deuda H4+); ver UAT-06.json."
+  nota_honesta: "UAT-05 paso de BLOCKED a PASS tras slice 5 (commit 0529e77). UAT-06 sigue FAIL por bug _calculate_frontier documentado en tests/uat-evidence/UAT-06.json; deuda H4+."
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 10:36
-  resultado: "161 passed in 42.70s"
-  working_tree: clean
+  ultima_ejecucion_local: 2026-09-23 11:24
+  resultado: "234 passed in 91.26s"
+  working_tree: dirty (post-slice-5, antes de commit docs)
 
-open_questions:
-  - "H3 D2: ContextRecipe como brick — RECOMENDACION AGENTE APROBADA: SI como brick"
-  - "H3 D3: sincronizacion de invalidacion con runs ACTIVE — RECOMENDACION AGENTE APROBADA: warning + strict opcional"
-  - "H3 D4: semantica del token budget — RECOMENDACION AGENTE APROBADA: caracteres aproximados, NO tokens reales"
-  - "Workflows ciclicos: deuda H4+; no se cierra en H3"
+open_questions: []  # H3 cerrado; D2/D3/D4 firmadas y aplicadas.
 
 deuda_tecnica_residual:
-  - "UAT-06 FAIL: bug _calculate_frontier ejecuta TODOS los nodos pendientes en una sola pasada de reconcile_run. Decisión consciente — H2 = DAG lineal. Resolver en H4+ junto a DecisionNode/ciclos. Documentado en tests/uat-evidence/UAT-06.json."
-  - "Duplicación catalog.py/storage.py: ambos son wrappers SQLite con _tx, _migrate, close. Defensa en profundidad intencional: catalog sobrevive aunque storage esté corrupto. No unificar sin diseño."
+  - "UAT-06 FAIL: bug _calculate_frontier ejecuta TODOS los nodos pendientes en una sola pasada de reconcile_run. Decision consciente — H2 = DAG lineal. Resolver en H4+ junto a DecisionNode/ciclos. Documentado en tests/uat-evidence/UAT-06.json."
+  - "H4-draft: DecisionNode, workflows ciclicos, fix _calculate_frontier (1 nodo por llamada o soporte ciclos), Adapter real para tokens (tiktoken si se exige budget estricto)."
+  - "Duplicacion catalog.py/storage.py: ambos son wrappers SQLite con _tx, _migrate, close. Defensa en profundidad intencional: catalog sobrevive aunque storage este corrupto. No unificar sin diseno."
   - "paths.py 59%: la rama Windows LOCALAPPDATA no se ejecuta en CI (Linux). Aceptable mientras CI corra en Linux."
   - "registry.py 88%: las validaciones con tipos no-objeto (None, list como spec) no cubiertas; se cubren via brick CLI pero no como tests unitarios."
   - "DSL: el ciclo de tests E2E de errores tipados del DSL queda como follow-up; los 18 tests cubren happy path + smart constructors."
 
 blockers: []
 
-next_action: "Firma del spec H3 (D2/D3/D4 con recomendaciones aprobadas por usuario implícito) + implementar Slice 1 (Knowledge ADT + Storage delta, +17 tests). Specs/h3-slice-{2,3,4,5}.md ya diseñados. Auditoria UAT subprocess honesta creada (tests/uat_audit.py + tests/uat-evidence/*.json)."
+next_action: "H3 cerrado. Branch push pendiente; siguiente desbloqueado: H4-draft (DecisionNode / workflows ciclicos / fix _calculate_frontier)."
