@@ -19,9 +19,9 @@ roadmap:
   current_stage: 2
   current_spike: null
   current_hito: H2
+  current_workitem: h3-spec-borrador (903f252)
   next_milestone_gate: H3
-  current_workitem: cierre-honesto-auditoria (este commit)
-  next_workitem: etapa3-diseno (NO implementar antes de spec firmado)
+  next_workitem: firma-spec-h3 + slice-1 (Knowledge ADT + Storage delta)
 
 python:
   minimum: "3.11"
@@ -69,10 +69,20 @@ workstreams:
     items: [uat-e2e-resume-or-start, cli-branches-coverage]
     status: completed
     commits: ["3bc66d9", "6011f60"]
+  - id: spec-h3-borrador
+    items: [knowledge-adt, context-controller, knowledge-controller, git-fingerprint, invalidation, outcome-trace]
+    status: draft
+    commits: ["903f252"]
+    spec: specs/h3-knowledge.md
+    pending_decisions: [D1-git-lib, D2-contextrecipe-brick, D3-invalidacion-sync, D4-token-budget]
   - id: ci-minimo
     items: [scripts-ci-sh]
     status: completed
     commits: ["4d8e80c"]
+  - id: deuda-storage-diagnostico
+    items: [storage-coverage-90-real-branches]
+    status: completed
+    commits: ["ba6ccf2"]
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
     status: completed
@@ -87,6 +97,7 @@ deliverables:
   - ".gitattributes con LF + diffs limpios"
   - "mise.toml: python 3.13.15, uv 0.12.17, tasks sync/test/lint/format/cli"
   - "scripts/ci.sh: gate unico ejecutable (ruff format + ruff check + pytest)"
+  - "specs/h3-knowledge.md: spec H3 BORRADOR (NO firmado, 4 decisiones pendientes)"
   - "CURRENT.md, STATE.yaml, SESSION-JOURNAL.md"
   - "AGENTS.md cerrado con 11 secciones (incluida §11 Haskell-inspired)"
   - "uv.lock reproducible"
@@ -141,9 +152,11 @@ ci:
   resultado: "161 passed in 20.89s"
 
 open_questions:
-  - "Etapa 3: ¿qué pieza diseñamos primero — ContextController (handoff con obligatorias+opcionales) o KnowledgeController (Claims/Evidence con invalidación)?"
-  - "Adopción SDDK: ¿escalamos el bug al mantenedor (maintainer_feedback) o esperamos a próxima release del binario?"
-  - "Workflows cíclicos: ¿se añaden a Etapa 3 (junto a ContextController) o quedan para H4?"
+  - "H3 D1: pygit2 vs dulwich (recomendacion: dulwich; pendiente spike 1h)"
+  - "H3 D2: ContextRecipe como brick (recomendacion: SI)"
+  - "H3 D3: sincronizacion de invalidacion con runs ACTIVE (recomendacion: warning + strict opcional)"
+  - "H3 D4: semantica del token budget (recomendacion: caracteres aproximados, NO tokens reales)"
+  - "Workflows ciclicos: ¿se añaden a Etapa 3 (junto a ContextController) o quedan para H4?"
 
 deuda_tecnica_residual:
   - "Controller NO soporta workflows cíclicos: _calculate_frontier retorna [] cuando el current_node ya está SUCCEEDED, aunque su successor sea otro nodo del mismo run. Decisión consciente — H2 = DAG lineal; DecisionNode/ciclos son H4+."
@@ -154,4 +167,4 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "Etapa 3 — leer external/blueprint-v1/docs/07-contexto-y-handoff.md y 08-conocimiento.md; escribir spec corto antes de implementar."
+next_action: "Resolver las 4 decisiones del spec H3 (D1 dulwich/pygit2, D2 brick, D3 sync invalidacion, D4 token budget) y firmarlo; luego arrancar Slice 1 (Knowledge ADT + Storage delta)."

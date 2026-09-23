@@ -294,3 +294,68 @@ disciplina de vertical slices y TDD focalizado; no saltar a Etapa 3.
   `08-conocimiento.md`. Spec corto antes de implementar.
 - **Después**: H4+ — DecisionNode (workflows cíclicos, outcome='pending',
   input humano). Es deuda real pero fuera de scope H2.
+
+## 2026-09-23 — Sesión 5: spec H3 borrador + diagnóstico storage
+
+### Resumen
+
+- **Modo AUTO continuo** desde la sesión 4.
+- 2 commits nuevos: diagnóstico storage (deuda cierre honesto)
+  y spec H3 borrador (`specs/h3-knowledge.md`).
+- **161 tests verde** (sin cambios — spec no toca código).
+- TODO list reconciliado: 6 completados verificados, 1 pendiente
+  que cambia de nombre (`etapa3-diseno` → `firma-spec-h3`).
+
+### Commits nuevos
+
+21. `ba6ccf2` docs(state): diagnóstico storage.py 90% corregido
+22. `903f252` spec(h3): borrador H3 Conocimiento incremental y contexto
+23. (este commit) docs: CURRENT/STATE/JOURNAL actualizados con el spec
+
+### Decisiones tomadas durante AUTO
+
+- **Reconciliación TODO ↔ realidad**: el recordatorio "7 incompletos"
+  era ruido. El cierre H2 estaba completo desde `d39c6d3`. Reconcilié
+  5 items verificados + 1 reabierto (`deuda-storage` para diagnóstico
+  real) + 1 reformulado (`etapa3-diseno` → spec H3 borrador).
+- **Diagnóstico storage honesto**: la causa del "90%" NO era la rama
+  `replace` no-op (esa SÍ está cubierta). Las 3 ramas reales
+  no cubiertas son `_tx rollback`, `list_resources(kind=)`, `add_relation`.
+  Esta última ya está cubierta por `test_workflow_plan`. Cierre
+  como defensa en profundidad.
+- **Spec H3 borrador**: NO se implementa nada sin firma. 4 decisiones
+  pendientes con recomendación pero no cerradas:
+  - D1 dulwich vs pygit2 → recom. dulwich (local-first, sin binarios C).
+  - D2 ContextRecipe como brick → recom. SÍ.
+  - D3 sync invalidación → recom. warning + strict opcional.
+  - D4 token budget → recom. caracteres aproximados, no tokens reales.
+- **5 slices de implementación** propuestas en el spec, cada una con
+  criterio de aceptación vertical. UAT canónico documentado
+  literalmente (modify source → invalidate → check stale → refresh
+  → compile handoff sin historial conversacional).
+
+### Bugs cazados durante AUTO
+
+- `multiedit` con 3 edits aplicados parcialmente: el tercero
+  tenía `old_string == new_string` (Falla de diseño mía,
+  no del tool). Detectado por `grep` posterior.
+- `edit` con acentos diferentes al CURRENT.md: rechazado por
+  mismatch; re-leído y aplicado correctamente.
+
+### Cierre honesto de capacidad (versión final)
+
+- **H2 cerrado honestamente** (sesión 4): sin cambios.
+- **H3 en borrador** (este commit): spec completo, decisiones
+  pendientes registradas, NO implementación hasta firma.
+- **16 commits limpios en main**, 161 tests verde.
+- **Deuda consciente H2**: controller NO soporta workflows cíclicos.
+  Queda en H4+ (DecisionNode).
+
+### Siguiente paso
+
+- **Ahora**: el spec espera tu firma. Decisiones D1-D4 son tuyas.
+  Mi recomendación por defecto si tú no respondes: dulwich + brick
+  + warning-strict-opcional + caracteres. Pero **necesito tu OK**
+  antes de codificar Slice 1.
+- **Después**: H4+ DecisionNode (workflows cíclicos). Fuera de H3.
+

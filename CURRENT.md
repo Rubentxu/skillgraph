@@ -18,9 +18,12 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 - Deuda H2 restante: el controller **NO soporta workflows cíclicos** (deuda
   real para H4+ / DecisionNode). Documentada y testeada; no se intentó cubrir
   en H2.
-- Trabajo activo: cerrar docs de la auditoría honesta + limpieza final.
-- Siguiente desbloqueado: **Etapa 3** (control-flow dinámico: ContextController +
-  KnowledgeController + Discovery). Diseño pendiente, no implementación.
+- Trabajo activo: **H3 spec borrador** (`specs/h3-knowledge.md`,
+  commit `903f252`). 4 decisiones pendientes (D1 git lib,
+  D2 brick, D3 sync invalidación, D4 token budget). NO se
+  implementa nada hasta que el spec esté firmado.
+- Siguiente desbloqueado: **resolver las 4 decisiones D1-D4 + firma
+  del spec**, luego arrancar Slice 1 (Knowledge ADT + Storage delta).
 
 ## Último estado comprobado
 
@@ -61,13 +64,11 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 
 ## Próxima acción concreta
 
-1. ~~Cerrar docs de la auditoría honesta (CURRENT/STATE/SESSION).~~ Hecho (este commit).
-2. **Etapa 3 — diseño primero**: leer `external/blueprint-v1/docs/07-contexto-y-handoff.md`
-   y `08-conocimiento.md`, escribir spec corto (siguiendo forma del spec de Etapa 2),
-   descomponer en 3-5 slices de implementación.
-3. NO implementar nada de Etapa 3 hasta que el spec esté firmado.
-4. Mantener `scripts/ci.sh` ejecutándose localmente en cada commit hasta que
-   haya runner externo configurado.
+1. ~~Cerrar docs de la auditoría honesta (CURRENT/STATE/SESSION).~~ Hecho (`d39c6d3`).
+2. ~~**Etapa 3 — diseño primero**: spec corto + descomposición.~~ Hecho (`903f252`, `specs/h3-knowledge.md`).
+3. **Resolver las 4 decisiones pendientes del spec H3** (D1 git lib, D2 brick, D3 sync invalidación, D4 token budget) y firmarlo. Sin spec firmado, no se implementa.
+4. Tras firma: arrancar Slice 1 (Knowledge ADT + Storage delta).
+5. Mantener `scripts/ci.sh` ejecutándose localmente en cada commit hasta que haya runner externo configurado.
 
 ## Valoración Rust (decisión operador 2026-09-23)
 
