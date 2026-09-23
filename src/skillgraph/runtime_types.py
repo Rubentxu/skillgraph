@@ -20,7 +20,7 @@ Por que existe este modulo aparte:
 
 from __future__ import annotations
 
-from typing import Final, Literal
+from typing import Final, Literal, NewType
 
 # --- Tipos suma (ADT cerradas) -------------------------------------------
 
@@ -32,6 +32,20 @@ RunState = Literal["CREATED", "ACTIVE", "WAITING", "COMPLETED", "FAILED", "CANCE
 
 NodeState = Literal["READY", "RUNNING", "WAITING", "SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"]
 """Ciclo de vida de una instancia de nodo (blueprint §2)."""
+
+# --- NewType: evita confusion entre strings ------------------------------
+# Un NodeName NO es un Outcome, aunque ambos sean str. Los NewType
+# desaparecen en runtime (no afectan performance) pero hacen que el
+# type-checker rechace mezclas accidentales.
+
+NodeName = NewType("NodeName", str)
+"""Identificador local de un nodo dentro de un WorkflowPlan."""
+
+OutcomeLabel = NewType("OutcomeLabel", str)
+"""Etiqueta declarativa que un Adapter devuelve o un WorkflowTransition declara."""
+
+RevisionNumber = NewType("RevisionNumber", int)
+"""Version monotona de un recurso (>= 1)."""
 
 # --- Constantes runtime (validacion + branching) ------------------------
 

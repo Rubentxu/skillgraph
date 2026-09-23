@@ -10,10 +10,11 @@ Por que existe este modulo aparte de `plan_loader.py`:
 
 Reglas de diseno (siguiendo las reglas de AGENTS.md):
 - **Inmutabilidad**: todas las estructuras son `frozen=True`.
-- **ADT sum-type**: NodeKind y Outcome son `Literal` validados en
-  __post_init__ (no strings sueltos circulando por el codigo).
+- **ADT sum-type**: NodeKind y Outcome son `Literal`/`NewType`
+  reexportados desde `runtime_types` (no strings sueltos circulando
+  por el codigo).
 - **Funcional**: las operaciones de composicion devuelven NUEVOS
-  WorkflowPlanBuilders; nunca mutan el receptor.
+  PlanBuilders; nunca mutan el receptor.
 - **Errores tipados**: las validaciones lanzan `ValidationError` /
   `ParseError` (no `ValueError` generico).
 - **Sin I/O**: este modulo no toca disco ni red.
@@ -22,33 +23,37 @@ Reglas de diseno (siguiendo las reglas de AGENTS.md):
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Final, Literal, NewType, cast, overload
+from typing import cast, overload
 
 from skillgraph.errors import ParseError, ValidationError
+from skillgraph.runtime_types import (
+    NODE_KINDS,
+    NodeKind,
+    NodeName,
+    OutcomeLabel,
+    RevisionNumber,
+)
 from skillgraph.workflow import (
     WorkflowNode,
     WorkflowPlan,
     WorkflowTransition,
 )
 
-# --- ADT: tipos suma con cardinality fija -----------------------------------
-
-# Tipos de nodo que el runtime sabe ejecutar. Aniadir uno nuevo es
-# un cambio de contrato del blueprint, no un detalle local.
-NodeKind = Literal["DecisionNode", "ActionNode"]
-"""Suma cerrada: solo estos dos tipos existen en el runtime actual."""
-
 API_VERSION = "skillgraph.dev/v1alpha1"
 """Version del contrato de recursos en este vertical slice."""
 
-# --- NewType: evita confusion entre strings ---------------------------------
-# Un NodeName NO es un Outcome, aunque ambos sean str. Los NewType
-# desaparecen en runtime (no afectan performance) pero hacen que el
-# type-checker rechaze mezclas accidentales.
-
-NodeName = NewType("NodeName", str)
-OutcomeLabel = NewType("OutcomeLabel", str)
-RevisionNumber = NewType("RevisionNumber", int)
+__all__ = [
+    "API_VERSION",
+    "NODE_KINDS",
+    "NodeKind",
+    "NodeName",
+    "OutcomeLabel",
+    "PlanBuilder",
+    "RevisionNumber",
+    "node_name",
+    "outcome",
+    "revision",
+]
 
 # --- Constructores con ADT y validacion ------------------------------------
 
@@ -123,19 +128,7 @@ class PlanBuilder:
         self,
         name: NodeName,
         *,
-        kind: Literal["ActionNode"] = "ActionNode",
-        namespace: str = "shared",
-        api_version: str = API_VERSION,
-        revision: int = 1,
-        expected: str,
-        capabilities: Iterable[str] = (),
-    ) -> PlanBuilder: ...
-    @overload
-    def add_node(
-        self,
-        name: NodeName,
-        *,
-        kind: Literal["DecisionNode"],
+        kind: NodeKind = "ActionNode",
         namespace: str = "shared",
         api_version: str = API_VERSION,
         revision: int = 1,
@@ -160,10 +153,10 @@ class PlanBuilder:
         """
         if any(n.name == name for n in self._nodes):
             raise ParseError(f"nodo duplicado en plan: {name!r}")
-        # Las anotaciones `Literal`/`NodeKind` ya restringen `kind`
-        # en tiempo de type-check; aqui validamos en runtime para
-        # usuarios que usen `cast` o `type: ignore`.
-        if kind not in {"DecisionNode", "ActionNode"}:
+        # Las anotaciones `NodeKind` ya restringen `kind` en tiempo de
+        # type-check; aqui validamos en runtime para usuarios que
+        # usen `cast` o `type: ignore`.
+        if kind not in NODE_KINDS:
             raise ValidationError(f"NodeKind invalido: {kind!r}")
         rev = _make_revision(revision)
         node = WorkflowNode(
@@ -235,9 +228,3 @@ class PlanBuilder:
             transitions=self._transitions,
             initial=self._initial,
         )
-
-
-# --- Constantes exportadas --------------------------------------------------
-
-NODE_KINDS: Final[frozenset[str]] = frozenset({"DecisionNode", "ActionNode"})
-"""Conjunto canonico de kinds de nodo ejecutables (ADT cerrada)."""
