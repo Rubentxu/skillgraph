@@ -321,16 +321,19 @@ class RunController:
         state: RunState,
         current_node: str | None,
     ) -> None:
-        with self._conn:
-            self._conn.execute(
-                """
-                UPDATE workflow_runs
-                SET state = ?, current_node = ?,
-                    updated_at = datetime('now')
-                WHERE tenant_id = ? AND project_id = ? AND run_id = ?
-                """,
-                (state, current_node, tenant_id, project_id, run_id),
-            )
+        # H9-BSlice3-S3: delega la mutacion de la fila de workflow_runs
+        # en `Storage.transition_run_state`. La transicion del state en
+        # el SQL no coordina con EventLog.append: el llamador sigue
+        # siendo responsable de emitir el evento que toque (ver decision
+        # arquitectonica del 2026-09-23 18:24). Mantener esta separacion
+        # evita acoplar Storage al emisor de eventos.
+        self._storage.transition_run_state(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            state=state,
+            current_node=current_node,
+        )
 
     def _recover_interrupted(self, tenant_id: str, project_id: str, run_id: str) -> None:
         """UAT-06: cualquier NodeExecution RUNNING sin finished_at se

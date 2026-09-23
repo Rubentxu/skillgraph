@@ -1153,6 +1153,42 @@ class Storage:
             )
             return cur.rowcount
 
+    def transition_run_state(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        state: str,
+        current_node: str | None,
+    ) -> None:
+        """Transiciona el ``state`` y/o ``current_node`` de un Run.
+
+        UPDATE no-op si el run no existe. Sustituye a
+        ``RunController._set_run_state``.
+
+        No emite eventos. Si la operación debe ir coordinada con
+        ``EventLog.append`` (lo más habitual), el llamador hace el
+        append DESPUES. Esto preserva el contrato actual: la
+        atomicidad entre state y eventos sigue siendo responsabilidad
+        del orquestador (RunController), no de Storage. Ver decisión
+        arquitectónica del 2026-09-23 18:24.
+
+        ``state`` debe ser uno de los literales ``RunState``; validación
+        tipica la hace el type checker, no este método (Storage expone
+        ``str`` para no acoplarse a tipos del runtime).
+        """
+        with self._conn:
+            self._conn.execute(
+                """
+                UPDATE workflow_runs
+                SET state = ?, current_node = ?,
+                    updated_at = datetime('now')
+                WHERE tenant_id = ? AND project_id = ? AND run_id = ?
+                """,
+                (state, current_node, tenant_id, project_id, run_id),
+            )
+
     def list_promotions(
         self,
         status: str | None = None,

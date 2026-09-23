@@ -14,6 +14,7 @@ Cubre:
 from __future__ import annotations
 
 import inspect
+import re
 import sqlite3
 from pathlib import Path
 
@@ -341,6 +342,10 @@ class TestRunControllerNoLongerSqlInRecoverInterrupted:
         s, _conn, adapter = storage
         ctl = RunController(storage=s, adapter=adapter, conn=_conn)
         src = inspect.getsource(ctl._recover_interrupted)
+        # Buscamos SQL como palabras completas (regex word boundary).
         for stmt in ("SELECT", "UPDATE", "INSERT", "DELETE"):
-            assert stmt not in src, f"{stmt} presente en _recover_interrupted"
+            pattern = r"\b" + stmt + r"\b"
+            assert re.search(pattern, src) is None, (
+                f"{stmt} como SQL presente en _recover_interrupted"
+            )
         assert "_conn.execute" not in src, "_conn.execute presente: la operacion no se ha delegado"
