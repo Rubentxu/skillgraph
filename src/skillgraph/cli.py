@@ -515,6 +515,33 @@ def _build_parser() -> argparse.ArgumentParser:
     eval_p.add_argument("--proposal", type=Path, required=True)
     eval_p.add_argument("--plan-file", type=Path, default=None)
 
+    # ----- slice-3 subcommands -----
+    el = ex_sub.add_parser(
+        "list",
+        help="Lista propuestas registradas (slice-3).",
+    )
+    el.add_argument("project", help="Proyecto destino.")
+    el.add_argument(
+        "--stage",
+        choices=("PROPOSED", "EVALUATED", "AUTHORIZED", "APPLIED", "REJECTED", "ARCHIVED"),
+        default=None,
+        help="Filtra por stage (default: todas).",
+    )
+
+    es = ex_sub.add_parser(
+        "show",
+        help="Muestra una propuesta por proposal_id (slice-3).",
+    )
+    es.add_argument("project", help="Proyecto destino.")
+    es.add_argument("proposal_id", help="ID de la propuesta a mostrar.")
+
+    ea2 = ex_sub.add_parser(
+        "archive",
+        help="Archiva una propuesta (stage ARCHIVED, slice-3).",
+    )
+    ea2.add_argument("project", help="Proyecto destino.")
+    ea2.add_argument("proposal_id", help="ID de la propuesta a archivar.")
+
     # ----- knowledge subcommand (H3 Slice 5) -----
     kn = sub.add_parser(
         "knowledge",
@@ -635,6 +662,12 @@ def _route_expansion(args: argparse.Namespace) -> int:
         return cmd_expansion_validate(args)
     if sub == "rejections":
         return cmd_expansion_rejections(args)
+    if sub == "list":
+        return cmd_expansion_list(args)
+    if sub == "show":
+        return cmd_expansion_show(args)
+    if sub == "archive":
+        return cmd_expansion_archive(args)
     parser_local = _build_parser()
     parser_local.parse_args(["expansion", "--help"])
     return EXIT_USAGE  # unreachable
@@ -1195,6 +1228,135 @@ def cmd_expansion_rejections(args: argparse.Namespace) -> int:
             f"rejected_by={data['rejected_by']!r} at={data['rejected_at']}"
         )
     return EXIT_OK
+
+
+# ---------------------------------------------------------------------------
+# Slice-3 handlers: list / show / archive
+# ---------------------------------------------------------------------------
+
+
+def _scan_proposals_dir(proposals_dir: Path) -> list[tuple[Path, dict[str, object]]]:
+    """Lee todos los JSON de propuestas. Devuelve (path, payload).
+
+    Ignora silenciosamente archivos con JSON malformado (no rompe
+    el comando entero por un archivo corrupto).
+    """
+    if not proposals_dir.is_dir():
+        return []
+    out: list[tuple[Path, dict[str, object]]] = []
+    for p in sorted(proposals_dir.iterdir()):
+        if p.suffix != ".json":
+            continue
+        try:
+            data = json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(data, dict):
+            out.append((p, data))
+    return out
+
+
+def cmd_expansion_list(args: argparse.Namespace) -> int:
+    """``sg expansion list <project> [--stage STAGE]``: lista propuestas.
+
+    Slice-3: lee desde el directorio ``expansion_proposals/`` existente
+    (JSON files planos, source-of-truth actual; ver specs/h4-slice-3.md
+    limitacion 3). NO migra a SQLite (deferido slice-4).
+
+    Stage inferido:
+    - ARCHIVED: existe ``<proposal_id>.archived`` (marker file).
+    - APPLIED: existe un plan que contiene el nodo/tr de la propuesta.
+      Por simplicidad slice-3 marcamos APPLIED solo si ARCHIVED+APPLIED
+      marker existe; sino = PROPOSED (estado inicial tras cmd_expansion_propose).
+    - REJECTED: hay un archivo en ``expansion_rejections/`` con ese proposal_id.
+    - Si nada match: PROPOSED.
+    """
+    project, rc = _open_project_or_error(args, args.project)
+    if rc != EXIT_OK:
+        return rc
+    assert project is not None
+    project_dir = Path(project["db_path"]).parent
+    proposals_dir = project_dir.parent.parent / "expansion_proposals"
+    rejections_dir = project_dir / "expansion_rejections"
+
+    rejection_ids: set[str] = set()
+    if rejections_dir.is_dir():
+        for p in rejections_dir.iterdir():
+            if p.suffix != ".json":
+                continue
+            try:
+                d = json.loads(p.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if isinstance(d, dict) and "proposal_id" in d:
+                rejection_ids.add(str(d["proposal_id"]))
+
+    rows = _scan_proposals_dir(proposals_dir)
+    if not rows:
+        print("(sin propuestas)")
+        return EXIT_OK
+
+    shown = 0
+    for path, data in rows:
+        proposal_id = str(data.get("proposal_id", path.stem))
+        archived_marker = path.with_suffix(path.suffix + ".archived")
+        if archived_marker.is_file():
+            stage = "ARCHIVED"
+        elif proposal_id in rejection_ids:
+            stage = "REJECTED"
+        else:
+            stage = "PROPOSED"
+        if args.stage is not None and args.stage != stage:
+            continue
+        created = data.get("created_at", "?")
+        author = data.get("author", "?")
+        print(f"- {proposal_id}: stage={stage} author={author} created_at={created}")
+        shown += 1
+    if shown == 0:
+        print(f"(sin propuestas en stage={args.stage})")
+    return EXIT_OK
+
+
+def cmd_expansion_show(args: argparse.Namespace) -> int:
+    """``sg expansion show <project> <proposal_id>``: muestra la propuesta."""
+    project, rc = _open_project_or_error(args, args.project)
+    if rc != EXIT_OK:
+        return rc
+    assert project is not None
+    project_dir = Path(project["db_path"]).parent
+    proposals_dir = project_dir.parent.parent / "expansion_proposals"
+
+    rows = _scan_proposals_dir(proposals_dir)
+    for _, data in rows:
+        if str(data.get("proposal_id", "")) == args.proposal_id:
+            print(json.dumps(data, indent=2, sort_keys=True))
+            return EXIT_OK
+    print(f"ERROR: proposal_id={args.proposal_id!r} no encontrado", file=sys.stderr)
+    return EXIT_PROJECT_NOT_FOUND
+
+
+def cmd_expansion_archive(args: argparse.Namespace) -> int:
+    """``sg expansion archive <project> <proposal_id>``: marca ARCHIVED.
+
+    Crea un marker file ``<proposal_id>.json.archived`` adyacente al
+    proposal JSON. No borra el proposal (audit forense). Idempotente.
+    """
+    project, rc = _open_project_or_error(args, args.project)
+    if rc != EXIT_OK:
+        return rc
+    assert project is not None
+    project_dir = Path(project["db_path"]).parent
+    proposals_dir = project_dir.parent.parent / "expansion_proposals"
+
+    rows = _scan_proposals_dir(proposals_dir)
+    for path, data in rows:
+        if str(data.get("proposal_id", "")) == args.proposal_id:
+            marker = path.with_suffix(path.suffix + ".archived")
+            marker.touch()
+            print(f"Archived: {args.proposal_id} (marker={marker})")
+            return EXIT_OK
+    print(f"ERROR: proposal_id={args.proposal_id!r} no encontrado", file=sys.stderr)
+    return EXIT_PROJECT_NOT_FOUND
 
 
 if __name__ == "__main__":

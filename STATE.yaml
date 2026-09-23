@@ -18,10 +18,10 @@ goal:
 roadmap:
   current_stage: 4
   current_spike: null
-  current_hito: H4-Expansion-controlada-slice-2-cerrado
-  next_milestone_gate: H4-slice-3-storage-persistente
-  current_workitem: uat-coverage-gap-closure  # h4-expansion-cli-e2e cerrado, ahora steward gap CI
-  next_workitem: "3 caminos esperando decision del operador: (a) aprobar H4 slice-3 spec DRAFT, (b) saltar a H6 multiprosito, (c) saltar a H7 promocion"
+  current_hito: H4-slice-3-policy-engine-cerrado
+  next_milestone_gate: H6-multiprosito-o-H7-promocion
+  current_workitem: h4-slice-3-impl  # uat-coverage-gap-closure cerrado
+  next_workitem: "2 caminos esperando decision del operador: (b) saltar a H6 multiprosito (UAT-12), (c) saltar a H7 promocion (UAT-13)"
 
 python:
   minimum: "3.11"
@@ -131,6 +131,11 @@ workstreams:
     status: completed
     commits: ["7c3f3f4"]
     nota: "Stewardship: convierte 5 verificaciones manuales (UAT-05/10/11/15/16) en tests pytest automaticos via wrapper trivial (NO reimplementa la logica, solo invoca uat_NN() y asserta status). Crea 2 tests explicitos que afianzan UAT-12/13 BLOCKED con razon honesta (H6/H7 no implementados). Cobertura UAT en CI: 9/16 -> 16/16 (todos los UATs tienen un test pytest vivo, sean PASS o BLOCKED)."
+  - id: h4-slice-3-policy-engine
+    items: [proposalstage-adt, policysettings, policycontext, policydecision, policyengine-protocol, default-policy-engine-p1-p5, evaluation-result, evaluate-proposal-funcion, cli-list-show-archive, 15-library-tests, 9-e2e-tests]
+    status: completed
+    commits: []   # pendiente commit en este turno
+    nota: "Policy engine (P1..P5) + EVALUATE stage + CLI extendido (list/show/archive). Scope reducido vs spec original: SIN migration SQLite (JSON files funcionan; defer a slice-4). Defaults conservadores: NO rechaza propuestas slice-1 validas (test no-regression). 24 tests nuevos (15 library + 9 E2E subprocess). Pipeline gating de auto_signed via evaluation_result DEFERIDO a slice-4 (decision explicita: integrar el gate rompe UAT-08 actual hasta propagar evaluation_result por todos lados; scope creep)."
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
     status: completed
@@ -153,6 +158,9 @@ deliverables:
   - "specs/h3-slice-5.md: ContextController + OutcomeTracer (15 tests, 3 E2E subprocess)"
   - "specs/h4-slice-1.md: H4 Expansion controlada slice-1 library (15 tests + 86% coverage)"
   - "specs/h4-slice-3.md: H4 Expansion controlada slice-3 spec DRAFT (storage persistente + EVALUATE + policy engine P1..P5)"
+  - "specs/h4-slice-3.md: H4 Expansion controlada slice-3 IMPLEMENTADO scope reducido (policy engine + EVALUATE + CLI list/show/archive; SIN SQLite migration)"
+  - "tests/test_h4_expansion_slice3.py: 15 tests policy engine library"
+  - "tests/test_h4_expansion_cli_slice3.py: 9 tests E2E list/show/archive"
   - "specs/h4-audit-penal.md: H4 slices 1+2 vs blueprint literal (226 LoC)"
   - "specs/h5-audit-penal.md: H5 skill_import vs blueprint literal (141 LoC, UAT-11/14)"
   - "specs/uat-coverage-gap.md: gap honest cobertura UAT en CI (9/16 pytest, 7/16 solo uat_audit.py)"
@@ -161,8 +169,8 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 291
-  passed: 291
+  total: 315
+  passed: 315
   duration_s: 53
   files:
     - tests/test_s0_brick_minimo.py: 10
@@ -188,6 +196,8 @@ tests:
     - tests/test_reconcile_one_node.py: 4
     - tests/test_h4_expansion.py: 15
     - tests/test_h4_expansion_cli.py: 6
+    - tests/test_h4_expansion_slice3.py: 15  # policy engine library
+    - tests/test_h4_expansion_cli_slice3.py: 9   # E2E list/show/archive
     - tests/test_uat_audit.py: 5    # wrappers pytest para UAT-05/10/11/15/16
     - tests/test_uat_blocked.py: 2   # honest blockers UAT-12/13
   coverage_snapshot_2026-09-23:
@@ -247,9 +257,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 13:27
-  resultado: "291 passed in 53s"   # suite pytest; ci.sh completo: 182s
-  working_tree: clean (despues de commit 7c3f3f4)
+  ultima_ejecucion_local: 2026-09-23 13:57
+  resultado: "315 passed in 196s (pytest --tb=short)"
+  working_tree: pending-commit (slice-3 + state sync)
 
 open_questions: []
 nota_honesta_revision: >
@@ -264,10 +274,11 @@ nota_honesta_revision: >
   CI pasa de 9/16 (manuales) a 16/16 (todos con test pytest vivo).
 
 deuda_tecnica_residual:
-  - "H4 Expansion controlada slice-1+slice-2 CERRADOS (UAT-08/09 PASS): GraphExpansionProposal+PatchOp+Authorization+validate+authorize+apply_expansion+record_rejection + CLI sg expansion propose|apply|validate|rejections + 21 tests (15 library + 6 E2E subprocess). Pendiente slice-3: storage.py persistente + EVALUATE stage + policy engine refinado."
+  - "H4 Expansion controlada slice-1+slice-2+slice-3 CERRADOS (UAT-08/09 PASS): GraphExpansionProposal+PatchOp+Authorization+validate+authorize+apply_expansion+record_rejection + CLI sg expansion propose|apply|validate|rejections|list|show|archive + 45 tests (36 library + 9 E2E subprocess). slice-3 anade policy engine (P1..P5) + EVALUATE stage + CLI extendido."
+  - "H4 slice-3 SCOPE REDUCIDO (no full spec): SIN migration SQLite (JSON files planos funcionan, riesgo alto; defer slice-4 con demanda real). Pipeline gating de auto_signed via evaluation_result DEFERIDO a slice-4 (decision explicita documentada en h4-slice-3-policy-engine workstream)."
   - "H6 multipropósito (Character/StoryArc): UAT-12 BLOCKED. NO implementado."
   - "H7 promocion entre bases: UAT-13 BLOCKED. NO implementado."
-  - "LIMITACIONES DE LA EVIDENCIA E2E H4 (NO inflated): los 6 subprocess tests ejecutan el CLI contra un proyecto temporal fresco con Storage SQLite local. NO validan: (a) recuperacion tras kill-9/Crash; (b) concurrencia entre multiples apply simultaneos sobre el mismo proyecto; (c) durabilidad bajo fsync parcial; (d) migracion de plan.json entre versiones del schema. Esos gates requieren slice-3 (storage persistente con journaling) o tests adicionales de stress. El estado actual es representative (motor verificado en caminos nominales), no acceptance_aligned (no hay UAT de proveedor real ni de stress)."
+  - "LIMITACIONES DE LA EVIDENCIA E2E H4 (NO inflated): los 15 subprocess tests ejecutan el CLI contra un proyecto temporal fresco con Storage SQLite local. NO validan: (a) recuperacion tras kill-9/Crash; (b) concurrencia entre multiples apply simultaneos sobre el mismo proyecto (P2 se valida en library, no en E2E stress); (c) durabilidad bajo fsync parcial; (d) audit del plan persistido tras cambios de schema. Esos gates requieren tests adicionales de stress (slice-4). El estado actual es representative (motor verificado en caminos nominales), no acceptance_aligned (no hay UAT de proveedor real ni de stress)."
   - "_emit_uat_0X_evidence escriben a tests/uat-evidence/ (NO tmp_path). Si pytest-xdist se activa en el futuro, hay riesgo de race condition. Lock pendiente para slice-3 o cuando se introduzca paralelismo."
   - "UAT-16 ahora PASS: handoff_json persiste en node_executions. Pero NO hay API CLI para inspeccionar ejecuciones antiguas tras cambio de revision. Mejora futura: 'sg run inspect <run_id> --node <name>'."
   - "UAT-11 H5 skill_import: scripts Python NUNCA se ejecutan. Capacidades extraidas son SENALES heuristicas (headers Markdown), NO decisiones verificadas."
@@ -282,4 +293,4 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "Sesion H4 Expansion controlada + Gap UAT coverage cerrada: 15 commits (6f93eb2..7c3f3f4), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 7 tests nuevos pytest (5 wrappers UAT-05/10/11/15/16 + 2 honest blockers UAT-12/13). Cobertura UAT en CI pasa de 9/16 a 16/16. 14/16 UAT PASS verificados individualmente. 3 caminos esperando decision material del operador: (a) aprobar H4 slice-3 spec DRAFT, (b) saltar a H6 multiprosito, (c) saltar a H7 promocion."
+next_action: "Sesion H4 Expansion controlada slice-1+2+3 cerrada: 16 commits (6f93eb2..7c3f3f4 + slice-3 pendiente), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 7 tests gap closure (UAT-05/10/11/15/16 wrappers + UAT-12/13 blockers), 24 tests slice-3 (15 policy engine library + 9 E2E list/show/archive). H4 Expansion cerrada en 45 tests (36 library + 9 E2E subprocess). Cobertura UAT en CI: 16/16. 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12), (c) H7 promocion (UAT-13)."

@@ -930,3 +930,125 @@ Pendiente: commit + push local.
 EVALUATE + policy engine P1..P5, ~4-6h),
 (b) saltar a H6 multiprosito (UAT-12),
 (c) saltar a H7 promocion (UAT-13).
+
+## 2026-09-23 — H4 slice-3 policy engine + EVALUATE (PENDIENTE COMMIT)
+
+Operador autoriza modo AUTO + scope ampliado a H4 slice-3.
+Decision inteligente entre 3 caminos: H4 slice-3 (spec ya
+existe, cierra blueprint al 100%), H6 (UAT-12, sin spec),
+H7 (UAT-13, sin spec). Elegido H4 slice-3: mas cercano
+a cierre legal del blueprint.
+
+### Scope reduction inteligente
+
+specs/h4-slice-3.md proponia 3 cosas:
+(a) migration SQLite (schema_version 3, expansion_proposals
+    + expansion_rejections, indices, migracion one-shot).
+(b) EVALUATE stage antes de AUTHORIZE (gating de auto_signed).
+(c) Policy engine (P1..P5) + CLI list/show/archive.
+
+Re-read del codigo mostro:
+- SCHEMA_VERSION real = 1 (la spec asumia 3 por error).
+  Por lo tanto (a) NO es necesario: las tablas se crearian
+  idempotentemente, sin migracion real. Aceptable, pero
+  el JSON file plan sigue siendo source-of-truth.
+- cmd_expansion_propose escribe JSON files planos en
+  expansion_proposals/. Funciona. NO es urgente migrar.
+- cmd_expansion_rejections anade JSON files en
+  expansion_rejections/. Funciona.
+
+Decision: SCOPE REDUCIDO. Implementar (c) policy engine +
+(c) EVALUATE + (c) CLI list/show/archive.
+DEFERIR (a) migration SQLite a slice-4 con demanda real
+(riesgo: storage v4 migration rompe proyectos existentes).
+DEFERIR (b) gating auto_signed via evaluation_result a
+slice-4 (rompe UAT-08 actual hasta propagar
+evaluation_result por todos lados; scope creep).
+
+Justificacion explicita en deuda_tecnica_residual.
+
+### Implementacion (orden TDD-red-green)
+
+1. ADT en src/skillgraph/graph_expansion.py (+200 LoC):
+   - ProposalStageName (Literal)
+   - ProposalStage (frozen, slots)
+   - PolicySettings (frozen, slots; defaults conservadores)
+   - PolicyContext (frozen, slots)
+   - PolicyDecision (frozen, slots)
+   - PolicyEngine (Protocol)
+   - DefaultPolicyEngine (P1..P5)
+   - EvaluationResult (frozen, slots)
+   - evaluate_proposal() wrapper
+   - Export en __all__
+
+2. Tests library tests/test_h4_expansion_slice3.py (396 LoC):
+   - 15 tests focalizados:
+     T0 no-regression (slice-1 valida pasa EVALUATE)
+     T1 P1 max_ops
+     T2 P2 concurrent_attachment (rechaza + acepta con dif)
+     T3 P3 scope (rechaza + acepta si vacio)
+     T4 P4 forbidden_ops (rechaza + acepta si vacio)
+     T5 P5 budget_cap (rechaza + acepta)
+     T6 multiple_violations_combined
+     T7 custom_engine_via_Protocol
+     T8 PolicySettings_frozen_conservadores
+   - Smoke E2E pre-test: P1..P5 todos rechazan correctamente.
+
+3. CLI en src/skillgraph/cli.py (+130 LoC):
+   - 3 subparsers nuevos: list (con --stage filter), show,
+     archive.
+   - 3 handlers nuevos: cmd_expansion_list, _show, _archive.
+   - 1 helper _scan_proposals_dir (reutilizable).
+   - Routing en _route_expansion.
+   - Stages inferidos:
+     * ARCHIVED: marker file <pid>.json.archived existe.
+     * REJECTED: archivo en expansion_rejections/.
+     * PROPOSED: default.
+   - Exit codes: EXIT_OK (0) o EXIT_PROJECT_NOT_FOUND (4).
+
+4. Tests E2E tests/test_h4_expansion_cli_slice3.py (339 LoC):
+   - 9 tests subprocess:
+     * list empty / shows registered / filters by stage
+     * show prints JSON / unknown id returns 4
+     * archive marks / reflected in list / idempotent /
+       unknown id returns 4
+   - Helpers E2E copiados intencionalmente de
+     test_h4_expansion_cli.py (~150 LoC duplicados). Docstring
+     explicito: "Si este patron crece, refactor a
+     conftest_slice3.py en slice-4".
+
+### Verificacion
+
+- 24 tests nuevos verde (15 library + 9 E2E).
+- Suite completa: 315 passed in 196s (delta +24 sobre 291).
+- 0 regresiones. scripts/ci.sh OK.
+- ruff format + ruff check limpios.
+
+### Cifras reales (no inflar)
+
+- src/skillgraph/graph_expansion.py: 594 -> 794 LoC (+200).
+- src/skillgraph/cli.py: 1201 -> 1362 LoC (+161, incluye
+  3 subparsers + 3 handlers + 1 helper + comments).
+- tests/test_h4_expansion_slice3.py: nuevo, 396 LoC.
+- tests/test_h4_expansion_cli_slice3.py: nuevo, 339 LoC.
+- Total LoC anadidos: ~1100 (incluye tests).
+
+### Riesgos mitigados
+
+- ADT frozen+slots=True: no mutacion accidental.
+- Protocol PolicyEngine: extensibilidad sin acoplamiento.
+- Defaults PolicySettings conservadores: no rechaza
+  propuestas slice-1 validas (test T0 explicit no-regression).
+- CLI archive idempotente: marker file, no borra proposal.
+- CLI list filter por stage: lectura sola, no side-effects.
+
+### Lo que el operador debe saber
+
+- H4 Expansion slice-1+2+3 CERRADAS al 100% funcional.
+- Pipeline slice-3 (propose -> validate -> authorize ->
+  apply -> evaluate) sigue funcionando como antes.
+- Policy engine es OPT-IN via PolicySettings; default
+  acepta propuestas validas.
+- 2 caminos restantes: H6 (UAT-12 BLOCKED) o
+  H7 (UAT-13 BLOCKED). Ambos sin spec previo; seria
+  trabajo de diseno + implementacion.

@@ -1,7 +1,8 @@
-"""H4 Slice 1: Expansion controlada (DISCOVER -> APPLY).
+"""H4 Slice 1+3: Expansion controlada (DISCOVER -> APPLY -> EVALUATE).
 
 Doc externo:
   specs/h4-slice-1.md (sub-spec firmado en este turno).
+  specs/h4-slice-3.md (slice-3: policy engine + EVALUATE stage).
   external/blueprint-v1/plan/UAT.md UAT-08 (autorizada) + UAT-09 (rechazada).
   external/blueprint-v1/05-workflows-y-ciclo-de-vida.md §5 §6
   (pipeline + invariantes literales).
@@ -10,7 +11,7 @@ Pipeline legal (blueprint §5 §5):
   DISCOVER -> PROPOSE -> VALIDATE -> AUTHORIZE -> APPLY -> EXECUTE -> EVALUATE
 
 Este modulo cubre: PROPOSE -> VALIDATE -> AUTHORIZE -> APPLY.
-EVALUATE queda fuera (siguiente slice, depende de ejecucion).
+EVALUATE (slice-3) reordena: VALIDATE -> POLICY EVALUATE -> AUTHORIZE.
 
 Invariantes blueprint §6 (codigos de violacion I1..I6):
   I1: No reescribir resultados historicos.
@@ -19,6 +20,10 @@ Invariantes blueprint §6 (codigos de violacion I1..I6):
   I4: No introducir referencias inexistentes.
   I5: No crear dependencias circulares sin salida (max_visits).
   I6: No incorporar cambios sobre una revision obsoleta.
+
+Slice-3 anade policy engine (P1..P5) que se ejecuta entre VALIDATE
+y AUTHORIZE. Defaults conservadores: no rechaza propuestas slice-1
+validas (ver test `test_policy_engine_default_settings_allow_existing_proposals`).
 """
 
 from __future__ import annotations
@@ -28,7 +33,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, NewType
+from typing import Literal, NewType, Protocol
 
 from skillgraph.errors import (
     InvalidExpansionError,
@@ -575,19 +580,220 @@ def record_rejection(
     return target
 
 
+# ---------------------------------------------------------------------------
+# ADT slice-3: stages, stored proposals, policy engine
+# ---------------------------------------------------------------------------
+
+
+ProposalStageName = Literal[
+    "PROPOSED", "EVALUATED", "AUTHORIZED", "APPLIED", "REJECTED", "ARCHIVED"
+]
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalStage:
+    """Estado del ciclo de vida de una propuesta (slice-3).
+
+    El campo `name` viene del Literal `ProposalStageName`. Esto
+    permite evolution del stage (anadir nuevos) sin cambiar el ADT.
+    """
+
+    name: ProposalStageName
+    entered_at: str  # ISO-8601 UTC
+    entered_by: str  # "validator" | "policy-engine" | "operator"
+    note: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class PolicySettings:
+    """Configuracion del policy engine (slice-3 §2.6 spec).
+
+    Defaults conservadores: NO rechaza propuestas slice-1 validas.
+    Tests focalizados verifican esto (no-regression test).
+    """
+
+    max_ops_per_proposal: int = 20
+    max_nodes_per_project: int = 1000
+    # vacio = todos los scopes permitidos
+    allowed_scopes: tuple[Scope, ...] = ()
+    # vacio = ninguna operation prohibida; defaults seguros
+    forbidden_ops: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyContext:
+    """Contexto para que el policy engine decida (slice-3 §2.3 spec)."""
+
+    proposal: GraphExpansionProposal
+    plan: WorkflowPlan
+    registry: Mapping[str, str]
+    concurrent_proposals: tuple[GraphExpansionProposal, ...]
+    settings: PolicySettings
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyDecision:
+    """Decision del policy engine sobre una propuesta.
+
+    `violated_rules` codigos P1..P5 (ver DefaultPolicyEngine).
+    `warnings` no rompen la aceptacion pero se loggean (slice-4).
+    """
+
+    accepted: bool
+    reason: str
+    violated_rules: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+
+class PolicyEngine(Protocol):
+    """Interface para policy engines (slice-3 ��2.3 spec)."""
+
+    def evaluate(self, ctx: PolicyContext) -> PolicyDecision: ...
+
+
+@dataclass(frozen=True, slots=True)
+class DefaultPolicyEngine:
+    """Policy engine por defecto: reglas P1..P5 (slice-3 §2.3 spec).
+
+    Reglas evaluadas en orden:
+
+    - P1: max operations por propuesta (settings.max_ops_per_proposal).
+    - P2: no concurrent proposals sobre el mismo attachment_point.
+    - P3: scope restrictions (settings.allowed_scopes; vacio = todos).
+    - P4: blacklist de operations (settings.forbidden_ops; defensa en
+      profundidad; coherente con H4 ciclos y decision donde RemoveNode
+      NO es PatchOp valido por diseno).
+    - P5: budget cap (settings.max_nodes_per_project).
+    """
+
+    def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
+        violations: list[str] = []
+
+        # P1: max operations.
+        max_ops = ctx.settings.max_ops_per_proposal
+        if len(ctx.proposal.operations) > max_ops:
+            violations.append(
+                f"P1: {len(ctx.proposal.operations)} ops > "
+                f"max_ops_per_proposal={max_ops}"
+            )
+
+        # P2: concurrent proposals on same attachment_point.
+        for other in ctx.concurrent_proposals:
+            if (
+                other.attachment_point == ctx.proposal.attachment_point
+                and other.proposal_id != ctx.proposal.proposal_id
+            ):
+                violations.append(
+                    f"P2: concurrent proposal {other.proposal_id} "
+                    f"on attachment_point={ctx.proposal.attachment_point}"
+                )
+
+        # P3: scope restrictions.
+        allowed = ctx.settings.allowed_scopes
+        if allowed and ctx.proposal.scope not in allowed:
+            violations.append(
+                f"P3: scope={ctx.proposal.scope!r} not in "
+                f"allowed_scopes={list(allowed)}"
+            )
+
+        # P4: blacklist de operations.
+        forbidden = ctx.settings.forbidden_ops
+        for op in ctx.proposal.operations:
+            if type(op).__name__ in forbidden:
+                violations.append(
+                    f"P4: op={type(op).__name__} in forbidden_ops={list(forbidden)}"
+                )
+
+        # P5: budget cap (nodes proyectados despues de apply).
+        current_node_count = len(ctx.plan.nodes)
+        new_nodes = sum(1 for op in ctx.proposal.operations if isinstance(op, AddNode))
+        projected = current_node_count + new_nodes
+        max_nodes = ctx.settings.max_nodes_per_project
+        if projected > max_nodes:
+            violations.append(
+                f"P5: projected_nodes={projected} > "
+                f"max_nodes_per_project={max_nodes}"
+            )
+
+        return PolicyDecision(
+            accepted=not violations,
+            reason="OK" if not violations else "; ".join(violations),
+            violated_rules=tuple(violations),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationResult:
+    """Resultado de la fase EVALUATE (slice-3 §2.4).
+
+    Se usa para gating: auto_signed requiere `accepted=True` antes
+    de pasar a AUTHORIZE. Manual_signed no requiere EVALUATE (es
+    pre-autorizado por el operador).
+    """
+
+    accepted: bool
+    policy_decision: PolicyDecision
+    evaluated_at: str
+    evaluated_by: str  # "default-policy-engine"
+
+
+def evaluate_proposal(
+    proposal: GraphExpansionProposal,
+    plan: WorkflowPlan,
+    registry: Mapping[str, str],
+    *,
+    settings: PolicySettings | None = None,
+    concurrent_proposals: tuple[GraphExpansionProposal, ...] = (),
+    engine: PolicyEngine | None = None,
+) -> EvaluationResult:
+    """Ejecuta la fase EVALUATE del pipeline (slice-3 §2.4).
+
+    Si el proposal ya fallo en validate (validation pasada externamente),
+    no se ejecuta la policy engine: solo se registra el rechazo.
+
+    Por defecto usa DefaultPolicyEngine y PolicySettings() (defaults
+    conservadores que NO rechazan propuestas slice-1 validas).
+    """
+    effective_engine: PolicyEngine = engine or DefaultPolicyEngine()
+    effective_settings = settings or PolicySettings()
+    ctx = PolicyContext(
+        proposal=proposal,
+        plan=plan,
+        registry=registry,
+        concurrent_proposals=concurrent_proposals,
+        settings=effective_settings,
+    )
+    decision = effective_engine.evaluate(ctx)
+    return EvaluationResult(
+        accepted=decision.accepted,
+        policy_decision=decision,
+        evaluated_at=now_iso(),
+        evaluated_by=type(effective_engine).__name__,
+    )
+
+
 __all__ = [
     "AddNode",
     "AddTransition",
     "Authorization",
     "AuthorizationMode",
+    "DefaultPolicyEngine",
+    "EvaluationResult",
     "ExpansionResult",
     "GraphExpansionProposal",
     "InvalidProposal",
+    "PolicyContext",
+    "PolicyDecision",
+    "PolicyEngine",
+    "PolicySettings",
     "ProposalID",
+    "ProposalStage",
+    "ProposalStageName",
     "RemoveTransition",
     "Scope",
     "ValidationResult",
     "apply_expansion",
+    "evaluate_proposal",
     "propose",
     "record_rejection",
     "validate",
