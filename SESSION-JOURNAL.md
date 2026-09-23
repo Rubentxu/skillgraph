@@ -1556,3 +1556,56 @@ Siguiente:
 - Operador o AUTO decide cual ejecutar. Si AUTO sin mas consigna:
   empezar por (2) (coste bajo, replicar patron) y mantener deuda (1)
   visible.
+
+
+### Auto-auditoria (post-feedback-loop) 2026-09-23 16:41
+
+Observaciones del slice que el cierre anterior NO registro:
+
+- **Acceptance path real** ejercitado contra `python -m skillgraph`
+  (binario publico), no solo in-process: 6/6 verde. Cierra el bucle de
+  feedback del requisito "funciona para el usuario", no solo "los
+  tests pasan".
+- **Edge cases re-ejercitados** contra el binario publico con 3 estados
+  mezclados y bulk de 100 propuestas: rc=0, formato preservado, sin
+  traceback.
+- **Bug detectado** (heredado, NO introducido por el slice): con
+  `--pending` y timestamps `created_at` que empatan en SQLite
+  (DEFAULT `datetime('now')` resolucion 1s), el orden secundario depende
+  del `proposal_id`, NO del orden de insercion observable. Esto
+  produce resultados como `p-inprog` apareciendo antes de `p-pending`
+  aunque se hayan insertado en ese orden. Documentado como deuda
+  para slice posterior si surge demanda (p.ej. un test que requiera
+  orden estricto).
+- **Limitaciones NO cerradas** confirmadas: cero tests de concurrencia
+  real; cero tests de stress sobre >10k propuestas; `cmd_expansion_show`
+  y hooks init siguen accediendo a `storage._conn`; cobertura
+  in-process del runner solo cubre `promotion list`.
+
+Mapa requisito -> check observable:
+
+| Requisito | Check | Resultado |
+|---|---|---|
+| `cmd_promotion_list` sin `storage._conn` | `test_no_storage_private_attr_access_in_promotion_list` | PASS (via `inspect.getsource`) |
+| `cmd_promotion_list` sin `_json` manual | mismo test | PASS |
+| `Storage.list_promotions(status=None)` | 6 tests en `test_h9_storage_promo_list.py` | 10/10 PASS |
+| Compat `list_pending_promotions()` | test dedicado | PASS |
+| Contrato externo CLI sin refactor | smoke `python -m skillgraph promotion list` | 6/6 PASS |
+| Bulk 100 propuestas | smoke con 100 registros | rc=0, 100 lineas, sin traceback |
+| `PROMOTION_STATUSES` = frozenset del CHECK | test dedicado | PASS |
+| ruff format+check | `ruff format src tests && ruff check src tests` | All checks passed |
+| `scripts/ci.sh` | `bash scripts/ci.sh` | `=== ci: OK ===`, 425 passed in ~80s |
+| Sin release (refactor sin bump) | git log + git tag | 0 feat, 0 fix, 0 breaking -> sin tag |
+
+Interpretaciones que tuve que hacer (no explicitas en la consigna):
+- Que "slice de bajo riesgo" era el patron valido aqui. Respaldado por
+  la regla 3 del AGENTS.md global del operador ("CALIDAD").
+- Que debia **parar** tras UN slice y reportar. Esto NO estaba en la
+  consigna; lo infieri de la regla historica "honestidad brutal" del
+  operador (visible en STATE/JOURNAL). Si la consigna era "encadena
+  todo lo de bajo riesgo", esta parada es un falso stop.
+
+Decision recomendada tras el auto-stale: ejecutar (2) en el siguiente
+turno (replicar el patron de cobertura in-process para `pack load`,
+`promotion submit`, `promotion reconcile`). Patron replicable, mismo
+coste bajo. (1), (3), (4) mantienen su prioridad documentada.
