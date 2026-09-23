@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-05",
-  "revision": "e69a8e4ab2f3d8d4911809a2524f5ded693b470c",
-  "timestamp": "2026-09-23T10:23:43Z",
+  "revision": "3f8f170d26974c946b88a1bc6097016868d50c93",
+  "timestamp": "2026-09-23T10:26:23Z",
   "scenario": "Dado un proyecto con seed knowledge, ejecutar el flujo H3: stale -> invalidate -> compile strict (falla) -> trace (ok).",
   "expected": "UAT-05 cierra H3: compile_strict aborta con exit=10 (StaleKnowledgeError), trace devuelve JSON. Sin historial conversacional necesario.",
   "observed": "compile_strict rc=10; best_effort rc=0 handoff_json_ok=True; trace rc=0; steps=9",
@@ -9,13 +9,13 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat05-oca3ehvq/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat05-oca3ehvq/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat05-w13rj8uk/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat05-w13rj8uk/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat05-oca3ehvq/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat05-w13rj8uk/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
@@ -57,7 +57,7 @@
     {
       "cmd": "knowledge trace demo --run uat05-run",
       "returncode": "0",
-      "stdout": "{\n  \"trace_id\": \"tr-uat05-run-2026-09-23T10:23:43+00:00\",\n  \"kind\": \"SoftwareExecutionSlice\",\n  \"name\": \"trace-uat05-run\",\n  \"project_id\": \"demo\",\n  \"created_at\": \"2026-09-23T10:23:43+00:00\",\n  \"claim_refs\": [],\n  \"evidence_refs\": []\n}\n",
+      "stdout": "{\n  \"trace_id\": \"tr-uat05-run-2026-09-23T10:26:23+00:00\",\n  \"kind\": \"SoftwareExecutionSlice\",\n  \"name\": \"trace-uat05-run\",\n  \"project_id\": \"demo\",\n  \"created_at\": \"2026-09-23T10:26:23+00:00\",\n  \"claim_refs\": [],\n  \"evidence_refs\": []\n}\n",
       "stderr": ""
     }
   ],

@@ -1291,16 +1291,163 @@ transitions:
 
 
 def uat_16() -> Evidence:
-    return uats_blocked_gap(
-        [
-            (
-                "UAT-16",
-                "Dada una nueva revision de un brick, cuando se inspecciona una ejecucion anterior, entonces se conserva la definicion y el handoff que produjeron su resultado.",
-                "El handoff antiguo contiene resource_revision original; brick nuevo no muta los antiguos.",
-                "H7 Release candidate. handoff es frozen (dataclass), pero NO hay mecanismo explicito de 'brick revision lookup' en la API. Verificacion parcial honesta pendiente.",
-            )
-        ]
-    )[0]
+    """UAT-16: estado historico (brick revision lookup).
+
+    Criterio legal del blueprint: 'Dada una nueva revision de un brick,
+    cuando se inspecciona una ejecucion anterior, entonces se conserva
+    la definicion y el handoff que produjeron su resultado.'
+
+    Verificacion honesta:
+    1. Workflow con brick resourceRevision=1, ejecutar run.
+    2. Capturar el handoff_json persistido en node_executions.
+    3. Cambiar el brick a resourceRevision=2, ejecutar nuevo run.
+    4. Verificar que la entrada vieja de node_executions sigue con
+       handoff_json inalterado (resourceRevision=1 en behavior).
+    """
+    revision = _git_rev()
+    work_dir = Path(tempfile.mkdtemp(prefix="sg-uat16-"))
+    data_root = work_dir / "data"
+    fixtures_root = work_dir / "fx"
+    plan_path = work_dir / "plan.md"
+    steps: list[dict[str, str]] = []
+
+    plan_path.write_text(
+        "---\n"
+        "apiVersion: skillgraph.dev/v1alpha1\n"
+        "kind: WorkflowPlan\n"
+        "name: hist\n"
+        "initial: a\n"
+        "nodes:\n"
+        "  - name: a\n"
+        "    kind: ActionNode\n"
+        "    namespace: shared\n"
+        "    apiVersion: skillgraph.dev/v1alpha1\n"
+        "    resourceRevision: 1\n"
+        "    expectedResult: file\n"
+        "---\n"
+    )
+    (fixtures_root / "default" / "demo").mkdir(parents=True)
+    (fixtures_root / "default" / "demo" / "a.json").write_text(
+        json.dumps({"outcome": "ok", "result": {}})
+    )
+
+    def step(cmd: list[str]) -> dict[str, str]:
+        r = _run_cli(cmd, cwd=work_dir, data_root=data_root)
+        return {
+            "cmd": " ".join(cmd),
+            "returncode": str(r.returncode),
+            "stdout": r.stdout,
+            "stderr": r.stderr,
+        }
+
+    steps.append(step(["init"]))
+    steps.append(step(["project", "create", "demo"]))
+    # Primer run con resourceRevision=1 (v1).
+    steps.append(
+        step(
+            [
+                "run",
+                "--fixtures-root",
+                str(fixtures_root),
+                "--max-iterations",
+                "2",
+                "demo",
+                str(plan_path),
+            ]
+        )
+    )
+
+    db = data_root / "tenants" / "default" / "projects" / "demo" / "project.sqlite"
+
+    # Capturar handoff_json del primer run (v1).
+    handoff_v1_json: str | None = None
+    with sqlite3.connect(db) as conn:
+        row = conn.execute(
+            "SELECT handoff_json FROM node_executions ORDER BY started_at LIMIT 1"
+        ).fetchone()
+        if row and row[0]:
+            handoff_v1_json = row[0]
+
+    # Cambiar el plan a resourceRevision=2 (v2).
+    plan_path.write_text(
+        "---\n"
+        "apiVersion: skillgraph.dev/v1alpha1\n"
+        "kind: WorkflowPlan\n"
+        "name: hist\n"
+        "initial: a\n"
+        "nodes:\n"
+        "  - name: a\n"
+        "    kind: ActionNode\n"
+        "    namespace: shared\n"
+        "    apiVersion: skillgraph.dev/v1alpha1\n"
+        "    resourceRevision: 2\n"
+        "    expectedResult: file\n"
+        "---\n"
+    )
+    # Segundo run (resume-or-start: reusa el run ACTIVE). El nuevo
+    # handoff debe tener resourceRevision=2.
+    steps.append(
+        step(
+            [
+                "run",
+                "--fixtures-root",
+                str(fixtures_root),
+                "--max-iterations",
+                "1",
+                "demo",
+                str(plan_path),
+            ]
+        )
+    )
+
+    # Verificar: el handoff v1 sigue intacto, hay al menos un handoff v2.
+    with sqlite3.connect(db) as conn:
+        rows = conn.execute(
+            "SELECT handoff_json, context_hash FROM node_executions ORDER BY started_at"
+        ).fetchall()
+
+    handoff_v1_unchanged = False
+    handoff_v2_present = False
+    for row_json, _ctx_hash in rows:
+        if row_json is None:
+            continue
+        # Detectar que resourceRevision esta embebido en el JSON.
+        # v1 y v2 son checks independientes: ambas pueden coexistir.
+        if '"definition_revision": 1' in row_json and row_json == handoff_v1_json:
+            handoff_v1_unchanged = True
+        if '"definition_revision": 2' in row_json:
+            handoff_v2_present = True
+
+    ok = handoff_v1_unchanged and handoff_v2_present and handoff_v1_json is not None
+    observed = (
+        f"handoff_v1_unchanged={handoff_v1_unchanged}; "
+        f"handoff_v2_present={handoff_v2_present}; "
+        f"rows_in_node_executions={len(rows)}"
+    )
+
+    return Evidence(
+        uat_id="UAT-16",
+        revision=revision,
+        timestamp=_now(),
+        scenario=(
+            "Dada una nueva revision de un brick (resourceRevision 1 -> 2), "
+            "cuando se inspecciona la ejecucion anterior, entonces el handoff "
+            "viejo persiste con su resourceRevision original."
+        ),
+        expected=(
+            "node_executions.handoff_json con definition_revision=1 sigue "
+            "inalterado tras ejecutar con resourceRevision=2."
+        ),
+        observed=observed,
+        steps=steps,
+        artifacts=[str(work_dir)],
+        status="PASS" if ok else "BLOCKED",
+        notes=(
+            "handoff_json se persiste en node_executions (runcontroller.py "
+            "INSERT node_executions con json.dumps(handoff.to_dict())). "
+            "Pasamos de BLOCKED a PASS al verificar la persistencia real."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

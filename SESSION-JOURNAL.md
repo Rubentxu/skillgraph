@@ -554,3 +554,57 @@ legal de los criterios de aceptacion. Auditoria honesta revelo:
 - 37 commits, 245 tests, **10/16 UAT PASS, 0 FAIL, 6 BLOCKED honestos**.
 - Deuda real documentada por Hito (H4..H7 sin implementar).
 - Sesion estable. Sin gate pendiente del lado del agente.
+
+
+## 2026-09-23 — Auditoria legal honesta + UAT-16 cerrado
+
+### Resumen
+
+Operador recordo: "el numero de cierres documentales no equivale a
+verificacion legal de los criterios". Audite los 10 UAT PASS contra
+el criterio legal exacto del blueprint. Detecte:
+
+1. **Duplicacion real**: 3 copias de `_now_iso` en
+   git_source/context_controller/knowledge_invalidator. Centralizadas
+   en `runtime.now_iso`. Imports redundantes quitados.
+
+2. **UAT-03 parcial**: solo verificaba 'DomainPack' en inspect stdout.
+   El blueprint exige 'capacidades aparecen en el catalogo'. Aniadido
+   query directa al storage: `spec_json` debe contener `review` y
+   `review.run`. Ahora PASS legal.
+
+3. **UAT-05 parcial**: solo verificaba rc=10/rc=0. Blueprint exige
+   "entradas obligatorias, decisiones aplicables y conocimiento
+   vigente". Aniadido step `compile` best-effort que imprime el JSON
+   del handoff; verificado `recipe_ref`, `definition_kind`, source.
+   Ahora PASS legal.
+
+4. **UAT-06 docstring obsoleto**: decia "bug frontier ejecuta TODOS"
+   pero el bug ya estaba arreglado en commit bdd196f. Limpieza.
+
+5. **UAT-16 fraudulento BLOCKED**: decia "no hay mecanismo de brick
+   revision lookup". Pero `node_executions.handoff_json` SI persiste
+   el handoff completo. Implementado flujo end-to-end: ejecuta v1,
+   captura handoff_json, cambia a v2, ejecuta v2, verifica coexistencia
+   y que v1 queda intacto. Ahora PASS.
+
+### Estado final
+
+- 41 commits en `main`. 245 tests pytest verde. Lint format+check
+  limpio. UAT: **11/16 PASS, 0 FAIL, 5 BLOCKED honestos**.
+
+### Limitaciones declaradas (5 BLOCKED)
+
+- UAT-08/09: H4 Expansion controlada (GraphExpansion/GraphPatch +
+  policy engine) NO implementado.
+- UAT-11: H5 adopcion de skills NO implementado.
+- UAT-12: H6 multipropósito (Character/StoryArc) NO implementado.
+- UAT-13: H7 promocion entre bases NO implementado.
+
+### Deuda tecnica residual (declarada)
+
+- Token budget aproximado (chars, no tiktoken).
+- Duplicacion catalog.py/storage.py (defensa en profundidad intencional).
+- paths.py rama Windows no ejecutada en CI Linux.
+- registry.py validaciones con tipos no-objeto.
+- Workflows ciclicos con self-loop sin max_visits quedan ACTIVE.

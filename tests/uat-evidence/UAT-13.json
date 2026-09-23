@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-13",
-  "revision": "e69a8e4ab2f3d8d4911809a2524f5ded693b470c",
-  "timestamp": "2026-09-23T10:23:45Z",
+  "revision": "3f8f170d26974c946b88a1bc6097016868d50c93",
+  "timestamp": "2026-09-23T10:26:26Z",
   "scenario": "Dada una propuesta de promocion persistida en un proyecto, cuando se interrumpe el proceso durante su publicacion, entonces la reconciliacion permite completarla sin duplicar la capacidad compartida.",
   "expected": "Promocion atomica entre bases.",
   "observed": "No auditado: requiere feature no implementada.",

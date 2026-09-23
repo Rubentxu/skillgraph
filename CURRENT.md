@@ -1,7 +1,7 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 12:08 (Europe/Madrid).
-> Revisión: `b7b2d5e feat(h4): DecisionNode outcomes + max_visits self-loops` + dedup.
+> Última verificación: 2026-09-23 12:26 (Europe/Madrid).
+> Revisión: `3f8f170 refactor: dedup now_iso + strengthen UAT-03/05/06`.
 
 ## Goal
 
@@ -15,26 +15,50 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 - H1 (Recursos persistentes) **cerrado**.
 - H2 (Ejecución local) **cerrado**.
 - **H3 (Conocimiento & Context) CERRADO**. 5 slices implementadas.
-- H4-H7 del blueprint NO implementados (UAT-08/09/11/12/13/16 BLOCKED).
-- Trabajo activo: auditoría honesta completa al blueprint (16 UATs), dedup
-  código, corrección de docs.
-- Siguiente: H4 Expansion controlada (GraphExpansion/GraphPatch/policy engine) o
-  H5 adopción de skills. Operador decide.
+- H4-H7 del blueprint NO implementados (UAT-08/09/11/12/13 BLOCKED).
+- **UAT-16 cerrado** (H7 release candidate NO implementado, pero el
+  criterio legal del blueprint ya se cumple via persistencia de
+  handoff_json en node_executions).
+- Trabajo activo: auditoría honesta completa al blueprint (16 UATs),
+  dedup código (`now_iso` x3 → 1), verificación legal de criterios
+  UAT-03 (capacities), UAT-05 (contenido handoff), UAT-16 (brick revision).
+- Siguiente: H4 Expansion controlada (GraphExpansion/GraphPatch/policy
+  engine) o H5 skill_import. Operador decide.
 
 ## Último estado comprobado
 
-- Repo: rama `main`, **37 commits limpios, lint verde, 245 tests verdes**.
-- Working tree: cambios sin commitear (STATE/CURRENT/journal).
-- Auditoría UAT honesta: **10/16 PASS, 0 FAIL, 6 BLOCKED**.
+- Repo: rama `main`, **40+ commits limpios, lint verde, 245 tests verdes**.
+- Auditoría UAT honesta: **11/16 PASS, 0 FAIL, 5 BLOCKED honestos**.
 - Python 3.13.15 via `mise`; `uv` para resolver venv reproducible.
+
+### Mejoras legales de UATs en este turno
+
+- **UAT-03**: aniadida verificación de capabilities persistidas en
+  storage (query directa `SELECT spec_json WHERE name='software-pack'`,
+  debe contener `'review'` y `'review.run'`).
+- **UAT-05**: aniadido step `compile` best-effort que imprime el JSON
+  completo del handoff; verificado que contiene `recipe_ref`,
+  `definition_kind`, source original. Cubre "entradas obligatorias,
+  decisiones aplicables y conocimiento vigente".
+- **UAT-06**: docstring actualizado (el bug "frontier ejecuta TODOS"
+  ya estaba arreglado en commit bdd196f; antes el docstring mentía).
+- **UAT-16**: pasó de BLOCKED a PASS. Verifica que `node_executions.
+  handoff_json` persiste el handoff completo tras cambiar la
+  resourceRevision del brick.
 
 ### Decisiones tomadas en este turno
 
-- **Dedup**: `has_self_loop` extraído a helper módulo-level (3 inline → 1).
-- **Auditoría 16 UATs** (no solo 7): UAT-10 (invalidación), UAT-14 (scripts no
-  se ejecutan), UAT-15 (fuente maliciosa) verificados PASS. UAT-08/09/11/12/13/16
-  declarados BLOCKED con razón.
-- **H4 (mi feat ciclos) NO es H4 del blueprint**: corregido en STATE.
+- **Dedup**: `now_iso` centralizado en `runtime.py`, 3 módulos
+  reexportan con `as _now_iso`. Imports redundantes (`UTC`,
+  `datetime`) quitados.
+- **UAT-05 fortalecido**: verificación real del contenido del handoff
+  (recipe_ref, definition_kind) en lugar de solo rc=10/rc=0.
+- **UAT-03 fortalecido**: query directa al storage verifica que las
+  capabilities (`spec.capabilities[].name='review'`, `entrypoint='review.run'`)
+  están en `spec_json`.
+- **UAT-16 implementado** (de BLOCKED a PASS): flujo end-to-end que
+  ejecuta workflow v1, captura handoff_json, cambia a v2, ejecuta
+  nuevo workflow, verifica coexistencia e inalterabilidad del viejo.
 
 ### H3 — slices implementadas
 
