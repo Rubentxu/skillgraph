@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import UTC
@@ -505,6 +506,45 @@ def _build_parser() -> argparse.ArgumentParser:
     pl.add_argument("project", help="Proyecto destino (donde se persiste el pack).")
     pl.add_argument("path", type=Path, help="Ruta al archivo Markdown del Domain Pack.")
 
+    # H8: promotion entre bases (UAT-13 ruta publica)
+    pr = sub.add_parser(
+        "promotion",
+        help="Promocion de conocimiento entre bases/proyectos (H8).",
+    )
+    pr_sub = pr.add_subparsers(dest="promotion_command", required=True)
+    ps = pr_sub.add_parser(
+        "submit",
+        help="Registra una propuesta de promocion (PENDING) desde un Claim.",
+    )
+    ps.add_argument("project", help="Proyecto origen (donde vive el Claim).")
+    ps.add_argument("claim_id", help="Identificador del Claim a promover.")
+    ps.add_argument("target", help="Proyecto/catalogo destino.")
+    ps.add_argument(
+        "--proposal-id",
+        default=None,
+        help="Identificador de propuesta. Default: promo-<claim_id>.",
+    )
+    pll = pr_sub.add_parser(
+        "list",
+        help="Lista propuestas del outbox.",
+    )
+    pll.add_argument("project", help="Proyecto (su project.sqlite contiene el outbox).")
+    pll.add_argument(
+        "--pending",
+        action="store_true",
+        help="Solo PENDING/IN_PROGRESS.",
+    )
+    prc = pr_sub.add_parser(
+        "reconcile",
+        help="Aplica las propuestas pendientes sin duplicar (UAT-13).",
+    )
+    prc.add_argument("project", help="Proyecto dueño del outbox.")
+    prc.add_argument(
+        "--target",
+        default=None,
+        help="Proyecto destino donde aplicar los claims. Default: el mismo proyecto.",
+    )
+
     rp = sub.add_parser(
         "run",
         help="Crea un Run desde un WorkflowPlan.md y reconcilia hasta terminal.",
@@ -677,6 +717,12 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_pack_import(args)
         if args.command == "pack" and args.pack_command == "load":
             return cmd_pack_load(args)
+        if args.command == "promotion" and args.promotion_command == "submit":
+            return cmd_promotion_submit(args)
+        if args.command == "promotion" and args.promotion_command == "list":
+            return cmd_promotion_list(args)
+        if args.command == "promotion" and args.promotion_command == "reconcile":
+            return cmd_promotion_reconcile(args)
         if args.command == "run":
             return cmd_run(args)
         if args.command == "knowledge":
@@ -875,6 +921,278 @@ def cmd_brick_register(args: argparse.Namespace) -> int:
     print(f"Brick registrado: {brick.kind}/{brick.identity.namespace}/{brick.identity.name}")
     print(f"UID: {uid}")
     return EXIT_OK
+
+
+# ---------------------------------------------------------------------------
+# H8: promocion entre bases (sg promotion submit/list/reconcile)
+# ---------------------------------------------------------------------------
+
+
+def _default_claim_importer(storage: Storage, *, tenant_id: str, target_project: str):
+    """apply_fn por defecto: importa al proyecto destino lo que el claim
+    referenciado necesita (source -> entity -> claim), reutilizando las
+    APIs idempotentes de Storage (upsert_source/upsert_entity/record_claim,
+    todas INSERT OR IGNORE/REPLACE). Asi el apply es re-ejecutable sin
+    duplicar: la idempotencia es del storage destino, no del caller.
+
+    El payload lo produce `cmd_promotion_submit`:
+    {source, entity, claim, source_project, target_project}.
+    Devuelve True si el claim quedó registrado en destino (o ya estaba).
+    """
+    from datetime import UTC, datetime
+
+    from skillgraph.knowledge.graph import Claim, Entity, Source
+
+    def _apply(payload: dict) -> bool:
+        c = payload.get("claim")
+        if not isinstance(c, dict):
+            return False
+        s = payload.get("source")
+        if isinstance(s, dict) and s.get("source_id"):
+            storage.register_source(
+                tenant_id=tenant_id,
+                project_id=target_project,
+                source=Source(
+                    source_id=s["source_id"],
+                    kind=s.get("kind", "local_file"),
+                    content_hash=s.get("content_hash", "promoted"),
+                    locator=s.get("locator", {}),
+                    git_commit_sha=s.get("git_commit_sha"),
+                    git_tree_sha=s.get("git_tree_sha"),
+                    working_tree_status=s.get("working_tree_status"),
+                    checked_at=s.get("checked_at") or datetime.now(UTC).isoformat(),
+                    freshness=s.get("freshness", "fresh"),
+                ),
+            )
+        e = payload.get("entity")
+        if isinstance(e, dict) and e.get("entity_id"):
+            storage.upsert_entity(
+                tenant_id=tenant_id,
+                project_id=target_project,
+                entity=Entity(
+                    entity_id=e["entity_id"],
+                    kind=e.get("kind", "module"),
+                    stable_key=e.get("stable_key", e["entity_id"]),
+                ),
+            )
+        claim = Claim(
+            claim_id=c["claim_id"],
+            subject_entity_id=c["subject_entity_id"],
+            predicate=c["predicate"],
+            object_literal=c["object_literal"],
+            source_id=c["source_id"],
+            evidence_ids=tuple(c.get("evidence_ids", ()) or ()),
+            extraction_method=c.get("extraction_method", "static_analysis"),
+            extractor_version=c.get("extractor_version", "unknown"),
+            checked_at_revision=c.get("checked_at_revision", "unknown"),
+        )
+        storage.record_claim(tenant_id=tenant_id, project_id=target_project, claim=claim)
+        return True
+
+    return _apply
+
+
+def _source_to_payload(storage: Storage, *, tenant_id: str, source_id: str) -> dict | None:
+    """Serializa una Source del proyecto origen para el payload de promocion."""
+    try:
+        row = storage._conn.execute(
+            "SELECT * FROM sources WHERE source_id = ? AND tenant_id = ?",
+            (source_id, tenant_id),
+        ).fetchone()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    d = dict(row)
+    import json as _json
+
+    for k in ("locator", "working_tree_status"):
+        if isinstance(d.get(k), str):
+            try:
+                d[k] = _json.loads(d[k])
+            except (ValueError, TypeError):
+                d[k] = {}
+    return d
+
+
+def _entity_to_payload(storage: Storage, *, tenant_id: str, entity_id: str) -> dict | None:
+    """Serializa una Entity del proyecto origen para el payload de promocion."""
+    try:
+        row = storage._conn.execute(
+            "SELECT * FROM entities WHERE entity_id = ? AND tenant_id = ?",
+            (entity_id, tenant_id),
+        ).fetchone()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    return dict(row)
+
+
+def cmd_promotion_submit(args: argparse.Namespace) -> int:
+    """Registra una propuesta de promocion en el outbox (status=PENDING).
+
+    El payload se construye desde el Claim indicado (source_project);
+    target_project es el catalogo destino donde `reconcile` lo aplicara.
+    """
+    from skillgraph.core.errors import IdentityConflictError
+    from skillgraph.governance.promotion import submit_proposal
+
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return err
+    tenant_id = project["tenant_id"]
+
+    storage = Storage(Path(project["db_path"]))
+    try:
+        claim = storage.get_claim(
+            tenant_id=tenant_id, project_id=args.project, claim_id=args.claim_id
+        )
+        if claim is None:
+            print(
+                f"ERROR (sg_not_found): claim {args.claim_id!r} no existe en {args.project!r}",
+                file=sys.stderr,
+            )
+            return EXIT_DOMAIN
+        payload = {
+            "source_project": args.project,
+            "target_project": args.target,
+            "source": _source_to_payload(storage, tenant_id=tenant_id, source_id=claim.source_id),
+            "entity": _entity_to_payload(
+                storage, tenant_id=tenant_id, entity_id=claim.subject_entity_id
+            ),
+            "claim": {
+                "claim_id": claim.claim_id,
+                "subject_entity_id": claim.subject_entity_id,
+                "predicate": claim.predicate,
+                "object_literal": claim.object_literal,
+                "source_id": claim.source_id,
+                "evidence_ids": list(claim.evidence_ids),
+                "extraction_method": claim.extraction_method,
+                "extractor_version": claim.extractor_version,
+                "checked_at_revision": claim.checked_at_revision,
+            },
+        }
+        proposal_id = args.proposal_id or f"promo-{args.claim_id}"
+        try:
+            submit_proposal(
+                storage,
+                proposal_id=proposal_id,
+                tenant_id=tenant_id,
+                source_project=args.project,
+                target_catalog=args.target,
+                knowledge_ref=args.claim_id,
+                payload=payload,
+            )
+        except IdentityConflictError as exc:
+            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+            return EXIT_DOMAIN
+    finally:
+        storage.close()
+    print(f"Propuesta registrada: {proposal_id} (PENDING)")
+    print(f"Destino: {args.target}")
+    return EXIT_OK
+
+
+def cmd_promotion_list(args: argparse.Namespace) -> int:
+    """Lista propuestas del outbox (todas o solo pendientes)."""
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return err
+
+    storage = Storage(Path(project["db_path"]))
+    try:
+        if args.pending:
+            rows = storage.list_pending_promotions()
+        else:
+            rows = [
+                dict(r)
+                for r in storage._conn.execute(
+                    "SELECT proposal_id, tenant_id, source_project, target_catalog,"
+                    " knowledge_ref, status FROM promotion_outbox ORDER BY created_at"
+                ).fetchall()
+            ]
+    finally:
+        storage.close()
+    if not rows:
+        print("(sin propuestas)")
+        return EXIT_OK
+    for r in rows:
+        print(
+            f"{r['proposal_id']}  {r['status']:<12} {r['source_project']} -> {r['target_catalog']}"
+        )
+    return EXIT_OK
+
+
+def cmd_promotion_reconcile(args: argparse.Namespace) -> int:
+    """Reconcilia propuestas PENDING/IN_PROGRESS: aplica sin duplicar.
+
+    Recorrido UAT-13: interrumpir el proceso (crash/failpoint) y
+    re-invocar `promotion reconcile` completa la operacion sin
+    duplicar el claim en el catalogo destino.
+    """
+
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return err
+    tenant_id = project["tenant_id"]
+    target = args.target or args.project
+
+    # El apply debe escribir en la base del PROYECTO DESTINO (el outbox
+    # vive en origen; el claim promovido vive en destino).
+    dest_project, err = resolver.lookup(target)
+    if err is not None:
+        print(
+            f"ERROR: proyecto destino {target!r} no existe; crealo antes de reconciliar.",
+            file=sys.stderr,
+        )
+        return EXIT_DOMAIN
+    dest_storage = Storage(Path(dest_project["db_path"]))
+    storage = Storage(Path(project["db_path"]))
+    try:
+        apply_fn = _default_claim_importer(
+            dest_storage, tenant_id=tenant_id, target_project=dest_project["name"]
+        )
+        # FAILPOINT de prueba (H8): simula un crash a mitad del apply.
+        # SKILLGRAPH_FAILPOINT_PROMOTION=before_apply  -> os._exit(9) tras
+        #   leer las pendientes pero ANTES de aplicar cualquiera.
+        # SKILLGRAPH_FAILPOINT_PROMOTION=after_apply_first -> os._exit(9)
+        #   justo despues de aplicar la primera (claim ya en destino pero
+        #   outbox sin marcar PUBLISHED: el estado exacto post-crash).
+        failpoint = os.environ.get("SKILLGRAPH_FAILPOINT_PROMOTION")
+        if failpoint == "before_apply":
+            sys.stderr.write("FAILPOINT: before_apply\n")
+            sys.stderr.flush()
+            os._exit(9)
+        results: list[dict[str, str]] = []
+        for proposal in storage.list_pending_promotions():
+            from skillgraph.governance.promotion import apply_proposal
+
+            # FAILPOINT mid_apply: el apply de negocio ya se ejecuto
+            # (o se ejecutaria ahora) pero el outbox sigue sin marcar
+            # PUBLISHED. Simula crash exactamente entre ambos efectos.
+            if failpoint == "mid_apply":
+                storage.mark_promotion_in_progress(proposal["proposal_id"])
+                sys.stderr.write("FAILPOINT: mid_apply\n")
+                sys.stderr.flush()
+                os._exit(9)
+            final_status = apply_proposal(storage, proposal["proposal_id"], apply_fn=apply_fn)
+            results.append({"proposal_id": proposal["proposal_id"], "status": final_status})
+    finally:
+        storage.close()
+        dest_storage.close()
+    if not results:
+        print("(nada que reconciliar)")
+        return EXIT_OK
+    published = sum(1 for r in results if r["status"] == "PUBLISHED")
+    failed = sum(1 for r in results if r["status"] == "FAILED")
+    for r in results:
+        print(f"{r['proposal_id']}: {r['status']}")
+    print(f"Reconciliadas: {len(results)} (PUBLISHED={published}, FAILED={failed})")
+    return EXIT_OK if failed == 0 else EXIT_DOMAIN
 
 
 def cmd_pack_import(args: argparse.Namespace) -> int:
