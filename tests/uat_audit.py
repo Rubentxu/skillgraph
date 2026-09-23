@@ -17,6 +17,7 @@ requiere feature no implementada, marca BLOCKED con la razon.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sqlite3
@@ -1592,58 +1593,181 @@ def uat_16() -> Evidence:
 # ---------------------------------------------------------------------------
 
 
-def main() -> int:
-    uats = [
-        uat_01,
-        uat_02,
-        uat_03,
-        uat_04,
-        uat_05,
-        uat_06,
-        uat_07,
-        uat_08,
-        uat_09,
-        uat_10,
-        uat_11,
-        uat_12,
-        uat_13,
-        uat_14,
-        uat_15,
-        uat_16,
-    ]
-    results = []
-    for fn in uats:
-        print(f"--- Ejecutando {fn.__name__} ---")
-        try:
-            ev = fn()
-        except Exception as exc:
-            ev = Evidence(
-                uat_id=fn.__name__.replace("uat_", "UAT-"),
-                revision=_git_rev(),
-                timestamp=_now(),
-                scenario="(excepcion durante la ejecucion del UAT)",
-                expected="(ejecutar el escenario)",
-                observed=f"{type(exc).__name__}: {exc}",
-                steps=[],
-                artifacts=[],
-                status="FAIL",
-                notes="Excepcion no controlada durante la auditoria.",
-            )
-        path = _save_evidence(ev)
-        results.append((ev.uat_id, ev.status, str(path)))
-        print(f"  {ev.uat_id}: {ev.status} -> {path}")
+# ---------------------------------------------------------------------------
+# CLI helpers
+# ---------------------------------------------------------------------------
 
-    # Resumen.
+
+_UAT_FUNCTIONS: list[tuple[str, str]] = [
+    ("UAT-01", "uat_01"),
+    ("UAT-02", "uat_02"),
+    ("UAT-03", "uat_03"),
+    ("UAT-04", "uat_04"),
+    ("UAT-05", "uat_05"),
+    ("UAT-06", "uat_06"),
+    ("UAT-07", "uat_07"),
+    ("UAT-08", "uat_08"),
+    ("UAT-09", "uat_09"),
+    ("UAT-10", "uat_10"),
+    ("UAT-11", "uat_11"),
+    ("UAT-12", "uat_12"),
+    ("UAT-13", "uat_13"),
+    ("UAT-14", "uat_14"),
+    ("UAT-15", "uat_15"),
+    ("UAT-16", "uat_16"),
+]
+
+# UATs cuyo uat_NN() es un STUB (no verifica el criterio real; delega en
+# uats_blocked_gap). Su evidencia real vive en test_h4_expansion_cli.py
+# (_emit_uat_08/09_evidence) o en test_uat_blocked.py (UAT-12/13).
+# Regenerarlos aqui PISA evidencia valida con BLOCKED heredado. Por
+# seguridad, --write sobre stubs exige --yes explicito.
+_STUB_UATS: frozenset[str] = frozenset({"UAT-08", "UAT-09", "UAT-12", "UAT-13"})
+
+
+def _run_one(uat_id: str, fn_name: str, write: bool) -> tuple[Evidence, Path | None]:
+    """Ejecuta un UAT individual; graba evidencia solo si write=True."""
+    fn = globals()[fn_name]
+    try:
+        ev = fn()
+    except Exception as exc:
+        ev = Evidence(
+            uat_id=uat_id,
+            revision=_git_rev(),
+            timestamp=_now(),
+            scenario="(excepcion durante la ejecucion del UAT)",
+            expected="(ejecutar el escenario)",
+            observed=f"{type(exc).__name__}: {exc}",
+            steps=[],
+            artifacts=[],
+            status="FAIL",
+            notes="Excepcion no controlada durante la auditoria.",
+        )
+    path = _save_evidence(ev) if write else None
+    return ev, path
+
+
+def _report(ev: Evidence, path: Path | None) -> None:
+    where = f" -> {path}" if path is not None else " (no escrito)"
+    print(f"  {ev.uat_id}: {ev.status}{where}")
+
+
+def _summary(results: list[tuple[str, str, Path | None]]) -> None:
     print("\n=== Resumen ===")
     for uat_id, status, _ in results:
         marker = "OK" if status == "PASS" else ("BLOCKED" if status == "BLOCKED" else "FAIL")
         print(f"  {marker} {uat_id}: {status}")
-
     n_pass = sum(1 for _, s, _ in results if s == "PASS")
     n_fail = sum(1 for _, s, _ in results if s == "FAIL")
     n_block = sum(1 for _, s, _ in results if s == "BLOCKED")
     print(f"\nPASS={n_pass}  FAIL={n_fail}  BLOCKED={n_block}")
 
+
+def _read_existing() -> list[tuple[str, str, Path | None]]:
+    """Lee la evidencia persistida sin ejecutar nada (modo read-only)."""
+    results: list[tuple[str, str, Path | None]] = []
+    if not EVIDENCE_DIR.exists():
+        print(f"(no hay evidencia en {EVIDENCE_DIR})")
+        return results
+    for uat_id, _fn in _UAT_FUNCTIONS:
+        path = EVIDENCE_DIR / f"{uat_id}.json"
+        if not path.exists():
+            print(f"  {uat_id}: MISSING (no hay evidencia persistida)")
+            results.append((uat_id, "MISSING", None))
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"  {uat_id}: READ_ERROR {type(exc).__name__}: {exc}")
+            results.append((uat_id, "READ_ERROR", None))
+            continue
+        status = str(data.get("status", "UNKNOWN"))
+        rev = str(data.get("revision", "?"))[:12]
+        print(f"  {uat_id}: {status} (rev={rev}, persisted)")
+        results.append((uat_id, status, path))
+    return results
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="uat_audit",
+        description=(
+            "Auditoria UAT de SkillGraph. Por defecto (sin args) LEE la "
+            "evidencia persistida y la reporta sin ejecutar nada. Para "
+            "regenerar evidencia, usar --write."
+        ),
+    )
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Ejecuta los UATs y SOBREESCRIBE la evidencia persistida. "
+        "Peligroso: pisar la evidencia valida de UATs PASS. Sobre "
+        "UATs stub (UAT-08/09/12/13) exige --yes.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Ejecuta los UATs SIN persistir evidencia (util para debug).",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirma operaciones destructivas (--write sobre UATs stub).",
+    )
+    parser.add_argument(
+        "uats",
+        nargs="*",
+        help="Subset de UATs a ejecutar (ej. UAT-08 UAT-09). Por defecto, todos.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    selected: list[tuple[str, str]] = _UAT_FUNCTIONS
+    if args.uats:
+        wanted = {u.upper() for u in args.uats}
+        selected = [(uid, fn) for uid, fn in _UAT_FUNCTIONS if uid in wanted]
+        missing = wanted - {uid for uid, _ in selected}
+        if missing:
+            print(f"ERROR: UATs desconocidos: {sorted(missing)}", file=sys.stderr)
+            print(f"Disponibles: {[uid for uid, _ in _UAT_FUNCTIONS]}", file=sys.stderr)
+            return 2
+
+    # Por defecto (sin --write ni --dry-run): modo read-only.
+    if not args.write and not args.dry_run:
+        print("=== Modo lectura (no se ejecuta nada; evidencia persistida) ===")
+        results = _read_existing()
+        _summary(results)
+        return 0
+
+    # Proteccion: --write sobre UATs stub requiere --yes explicito.
+    write = bool(args.write)
+    if write:
+        stubs_in_selection = [uid for uid, _ in selected if uid in _STUB_UATS]
+        if stubs_in_selection and not args.yes:
+            print(
+                f"ERROR: --write sobre UATs stub ({stubs_in_selection}) pisaria "
+                "evidencia valida con BLOCKED heredado. Su evidencia real "
+                "vive en test_h4_expansion_cli.py / test_uat_blocked.py. "
+                "Si realmente queres regenerar el stub, anade --yes.",
+                file=sys.stderr,
+            )
+            return 3
+
+    mode = "WRITE" if write else "DRY-RUN"
+    print(f"=== Modo {mode} ({len(selected)} UATs) ===")
+    results: list[tuple[str, str, Path | None]] = []
+    for uat_id, fn_name in selected:
+        print(f"--- Ejecutando {fn_name} ---")
+        ev, path = _run_one(uat_id, fn_name, write=write)
+        results.append((uat_id, ev.status, path))
+        _report(ev, path)
+
+    _summary(results)
+    n_fail = sum(1 for _, s, _ in results if s == "FAIL")
     return 0 if n_fail == 0 else 1
 
 
