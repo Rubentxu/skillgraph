@@ -661,3 +661,29 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
 - **Pendiente S3+S5+S6+S7**: escrituras que SÍ comparten evento
   con state. Aquí necesito decisión arquitectónica (consigna
   del operador: parar y presentar). Detalles abajo.
+
+## UPDATE 2026-09-23 21:19 — H9-Coverage-1 cerrado
+
+- **Slice**: cobertura de `src/skillgraph/governance/graph_expansion.py`
+  del 86% al 98% con 17 tests focales.
+- **Ramas cubiertas**: `Either.unwrap/unwrap_err` (lanzan RuntimeError
+  en el lado opuesto), `InvalidProposal.to_dict`, `propose()` con
+  operations/author/problem_observed vacíos (3 ramas), `validate()`
+  con attachment_point inexistente, `_find_capable` falso,
+  `Authorization.is_active` (granted + policy_approved),
+  cycle detection (`bfs_cycle` + `_cycle_source_nodes`),
+  `apply_expansion` filtrando `RemoveTransition` antes de validar
+  nuevas transiciones, y W1 warning para `RemoveTransition` sobre
+  nodo activo.
+- **Resultado**: 553/553 tests verde (`scripts/ci.sh` 155s).
+  `ruff check` All checks passed.
+- **Lo que queda sin cubrir** (5 BrPart + 7 stmt):
+  ramas defensivas de `RemoveTransition` application (unreachable
+  cuando nuevas transiciones no se aplican a nodos activos eliminados)
+  y `assert` interno de `_sort_nodes_topologically` en un caso
+  límite sin disparar en la suite actual.
+- **Spec**: `specs/h9-coverage-graph-expansion.md` documenta
+  las 16 ramas identificadas y cuáles se cubren.
+- **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos
+  (preservada por construcción, ADR pendiente).
+- **Próximo paso**: seleccionar siguiente slice del roadmap.

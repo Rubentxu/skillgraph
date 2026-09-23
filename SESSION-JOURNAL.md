@@ -1993,3 +1993,49 @@ no de funcionalidad).
   (4 InProcess-2 + 3 InProcess-3 + 3 InProcess-4).
 - Working tree limpio.
 
+
+### H9-Coverage-1 — cobertura `graph_expansion.py` 86% → 98% (2026-09-23 21:19)
+
+**Slice**: 17 tests focales para subir cobertura del módulo
+de Either-style API.
+
+**Spec**: `specs/h9-coverage-graph-expansion.md` con inventario
+de las 16 ramas identificadas.
+
+**Tests añadidos** (`tests/test_h9_coverage_graph_expansion.py`,
+413 líneas, 17 tests):
+
+- `TestExpansionResultEither` (3): `unwrap`/`unwrap_err` en
+  lado opuesto lanzan RuntimeError; `InvalidProposal.to_dict`.
+- `TestRequireProblem` (2): whitespace + empty.
+- `TestRequireAttachment` (1): `attachment_point='ghost'` via
+  `validate()` (NO `propose()` — la validación ocurre
+  fuera del try/except que captura _require_attachment).
+- `TestProposeValidations` (2): operations vacíos + author
+  vacío.
+- `TestFindCapable` (1): todos capabilities faltantes.
+- `TestAuthorization` (2): is_active True granted, is_active
+  False not_granted.
+- `TestCycleDetection` (2): bfs_cycle básico + _cycle_source_nodes.
+- `TestApplyExpansionRemoveTransition` (2): RemoveTransition
+  filtra nuevas transiciones ANTES de validar.
+- `TestRemoveTransitionWarning` (1): W1 warning en nodo activo.
+
+**`_Ok`/`_Err` no están en `__all__`**, importados por nombre
+cualificado (`graph_expansion._Ok`).
+
+**Verificación**:
+
+- `mise exec -- uv run pytest tests/test_h9_coverage_graph_expansion.py`:
+  17/17 verde.
+- `mise exec -- uv run pytest --cov=skillgraph --cov-report=term`:
+  `graph_expansion.py` 285 stmts, 4 miss, 100 br, 5 brpart → **98%**.
+- `scripts/ci.sh`: **553/553 verde en 155s**.
+- `ruff check src tests`: All checks passed.
+
+**Ramas BrPart no cubiertas** (5): `361->360`, `391->390`,
+`428->424`, `518`, `519->514`. Línea 533-539: `assert` interno
+de `_sort_nodes_topologically`. Son defensive branches y un
+assert de invariante interna. Justificación de no cubrir en
+spec.
+

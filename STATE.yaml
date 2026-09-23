@@ -212,9 +212,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 536
-  passed: 536
-  duration_s: 105
+  total: 553
+  passed: 553
+  duration_s: 155
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -229,6 +229,7 @@ tests:
   h9_bslice3_s1_create_run_delta: "+7 tests del API Storage.create_run: 6 de contrato observable (incluido plan_json passed-through verbatim + works_through_runcontroller verifica evento RunCreated SI se emite) + 1 de introspeccion no-regresion."
   h9_bslice3_s8s9_no_conn_delta: "+6 tests del cierre de RunController sin conn: 2 Storage.conn (returns/is_same_as_underlying) + 2 firma sin conn (rejects_conn_keyword/signature_has_only_storage_and_adapter) + 1 camino end-to-end (create_run_and_reconcile_via_storage_conn verifica que EventLog comparte conexion con Storage) + 1 introspeccion no-regresion (__init__ sin 'self._conn' ni 'import sqlite3')."
   h9_inprocess4_delta: "+12 tests in-process CLI runner (knowledge refresh: 4 + knowledge compile: 4 + knowledge trace: 4). Cubre happy paths + error paths documentando comportamiento real de wrappers (UnknownSourceError y FileNotFoundError se propagan; ValidationError de overflow_strategy se propaga porque la validacion ocurre antes del try/except del wrapper). 2 bugs menores de UX conocidos documentados sin tocar produccion."
+  h9_coverage1_delta: "+17 tests cobertura graph_expansion.py (89% -> 98%): Either API unwrap/unwrap_err (2) + InvalidProposal.to_dict (1) + propose validations empty/whitespace operations/author/problem_observed (4) + validate attachment inexistente (1) + _find_capable false + Authorization (2) + cycle detection bfs_cycle/_cycle_source_nodes (2) + RemoveTransition filter apply_expansion (2) + W1 warning remove_transition active node (1). _Ok/_Err accedidos por nombre cualificado porque no estan en __all__. Spec: specs/h9-coverage-graph-expansion.md."
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -278,6 +279,7 @@ tests:
     - tests/test_h9_storage_create_run.py: 7   # H9-BSlice3-S1(create_run): create_run
     - tests/test_h9_storage_run_controller_no_conn.py: 6   # H9-BSlice3-S8+S9: Storage.conn + RunController sin conn
     - tests/test_h9_cli_inproc_knowledge_refresh_compile_trace.py: 12   # H9-InProcess-4: knowledge refresh/compile/trace
+    - tests/test_h9_coverage_graph_expansion.py: 17   # H9-Coverage-1: cobertura graph_expansion.py (89%->98%)
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -294,7 +296,7 @@ tests:
     registry.py: 88%
     bricks.py: 91%
     skill_importer.py: 89%
-    graph_expansion.py: 86%
+    graph_expansion.py: 98%  # ANTES 86%. +17 tests cubren Either API unwrap/unwrap_err, _require_problem/_require_attachment, _find_capable, cycle detection, RemoveTransition filter, Authorization, W1 warning. 5 ramas BrPart + stmt 533-539 restantes: defensive branches de RemoveTransition application (state guard unreachable por diseño cuando nuevas transiciones no se aplican a nodos activos eliminados) y línea 533-539 es un assert interno de _sort_nodes_topologically en un caso limite sin disparar en la suite actual.
     context_controller.py: 81%
     paths.py: 81%   # ANTES 59%. Refactor + test_paths.py cubrio XDG y helpers.
     parser.py: 100%  # ANTES 77%. Tests focalizados en 12 ramas de error (test_parser.py, 12 tests).
