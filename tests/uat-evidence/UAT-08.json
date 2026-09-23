@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-08",
-  "revision": "d72bbff41a3e453d267ae2b8ca54a1ff82a22ca7",
-  "timestamp": "2026-09-23T10:31:47Z",
+  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
+  "timestamp": "2026-09-23T10:33:23Z",
   "scenario": "Dada una problematica no contemplada, cuando se propone un subgrafo valido y autorizado, entonces se incorpora unicamente el cambio solicitado.",
   "expected": "Los nodos completados mantienen sus revisiones y resultados originales.",
   "observed": "No auditado: requiere feature no implementada.",

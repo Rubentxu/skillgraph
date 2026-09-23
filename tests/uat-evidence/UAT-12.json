@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-12",
-  "revision": "d72bbff41a3e453d267ae2b8ca54a1ff82a22ca7",
-  "timestamp": "2026-09-23T10:31:49Z",
+  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
+  "timestamp": "2026-09-23T10:33:25Z",
   "scenario": "Dado un Domain Pack narrativo, cuando se registran Character y StoryArc, entonces el proyecto puede crear y relacionar instancias sin modificar el codigo del nucleo.",
   "expected": "Tipos y relaciones extensibles sin tocar el nucleo.",
   "observed": "No auditado: requiere feature no implementada.",

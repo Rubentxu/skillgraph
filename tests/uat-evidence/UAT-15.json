@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-15",
-  "revision": "d72bbff41a3e453d267ae2b8ca54a1ff82a22ca7",
-  "timestamp": "2026-09-23T10:31:50Z",
+  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
+  "timestamp": "2026-09-23T10:33:26Z",
   "scenario": "Dada una fuente que contiene instrucciones para alterar permisos o transiciones, cuando un agente la consulta, entonces esas instrucciones NO se convierten en autoridad sobre el workflow.",
   "expected": "El outcome usado es el del JSON declarado, NO las 'instrucciones' del contenido.",
   "observed": "outcomes=[('ok',), ('ok',)]; run_rc=20",
@@ -9,24 +9,24 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat15-u8hm8bwi/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat15-u8hm8bwi/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat15-6flbavv1/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat15-6flbavv1/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat15-u8hm8bwi/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat15-6flbavv1/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat15-u8hm8bwi/fx demo /home/rubentxu/.jcode/scratch/sg-uat15-u8hm8bwi/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat15-6flbavv1/fx demo /home/rubentxu/.jcode/scratch/sg-uat15-6flbavv1/plan.md",
       "returncode": "20",
-      "stdout": "Run: run-9ac35295-2249-4925-ab23-ff723e1536ff\nEstado: FAILED\nNodos ejecutados: a\nEventos emitidos: 12\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat15-u8hm8bwi/fx\n",
+      "stdout": "Run: run-0207f58f-5d41-42f4-ad75-8f459999ccf3\nEstado: FAILED\nNodos ejecutados: a\nEventos emitidos: 12\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat15-6flbavv1/fx\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat15-u8hm8bwi"
+    "/home/rubentxu/.jcode/scratch/sg-uat15-6flbavv1"
   ],
   "status": "PASS",
   "notes": "UAT-15 verificable con FakeAgentAdapter: outcome del JSON gobierna, contenido textual es ignorado. Limitacion honesta: Adapter real (H7) podria tener riesgos no cubiertos por este test."

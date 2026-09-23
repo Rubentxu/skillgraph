@@ -35,13 +35,22 @@ NodeState = Literal["READY", "RUNNING", "WAITING", "SUCCEEDED", "FAILED", "STOPP
 
 # --- H3 Slice 1: tipos de conocimiento -------------------------------------
 
-SourceKind = Literal["git_commit", "git_tree", "local_file", "external_doc"]
+SourceKind = Literal[
+    "git_commit",
+    "git_tree",
+    "local_file",
+    "external_doc",
+    "skill_pack",
+]
 """Tipo de fuente de la que se extrae evidencia.
 
 - `git_commit`: snapshot inmutable de un commit.
 - `git_tree`: snapshot de un tree (directorio) en un commit.
 - `local_file`: archivo del workspace NO bajo git (provisional).
 - `external_doc`: documento externo (URL, PDF, etc.).
+- `skill_pack`: paquete de skill externa asimilada (H5). Conserva
+  el material original como referencia (path + content_hash) sin
+  ejecutar el codigo del paquete. Ver `skill_importer.py`.
 """
 
 FreshnessState = Literal["fresh", "stale", "archived"]

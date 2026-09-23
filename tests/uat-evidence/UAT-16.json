@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-16",
-  "revision": "d72bbff41a3e453d267ae2b8ca54a1ff82a22ca7",
-  "timestamp": "2026-09-23T10:31:52Z",
+  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
+  "timestamp": "2026-09-23T10:33:26Z",
   "scenario": "Dada una nueva revision de un brick (resourceRevision 1 -> 2), cuando se inspecciona la ejecucion anterior, entonces el handoff viejo persiste con su resourceRevision original.",
   "expected": "node_executions.handoff_json con definition_revision=1 sigue inalterado tras ejecutar con resourceRevision=2.",
   "observed": "handoff_v1_unchanged=True; handoff_v2_present=True; rows_in_node_executions=2",
@@ -9,30 +9,30 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/fx --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/fx --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/plan.md",
       "returncode": "0",
-      "stdout": "Run: run-cde202f9-bf9e-4830-a569-383390f0eb2d\nEstado: COMPLETED\nNodos ejecutados: a\nEventos emitidos: 7\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/fx\n",
+      "stdout": "Run: run-f2c7b48d-63aa-418b-b6d6-7f86a0db9c0a\nEstado: COMPLETED\nNodos ejecutados: a\nEventos emitidos: 7\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/fx\n",
       "stderr": ""
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/fx --max-iterations 1 demo /home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/fx --max-iterations 1 demo /home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/plan.md",
       "returncode": "0",
-      "stdout": "Run: run-893b0f39-89af-422f-9673-2eb74300e27a\nEstado: COMPLETED\nNodos ejecutados: a\nEventos emitidos: 7\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu/fx\n",
+      "stdout": "Run: run-cc1e6b89-d3bc-44be-b533-fa13b75b6409\nEstado: COMPLETED\nNodos ejecutados: a\nEventos emitidos: 7\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat16-ti071l94/fx\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat16-xesfbpzu"
+    "/home/rubentxu/.jcode/scratch/sg-uat16-ti071l94"
   ],
   "status": "PASS",
   "notes": "handoff_json se persiste en node_executions (runcontroller.py INSERT node_executions con json.dumps(handoff.to_dict())). Pasamos de BLOCKED a PASS al verificar la persistencia real."

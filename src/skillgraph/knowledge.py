@@ -125,6 +125,16 @@ class Source:
     def __post_init__(self) -> None:
         if not self.content_hash:
             raise InvalidSourceError("content_hash no puede estar vacio")
+        # Validar kind contra el Literal SourceKind. El Literal NO se
+        # valida en runtime por `from __future__ import annotations`,
+        # asi que usamos typing.get_args sobre el tipo ya importado.
+        import typing
+
+        valid_kinds = typing.get_args(SourceKind)
+        if self.kind not in valid_kinds:
+            raise InvalidSourceError(
+                f"Source kind={self.kind!r} invalido. Valores permitidos: {sorted(valid_kinds)}"
+            )
         if self.kind.startswith("git_") and not self.git_commit_sha:
             raise InvalidSourceError(
                 f"Source {self.source_id!r} kind={self.kind} requiere git_commit_sha"

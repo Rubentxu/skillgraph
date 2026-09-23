@@ -1,32 +1,32 @@
 {
   "uat_id": "UAT-11",
-  "revision": "d72bbff41a3e453d267ae2b8ca54a1ff82a22ca7",
-  "timestamp": "2026-09-23T10:31:49Z",
+  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
+  "timestamp": "2026-09-23T10:33:25Z",
   "scenario": "Dada una skill convencional (markdown+json+script.py), cuando se importa via 'sg pack import', entonces se conserva la fuente original y se genera un informe de estructuracion con partes ambiguas senaladas.",
   "expected": "rc=0; files_structured=2 (README.md, config.json); script.py en entries_ambiguous como 'ignored'; scripts_detected incluye 'dangerous.py'; capabilities_extracted son senales (NO decisiones); Source registrado en storage con kind='skill_pack'; script NO ejecutado (stdout sin 'pwned').",
-  "observed": "pack_import rc=0; structured_ok=True; script_ignored=True; scripts_detected=True; capabilities_señales=True; nota_honesta_ok=True; source_persisted=True (skill:/var/home/rubentxu/.jcode/scratch/sg-uat11-sskutq40/skill); script_not_executed=True",
+  "observed": "pack_import rc=0; structured_ok=True; script_ignored=True; scripts_detected=True; capabilities_señales=True; nota_honesta_ok=True; source_persisted=True (skill:/var/home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil/skill); script_not_executed=True",
   "steps": [
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat11-sskutq40/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat11-sskutq40/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat11-sskutq40/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "pack import demo /home/rubentxu/.jcode/scratch/sg-uat11-sskutq40/skill --report /home/rubentxu/.jcode/scratch/sg-uat11-sskutq40/report.json",
+      "cmd": "pack import demo /home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil/skill --report /home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil/report.json",
       "returncode": "0",
-      "stdout": "Fuente conservada: source_id=skill:/var/home/rubentxu/.jcode/scratch/sg-uat11-sskutq40/skill\nContent hash: sha256:54fce5ff2803d6bc92c556ab026f424017d012ae5bb95b73ac29cc2d4428817c\nArchivos: 3 (estructurados=2, ambiguos=1)\nScripts detectados (NO ejecutados): 1\nCapacidades extraidas (senales, no verificadas): 2\nInforme escrito en: /home/rubentxu/.jcode/scratch/sg-uat11-sskutq40/report.json\n",
+      "stdout": "Fuente conservada: source_id=skill:/var/home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil/skill\nContent hash: sha256:54fce5ff2803d6bc92c556ab026f424017d012ae5bb95b73ac29cc2d4428817c\nArchivos: 3 (estructurados=2, ambiguos=1)\nScripts detectados (NO ejecutados): 1\nCapacidades extraidas (senales, no verificadas): 2\nInforme escrito en: /home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil/report.json\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat11-sskutq40"
+    "/home/rubentxu/.jcode/scratch/sg-uat11-04vu3eil"
   ],
   "status": "PASS",
   "notes": "H5 skill_import implementado: src/skillgraph/skill_importer.py + cmd_pack_import en cli.py. Pipeline: IMPORT->ANALYZE->STRUCTURE->VALIDATE->REGISTER. Scripts Python detectados pero NUNCA ejecutados (cumple UAT-14)."

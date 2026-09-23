@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-06",
-  "revision": "d72bbff41a3e453d267ae2b8ca54a1ff82a22ca7",
-  "timestamp": "2026-09-23T10:31:46Z",
+  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
+  "timestamp": "2026-09-23T10:33:23Z",
   "scenario": "Dada una ejecucion interrumpida, cuando se reinicia la CLI, se recuperan estado y resultados confirmados y se continua desde un punto seguro.",
   "expected": "HONESTO: con max-iterations=2 el run completa todos los nodos en una pasada (bug _calculate_frontier ejecuta toda la frontier). UAT-06 de recuperacion NO verificable honestamente con la implementacion actual. Marca deuda H4+.",
   "observed": "state_after_1=('ACTIVE', 'c'); runs_after=1; run1_rc=21; run2_rc=0 (Resume-or-start funciona correctamente.)",
@@ -9,30 +9,30 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/fixtures --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/fixtures --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/plan.md",
       "returncode": "21",
-      "stdout": "Run: run-ef531a94-96b4-4ec5-95d0-2c66b6d2db79\nEstado: ACTIVE\nNodos ejecutados: a, b\nEventos emitidos: 11\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/fixtures\n",
+      "stdout": "Run: run-fe3ba1b1-1b06-4b12-8604-be6d9c261711\nEstado: ACTIVE\nNodos ejecutados: a, b\nEventos emitidos: 11\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/fixtures\n",
       "stderr": "WARN: max-iterations alcanzado (2); estado=ACTIVE current=c\n"
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/plan.md",
       "returncode": "0",
-      "stdout": "Run: run-ef531a94-96b4-4ec5-95d0-2c66b6d2db79\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc/fixtures\n",
+      "stdout": "Run: run-fe3ba1b1-1b06-4b12-8604-be6d9c261711\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu/fixtures\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat06-3oflwidc"
+    "/home/rubentxu/.jcode/scratch/sg-uat06-i2ij_7vu"
   ],
   "status": "PASS",
   "notes": "Resume-or-start funciona correctamente."

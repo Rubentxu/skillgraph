@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-01",
-  "revision": "d72bbff41a3e453d267ae2b8ca54a1ff82a22ca7",
-  "timestamp": "2026-09-23T10:31:41Z",
+  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
+  "timestamp": "2026-09-23T10:33:18Z",
   "scenario": "Dado un repositorio limpio (solo README.md), cuando se registra como proyecto, entonces SkillGraph almacena sus datos internos fuera del repo.",
   "expected": "Solo README.md (archivo creado por el usuario)",
   "observed": "Archivos en el repo tras init+project create: ['README.md']",
@@ -9,18 +9,18 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat01-4byma93h/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat01-4byma93h/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat01-oxi20nus/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat01-oxi20nus/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat01-4byma93h/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat01-oxi20nus/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat01-4byma93h"
+    "/home/rubentxu/.jcode/scratch/sg-uat01-oxi20nus"
   ],
   "status": "PASS",
   "notes": "init + project create crean archivos en data_root (tmpfs), no en el repo fuente. Verificacion recursiva confirma ausencia de archivos .sqlite, .skillgraph, catalog."
