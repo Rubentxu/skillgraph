@@ -144,7 +144,7 @@ workstreams:
   - id: plan-loader-coverage-stewardship
     items: [test-plan-loader-py-13-tests-load-file-happy-9-error-branches]
     status: completed
-    commits: []   # pendiente commit en este turno
+    commits: ["b6ca7e1"]
     nota: "Stewardship: plan_loader.py 48% -> 100% cobertura. 13 tests focalizados: load_plan_file happy path (que no tenia tests directos; CLI lo cubria solo via subprocess E2E) + 4 ramas de error de load_plan_file + 2 de _plan_from_dict + 1 de _node/_transition + 1 de _required. Dato heredado 69% estaba obsoleto. 0 LoC produccion modificado. Cierre del segundo modulo critico con cobertura <80%."
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
@@ -271,7 +271,7 @@ ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
   ultima_ejecucion_local: 2026-09-23 14:16
   resultado: "340 passed in 58s (pytest --tb=short)"
-  working_tree: pending-commit (plan_loader coverage + state sync)
+  working_tree: clean (despues de commit b6ca7e1)
 
 open_questions: []
 nota_honesta_revision: >
