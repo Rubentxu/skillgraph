@@ -1,0 +1,12 @@
+{
+  "uat_id": "UAT-11",
+  "revision": "b7b2d5e2ca5ac1455bf0ce7858bcc4d110a126c2",
+  "timestamp": "2026-09-23T10:07:17Z",
+  "scenario": "Dada una skill convencional, cuando se importa, entonces se conserva la fuente original y se genera un informe de estructuracion.",
+  "expected": "Las partes ambiguas deben permanecer senaladas; no se presentan como decisiones verificadas.",
+  "observed": "No auditado: requiere feature no implementada.",
+  "steps": [],
+  "artifacts": [],
+  "status": "BLOCKED",
+  "notes": "H5 Adopcion de skills (import/skill_import) NO implementado."
+}

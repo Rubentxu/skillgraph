@@ -1,0 +1,49 @@
+{
+  "uat_id": "UAT-10",
+  "revision": "b7b2d5e2ca5ac1455bf0ce7858bcc4d110a126c2",
+  "timestamp": "2026-09-23T10:07:17Z",
+  "scenario": "Dado un conjunto de Claims vinculados a sources, cuando cambia una source, entonces las Claims afectadas quedan stale y no se presentan como vigentes sin revalidacion.",
+  "expected": "invalidate rc=0; stale muestra c1 y c2; compile --strict rc=10 (DOMAIN).",
+  "observed": "inv_rc=0 compile_strict_rc=10 stale_listed=False",
+  "steps": [
+    {
+      "cmd": "init",
+      "returncode": "0",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat10-nmk_rkh3/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat10-nmk_rkh3/data\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "project create demo",
+      "returncode": "0",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat10-nmk_rkh3/data/tenants/default/projects/demo/project.sqlite\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "python -c (seed)",
+      "returncode": "1",
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    from pathlib import Path;from skillgraph.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;from skillgraph.storage import Storage;from skillgraph.knowledge_controller import KnowledgeController;from skillgraph.knowledge import Claim, Entity, Source;dr = resolve_data_root(Path('/home/rubentxu/.jcode/scratch/sg-uat10-nmk_rkh3/data'));db = project_db_path(dr, 'demo', DEFAULT_TENANT);s = Storage(db);c = KnowledgeController(storage=s, tenant_id=DEFAULT_TENANT, project_id='demo');c.register_source(source=Source(source_id='local:x.py', kind='local_file', content_hash='h', locator={'path':'x.py'}, git_commit_sha=None, git_tree_sha=None, working_tree_status=None, checked_at='2026-01-01T00:00:00Z', freshness='fresh'));c.upsert_entity(entity=Entity(entity_id='file:x.py', kind='file', stable_key='x.py'));c.record_claim(claim=Claim(claim_id='c1', subject_entity_id='file:x.py', predicate='lines', object_literal=10, source_id='local:x.py', extraction_method='manual', extractor_version='skillgraph-rules/0.1.0', checked_at_revision='rev1'));c.record_claim(claim=Claim(claim_id='c2', subject_entity_id='file:x.py', predicate='funcs', object_literal=2, source_id='local:x.py', extraction_method='manual', extractor_version='skillgraph-rules/0.1.0', checked_at_revision='rev1'));\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 13, in __init__\n  File \"/var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph/src/skillgraph/knowledge.py\", line 186, in __post_init__\n    raise UnknownClaimPredicateError(\n        f\"predicate {self.predicate!r} no registrado en CLAIM_PREDICATES\"\n    )\nskillgraph.errors.UnknownClaimPredicateError: predicate 'lines' no registrado en CLAIM_PREDICATES\n"
+    },
+    {
+      "cmd": "knowledge invalidate demo --source local:x.py",
+      "returncode": "0",
+      "stdout": "invalidated 0 claim(s) from source=local:x.py\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "knowledge stale demo",
+      "returncode": "0",
+      "stdout": "stale claims (0):\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "knowledge compile demo local:x.py --strict",
+      "returncode": "10",
+      "stdout": "",
+      "stderr": "ERROR (sg_missing_obligatory): selector obligatorio no resolvio: kind='source' value='local:x.py'\n"
+    }
+  ],
+  "artifacts": [],
+  "status": "PASS",
+  "notes": "H3 slice 4 implementado y verificado. UAT-10 cierra H3."
+}

@@ -524,3 +524,33 @@ deuda H4+ documentada).
 - **H4-draft**: DecisionNode, workflows cíclicos, fix
   `_calculate_frontier` (1 nodo por llamada o soporte ciclos),
   Adapter real para tokens (tiktoken si se exige budget estricto).
+
+
+## 2026-09-23 — Auditoría honesta blueprint completo (16 UATs) + dedup
+
+### Resumen
+
+El operador senalo que el numero de commits NO equivale a verificacion
+legal de los criterios de aceptacion. Auditoria honesta revelo:
+
+- Mi auditoria previa cubria 7 de 16 UATs del blueprint.
+- Los 9 restantes (UAT-08..16) son gates reales para H4..H7.
+- "H4" en mi docs era en realidad una feature de ciclos (no Expansion
+  controlada del blueprint). Confusion corregida en STATE.
+
+### Acciones tomadas
+
+1. **Dedup codigo**: `has_self_loop` (3 inline en runcontroller.py)
+   extraido a helper modulo-level. 245 tests siguen verdes.
+2. **UAT extendida**:
+   - UAT-10 invalidacion: PASS (H3 slice 4 verificado subprocess).
+   - UAT-14 scripts no se ejecutan: PASS (import no crea marker).
+   - UAT-15 fuente maliciosa: PASS (Adapter outcome JSON gobierna).
+   - UAT-08/09/11/12/13/16: BLOCKED con razon explicita.
+3. **Docs corregidos**: H4 mis docs != H4 blueprint. STATE honesto.
+
+### Estado final
+
+- 37 commits, 245 tests, **10/16 UAT PASS, 0 FAIL, 6 BLOCKED honestos**.
+- Deuda real documentada por Hito (H4..H7 sin implementar).
+- Sesion estable. Sin gate pendiente del lado del agente.

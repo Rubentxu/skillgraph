@@ -1,32 +1,40 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 11:24 (Europe/Madrid).
-> Revisión: `0529e77 H3 slice 5: ContextController + OutcomeTracer + CLI knowledge`.
+> Última verificación: 2026-09-23 12:08 (Europe/Madrid).
+> Revisión: `b7b2d5e feat(h4): DecisionNode outcomes + max_visits self-loops` + dedup.
 
 ## Goal
 
 Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0 + S1) → Etapa 1 → Etapa 2 → Etapa 3.
-Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1/README.md`,
-`external/blueprint-v1/adr/`.
+Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1/plan/HITOS.md`,
+`external/blueprint-v1/plan/UAT.md`, `external/blueprint-v1/adr/`.
 
 ## Hito y trabajo activo
 
 - H0 (Blueprint validado) **cerrado**.
 - H1 (Recursos persistentes) **cerrado**.
-- H2 (Ejecución local) **cerrado**. Evidencia en `tests/uat-evidence/`.
-- **H3 (Knowledge & Context) CERRADO**. 5 slices implementadas y verificadas.
-  Auditoría UAT honesta: **7/7 PASS, 0 FAIL, 0 BLOCKED**.
-- Siguiente desbloqueado opcional: **H4-draft** (DecisionNode, workflows cíclicos,
-  Adapter real para tokens si se exige).
+- H2 (Ejecución local) **cerrado**.
+- **H3 (Conocimiento & Context) CERRADO**. 5 slices implementadas.
+- H4-H7 del blueprint NO implementados (UAT-08/09/11/12/13/16 BLOCKED).
+- Trabajo activo: auditoría honesta completa al blueprint (16 UATs), dedup
+  código, corrección de docs.
+- Siguiente: H4 Expansion controlada (GraphExpansion/GraphPatch/policy engine) o
+  H5 adopción de skills. Operador decide.
 
 ## Último estado comprobado
 
-- Repo: rama `main`, **33 commits limpios, lint verde, 238 tests verdes**.
-- Working tree: cambios sin commitear en `STATE.yaml`, `CURRENT.md`,
-  `SESSION-JOURNAL.md` (cierre de docs H3).
-- CI pasa localmente con `scripts/ci.sh` (91.26s).
+- Repo: rama `main`, **37 commits limpios, lint verde, 245 tests verdes**.
+- Working tree: cambios sin commitear (STATE/CURRENT/journal).
+- Auditoría UAT honesta: **10/16 PASS, 0 FAIL, 6 BLOCKED**.
 - Python 3.13.15 via `mise`; `uv` para resolver venv reproducible.
-- Bootstrap del paquete: `hatchling`, `py.typed`, dev deps PEP 735.
+
+### Decisiones tomadas en este turno
+
+- **Dedup**: `has_self_loop` extraído a helper módulo-level (3 inline → 1).
+- **Auditoría 16 UATs** (no solo 7): UAT-10 (invalidación), UAT-14 (scripts no
+  se ejecutan), UAT-15 (fuente maliciosa) verificados PASS. UAT-08/09/11/12/13/16
+  declarados BLOCKED con razón.
+- **H4 (mi feat ciclos) NO es H4 del blueprint**: corregido en STATE.
 
 ### H3 — slices implementadas
 

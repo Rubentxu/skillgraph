@@ -1,0 +1,33 @@
+{
+  "uat_id": "UAT-15",
+  "revision": "b7b2d5e2ca5ac1455bf0ce7858bcc4d110a126c2",
+  "timestamp": "2026-09-23T10:07:17Z",
+  "scenario": "Dada una fuente que contiene instrucciones para alterar permisos o transiciones, cuando un agente la consulta, entonces esas instrucciones NO se convierten en autoridad sobre el workflow.",
+  "expected": "El outcome usado es el del JSON declarado, NO las 'instrucciones' del contenido.",
+  "observed": "outcomes=[('ok',), ('ok',)]; run_rc=20",
+  "steps": [
+    {
+      "cmd": "init",
+      "returncode": "0",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat15-vzynmaql/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat15-vzynmaql/data\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "project create demo",
+      "returncode": "0",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat15-vzynmaql/data/tenants/default/projects/demo/project.sqlite\n",
+      "stderr": ""
+    },
+    {
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat15-vzynmaql/fx demo /home/rubentxu/.jcode/scratch/sg-uat15-vzynmaql/plan.md",
+      "returncode": "20",
+      "stdout": "Run: run-6a06650b-aed8-42eb-a4d5-e7c93405ab41\nEstado: FAILED\nNodos ejecutados: a\nEventos emitidos: 12\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat15-vzynmaql/fx\n",
+      "stderr": ""
+    }
+  ],
+  "artifacts": [
+    "/home/rubentxu/.jcode/scratch/sg-uat15-vzynmaql"
+  ],
+  "status": "PASS",
+  "notes": "UAT-15 verificable con FakeAgentAdapter: outcome del JSON gobierna, contenido textual es ignorado. Limitacion honesta: Adapter real (H7) podria tener riesgos no cubiertos por este test."
+}

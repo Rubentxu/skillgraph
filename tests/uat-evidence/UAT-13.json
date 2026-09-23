@@ -1,0 +1,12 @@
+{
+  "uat_id": "UAT-13",
+  "revision": "b7b2d5e2ca5ac1455bf0ce7858bcc4d110a126c2",
+  "timestamp": "2026-09-23T10:07:17Z",
+  "scenario": "Dada una propuesta de promocion persistida en un proyecto, cuando se interrumpe el proceso durante su publicacion, entonces la reconciliacion permite completarla sin duplicar la capacidad compartida.",
+  "expected": "Promocion atomica entre bases.",
+  "observed": "No auditado: requiere feature no implementada.",
+  "steps": [],
+  "artifacts": [],
+  "status": "BLOCKED",
+  "notes": "H7 Release candidate NO implementado."
+}

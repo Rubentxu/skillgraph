@@ -1,0 +1,12 @@
+{
+  "uat_id": "UAT-08",
+  "revision": "b7b2d5e2ca5ac1455bf0ce7858bcc4d110a126c2",
+  "timestamp": "2026-09-23T10:07:16Z",
+  "scenario": "Dada una problematica no contemplada, cuando se propone un subgrafo valido y autorizado, entonces se incorpora unicamente el cambio solicitado.",
+  "expected": "Los nodos completados mantienen sus revisiones y resultados originales.",
+  "observed": "No auditado: requiere feature no implementada.",
+  "steps": [],
+  "artifacts": [],
+  "status": "BLOCKED",
+  "notes": "H4 Expansión controlada (GraphExpansion/GraphPatch) NO implementado. Eventos GraphExpansionProposed/Accepted existen en runtime pero sin policy engine."
+}

@@ -89,6 +89,11 @@ workstreams:
     items: [slice-1-knowledge-adt, slice-2-knowledge-controller, slice-3-git-dulwich, slice-4-invalidation, slice-5-context-controller]
     status: completed
     commits: ["b06cc15", "dd2f7a7", "01dd3ac", "2d8cad0", "0529e77"]
+  - id: h4-feature-ciclos-y-decision
+    items: [outcomes-declarados, max-visits-ciclos, has-self-loop-dedup]
+    status: feature-complete
+    nota: "NO es H4 del blueprint (Expansion controlada). Es feature de ciclos y DecisionNode."
+    commits: ["b7b2d5e"]
   - id: ci-minimo
     items: [scripts-ci-sh]
     status: completed
@@ -163,16 +168,25 @@ tests:
 uat:
   audit_script: tests/uat_audit.py
   evidence_dir: tests/uat-evidence/
-  audit_revision: "0529e77 (slice 5 commit)"
+  audit_revision: "b7b2d5e (post-dedup runcontroller)"
   status:
-    UAT-01: PASS   # no contamination (evidencia: tests/uat-evidence/UAT-01.json)
-    UAT-02: PASS   # project isolation (evidencia: tests/uat-evidence/UAT-02.json)
-    UAT-03: PASS   # brick declarative (evidencia: tests/uat-evidence/UAT-03.json)
-    UAT-04: PASS   # ejecucion determinista (evidencia: tests/uat-evidence/UAT-04.json)
-    UAT-05: PASS   # handoff con ContextRecipe (H3 slices 1-5 CERRADAS; reescrito en slice 5)
-    UAT-06: PASS   # recuperacion: max_iterations ahora respeta el limite (1 + N llamadas reconcile = N ejecuciones); resume-or-start verificado
-    UAT-07: PASS   # idempotencia: UNIQUE event_id + UNIQUE node_execution_id
-  nota_honesta: "UAT-05 paso de BLOCKED a PASS tras slice 5 (commit 0529e77). UAT-06 paso de FAIL a PASS tras fix en cmd_run (commit 6d4b36e): max_iterations contaba 1 llamada extra fuera del while; ahora itera correctamente."
+    UAT-01: PASS   # proyecto sin contaminacion
+    UAT-02: PASS   # aislamiento proyectos
+    UAT-03: PASS   # brick declarativo
+    UAT-04: PASS   # ejecucion determinista (DecisionNode outcomes via metadata)
+    UAT-05: PASS   # handoff con ContextRecipe
+    UAT-06: PASS   # recuperacion (cmd_run max_iterations)
+    UAT-07: PASS   # idempotencia
+    UAT-08: BLOCKED # H4 Expansion controlada (GraphExpansion/GraphPatch) NO implementado
+    UAT-09: BLOCKED # H4 Expansion controlada policy engine NO implementado
+    UAT-10: PASS   # invalidacion conocimiento (H3 slice 4, BFS transitivo)
+    UAT-11: BLOCKED # H5 adopcion de skills (import/skill_import) NO implementado
+    UAT-12: BLOCKED # H6 multipropósito (Character/StoryArc) NO implementado
+    UAT-13: BLOCKED # H7 release candidate (promocion entre bases) NO implementado
+    UAT-14: PASS   # codigo de terceros (import no ejecuta scripts)
+    UAT-15: PASS   # fuente maliciosa (Adapter outcome JSON gobierna)
+    UAT-16: BLOCKED # H7 release candidate (brick revision lookup) NO implementado
+  nota_honesta: "Auditoria extendida al blueprint completo (16 UATs, no solo 7). 10 PASS, 0 FAIL, 6 BLOCKED con razones explicitas. Los BLOCKED son H4/H5/H6/H7 — corresponden a features no implementadas, no a regresiones."
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
@@ -183,13 +197,17 @@ ci:
 open_questions: []  # H3 cerrado; D2/D3/D4 firmadas y aplicadas.
 
 deuda_tecnica_residual:
-  - "Workflows ciclicos: NO se soportan. Deuda H4+ (DecisionNode + aristas que vuelven a visit). H2/H3 = DAG lineal."
+  - "H4 Expansion controlada (GraphExpansion/GraphPatch/policy engine): UAT-08/09 BLOCKED. NO implementado."
+  - "H5 adopcion de skills: UAT-11 BLOCKED. NO implementado."
+  - "H6 multipropósito (Character/StoryArc): UAT-12 BLOCKED. NO implementado."
+  - "H7 release candidate: UAT-13/16 BLOCKED. NO implementado."
+  - "UAT-16 brick revision lookup: handoff es frozen por construccion pero NO hay API explicita para inspeccionar ejecuciones antiguas tras cambio de revision."
+  - "Workflows ciclicos con self-loop sin max_visits: quedan ACTIVE infinitamente (limite viene del caller --max-iterations)."
   - "Token budget aproximado (chars, no tokens reales): tiktoken solo si H4+ exige Adapter real."
-  - "Duplicacion catalog.py/storage.py: ambos son wrappers SQLite con _tx, _migrate, close. Defensa en profundidad intencional: catalog sobrevive aunque storage este corrupto. No unificar sin diseno."
-  - "paths.py 59%: la rama Windows LOCALAPPDATA no se ejecuta en CI (Linux). Aceptable mientras CI corra en Linux."
-  - "registry.py 88%: las validaciones con tipos no-objeto (None, list como spec) no cubiertas; se cubren via brick CLI pero no como tests unitarios."
-  - "DSL: el ciclo de tests E2E de errores tipados del DSL queda como follow-up; los 18 tests cubren happy path + smart constructors."
+  - "Duplicacion catalog.py/storage.py: defensa en profundidad intencional. No unificar sin diseno."
+  - "paths.py 59%: rama Windows LOCALAPPDATA no ejecutada en CI Linux. Aceptable mientras CI corra en Linux."
+  - "registry.py 88%: validaciones con tipos no-objeto. Cubierto via brick CLI."
 
 blockers: []
 
-next_action: "Etapas 0..3 cerradas. Branch push pendiente (sin remoto). Siguiente desbloqueado opcional: H4-draft (DecisionNode / workflows ciclicos / Adapter real de tokens si se exige)."
+next_action: "Etapas 0..3 (H0..H3 blueprint) cerradas. H4..H7 sin implementar. Siguiente: documentar gate H4 Expansion controlada (GraphExpansion/GraphPatch) o saltar a H5 (skill import). Operador decide."
