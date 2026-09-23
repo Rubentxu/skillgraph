@@ -150,6 +150,7 @@ deliverables:
   - "specs/h4-slice-3.md: H4 Expansion controlada slice-3 spec DRAFT (storage persistente + EVALUATE + policy engine P1..P5)"
   - "specs/h4-audit-penal.md: H4 slices 1+2 vs blueprint literal (226 LoC)"
   - "specs/h5-audit-penal.md: H5 skill_import vs blueprint literal (141 LoC, UAT-11/14)"
+  - "specs/uat-coverage-gap.md: gap honest cobertura UAT en CI (9/16 pytest, 7/16 solo uat_audit.py)"
   - "CURRENT.md, STATE.yaml, SESSION-JOURNAL.md"
   - "AGENTS.md cerrado con 11 secciones (incluida §11 Haskell-inspired)"
   - "uv.lock reproducible"

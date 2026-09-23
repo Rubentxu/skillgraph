@@ -839,3 +839,29 @@ Detectadas durante la escritura del audit H5:
 - 14/16 UAT PASS, 0 FAIL, 2 BLOCKED honestos (H6, H7).
 - Sin trabajo desbloqueado de mayor ROI sin decision del
   operador.
+
+## 2026-09-23 — Spec cobertura UAT en CI (2d01a06)
+
+Detectado gap en re-read: tests/uat_audit.py (1651 LoC)
+implementa 16 uat_NN() pero NO corre en CI. scripts/ci.sh
+solo ejecuta pytest.
+
+specs/uat-coverage-gap.md (127 LoC) publica el mapa:
+
+| Cubiertos pytest | UAT-01..04, 06..09, 14 (9 UATs, 56%) |
+| Solo uat_audit.py | UAT-05, 10, 11, 15, 16 (5 gaps reales) |
+| Esperados BLOCKED | UAT-12 (H6), UAT-13 (H7) |
+
+Riesgos: refactor silencioso (UAT-10 sin pytest), falsa
+sensación de cobertura, desincronización tests↔realidad.
+
+Recomendaciones (NO implementadas):
+1. pytest wrapper para uat_audit (1-2h).
+2. Añadir uat_audit.py a scripts/ci.sh (15 min).
+3. Tests pytest para UAT-12/13 BLOCKED esperados (30 min).
+4. AGENTS.md §13 (doc pura, 10 min).
+
+Mi propuesta: Rec. 4 + Rec. 1 parcial (5 gaps reales).
+Espera aprobación del operador (es refactor material de
+1651 LoC de script).
+
