@@ -1,6 +1,6 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 14:18 (Europe/Madrid).
+> Última verificación: 2026-09-23 23:00 (Europe/Madrid).
 > **INICIATIVA CERRADA** tras v0.6.0 (2026-09-23). Ver `.next-decision.md`.
 
 ## Goal
@@ -21,6 +21,10 @@ H6 (UAT-12) y H7 (UAT-13), se emiti tag v0.6.0, y la iniciativa paso
 de v0.5.0-CLOSED a v0.6.0-CLOSED. Ver SESSION-JOURNAL.md entrada
 '2026-09-23 (reinicio)'.
 
+**Sesion 2026-09-23 (Coverage)**: tras el cierre, se ejecutaron 10 slices
+de cobertura H9-Coverage-1..10 sobre modulos <95%. 553 → 604 tests
+(+51). Detalle en SESSION-JOURNAL.md entrada '2026-09-23 23:00'.
+
 ## Hito y trabajo activo
 
 **Sin trabajo activo.** Iniciativa cerrada.
@@ -36,12 +40,14 @@ de v0.5.0-CLOSED a v0.6.0-CLOSED. Ver SESSION-JOURNAL.md entrada
 
 ## Último estado comprobado
 
-- HEAD: `8d87348` (v0.6.0 + refactor bounded-contexts y shims de compatibilidad).
-- Tests: **405/405 PASS** en 106s (`scripts/ci.sh`).
+- HEAD: `e5e5b99` (post-H9-Coverage-10 + cierre de sesion).
+- Tests: **604/604 PASS** en ~112s (`scripts/ci.sh`).
 - 5 releases emitidas: v0.3.0, v0.4.0, v0.4.1, v0.5.0, **v0.6.0**.
 - **UATs: 16/16 PASS, 0 FAIL, 0 BLOCKED** (primera vez en la historia del proyecto).
-- Cobertura módulos críticos: parser 100%, plan_loader 100%,
-  recipe 100%, errors 100%, runtime 100%.
+- Cobertura nucleo ≥95% en todos los modulos excepto
+  `knowledge/context_controller.py` (82%, bloqueo documentado;
+  requiere decision material: refactor SQL→Storage API o aceptar
+  deuda). Detalle en SESSION-JOURNAL.md '2026-09-23 23:00'.
 - Footgun crítico `tests/uat_audit.py main()`: **CERRADO** en v0.5.0.
 - Documentación sincronizada: CHANGELOG.md, STATE.yaml, CURRENT.md,
   SESSION-JOURNAL.md, .next-decision.md, AGENTS.md, specs/.
@@ -51,13 +57,19 @@ de v0.5.0-CLOSED a v0.6.0-CLOSED. Ver SESSION-JOURNAL.md entrada
 Ver `.next-decision.md` sección "Próximos pasos (fuera de esta
 iniciativa)". Resumen:
 
-1. H6 multipropósito (requiere spec operador).
-2. H7 promoción entre bases (requiere spec operador).
-3. cli.py stewardship focal (~10-15 tests in-process para los 3
+1. **H9-Coverage-context_controller** (decisión material): refactor
+   SQL directo en `_conn` a métodos públicos de Storage. Es trabajo
+   no trivial (~30-40 tests + 8 métodos nuevos). Requiere aprobación
+   del operador (afecta API pública de Storage). Alternativa:
+   aceptar la deuda y cubrir solo las 6 ramas alcanzables (sube a
+   ~90-93%, no llega al 95% del blueprint).
+2. H6 multipropósito (requiere spec operador).
+3. H7 promoción entre bases (requiere spec operador).
+4. cli.py stewardship focal (~10-15 tests in-process para los 3
    comandos más críticos).
-4. Audit transversal (UAT-MATRIX.md, ARCHITECTURE.md, HITOS.md
+5. Audit transversal (UAT-MATRIX.md, ARCHITECTURE.md, HITOS.md
    regenerado).
-5. Cualquier otro work item fuera del scope: nuevo goal en SDDK.
+6. Cualquier otro work item fuera del scope: nuevo goal en SDDK.
 
 ### H5 skill_import — diseño
 
