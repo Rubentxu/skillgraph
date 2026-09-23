@@ -1,6 +1,9 @@
 # Spec H3 — Conocimiento incremental y contexto verificable
 
-> Estado: **BORRADOR**, pendiente de firma antes de implementar.
+> Estado: **DISEÑO COMPLETO**, pendiente de firma (D2, D3, D4).
+> D1 cerrada con spike (dulwich, commit `0e94e16`).
+> Sub-specs diseñados: slices 1-5 (commits `13c1942`, este commit,
+> y siguientes).
 > Hito: H3 (Etapa 3) — cierra `external/blueprint-v1/plan/ROADMAP.md` Etapa 3.
 > Gate de H3 (literal): "modificar una fuente, detectar qué afirmaciones
 > requieren revisión y reconstruir el contexto".
@@ -194,59 +197,45 @@ ADR-0007 (provenance).
    serializado, lo abre en un proceso nuevo, ejecuta un FakeAdapter,
    y el resultado es el mismo que en el proceso original.
 
-## 6. Slices de implementación (propuesta 5)
+## 6. Slices de implementación (5 slices, todos con sub-spec)
 
 Cada slice entrega una pieza vertical observable. Cierran
 **decremento de funcionalidad** si fallan, no incremento.
 
+**Sub-specs detallados** (en `specs/`):
+- Slice 1 → `specs/h3-slice-1.md` (457 líneas, 17 tests, ADT + Storage).
+- Slice 2 → `specs/h3-slice-2.md` (KnowledgeController, 14 tests).
+- Slice 3 → `specs/h3-slice-3.md` (Git fingerprinting con dulwich, 8 tests).
+- Slice 4 → `specs/h3-slice-4.md` (Invalidación transitiva + event, 10 tests).
+- Slice 5 → `specs/h3-slice-5.md` (ContextController + OutcomeTracer, 15 tests).
+
+Cada sub-spec incluye: ADT, schema, API pública, errores nuevos,
+lista de tests con criterios, riesgos identificados, y commit
+previsto. **Total previsto tras firma**: 161 → 225 tests.
+
 ### Slice 1 — Knowledge ADT + Storage delta
 
-- `src/skillgraph/knowledge.py`: dataclasses frozen para
-  `Source`/`Entity`/`Claim`/`Evidence`/`Relation`/`Finding`/`OutcomeTrace`.
-- `runtime_types.py` extendido: `SourceKind`, `FreshnessState`,
-  `ClaimPredicate` (Literal inicial), `FindingResult` literals.
-- `Storage._migrate()` añade las 7 tablas nuevas.
-- `Storage` métodos: `register_source`, `get_source`,
-  `record_claim`, `get_claim`, `list_stale_claims`,
-  `attach_evidence`, `get_evidences_for_claim`,
-  `record_finding`, `record_trace`, `link_trace`.
-- Tests: `tests/test_knowledge_storage.py` (15 tests, schema,
-  idempotencia de upsert, UNIQUE constraints).
+Ver `specs/h3-slice-1.md` para detalle completo. 17 tests propuestos.
 
 ### Slice 2 — KnowledgeController (sin invalidación transitiva)
 
-- `src/skillgraph/knowledge_controller.py`:
-  `register_source`, `record_claim`, `query_relevant_obligatory`,
-  `traverse_dependencies(max_hops=1)`.
-- Tests: `tests/test_knowledge_controller.py` (12 tests, sin git todavía).
+Ver `specs/h3-slice-2.md`. 14 tests propuestos, dependencias de
+Storage (Slice 1), no toca Git. UUIDv5 para IDs derivados.
 
 ### Slice 3 — Git fingerprinting
 
-- `src/skillgraph/git_source.py`: `GitSource.from_commit`,
-  `GitSource.refresh`, `detect_changes(since_sha)`.
-- Dependencia: `pygit2` o `dulwich` (a decidir en spec);
-  sin networking, solo acceso al repo local.
-- Tests: `tests/test_git_source.py` (8 tests, repo temporal en tmp).
+Ver `specs/h3-slice-3.md`. 8 tests con repo temporal, `dulwich`
+como dep opcional (`pip install skillgraph[git]`).
 
 ### Slice 4 — Invalidación transitiva + event
 
-- `KnowledgeController.invalidate_from_source(source_id)`:
-  implementa el algoritmo literal del §4.
-- Emite `KnowledgeInvalidated` event al EventLog (reusa el sistema
-  de la Etapa 2; tipo de evento nuevo en `runtime_types.py`).
-- Tests: `tests/test_knowledge_invalidation.py` (10 tests, ciclo
-  modify → invalidate → check stale → refresh).
+Ver `specs/h3-slice-4.md`. 10 tests, algoritmo del blueprint §8
+implementado literalmente. Emite `KnowledgeInvalidated` al EventLog.
 
 ### Slice 5 — ContextRecipe + ContextController + OutcomeTracer
 
-- Kind nuevo `ContextRecipe` en registry.
-- `src/skillgraph/context_controller.py`: `compile_handoff`,
-  serialización, hash determinista.
-- `OutcomeTracer.from_run(run_id)`.
-- Tests: `tests/test_context_controller.py` (12 tests, UAT canónico
-  completo §5 in-process).
-- Tests E2E subprocess: añadir a `tests/test_cli_branches.py`
-  comando nuevo `knowledge` (subcomando opcional; ver §10).
+Ver `specs/h3-slice-5.md`. 15 tests (12 unit + 3 E2E subprocess),
+cierra el gate H3. ContextRecipe como brick (D2 cerrado=brick).
 
 ## 7. Out of scope explícito
 
@@ -328,15 +317,15 @@ por completo con evidencia reproducible.
 
 El spec se considera **firmado** cuando:
 
-1. D1 está decidida (elegir `dulwich` o `pygit2`).
+1. D1 está decidida (✅ cerrada 2026-09-23: `dulwich`, commit `0e94e16`).
 2. D2 está aprobada (sí/no como brick).
 3. D3 está aprobada (sincronización de invalidación).
 4. D4 está aprobada (semántica del token budget).
-5. Las 5 slices de §6 tienen criterios de aceptación por slice
-   (commits separados, tests verde por slice, no por hito completo).
+5. Las 5 slices de §6 tienen sub-specs detallados con criterios
+   de aceptación por slice (commits separados, tests verde por
+   slice, no por hito completo). ✅ (slice-1 a slice-5 commiteados).
 
-Tras la firma, el spec se commitea en `specs/h3-knowledge.md`
-con estado `STATUS: SIGNED`.
+Tras la firma, el spec se commitea con estado `STATUS: SIGNED`.
 
 ## 10. Comando CLI (futuro, no implementa en este spec)
 
