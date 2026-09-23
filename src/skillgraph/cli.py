@@ -636,12 +636,19 @@ def cmd_run(args: argparse.Namespace) -> int:
                 project_id=project["name"],
                 plan=plan,
             )
+        # UAT-06 (fix): max_iterations cuenta TODAS las llamadas reconcile,
+        # incluida la primera. Antes habia una llamada externa al while
+        # que ejecutaba 1 nodo, y luego el while iteraba max_iterations
+        # veces mas, dando un total de 1 + max_iterations reconciliaciones.
+        # Con max-iterations=2 sobre un plan de 3 nodos, eso ejecutaba los
+        # 3 nodos en lugar de respetar el limite. Aqui contamos la
+        # primera como iterations=1 y luego iteramos hasta max_iterations.
+        iterations = 1
         snap = ctl.reconcile_run(
             tenant_id=project["tenant_id"],
             project_id=project["name"],
             run_id=run_id,
         )
-        iterations = 0
         while not is_terminal_run_state(snap.state) and iterations < args.max_iterations:
             iterations += 1
             snap = ctl.reconcile_run(

@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-02",
-  "revision": "2d8cad0da503410c5867404c649eb117656affc5",
-  "timestamp": "2026-09-23T09:21:54Z",
+  "revision": "5e562deac58f82c081f58c776b301f07384c84f5",
+  "timestamp": "2026-09-23T09:32:15Z",
   "scenario": "Dados dos proyectos del mismo tenant (alpha, beta), cuando se crea un brick solo en alpha, entonces beta no lo ve.",
   "expected": "alpha tiene 1 brick alpha-secret; beta tiene 0 bricks alpha-secret; inspect de beta NO muestra alpha-secret",
   "observed": "alpha=1, beta=0; inspect beta tiene alpha-secret: False",
@@ -9,23 +9,23 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-xi8lw_yl/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat02-xi8lw_yl/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-zr5c12ue/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat02-zr5c12ue/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create alpha",
       "returncode": "0",
-      "stdout": "Proyecto 'alpha' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-xi8lw_yl/data/tenants/default/projects/alpha/project.sqlite\n",
+      "stdout": "Proyecto 'alpha' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-zr5c12ue/data/tenants/default/projects/alpha/project.sqlite\n",
       "stderr": ""
     },
     {
       "cmd": "project create beta",
       "returncode": "0",
-      "stdout": "Proyecto 'beta' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-xi8lw_yl/data/tenants/default/projects/beta/project.sqlite\n",
+      "stdout": "Proyecto 'beta' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat02-zr5c12ue/data/tenants/default/projects/beta/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "brick alpha /home/rubentxu/.jcode/scratch/sg-uat02-xi8lw_yl/alpha-only.md",
+      "cmd": "brick alpha /home/rubentxu/.jcode/scratch/sg-uat02-zr5c12ue/alpha-only.md",
       "returncode": "0",
       "stdout": "Brick registrado: DecisionNode/software/alpha-secret\nUID: default/alpha/skillgraph.dev/v1alpha1/DecisionNode/software/alpha-secret\n",
       "stderr": ""
@@ -33,12 +33,12 @@
     {
       "cmd": "project inspect beta",
       "returncode": "0",
-      "stdout": "Proyecto: beta\nTenant:   default\nDB:       /var/home/rubentxu/.jcode/scratch/sg-uat02-xi8lw_yl/data/tenants/default/projects/beta/project.sqlite\nCreado:   2026-09-23T09:21:53.883112+00:00\nRecursos: 0 total\n",
+      "stdout": "Proyecto: beta\nTenant:   default\nDB:       /var/home/rubentxu/.jcode/scratch/sg-uat02-zr5c12ue/data/tenants/default/projects/beta/project.sqlite\nCreado:   2026-09-23T09:32:15.089129+00:00\nRecursos: 0 total\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat02-xi8lw_yl"
+    "/home/rubentxu/.jcode/scratch/sg-uat02-zr5c12ue"
   ],
   "status": "PASS",
   "notes": "Aislamiento via tenant_id+project_id en Storage. UNIQUE constraints separados por proyecto."

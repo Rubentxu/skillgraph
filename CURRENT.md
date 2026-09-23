@@ -13,17 +13,15 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 
 - H0 (Blueprint validado) **cerrado**.
 - H1 (Recursos persistentes) **cerrado**.
-- H2 (Ejecución local) **cerrado** con la nota honesta: **UAT-06 FAIL**
-  (bug `_calculate_frontier` ejecuta TODOS los nodos en una sola pasada;
-  deuda H4+). Evidencia en `tests/uat-evidence/UAT-06.json`.
+- H2 (Ejecución local) **cerrado**. Evidencia en `tests/uat-evidence/`.
 - **H3 (Knowledge & Context) CERRADO**. 5 slices implementadas y verificadas.
-  Auditoría UAT honesta: **6/7 PASS, 0 BLOCKED, 1 FAIL (UAT-06 deuda H4+)**.
-- Siguiente desbloqueado: **H4-draft** (DecisionNode, workflows cíclicos,
-  fix `_calculate_frontier`, Adapter real para tokens si se exige).
+  Auditoría UAT honesta: **7/7 PASS, 0 FAIL, 0 BLOCKED**.
+- Siguiente desbloqueado opcional: **H4-draft** (DecisionNode, workflows cíclicos,
+  Adapter real para tokens si se exige).
 
 ## Último estado comprobado
 
-- Repo: rama `main`, **32 commits limpios, lint verde, 234 tests verdes**.
+- Repo: rama `main`, **33 commits limpios, lint verde, 238 tests verdes**.
 - Working tree: cambios sin commitear en `STATE.yaml`, `CURRENT.md`,
   `SESSION-JOURNAL.md` (cierre de docs H3).
 - CI pasa localmente con `scripts/ci.sh` (91.26s).
@@ -39,8 +37,9 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 | 3 | `01dd3ac` | Git fingerprinting con dulwich (`git_source.py`) + tests spike→TDD | +8 |
 | 4 | `2d8cad0` | Invalidación transitiva + `KnowledgeInvalidated` event (`knowledge_invalidator.py`) | +10 |
 | 5 | `0529e77` | ContextController + OutcomeTracer + `ContextRecipe` + CLI `knowledge {stale,invalidate,refresh,compile,trace}` | +18 (13 unit + 5 e2e) |
+| 6 | `6d4b36e` | Fix UAT-06: `cmd_run` max_iterations contaba 1 llamada extra fuera del while; +4 tests honestos | +4 |
 
-**Total H3: 70 tests nuevos. Acumulado repo: 161 → 234.**
+**Total H3 + fix: 74 tests nuevos. Acumulado repo: 161 → 238.**
 
 ### Decisiones H3 firmadas
 
@@ -53,9 +52,10 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 ### Auditoría UAT (subprocess honesta)
 
 - UAT-01..04: PASS (no contamination / project isolation / brick declarative / ejecución determinista).
-- UAT-05: **PASS** (reescrito en slice 5; antes BLOCKED). Handoff con
+- UAT-05: PASS (reescrito en slice 5; antes BLOCKED). Handoff con
   ContextRecipe: stale → invalidate → compile strict (exit=10) → trace (exit=0).
-- UAT-06: FAIL (deuda H4+; bug `_calculate_frontier` documentado).
+- UAT-06: **PASS** (arreglado tras fix `cmd_run` max_iterations). Resume-or-start
+  verificado: max-iter=2 → ACTIVE en c; 2ª llamada → COMPLETED.
 - UAT-07: PASS (idempotencia).
 
 Evidencias en `tests/uat-evidence/UAT-0{1..7}.json`.
@@ -78,15 +78,15 @@ Evidencias en `tests/uat-evidence/UAT-0{1..7}.json`.
 - **b3 (SDDK adopción real)** bloqueado por bug del binario SDDK:
   cada invocación de `sddk config resolve --cwd` devuelve un `workspace_id`
   distinto. No es gate del usuario; workaround: continuamos sin SDDK.
-- **UAT-06 FAIL**: bug `_calculate_frontier` (deuda H4+, NO bloquea H3 cerrado).
+- **UAT-06 PASS**: bug del CLI (max_iterations contaba 1 extra) arreglado en `6d4b36e`.
 
 ## Próxima acción concreta
 
 1. ~~Slices 1-5 H3.~~ Hecho (commits `b06cc15`/`dd2f7a7`/`01dd3ac`/`2d8cad0`/`0529e77`).
 2. ~~UAT-05 re-audito.~~ Hecho: PASS tras slice 5.
-3. **Push rama remota** (workstream H3 completo, pendiente `git push origin main`).
-4. **H4-draft**: spec para DecisionNode + workflows cíclicos + fix
-   `_calculate_frontier` + Adapter real de tokens si aplica.
+3. ~~UAT-06 re-audito.~~ Hecho: PASS tras fix `cmd_run` (`6d4b36e`).
+4. **Push rama remota** (workstream H3 completo, pendiente `git push origin main`).
+5. **H4-draft** (opcional): DecisionNode, workflows cíclicos, Adapter real de tokens.
 
 ## Valoración Rust (decisión operador 2026-09-23)
 

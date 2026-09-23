@@ -1,39 +1,39 @@
 {
   "uat_id": "UAT-06",
-  "revision": "2d8cad0da503410c5867404c649eb117656affc5",
-  "timestamp": "2026-09-23T09:21:57Z",
+  "revision": "5e562deac58f82c081f58c776b301f07384c84f5",
+  "timestamp": "2026-09-23T09:32:18Z",
   "scenario": "Dada una ejecucion interrumpida, cuando se reinicia la CLI, se recuperan estado y resultados confirmados y se continua desde un punto seguro.",
   "expected": "HONESTO: con max-iterations=2 el run completa todos los nodos en una pasada (bug _calculate_frontier ejecuta toda la frontier). UAT-06 de recuperacion NO verificable honestamente con la implementacion actual. Marca deuda H4+.",
-  "observed": "state_after_1=('COMPLETED', None); runs_after=2; run1_rc=0; run2_rc=0 (Bug confirmado: _calculate_frontier ejecuta TODOS los nodos pendientes en una sola pasada. max-iterations no previene esto. Deuda H4+ (limitar reconciliacion a UN nodo por llamada o soportar ciclos).)",
+  "observed": "state_after_1=('ACTIVE', 'c'); runs_after=1; run1_rc=21; run2_rc=0 (Resume-or-start funciona correctamente.)",
   "steps": [
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/fixtures --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/plan.md",
-      "returncode": "0",
-      "stdout": "Run: run-5d579a44-87ef-41bb-950d-4418b23281bd\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/fixtures\n",
-      "stderr": ""
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/fixtures --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/plan.md",
+      "returncode": "21",
+      "stdout": "Run: run-8fb1abeb-f5c0-4083-9391-4854730ffece\nEstado: ACTIVE\nNodos ejecutados: a, b\nEventos emitidos: 11\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/fixtures\n",
+      "stderr": "WARN: max-iterations alcanzado (2); estado=ACTIVE current=c\n"
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/plan.md",
       "returncode": "0",
-      "stdout": "Run: run-1642929b-1358-4aad-8e91-d7a884e40580\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0/fixtures\n",
+      "stdout": "Run: run-8fb1abeb-f5c0-4083-9391-4854730ffece\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j/fixtures\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat06-axqad_z0"
+    "/home/rubentxu/.jcode/scratch/sg-uat06-kylxr32j"
   ],
-  "status": "FAIL",
-  "notes": "Bug confirmado: _calculate_frontier ejecuta TODOS los nodos pendientes en una sola pasada. max-iterations no previene esto. Deuda H4+ (limitar reconciliacion a UN nodo por llamada o soportar ciclos)."
+  "status": "PASS",
+  "notes": "Resume-or-start funciona correctamente."
 }

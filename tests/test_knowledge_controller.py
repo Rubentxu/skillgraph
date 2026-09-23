@@ -234,9 +234,7 @@ def test_register_source_idempotent(tmp_path: Path) -> None:
     ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src())
     ctl.register_source(source=_src())
-    n = ctl.storage._conn.execute(
-        "SELECT COUNT(*) FROM sources"
-    ).fetchone()[0]
+    n = ctl.storage._conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
     assert n == 1
 
 
@@ -259,9 +257,7 @@ def test_record_claim_idempotent_on_full_tuple(tmp_path: Path) -> None:
     )
     # Misma tupla natural -> mismo ClaimID determinista.
     assert id1 == id2
-    n = ctl.storage._conn.execute(
-        "SELECT COUNT(*) FROM claims"
-    ).fetchone()[0]
+    n = ctl.storage._conn.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
     assert n == 1  # solo 1 row (INSERT OR IGNORE)
 
 

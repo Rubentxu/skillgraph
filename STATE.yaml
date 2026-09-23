@@ -122,9 +122,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 234
-  passed: 234
-  duration_s: 91.26
+  total: 238
+  passed: 238
+  duration_s: 94.50
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -141,6 +141,7 @@ tests:
     - tests/test_git_source.py: 8
     - tests/test_knowledge_invalidation.py: 10
     - tests/test_context_controller.py: 13
+    - tests/test_reconcile_one_node.py: 4
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -169,9 +170,9 @@ uat:
     UAT-03: PASS   # brick declarative (evidencia: tests/uat-evidence/UAT-03.json)
     UAT-04: PASS   # ejecucion determinista (evidencia: tests/uat-evidence/UAT-04.json)
     UAT-05: PASS   # handoff con ContextRecipe (H3 slices 1-5 CERRADAS; reescrito en slice 5)
-    UAT-06: FAIL   # recuperacion: bug real _calculate_frontier ejecuta TODOS los nodos en una sola pasada (deuda H4+)
+    UAT-06: PASS   # recuperacion: max_iterations ahora respeta el limite (1 + N llamadas reconcile = N ejecuciones); resume-or-start verificado
     UAT-07: PASS   # idempotencia: UNIQUE event_id + UNIQUE node_execution_id
-  nota_honesta: "UAT-05 paso de BLOCKED a PASS tras slice 5 (commit 0529e77). UAT-06 sigue FAIL por bug _calculate_frontier documentado en tests/uat-evidence/UAT-06.json; deuda H4+."
+  nota_honesta: "UAT-05 paso de BLOCKED a PASS tras slice 5 (commit 0529e77). UAT-06 paso de FAIL a PASS tras fix en cmd_run (commit 6d4b36e): max_iterations contaba 1 llamada extra fuera del while; ahora itera correctamente."
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
@@ -182,8 +183,8 @@ ci:
 open_questions: []  # H3 cerrado; D2/D3/D4 firmadas y aplicadas.
 
 deuda_tecnica_residual:
-  - "UAT-06 FAIL: bug _calculate_frontier ejecuta TODOS los nodos pendientes en una sola pasada de reconcile_run. Decision consciente — H2 = DAG lineal. Resolver en H4+ junto a DecisionNode/ciclos. Documentado en tests/uat-evidence/UAT-06.json."
-  - "H4-draft: DecisionNode, workflows ciclicos, fix _calculate_frontier (1 nodo por llamada o soporte ciclos), Adapter real para tokens (tiktoken si se exige budget estricto)."
+  - "Workflows ciclicos: NO se soportan. Deuda H4+ (DecisionNode + aristas que vuelven a visit). H2/H3 = DAG lineal."
+  - "Token budget aproximado (chars, no tokens reales): tiktoken solo si H4+ exige Adapter real."
   - "Duplicacion catalog.py/storage.py: ambos son wrappers SQLite con _tx, _migrate, close. Defensa en profundidad intencional: catalog sobrevive aunque storage este corrupto. No unificar sin diseno."
   - "paths.py 59%: la rama Windows LOCALAPPDATA no se ejecuta en CI (Linux). Aceptable mientras CI corra en Linux."
   - "registry.py 88%: las validaciones con tipos no-objeto (None, list como spec) no cubiertas; se cubren via brick CLI pero no como tests unitarios."
@@ -191,4 +192,4 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "H3 cerrado. Branch push pendiente; siguiente desbloqueado: H4-draft (DecisionNode / workflows ciclicos / fix _calculate_frontier)."
+next_action: "Etapas 0..3 cerradas. Branch push pendiente (sin remoto). Siguiente desbloqueado opcional: H4-draft (DecisionNode / workflows ciclicos / Adapter real de tokens si se exige)."
