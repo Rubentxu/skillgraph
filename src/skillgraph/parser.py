@@ -64,6 +64,11 @@ def parse_markdown(
     No realiza validación tipada del `spec`; eso es responsabilidad del
     registro de tipos. Aquí solo se impone la **forma declarativa**
     común del blueprint (doc 03 §3).
+
+    La identidad del brick se construye desde el front matter
+    (`metadata.namespace`, `metadata.name`) combinada con el `tenant_id`
+    y `project_id` del caller. El caller NO controla el namespace/name
+    del brick resultante: eso sería una escalada de capacidades.
     """
     if not isinstance(text, str):
         raise ParseError(f"Entrada de {source} debe ser texto")
@@ -92,8 +97,16 @@ def parse_markdown(
     if not isinstance(namespace, str):
         raise ParseError(f"{source}: metadata.namespace debe ser string")
 
+    brick_identity = ResourceIdentity(
+        tenant_id=identity.tenant_id,
+        project_id=identity.project_id,
+        namespace=namespace,
+        kind=kind,
+        name=name,
+    )
+
     return Brick(
-        identity=identity,
+        identity=brick_identity,
         api_version=api_version,
         kind=kind,
         spec=spec,

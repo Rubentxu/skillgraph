@@ -1,8 +1,10 @@
-"""API pública del paquete (Etapa 0/1).
+"""SkillGraph: plataforma local-first para workflows declarativos de agentes.
 
-Mantener este módulo delgado: es el contrato estable entre
-Etapa 0, 2, 3 y 5. Si crece, auditar duplicación.
+API pública estable. La version se mantiene aquí y la consume hatchling
+para construir el wheel (ver pyproject.toml [tool.hatch.version]).
 """
+
+__version__ = "0.1.0.dev0"
 
 from skillgraph.bricks import Brick, ResourceIdentity
 from skillgraph.errors import (
