@@ -334,25 +334,16 @@ class RunController:
 
     def _recover_interrupted(self, tenant_id: str, project_id: str, run_id: str) -> None:
         """UAT-06: cualquier NodeExecution RUNNING sin finished_at se
-        devuelve a READY para ser reintentada."""
-        rows = self._conn.execute(
-            """
-            SELECT node_execution_id FROM node_executions
-            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
-              AND state = 'RUNNING' AND finished_at IS NULL
-            """,
-            (tenant_id, project_id, run_id),
-        ).fetchall()
-        for r in rows:
-            with self._conn:
-                self._conn.execute(
-                    """
-                    UPDATE node_executions
-                    SET state = 'READY', finished_at = datetime('now')
-                    WHERE node_execution_id = ?
-                    """,
-                    (r["node_execution_id"],),
-                )
+        devuelve a READY para ser reintentada.
+
+        Ahora delega en ``Storage.recover_interrupted_node_executions``
+        (H9-BSlice3-S4). Escritura sin evento; la atomicidad interna la
+        gestiona Storage (una sola transaccion para todas las filas,
+        a diferencia del bucle anterior que abria una tx por fila).
+        """
+        self._storage.recover_interrupted_node_executions(
+            tenant_id=tenant_id, project_id=project_id, run_id=run_id
+        )
 
     def _calculate_frontier(
         self,

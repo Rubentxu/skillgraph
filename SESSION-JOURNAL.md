@@ -1767,3 +1767,50 @@ coste bajo. (1), (3), (4) mantienen su prioridad documentada.
 | 12 tests nuevos verdes | `pytest tests/test_h9_storage_run_reads.py` | 12/12 PASS |
 | ruff format+check | `ruff format src tests && ruff check src tests` | All checks passed |
 | `scripts/ci.sh` | `bash scripts/ci.sh` | 479 passed in ~157s, OK |
+
+---
+
+## UPDATE 2026-09-23 18:38 — H9-BSlice3-S4 (recuperacion sin evento) cerrado
+
+- **Slice**: `_recover_interrupted` migrado a
+  `Storage.recover_interrupted_node_executions(*, tenant_id,
+  project_id, run_id) -> int` con mejora de atomicidad.
+- **Cambio de comportamiento observable declarado honestamente**:
+  la operación pasa de un bucle `for r in rows: with self._conn:
+  UPDATE` a UNA sola `UPDATE` masiva dentro de un solo `with
+  self._conn:`. Esto MEJORA la atomicidad interna (si la fila N
+  fallara, ninguna fila quedaba a medias en el caso anterior;
+  ahora la operación es atómica, todas las filas o ninguna).
+- **El comportamiento externo es el mismo** (TODOS los RUNNING
+  pasan a READY): T3 sigue verde sin tocar nada. Eso confirma
+  la invariante observable.
+- **+8 tests nuevos** (`tests/test_h9_storage_recover_interrupted.py`):
+  - 6 tests de contrato observable: 0 cuando nada, transicion
+    correcta, no toca SUCCEEDED ni FAILED, no toca running CON
+    finished_at, aislamiento por run, aislamiento por tenant+project.
+  - 1 test de atomicidad interna (estructural): cuenta UPDATE
+    ejecutados sobre `node_executions`. Verifica que es 1, no N.
+    Hecho con `unittest.mock.MagicMock(wraps=real_conn)` reasignando
+    `Storage._conn` (el atributo del Storage, no el execute del
+    Connection que es read-only en sqlite3).
+  - 1 test de introspeccion no-regresion: el metodo privado del
+    RunController ya no contiene SQL directo (SELECT/UPDATE/INSERT/DELETE).
+- **Asuncion defectuosa corregida**: la primera version del test
+  de atomicidad intentaba `s._conn.execute = ...`, pero
+  sqlite3.Connection.execute es read-only. Cambie a MagicMock
+  sobre el atributo `_conn` del Storage (que sí es reasignable).
+  Re-formulacion: medir la cuenta de UPDATE en lugar del execute.
+  Mas limpio y portable.
+- **Limitaciones confirmadas**: el RunController sigue con `conn=`
+  en su __init__ (lo necesita para S3, S5, S6, S7 que son escrituras
+  mixtas con EventLog).
+- **Mapa requisito -> check**:
+| Requisito | Check | Resultado |
+|---|---|---|
+| API publica con keyword-only args | inspeccion codigo | OK |
+| Una sola UPDATE masiva | test `test_issues_single_update_for_multiple_rows` | PASS |
+| Comportamiento externo preservado | T3 de caracterizacion | PASS |
+| No exposicion de connection publica | inspeccion | OK |
+| No emitir eventos | inspeccion | OK (no aparece EventLog) |
+| ruff format+check | `ruff format src tests && ruff check src tests` | All checks passed |
+| `scripts/ci.sh` | `bash scripts/ci.sh` | 487 passed in ~173s, OK |

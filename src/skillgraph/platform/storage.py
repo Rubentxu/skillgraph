@@ -1121,6 +1121,38 @@ class Storage:
         ).fetchall()
         return tuple(r["node_name"] for r in rows)
 
+    def recover_interrupted_node_executions(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> int:
+        """Transiciona TODOS los NodeExecution en ``RUNNING`` sin
+        ``finished_at`` a ``READY`` para un run.
+
+        Sustituye a ``RunController._recover_interrupted``: el original
+        abría una transacción por cada fila (bucle ``for r in rows: with
+        self._conn: ...``). Esta versión abre UNA sola transacción para
+        todas las filas. Es una escritura atómica en sí misma: si algo
+        falla dentro de la operación, ninguna fila queda a medias.
+
+        Esta operación NO emite eventos. S4 del plan H9-BSlice3.
+
+        Devuelve el número de filas recuperadas (0 si no había ninguna).
+        """
+        with self._conn:
+            cur = self._conn.execute(
+                """
+                UPDATE node_executions
+                SET state = 'READY', finished_at = datetime('now')
+                WHERE tenant_id = ? AND project_id = ? AND run_id = ?
+                  AND state = 'RUNNING' AND finished_at IS NULL
+                """,
+                (tenant_id, project_id, run_id),
+            )
+            return cur.rowcount
+
     def list_promotions(
         self,
         status: str | None = None,

@@ -563,3 +563,23 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
 - **Sigue respetando contrato**: ningún cambio de comportamiento
   observable. Las pruebas T1..T6 de caracterización siguen verdes
   sin tocar nada.
+
+## UPDATE 2026-09-23 18:38 — H9-BSlice3-S4 (recuperación sin evento) cerrado
+
+- **Slice**: `_recover_interrupted` migrado a API pública
+  `Storage.recover_interrupted_node_executions` con mejora de
+  atomicidad. **Una sola UPDATE masiva**, no el bucle
+  "1 tx por fila" del original. Verificado con MagicMock.
+- **NO toca la grieta de no-atomicidad** entre workflow_runs y
+  runtime_events: esta operación no coordina con EventLog.append
+  en ningún momento.
+- **+8 tests**: 6 contrato observable (cuenta devuelta, transición
+  correcta, no toca SUCCEEDED/READY-COMPLETED, aislamiento por run
+  y por tenant+project) + 1 atomicidad interna (estructural:
+  cuenta UPDATE ejecutados) + 1 introspección no-regresión.
+- **487/487 verde** (`scripts/ci.sh` ~173s).
+- **SQL directo en RunController**: de 10 sites identificados a 7
+  (cerradas: S2/S8/S9 en S1, S4 aquí).
+- **Pendiente S3+S5+S6+S7**: escrituras que SÍ comparten evento
+  con state. Aquí necesito decisión arquitectónica (consigna
+  del operador: parar y presentar). Detalles abajo.
