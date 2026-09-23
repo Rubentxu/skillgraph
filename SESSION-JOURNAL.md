@@ -696,7 +696,7 @@ criterios legales del blueprint:
 
 ### H4 slice-1 library (6f93eb2)
 - specs/h4-slice-1.md (232 LoC, DRAFT): ADT, 9 campos obligatorios,
-  6 invariantes I1..I6, 12 tests propuestos → 15 entregados.
+  7 invariantes blueprint §6 (I1..I6 implementados + I7 no promover locales, diferido slice-3), 12 tests propuestos → 15 entregados.
 - src/skillgraph/graph_expansion.py (608 LoC, coverage 86%):
   Pipeline PROPOSE→VALIDATE→AUTHORIZE→APPLY. `apply_expansion`
   returns `ExpansionResult` (Either). WorkflowPlan inmutable.
@@ -757,7 +757,7 @@ UAT.md UAT-08/09 literales, SPIKES.md S6 (concurrencia), 05-workflows
 
 Resultado (resumen):
 - H4-GraphExpansion: cubierto (ADT + apply + record).
-- H4-Validacion patches: cubierto (6 invariantes I1..I6).
+- H4-Validacion patches: cubierto (7 invariantes blueprint §6; I7 diferido slice-3).
 - H4-Politica autorizacion: PARCIAL (sin policy engine refinado).
 - H4-Revision del grafo: PARCIAL (sin revision_history).
 - ROADMAP-Nuevas dependencias: cubierto.

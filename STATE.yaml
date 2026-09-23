@@ -106,7 +106,7 @@ workstreams:
     items: [proposal-adt, op-adt-add-node, op-adt-add-transition, op-adt-remove-transition, validate, authorize, apply, record-rejection, errors]
     status: completed
     commit: "6f93eb2"
-    nota: "DISCOVER+PROPOSE+VALIDATE+AUTHORIZE+APPLY. Pipeline puro. WorkflowPlan inmutable. ExpansionResult estilo Either. 6 invariantes I1..I6. 15 tests."
+    nota: "DISCOVER+PROPOSE+VALIDATE+AUTHORIZE+APPLY. Pipeline puro. WorkflowPlan inmutable. ExpansionResult estilo Either. 7 invariantes blueprint §6 (I1..I6 implementados + I7 no promover locales, diferido slice-3). 15 tests."
   - id: h4-expansion-controlada-slice-2-cli
     items: [cmd-expansion-propose, cmd-expansion-apply, cmd-expansion-validate, cmd-expansion-rejections, e2e-uat-08, e2e-uat-09, violated-invariants-persistence]
     status: completed

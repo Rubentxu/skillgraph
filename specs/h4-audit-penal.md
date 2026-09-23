@@ -25,7 +25,7 @@ Fuentes primarias:
 | Entregable blueprint | Slice-1+2 | Evidencia |
 |---|---|---|
 | GraphExpansion (ADT) | Sí | `GraphExpansionProposal` + `PatchOp` + `Authorization` (graph_expansion.py:195-242) |
-| Validación de GraphPatches | Sí | `validate()` con 6 invariantes I1..I6 (graph_expansion.py:363-449) |
+| Validación de GraphPatches | Sí | `validate()` con 7 invariantes blueprint §6 literal (I1..I6 implementados + I7 = no promover locales, diferido slice-3) |
 | Política de autorización | Parcial | `_require_authorization` verifica `granted_at` + `granted_by` para manual_signed; **NO hay policy engine** |
 | Revisión del grafo | Parcial | `base_revision` validado en I5; **NO hay mecanismo de "revisión del grafo"** post-apply (revisión = plan nuevo, sin versionado semántico) |
 

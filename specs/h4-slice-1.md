@@ -104,7 +104,7 @@ Cada invariante de blueprint §6 tiene un validador independiente:
 class ValidationResult:
     accepted: bool
     reason: str  # "" si accepted
-    violated_invariants: tuple[str, ...]  # codigos I1..I6
+    violated_invariants: tuple[str, ...]  # codigos I1..I7 (blueprint §6 literal)
     warnings: tuple[str, ...]
 ```
 
@@ -189,6 +189,14 @@ def record_rejection(
 
 ## 6. Tests propuestos (12 tests, ~150 LoC)
 
+> Nota sobre numeracion I1..I6: la **fuente de verdad** es
+> `external/blueprint-v1/05-workflows-y-ciclo-de-vida.md` §6
+> "Invariantes de expansion" (7 invariantes). El codigo
+> (`graph_expansion.py`) usa la numeracion literal del blueprint
+> (I1..I6 implementados; I7 = "no promover cambios locales a
+> definiciones compartidas" documentado pero NO implementado en
+> slice-1, queda para slice-3 policy engine P4 forbidden_ops).
+
 1. `test_proposal_requires_all_9_fields`: propuesta sin un campo -> error.
 2. `test_authorize_manual_signed_requires_grantor_and_time`.
 3. `test_authorize_auto_only_for_low_risk_ops`: op de add_node OK; op
@@ -208,6 +216,26 @@ def record_rejection(
     proposal_id + reason + violacion.
 12. `test_full_pipeline_authorized_to_applied`: ciclo completo
     DISCOVER..EVALUATE en el happy path.
+
+**Invariantes blueprint §6 (codigo `graph_expansion.py`):**
+- I1 (no reescribir resultados historicos): NO implementado a nivel
+  de patch_op en slice-1. La garantia viene de que `apply_expansion`
+  produce un plan NUEVO que NO referencia ejecuciones (resourceRevision)
+  del plan anterior. Diferido a slice-3 si se requiere verificacion
+  explicita.
+- I2 (no alterar instancia activa silenciosamente): implementado como
+  warning en `validate()` (no rechazo).
+- I3 (no adquirir caps no autorizadas): implementado en `validate()`
+  via `_find_capable` + registry.
+- I4 (no introducir referencias inexistentes): implementado en
+  `validate()` via `_ref_exists` para `new_dependencies`.
+- I5 (no crear dependencias circulares sin salida): implementado en
+  `validate()` via `_has_cycle_via_new_transitions`.
+- I6 (no incorporar cambios sobre rev obsoleta): implementado en
+  `validate()` via check `base_revision == plan.revision`.
+- I7 (no promover cambios locales a definiciones compartidas): NO
+  implementado en slice-1. Es exactamente lo que cubre la policy
+  engine P4 (forbidden_ops) en slice-3 spec.
 
 ## 7. Riesgos identificados
 
