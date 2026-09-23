@@ -189,3 +189,65 @@ El plano de control sigue en Python (ADR-0001).
 **Antiobjetivo del roadmap**: no introducir una base de grafos especializada,
 scheduler distribuido o sistema de agentes permanentes sin un requisito
 observado. Rust como acelerador sí; Rust como framework, no.
+
+## UPDATE 2026-09-23 14:30 — Post 3 cycles stewardship coverage
+
+### Goal
+
+Iniciativa H4 Expansion + coverage stewardship cerrada al 100% en
+los 3 modulos criticos con cobertura <80% testeable.
+
+### Hito y trabajo activo
+
+- H0, H1, H2, H3, H4 (slice-1+2+3), H5: **CERRADOS**.
+- H6 (multiproposito), H7 (promocion): **NO implementados**, UAT-12/13
+  BLOCKED honestos (sin spec del operador).
+- 14/16 UAT PASS, 2 BLOCKED honestos.
+- **Trabajo activo: NINGUNO MATERIAL.**
+
+### Stewardships de cobertura cerrados en esta sesion (3/3)
+
+| Modulo | Antes | Despues | Tests | Commit |
+|---|---|---|---|---|
+| parser.py | 77% | 100% | +12 | `0e96495` |
+| plan_loader.py | 48% (heredado 69% obsoleto) | 100% | +13 | `b6ca7e1` |
+| recipe.py | 73% | 100% | +22 | `629be65` |
+
+Total: +47 tests, 0 LoC produccion modificado.
+
+### Ultimo estado comprobado
+
+- Repo: rama `main`, **HEAD `076f6e9`**, working tree clean.
+- **362 tests pytest verde** (315 -> 362, delta +47).
+- `scripts/ci.sh`: OK. ruff format+check: limpios.
+- Auditoria UAT honesta: 14/16 PASS, 0 FAIL, 2 BLOCKED honestos.
+
+### Bloqueos
+
+- **NINGUNO tecnico.**
+- **BLOQUEO de decision material:** 4 caminos posibles, todos requieren
+  consigna del operador:
+  1. Cerrar iniciativa (defendible: no quedan gaps materiales de
+     cobertura testeable, 2 H's en BLOCKED honesto).
+  2. H6 multiprosito (UAT-12, Character/StoryArc) — requiere spec o
+     "auto-propone sin spec".
+  3. H7 promocion entre bases (UAT-13) — idem.
+  4. Audit transversal final (UAT-MATRIX + ARCHITECTURE.md + roadmap sync).
+
+### Siguiente accion concreta
+
+**Esperar consigna del operador.** No fabrico decision material en
+AUTO sin instruccion explicita (regla de honestidad brutal del operador).
+
+Si la consigna es "elige tu" o "sigue", proceder con la opcion que
+defienda con evidencia. Si la consigna es "cierra", marco iniciativa
+COMPLETED y detengo el ciclo.
+
+### Estado durable
+
+- `STATE.yaml`: sincronizado (tests 340 -> 362, recipe 73% -> 100%,
+  workstreams cerrados, deuda residual actualizada).
+- `SESSION-JOURNAL.md`: entrada "2026-09-23 14:25" con resumen del
+  recipe stewardship.
+- `CURRENT.md`: este update.
+- Sin remote `git push` (orden del operador).
