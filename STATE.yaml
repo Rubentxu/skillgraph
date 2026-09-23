@@ -129,7 +129,7 @@ workstreams:
   - id: uat-coverage-gap-closure
     items: [wrappers-pytest-para-uat_05_10_11_15_16, blocked-honest-pytest-para-uat_12_13]
     status: completed
-    commits: []   # pendiente commit en este turno
+    commits: ["7c3f3f4"]
     nota: "Stewardship: convierte 5 verificaciones manuales (UAT-05/10/11/15/16) en tests pytest automaticos via wrapper trivial (NO reimplementa la logica, solo invoca uat_NN() y asserta status). Crea 2 tests explicitos que afianzan UAT-12/13 BLOCKED con razon honesta (H6/H7 no implementados). Cobertura UAT en CI: 9/16 -> 16/16 (todos los UATs tienen un test pytest vivo, sean PASS o BLOCKED)."
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
@@ -247,9 +247,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 13:21
-  resultado: "291 passed in 53s"
-  working_tree: pending-commit (tests/test_uat_audit.py + tests/test_uat_blocked.py + STATE.yaml)
+  ultima_ejecucion_local: 2026-09-23 13:27
+  resultado: "291 passed in 53s"   # suite pytest; ci.sh completo: 182s
+  working_tree: clean (despues de commit 7c3f3f4)
 
 open_questions: []
 nota_honesta_revision: >
@@ -282,4 +282,4 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "Sesion H4 Expansion controlada + Gap UAT coverage cerrada: 14 commits (6f93eb2..), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 7 tests nuevos pytest (5 wrappers UAT-05/10/11/15/16 + 2 honest blockers UAT-12/13). Cobertura UAT en CI pasa de 9/16 a 16/16. 14/16 UAT PASS verificados individualmente. 3 caminos esperando decision material del operador: (a) aprobar H4 slice-3 spec DRAFT, (b) saltar a H6 multiprosito, (c) saltar a H7 promocion."
+next_action: "Sesion H4 Expansion controlada + Gap UAT coverage cerrada: 15 commits (6f93eb2..7c3f3f4), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 7 tests nuevos pytest (5 wrappers UAT-05/10/11/15/16 + 2 honest blockers UAT-12/13). Cobertura UAT en CI pasa de 9/16 a 16/16. 14/16 UAT PASS verificados individualmente. 3 caminos esperando decision material del operador: (a) aprobar H4 slice-3 spec DRAFT, (b) saltar a H6 multiprosito, (c) saltar a H7 promocion."
