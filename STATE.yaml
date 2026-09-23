@@ -71,10 +71,15 @@ workstreams:
     commits: ["3bc66d9", "6011f60"]
   - id: spec-h3-borrador
     items: [knowledge-adt, context-controller, knowledge-controller, git-fingerprint, invalidation, outcome-trace]
-    status: draft
-    commits: ["903f252", "0e94e16", "13c1942"]
+    status: design-complete
+    commits: ["903f252", "0e94e16", "13c1942", "f6432ed", "05dcb58"]
     spec: specs/h3-knowledge.md
-    sub_specs: [specs/h3-slice-1.md]
+    sub_specs:
+      - specs/h3-slice-1.md   # Knowledge ADT + Storage (17 tests)
+      - specs/h3-slice-2.md   # KnowledgeController (14 tests)
+      - specs/h3-slice-3.md   # Git fingerprinting dulwich (8 tests)
+      - specs/h3-slice-4.md   # Invalidacion transitiva (10 tests)
+      - specs/h3-slice-5.md   # ContextController + OutcomeTracer (15 tests)
     pending_decisions: [D2-contextrecipe-brick, D3-invalidacion-sync, D4-token-budget]
     closed_decisions:
       D1-git-lib: {choice: dulwich, commit: 0e94e16, evidence: spike /tmp/sg-git-spike}
@@ -100,8 +105,12 @@ deliverables:
   - ".gitattributes con LF + diffs limpios"
   - "mise.toml: python 3.13.15, uv 0.12.17, tasks sync/test/lint/format/cli"
   - "scripts/ci.sh: gate unico ejecutable (ruff format + ruff check + pytest)"
-  - "specs/h3-knowledge.md: spec H3 BORRADOR (D1 cerrada con spike, D2/D3/D4 pendientes de firma)"
-  - "specs/h3-slice-1.md: sub-spec Slice 1 (Knowledge ADT + Storage delta) con 17 tests propuestos"
+  - "specs/h3-knowledge.md: spec H3 DISEÑO COMPLETO (D1 cerrado; D2/D3/D4 pendientes)"
+  - "specs/h3-slice-1.md: Knowledge ADT + Storage (17 tests)"
+  - "specs/h3-slice-2.md: KnowledgeController (14 tests)"
+  - "specs/h3-slice-3.md: Git fingerprinting dulwich (8 tests)"
+  - "specs/h3-slice-4.md: Invalidación transitiva (10 tests)"
+  - "specs/h3-slice-5.md: ContextController + OutcomeTracer (15 tests, 3 E2E subprocess)"
   - "CURRENT.md, STATE.yaml, SESSION-JOURNAL.md"
   - "AGENTS.md cerrado con 11 secciones (incluida §11 Haskell-inspired)"
   - "uv.lock reproducible"
@@ -152,8 +161,8 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 10:30
-  resultado: "161 passed in 85.98s"
+  ultima_ejecucion_local: 2026-09-23 10:36
+  resultado: "161 passed in 42.70s"
   working_tree: clean
 
 open_questions:

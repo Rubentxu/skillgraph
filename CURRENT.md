@@ -1,7 +1,7 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 10:30 (Europe/Madrid).
-> Revisión: `642ee85 chore: anadir .coverage* a .gitignore`.
+> Última verificación: 2026-09-23 10:36 (Europe/Madrid).
+> Revisión: `05dcb58 spec(h3): sub-specs slices 2-5 + spec padre compactado`.
 
 ## Goal
 
@@ -27,8 +27,8 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 
 ## Último estado comprobado
 
-- Repo: rama `main`, **24 commits limpios, lint verde, 161 tests verdes**.
-- Working tree: limpio. CI pasa localmente con `scripts/ci.sh` (1m 25s).
+- Repo: rama `main`, **26 commits limpios, lint verde, 161 tests verdes**.
+- Working tree: limpio. CI pasa localmente con `scripts/ci.sh` (~43s).
 - Python 3.13.15 via `mise`; `uv` para resolver venv reproducible.
 - Bootstrap del paquete: `hatchling`, `py.typed`, dev deps PEP 735.
 - Spikes S0..S5 ejecutados y verificados con tests de extremo a extremo.
@@ -39,11 +39,13 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
   runner externo.
 - AGENTS.md cerrado: Section 11 (Haskell-inspired functional programming)
   con 15 subsecciones.
-- Spec H3 borrador (`specs/h3-knowledge.md`, 364 lineas). D1 cerrada
-  con spike comparativo dulwich vs pygit2. D2/D3/D4 pendientes de firma.
-- Sub-spec Slice 1 (`specs/h3-slice-1.md`, 457 lineas): diseno detallado
-  listo para ejecutar tras firma (ADT, schema SQL, 17 tests, 11 metodos
-  Storage, 4 errores).
+- Spec H3 diseño completo (`specs/h3-knowledge.md`).
+  - D1 cerrada con spike (`dulwich`, commit `0e94e16`).
+  - 5 sub-specs (slices 1-5) diseñados y commiteados:
+    `specs/h3-slice-1.md` ... `specs/h3-slice-5.md`.
+  - Total tests previstos tras firma: **161 → 225**.
+  - D2/D3/D4 pendientes de firma. Recomendación agente: brick +
+    warning-strict + caracteres.
 
 ## Decisiones del operador registradas
 
