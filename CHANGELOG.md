@@ -12,6 +12,49 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.4.1] — 2026-09-23
+
+**Resumen**: dos correcciones de portabilidad y trazabilidad del
+módulo `tests/uat_audit.py`. Sin cambios de comportamiento observable
+ni en la API pública.
+
+### Fixes (PATCH bump)
+
+- `7b81df7` **fix(tests)**: UAT evidence usa SHA real de HEAD.
+  - Antes: `revision: "HEAD"` literal en evidencia de UAT-08/09.
+  - Ahora: helper `_git_rev_head()` que ejecuta `git rev-parse HEAD`
+    en el repo de evidencia y captura el SHA real.
+  - Justificación: una evidencia de auditoría que no contiene el SHA
+    real no es auditable. Mejora la verificabilidad, no el comportamiento.
+- `edb19b0` **fix(uat)**: `REPO_ROOT` se deriva de `__file__`.
+  - Antes: `Path("/var/mnt/DiscoChino2-fast/...")` hardcodeado,
+    rompía el módulo al clonarse en otra máquina o ruta.
+  - Ahora: `Path(__file__).resolve().parent.parent` — funciona en
+    cualquier checkout sin editar.
+  - Verificado: módulo importa OK desde `test_uat_blocked.py` y
+    `test_uat_audit.py`, y resuelve a la misma raíz que el path
+    hardcodeado en este entorno.
+
+### Estado verificable al tag
+
+- **HEAD pre-tag**: `edb19b0`.
+- **Tests**: 368 passed en 63s (sin delta vs v0.4.0).
+- **UATs**: 14/16 PASS, 2 BLOCKED honestos (sin cambio).
+- **`scripts/ci.sh`**: OK.
+- **ruff format+check**: limpios.
+
+### Limitaciones y deudas conocidas (sin cambio desde v0.4.0)
+
+- UAT-12 H6 multipropósito: BLOCKED.
+- UAT-13 H7 promoción: BLOCKED.
+- H4 slice-4 deferred.
+- `paths.py` rama Windows: no testeable en CI Linux.
+- **NUEVA detectada en sesión**: el `main()` de `tests/uat_audit.py`
+  es destructivo por defecto — al ejecutarlo sin args pisa toda la
+  evidencia existente en `tests/uat-evidence/*.json` con `BLOCKED`.
+  No se ha arreglado en este PATCH por estar fuera del scope
+  (cambia contrato del script, no portabilidad).
+
 ## [0.4.0] — 2026-09-23
 
 **Resumen**: cierra el gap declarado en `specs/h4-slice-3.md` limitación 3.
