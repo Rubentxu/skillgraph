@@ -17,11 +17,22 @@ DEFAULT_TENANT = "default"
 
 
 def default_data_root() -> Path:
-    """Raíz por defecto multiplataforma."""
+    """Raíz por defecto multiplataforma.
+
+    En ``nt`` (Windows): ``%LOCALAPPDATA%`` si existe, si no ``%USERPROFILE%``.
+    En ``posix``: ``$XDG_DATA_HOME`` si existe, si no ``~/.local/share``.
+    """
     if os.name == "nt":
-        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        base = os.environ.get("LOCALAPPDATA")
+        if base is None:
+            # Fallback: expanduser('~') en 'nt' usa %USERPROFILE%, en
+            # sistemas sin esa variable, expande vacio. Forzamos un
+            # string no vacio para evitar paths raros.
+            base = os.path.expanduser("~") or os.getcwd()
     else:
-        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+        base = os.environ.get("XDG_DATA_HOME")
+        if base is None:
+            base = str(Path("~/.local/share").expanduser())
     return Path(base) / "skillgraph"
 
 
