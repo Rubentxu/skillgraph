@@ -745,3 +745,50 @@ criterios legales del blueprint:
   H7 promoción).
 - Próximo: H4 slice-3 (storage.py persistente + EVALUATE stage +
   policy engine refinado), o H6/H7 si el operador prioriza.
+
+## 2026-09-23 — H4 audit penal + honestidad post re-read
+
+### Audit penal H4 (7233fac)
+
+specs/h4-audit-penal.md (226 LoC) cruza slice-1+2 contra blueprint
+literal: HITOS.md §H4 (4 entregables), ROADMAP.md §Etapa 4 (5 trabajos),
+UAT.md UAT-08/09 literales, SPIKES.md S6 (concurrencia), 05-workflows
+§GraphExpansion (3 estados lifecycle).
+
+Resultado (resumen):
+- H4-GraphExpansion: cubierto (ADT + apply + record).
+- H4-Validacion patches: cubierto (6 invariantes I1..I6).
+- H4-Politica autorizacion: PARCIAL (sin policy engine refinado).
+- H4-Revision del grafo: PARCIAL (sin revision_history).
+- ROADMAP-Nuevas dependencias: cubierto.
+- ROADMAP-Reanudacion handoff: NO en slice-1+2.
+- UAT-08 literal: PASS verificado E2E.
+- UAT-09 literal: PASS verificado E2E.
+- UAT-09 'estado de espera': NO en slice-1+2 (diferido slice-3).
+- S6 concurrencia: NO cubierto (diferido slice-3 stress).
+- Lifecycle 3 estados: 2/3 cubiertos (Accepted/Rejected);
+  Proposed diferido slice-3.
+
+Conclusion: H4 HONESTAMENTE CERRADO EN SU ALCANCE DECLARADO. No se
+han falseado PASS; los parciales y NO cubiertos están documentados
+como limitaciones vigentes en STATE.yaml.
+
+### Otros fixes del re-read
+
+- commit 8a78271: STATE.yaml current_stage 3→4 (Etapa 4 no 3),
+  LIMITACIONES evidence E2E añadidas (representative no
+  acceptance_aligned), caveát de pytest-xdist.
+- commit 81fbb0e: specs/h4-slice-3.md (411 LoC, DRAFT) — propuesta
+  storage persistente + EVALUATE + policy engine P1..P5.
+- commit 006b818: evidence JSON bit-exact reproducible entre
+  ejecuciones (md5 estable). Bug detectado: pytest scratch paths
+  en stdout/stderr rompían reproducibilidad.
+
+### Estado final
+
+- HEAD: 7233fac.
+- 284 tests pytest verde, ruff format+check limpios.
+- 14/16 UAT PASS, 0 FAIL, 2 BLOCKED honestos (H6, H7).
+- 7 commits en este turno (sesion H4 Expansion controlada).
+- Próximo: esperar decisión del operador sobre H4 slice-3 (aprobación
+  del spec) o salto a H6/H7.

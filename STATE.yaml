@@ -112,6 +112,11 @@ workstreams:
     status: completed
     commit: "bd95d29"
     nota: "sg expansion propose|apply|validate|rejections. E2E subprocess para UAT-08/09. Evidence JSON legal emitido."
+  - id: h4-audit-penal-vs-blueprint
+    items: [audit-hitos, audit-roadmap, audit-uat-08, audit-uat-09, audit-s6-concurrencia, audit-lifecycle]
+    status: completed
+    commit: "7233fac"
+    nota: "specs/h4-audit-penal.md (226 LoC). H4 honestamente cerrado en su alcance declarado. 5 limitaciones vigentes documentadas. Slice-3 spec cubre los gaps reales."
   - id: deuda-storage-diagnostico
     items: [storage-coverage-90-real-branches, gitignore-coverage]
     status: completed
@@ -136,6 +141,9 @@ deliverables:
   - "specs/h3-slice-3.md: Git fingerprinting dulwich (8 tests)"
   - "specs/h3-slice-4.md: Invalidación transitiva (10 tests)"
   - "specs/h3-slice-5.md: ContextController + OutcomeTracer (15 tests, 3 E2E subprocess)"
+  - "specs/h4-slice-1.md: H4 Expansion controlada slice-1 library (15 tests + 86% coverage)"
+  - "specs/h4-slice-3.md: H4 Expansion controlada slice-3 spec DRAFT (storage persistente + EVALUATE + policy engine P1..P5)"
+  - "specs/h4-audit-penal.md: H4 slices 1+2 vs blueprint literal (226 LoC)"
   - "CURRENT.md, STATE.yaml, SESSION-JOURNAL.md"
   - "AGENTS.md cerrado con 11 secciones (incluida §11 Haskell-inspired)"
   - "uv.lock reproducible"
@@ -257,4 +265,4 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "H4 slice-3: storage.py persistente para propuestas, EVALUATE stage, policy engine refinado. Despues: H6 multipropósito o H7 promocion."
+next_action: "H4 slice-1+2+audit penal cerrados (commits 6f93eb2/bd95d29/7233fac). Slice-3 spec publicado DRAFT en specs/h4-slice-3.md (411 LoC) esperando aprobacion del operador (3 preguntas abiertas en §7). Sin trabajo desbloqueado de mayor ROI: H6 multiproposito (UAT-12) y H7 promocion (UAT-13) son saltos materiales que requieren decision del operador."
