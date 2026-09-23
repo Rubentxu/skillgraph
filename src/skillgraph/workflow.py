@@ -20,6 +20,31 @@ from typing import Any
 from skillgraph.errors import ValidationError
 from skillgraph.runtime_types import NODE_KINDS, NodeKind
 
+OUTCOME_KEY = "outcomes"
+MAX_VISITS_KEY = "max_visits"
+
+
+def _declared_outcomes(metadata: dict[str, Any]) -> tuple[str, ...]:
+    raw = metadata.get(OUTCOME_KEY)
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not all(isinstance(o, str) and o for o in raw):
+        raise ValidationError(
+            f"WorkflowNode.metadata[{OUTCOME_KEY!r}] debe ser lista de strings no vacios"
+        )
+    return tuple(raw)
+
+
+def _declared_max_visits(metadata: dict[str, Any]) -> int | None:
+    raw = metadata.get(MAX_VISITS_KEY)
+    if raw is None:
+        return None
+    if not isinstance(raw, int) or raw < 1:
+        raise ValidationError(
+            f"WorkflowNode.metadata[{MAX_VISITS_KEY!r}] debe ser int >= 1 o ausente"
+        )
+    return raw
+
 
 @dataclass(frozen=True, slots=True)
 class WorkflowNode:
@@ -37,6 +62,8 @@ class WorkflowNode:
     expected_result: str
     capabilities: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
+    outcomes: tuple[str, ...] = ()
+    max_visits: int | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -53,6 +80,19 @@ class WorkflowNode:
             raise ValidationError("WorkflowNode.expected_result vacio")
         if not isinstance(self.metadata, dict):
             raise ValidationError("WorkflowNode.metadata debe ser dict")
+        # H4: DecisionNode requiere outcomes declarados; max_visits es optativo.
+        declared = _declared_outcomes(self.metadata)
+        if self.kind == "DecisionNode":
+            if not declared:
+                raise ValidationError("DecisionNode requiere metadata.outcomes (lista no vacia)")
+            object.__setattr__(self, "outcomes", declared)
+        elif declared:
+            # Si ActionNode declara outcomes por metadata, lo respetamos
+            # (degraded mode: metadata es la verdad).
+            object.__setattr__(self, "outcomes", declared)
+        mv = _declared_max_visits(self.metadata)
+        if mv is not None:
+            object.__setattr__(self, "max_visits", mv)
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +133,16 @@ class WorkflowPlan:
                 raise ValidationError(f"WorkflowTransition.source {t.source!r} no es nodo")
             if t.target not in names:
                 raise ValidationError(f"WorkflowTransition.target {t.target!r} no es nodo")
+        # H4: validar que las transiciones usen outcomes declarados si el
+        # nodo los declaro (DecisionNode o ActionNode con outcomes explicitos).
+        by_name = {n.name: n for n in self.nodes}
+        for t in self.transitions:
+            src = by_name[t.source]
+            if src.outcomes and t.outcome not in src.outcomes:
+                raise ValidationError(
+                    f"WorkflowTransition: outcome {t.outcome!r} no esta en "
+                    f"outcomes declarados del nodo {src.name!r}={list(src.outcomes)!r}"
+                )
 
     def successors(self, node_name: str, outcome: str) -> str | None:
         """Devuelve el siguiente nodo segun el outcome, o None si terminal."""

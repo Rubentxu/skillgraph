@@ -123,11 +123,13 @@ class TestPlanBuilderBuildsValidPlan:
                 node_name("decide"),
                 kind="DecisionNode",  # type: ignore[arg-type]
                 expected="text",
+                metadata={"outcomes": ["ok", "abort"]},
             )
             .starts_at(node_name("decide"))
             .build()
         )
         assert plan.node("decide").kind == "DecisionNode"
+        assert plan.node("decide").outcomes == ("ok", "abort")
 
 
 class TestDslMatchesLoader:

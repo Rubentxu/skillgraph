@@ -134,6 +134,7 @@ class PlanBuilder:
         revision: int = 1,
         expected: str,
         capabilities: Iterable[str] = (),
+        metadata: dict[str, object] | None = None,
     ) -> PlanBuilder: ...
     def add_node(
         self,
@@ -145,6 +146,7 @@ class PlanBuilder:
         revision: int = 1,
         expected: str,
         capabilities: Iterable[str] = (),
+        metadata: dict[str, object] | None = None,
     ) -> PlanBuilder:
         """Devuelve un NUEVO builder con el nodo aniadido.
 
@@ -167,6 +169,7 @@ class PlanBuilder:
             resource_revision=rev,
             expected_result=expected,
             capabilities=tuple(capabilities),
+            metadata=dict(metadata) if metadata else {},
         )
         return PlanBuilder(
             nodes=(*self._nodes, node),

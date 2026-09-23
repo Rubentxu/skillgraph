@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-03",
-  "revision": "5e562deac58f82c081f58c776b301f07384c84f5",
-  "timestamp": "2026-09-23T09:32:16Z",
+  "revision": "61cccefa5f87dcce178b781af9e52a1c91924d64",
+  "timestamp": "2026-09-23T09:54:14Z",
   "scenario": "Dado un Domain Pack Markdown valido, cuando se registra, sus capacidades aparecen en el catalogo. Un YAML invalido se rechaza antes de activar comportamiento.",
   "expected": "valid_pack -> exit=0; invalid_pack -> exit!=0 (kind desconocido); invalid_version -> exit=12 (version no es string); inspect muestra DomainPack (kind del brick)",
   "observed": "valid_pack rc=0; invalid_pack rc=12; invalid_version rc=12; inspect has DomainPack: True",
@@ -9,29 +9,29 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat03-al7dcekf/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat03-al7dcekf/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat03-o630avqw/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat03-o630avqw/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat03-al7dcekf/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat03-o630avqw/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "brick demo /home/rubentxu/.jcode/scratch/sg-uat03-al7dcekf/valid.md",
+      "cmd": "brick demo /home/rubentxu/.jcode/scratch/sg-uat03-o630avqw/valid.md",
       "returncode": "0",
       "stdout": "Brick registrado: DomainPack/software/software-pack\nUID: default/demo/skillgraph.dev/v1alpha1/DomainPack/software/software-pack\n",
       "stderr": ""
     },
     {
-      "cmd": "brick demo /home/rubentxu/.jcode/scratch/sg-uat03-al7dcekf/invalid.md",
+      "cmd": "brick demo /home/rubentxu/.jcode/scratch/sg-uat03-o630avqw/invalid.md",
       "returncode": "12",
       "stdout": "",
       "stderr": "ERROR (sg_unknown_kind): Tipo no registrado: apiVersion='skillgraph.dev/v1alpha1' kind='UnknownKind'\n"
     },
     {
-      "cmd": "brick demo /home/rubentxu/.jcode/scratch/sg-uat03-al7dcekf/invalid-version.md",
+      "cmd": "brick demo /home/rubentxu/.jcode/scratch/sg-uat03-o630avqw/invalid-version.md",
       "returncode": "12",
       "stdout": "",
       "stderr": "ERROR (sg_validation): DomainPack.spec.version debe ser string\n"
@@ -39,12 +39,12 @@
     {
       "cmd": "project inspect demo",
       "returncode": "0",
-      "stdout": "Proyecto: demo\nTenant:   default\nDB:       /var/home/rubentxu/.jcode/scratch/sg-uat03-al7dcekf/data/tenants/default/projects/demo/project.sqlite\nCreado:   2026-09-23T09:32:15.711310+00:00\nRecursos: 1 total\n  DomainPack: 1\n",
+      "stdout": "Proyecto: demo\nTenant:   default\nDB:       /var/home/rubentxu/.jcode/scratch/sg-uat03-o630avqw/data/tenants/default/projects/demo/project.sqlite\nCreado:   2026-09-23T09:54:13.979717+00:00\nRecursos: 1 total\n  DomainPack: 1\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat03-al7dcekf"
+    "/home/rubentxu/.jcode/scratch/sg-uat03-o630avqw"
   ],
   "status": "PASS",
   "notes": "Validacion: registry.py valida kind conocido + spec semantica. Version int falla en _validate_domain_pack."

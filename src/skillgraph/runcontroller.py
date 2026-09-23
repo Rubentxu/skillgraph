@@ -262,17 +262,43 @@ class RunController:
             # propiedad del blueprint: cada pasada del bucle es
             # determinista y reversible.
 
-        # Si frontier vacia y destination_verified -> COMPLETED.
+        # Si frontier vacia -> terminamos.
+        # Caso H4 budget exhausted: current con self-loop y max_visits
+        # agotado -> FAILED. Caso DAG normal -> COMPLETED.
+        run_row = self._load_run(tenant_id, project_id, run_id)
+        prev_current = run_row["current_node"]
+        budget_exhausted = False
+        if prev_current is not None:
+            node_prev = plan.node(prev_current)
+            has_self_loop = any(
+                t.source == prev_current and t.target == prev_current for t in plan.transitions
+            )
+            if has_self_loop and node_prev.max_visits is not None:
+                existing_prev = self._node_executions_for(
+                    tenant_id, project_id, run_id, prev_current
+                )
+                if len(existing_prev) >= node_prev.max_visits:
+                    budget_exhausted = True
         new_frontier = self._calculate_frontier(tenant_id, project_id, run_id, plan)
         if not new_frontier:
-            self._set_run_state(tenant_id, project_id, run_id, "COMPLETED", None)
-            self._events.append(
-                EventBuilder(
-                    tenant_id=tenant_id,
-                    project_id=project_id,
-                    correlation_id=run_id,
-                ).run_completed(run_id=run_id, state="COMPLETED")
-            )
+            if budget_exhausted:
+                self._set_run_state(tenant_id, project_id, run_id, "FAILED", prev_current)
+                self._events.append(
+                    EventBuilder(
+                        tenant_id=tenant_id,
+                        project_id=project_id,
+                        correlation_id=run_id,
+                    ).run_completed(run_id=run_id, state="FAILED", at=prev_current)
+                )
+            else:
+                self._set_run_state(tenant_id, project_id, run_id, "COMPLETED", None)
+                self._events.append(
+                    EventBuilder(
+                        tenant_id=tenant_id,
+                        project_id=project_id,
+                        correlation_id=run_id,
+                    ).run_completed(run_id=run_id, state="COMPLETED")
+                )
 
         return self._snapshot(tenant_id, project_id, run_id)
 
@@ -360,6 +386,19 @@ class RunController:
         last = existing[-1] if existing else None
         if last is None:
             return [current]
+        # H4: si last es SUCCEEDED, es ciclo solo si el plan declara una
+        # auto-transicion desde current hacia si mismo. Sin self-loop
+        # declarada, es nodo terminal post-exito: devolver [].
+        if last["state"] == "SUCCEEDED":
+            node = plan.node(current)
+            has_self_loop = any(
+                t.source == current and t.target == current for t in plan.transitions
+            )
+            if not has_self_loop:
+                return []
+            if node.max_visits is not None and len(existing) >= node.max_visits:
+                return []
+            return [current]
         if last["state"] in {"SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"}:
             return []
         return [current]
@@ -374,12 +413,17 @@ class RunController:
         node_name: str,
     ) -> bool:
         """Ejecuta UN nodo. Devuelve False si FAILED terminal."""
-        # Idempotencia: si ya hay SUCCEEDED, no hacemos nada.
+        # Idempotencia: si ya hay SUCCEEDED Y el plan NO declara un
+        # self-loop en este nodo, no hacemos nada (DAG lineal).
+        # H4: en self-loop, debemos re-ejecutar para gastar el budget.
         existing = self._node_executions_for(tenant_id, project_id, run_id, node_name)
-        if existing and existing[-1]["state"] == "SUCCEEDED":
+        node = plan.node(node_name)
+        has_self_loop = any(
+            t.source == node_name and t.target == node_name for t in plan.transitions
+        )
+        if existing and existing[-1]["state"] == "SUCCEEDED" and not has_self_loop:
             return True
 
-        node = plan.node(node_name)
         attempt = len(existing) + 1
         # Permitimos como maximo un reintento tras fallo.
         if attempt > MAX_NODE_ATTEMPTS:
