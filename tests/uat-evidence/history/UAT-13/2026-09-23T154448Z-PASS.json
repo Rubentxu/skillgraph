@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-13",
   "revision": "d220ec2773d36a6e4529c28afbc300e375f7bc72",
-  "timestamp": "2026-09-23T15:54:42Z",
+  "timestamp": "2026-09-23T15:44:48Z",
   "scenario": "Dada una propuesta de promocion persistida, cuando el proceso se interrumpe a mitad del apply (failpoint os._exit(9)), entonces la reconciliacion via CLI la completa sin duplicar el claim en destino.",
   "expected": "Promocion atomica entre bases, recuperable por CLI.",
   "observed": "2 tests subprocess E2E PASS: submit duplicado rechazado por idempotency_key; crash mid_apply deja outbox IN_PROGRESS sin aplicar; reconcile posterior completa y re-reconcile no duplica (claim/entity/source == 1/1/1 en destino tras 2 reconciles). tests/test_h8_public_paths.py::TestUat13PublicPath",
@@ -23,20 +23,5 @@
     "tests/test_h8_public_paths.py"
   ],
   "status": "PASS",
-  "notes": "Ruta publica (H8) con failpoints en limites transaccionales. Los tests de biblioteca (tests/test_h7_promocion.py) cubren promotion.py; esta evidencia certifica el recorrido CLI con crash real del proceso.",
-  "hito": "H8.2",
-  "hito_summary": "Promocion publica CLI con failpoints y recuperacion",
-  "criteria_observed": [
-    "submit persiste claim en outbox; duplicado rechazado",
-    "crash mid_apply deja outbox IN_PROGRESS sin aplicar",
-    "reconcile completa la promocion tras el crash",
-    "re-reconcile no duplica (1/1/1 en destino)"
-  ],
-  "tests_passed": 16,
-  "tests_failed": 0,
-  "tests_total": 16,
-  "test_file": "tests/test_h7_promocion.py (16) + tests/test_h8_public_paths.py::TestUat13PublicPath (2)",
-  "command": "uv run pytest tests/test_h7_promocion.py tests/test_h8_public_paths.py::TestUat13PublicPath -q",
-  "command_exit_code": 0,
-  "blockers": []
+  "notes": "Ruta publica (H8) con failpoints en limites transaccionales. Los tests de biblioteca (tests/test_h7_promocion.py) cubren promotion.py; esta evidencia certifica el recorrido CLI con crash real del proceso."
 }

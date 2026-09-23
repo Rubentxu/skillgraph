@@ -1,0 +1,47 @@
+{
+  "uat_id": "UAT-13",
+  "status": "PASS",
+  "revision": "95a0ca99544a419eec9f77ecdaa417127aa70499",
+  "verified_at": "2026-09-23T14:07:49Z",
+  "hito": "H7",
+  "hito_summary": "Promocion entre bases - outbox + reconciliacion idempotente, completa sin duplicar tras interrupcion",
+  "criteria_observed": [
+    "test_compute_idempotency_key_combines_project_and_ref: misma entrada produce misma key deterministica",
+    "test_compute_idempotency_key_different_inputs: inputs distintos producen keys distintas",
+    "test_compute_idempotency_key_rejects_empty: inputs vacios rechazados",
+    "test_submit_creates_pending_proposal: submit crea propuesta en status=PENDING",
+    "test_submit_duplicate_raises_conflict: reintento con misma idempotency_key -> IdentityConflictError",
+    "test_apply_successful_marks_published: apply exitoso transiciona PENDING -> PUBLISHED",
+    "test_apply_failed_marks_failed: apply con apply_fn=False marca FAILED (no aplica)",
+    "test_apply_exception_marks_failed: excepcion en apply_fn marca FAILED y no rellena PUBLISHED",
+    "test_apply_already_published_is_idempotent: aplicar 2 veces sobre PUBLISHED NO duplica (apply_fn counter no incrementa)",
+    "test_apply_failed_status_not_retried: estado FAILED no se reintenta silenciosamente (segun contrato: requiere inspeccion manual)",
+    "test_apply_unknown_proposal_raises: proposal_id inexistente -> KeyError",
+    "test_reconcile_empty_returns_empty: reconciliacion sin pendientes retorna vacio",
+    "test_reconcile_processes_pending: reconciliacion procesa multiples PENDING en orden",
+    "test_reconcile_after_interruption_completes_pending: CASO CRITICO UAT-13 - tras interrupcion (IN_PROGRESS dejado por crash) reconciliacion completa sin duplicar (apply_fn llamado 1 sola vez aunque quedaran 2 IN_PROGRESS)",
+    "test_reconcile_does_not_duplicate_published: reconciliacion NO toca propuestas ya PUBLISHED",
+    "test_reconcile_mixed_status_handles_each_correctly: mezcla PENDING+IN_PROGRESS+FAILED -> cada una se procesa segun corresponde"
+  ],
+  "tests_passed": 16,
+  "tests_failed": 0,
+  "tests_total": 16,
+  "test_file": "tests/test_h7_promocion.py",
+  "implementation_files": [
+    "src/skillgraph/promotion.py (160 LoC): submit_proposal, apply_proposal (idempotente), reconcile_pending",
+    "src/skillgraph/storage.py (+146 LoC, 0 modificados): schema tabla promotion_outbox + 6 metodos (register/get/list_pending/mark_in_progress/_published/_failed)"
+  ],
+  "blueprint_section": "doc 09 - Outbox + Reconciliacion",
+  "design_decisions": {
+    "blueprint_pattern": "Patron del blueprint 5 pasos: 1. resultado persistido origen (register_promotion), 2. mensaje outbox (tabla promotion_outbox), 3. aplicacion idempotente (apply_fn + idempotency_key), 4. confirmacion (mark_promotion_published), 5. reconciliacion tras interrupcion (reconcile_pending).",
+    "transactional_outbox": "PENDING se inserta en la misma transaccion que el resultado. apply se ejecuta en destino cuando el publisher envie el mensaje; si se cae a mitad, IN_PROGRESS queda y reconcile lo completa.",
+    "atomic_state_transitions": "Cada transicion ocurre dentro de transacciones DDL 'BEGIN; UPDATE promotion_outbox ...; COMMIT;'. Un FAILED no se reintenta silenciosamente.",
+    "idempotency_key_unique": "idempotency_key UNIQUE garantiza que dos propuestas con misma key no coexistan. Duplicado -> IdentityConflictError.",
+    "reconcile_strategy": "reconcile_pending procesa todas en PENDING/IN_PROGRESS con status != FAILED. Aplica idempotencia: PUBLISHED no se toca, FAILED requiere intervencion."
+  },
+  "evidence_run_id": "h7-real-16p16-95a0ca9",
+  "command": "uv run pytest tests/test_h7_promocion.py -v",
+  "command_exit_code": 0,
+  "command_duration_seconds": 4.77,
+  "blockers": []
+}
