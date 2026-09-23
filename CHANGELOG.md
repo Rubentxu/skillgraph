@@ -12,6 +12,68 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.5.0] — 2026-09-23
+
+**Resumen**: añade CLI propio al módulo `tests/uat_audit.py`. Antes
+ejecutaba los 16 UATs y sobreescribía la evidencia persistida por
+defecto (footgun crítico). Ahora es read-only por defecto; el modo
+write es opt-in con flags explícitos y protección contra pisado de
+evidencia válida de UATs stub.
+
+Sin cambios en la API pública de SkillGraph. Sin cambios en código
+de producción (`src/skillgraph/`).
+
+### Features (MINOR bump)
+
+- `233431b` **feat(uat)**: CLI safety en `tests/uat_audit.py`.
+  - **Default read-only**: `python tests/uat_audit.py` ahora LEE la
+    evidencia persistida y la reporta sin ejecutar nada. Cierra el
+    footgun documentado en v0.4.1 CHANGELOG.
+  - **`--write`**: ejecuta los UATs y SOBREESCRIBE la evidencia. Solo
+    para UATs no-stub (los stubs UAT-08/09/12/13 son heredados y
+    delegan en `uats_blocked_gap`; su evidencia real vive en
+    `test_h4_expansion_cli.py` / `test_uat_blocked.py`).
+  - **`--write --yes`**: confirma la operación sobre UATs stub
+    (mensaje explícito + exit 3 si se omite `--yes`).
+  - **`--dry-run`**: ejecuta los UATs sin persistir evidencia (útil
+    para debug).
+  - **Subset selection**: `uat_audit.py UAT-08 UAT-09` ejecuta solo
+    los UATs nombrados.
+  - **`--help`**: imprime uso.
+  - **Exit codes**: 0 OK, 2 UAT desconocido, 3 stub sin `--yes`.
+  - Refactor: extrae `_run_one`, `_report`, `_summary`,
+    `_read_existing`, `_build_parser` para DRY.
+
+### Tests añadidos (sin bump)
+
+- `607d859` **test(uat)**: 5 tests para el nuevo CLI.
+  - `test_main_default_is_readonly`: modo lectura no escribe nada.
+  - `test_main_write_unknown_uat_returns_2`: exit code 2 en UAT
+    desconocido.
+  - `test_main_write_stub_without_yes_returns_3`: exit code 3 Y la
+    evidencia preexistente con `revision: "must-survive"` queda
+    intacta (verifica que NO se pisa).
+  - `test_main_dry_run_does_not_write`: `--dry-run` no persiste.
+  - `test_main_help_exits_zero`: `--help` sale rc=0 con mensaje
+    que contiene `--write`.
+
+### Estado verificable al tag
+
+- **HEAD pre-tag**: `607d859`.
+- **Tests**: 373 passed en 82s (368 → 373, delta +5 tests CLI).
+- **UATs**: 14/16 PASS, 2 BLOCKED honestos (sin cambio).
+- **`scripts/ci.sh`**: OK.
+- **ruff format+check**: limpios.
+- **Footgun verificado**: ejecutar `python tests/uat_audit.py` ya NO
+  modifica el working tree (verificado con `git status` antes/después).
+
+### Limitaciones y deudas conocidas (sin cambio desde v0.4.1)
+
+- UAT-12 H6 multipropósito: BLOCKED.
+- UAT-13 H7 promoción: BLOCKED.
+- H4 slice-4 deferred.
+- `paths.py` rama Windows: no testeable en CI Linux.
+
 ## [0.4.1] — 2026-09-23
 
 **Resumen**: dos correcciones de portabilidad y trazabilidad del
