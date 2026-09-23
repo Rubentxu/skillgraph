@@ -470,3 +470,27 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
   3) H9-A concurrencia real (ADR material; requiere decision).
   4) Cerrar la iniciativa definitivamente.
 - Si AUTO: prioriza (2) por coste/valor, manteniendo (1) en cola.
+
+## UPDATE 2026-09-23 17:30 — H9-InProcess-3 cerrado
+
+- **Slice**: cobertura in-process CLI (cmd_ directo) + acceptance path
+  real (binario publico) sobre `knowledge stale`, `knowledge invalidate`
+  y `brick register`. 11 tests nuevos (8 in-process + 3 subprocess).
+- **461/461 verde en `scripts/ci.sh`** (~85s).
+- **Descubrimiento honesto**: in-process y subprocess cubren rutas
+  distintas. In-process documenta que `cmd_*` directo lanza
+  excepciones tipadas; subprocess documenta que el wrapper `main()`
+  las traduce a `EXIT_DOMAIN` (10) + stderr formateado.
+- **Bug heredado (NO introducido)**: ya documentado en JOURNAL.
+  NO requiere fix — el contrato publico cumple spec.
+- **Limitaciones NO cerradas** confirmadas: `cmd_run:1315` con
+  `storage._conn` (H9-BSlice3 candidato); 4 cmd_* aun no cubiertos
+  in-process (`knowledge compile/trace/refresh`, `run`).
+- **Siguiente**: sigue el menu del H9-BSlice1 update
+  (2026-09-23 16:38); opciones abiertas:
+  1. H9-BSlice3 (refactor `storage._conn` en `cmd_run`) — cambio
+     de interfaz mayor en `RunController.storage_input`. Pide
+     consigna: ¿se requiere o se acepta la concesion?
+  2. Cobertura in-process residual (`knowledge compile/trace/refresh`).
+  3. H9-A concurrencia real (ADR material).
+  4. Cierre de iniciativa si la deuda esta documentada y aceptada.

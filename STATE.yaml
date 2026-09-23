@@ -212,12 +212,13 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 450
-  passed: 450
-  duration_s: 116
+  total: 461
+  passed: 461
+  duration_s: 85
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
+  h9_inprocess3_delta: "+11 tests (8 in-process knowledge/brick + 3 acceptance real subprocess)"
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -256,6 +257,7 @@ tests:
     - tests/test_h9_cli_promo_list_inproc.py: 5
     - tests/test_h9_cli_inproc_promo_pack.py: 12
     - tests/test_h9_storage_find_active_run.py: 13   # H9-BSlice2: find_active_run + invariantes
+    - tests/test_h9_cli_inproc_knowledge_brick.py: 11   # H9-InProcess-3: knowledge + brick + acceptance real
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -330,6 +332,7 @@ nota_honesta_revision: >
   CI pasa de 9/16 (manuales) a 16/16 (todos con test pytest vivo).
 
 deuda_tecnica_residual:
+  - "H9-InProcess-3 cerrado: cobertura in-process para knowledge stale (3 escenarios), knowledge invalidate (2 escenarios), brick register (3 escenarios) + 3 acceptance path real (subprocess) sobre los mismos comandos. +11 tests. Asunciones defectuosas corregidas tras smoke empirico: (a) stale claim no se siembra directo con freshness='stale', necesita invalidate_from_source previo; (b) knowledge invalidate con source ghost lanza UnknownSourceError cuando se invoca el cmd_ directo (sin captura), pero el wrapper CLI main() traduce correctamente a EXIT_DOMAIN (10) y stderr formateado. NO requiere fix: contrato externo cumple spec. El test in-process documenta la ruta directa; el test subprocess documenta el contrato publico. Cobertura in-process CLI: ampliada a 7 comandos (4 InProcess-2 + 3 InProcess-3)."
   - "H9-BSlice2 cerrado (commits 54d9015 + 3fe5940): API publica Storage.find_active_run(tenant_id, project_id); el runner delega en metodos public Storage en 3 helpers antes con SQL directo. +13 tests (10 API + 3 invariantes sobre acceso a storage._conn en helpers). Limitacion storage._conn en runner CERRADA para los 3 helpers de dominio (queda 1 sitio en cmd_run para RunController, scope aparte)."
   - "H9-InProcess-2 cerrado (commit 7a67bcd): cobertura in-process para promotion submit (4 escenarios), promotion reconcile (2 escenarios nominales), pack load (3 escenarios), expansion show (3 escenarios). +12 tests. Limitacion 'cobertura in-process del CLI' CERRADA para los 4 comandos mas criticos de H8."
   - "H9-BSlice1 cerrado (commit fe6b020): API publica Storage.list_promotions(status=None); cmd_promotion_list ya no accede a storage._conn. +15 tests (10 storage + 5 in-process CLI). Limitacion 'sin API Storage listar promotions' CERRADA."

@@ -1609,3 +1609,66 @@ Decision recomendada tras el auto-stale: ejecutar (2) en el siguiente
 turno (replicar el patron de cobertura in-process para `pack load`,
 `promotion submit`, `promotion reconcile`). Patron replicable, mismo
 coste bajo. (1), (3), (4) mantienen su prioridad documentada.
+
+---
+
+## UPDATE 2026-09-23 17:30 — H9-InProcess-3 cerrado
+
+- **Slice**: cobertura in-process (cmd_* directo) + acceptance path real
+  (subprocess `python -m skillgraph`) para los comandos que quedaron sin
+  cubrir tras H9-InProcess-2:
+  - `cmd_knowledge_stale` (3 escenarios in-process)
+  - `cmd_knowledge_invalidate` (2 escenarios in-process)
+  - `cmd_brick_register` (3 escenarios in-process)
+  - Mismos 3 sobre el binario publico (subprocess), capturando el
+    wrapper `main()` que traduce `SkillGraphError -> EXIT_DOMAIN`
+- **Total**: +11 tests nuevos (8 in-process + 3 acceptance real).
+  461/461 verde en `scripts/ci.sh` (~85s).
+- **Asunciones defectuosas corregidas** tras smoke empirico con el
+  binario publico (no las descubri redactando el test):
+  - **Stale claim no se siembra directo con `freshness='stale'` en
+    `storage.upsert_knowledge`** — necesita pasar por
+    `invalidate_from_source` para que la columna `freshness` se
+    materialice. El primer test que escribi asumiendo esto ultimo
+    fallo; corregi para usar la API real.
+  - **`cmd_knowledge_invalidate` con source ghost NO devuelve rc=0
+    silencioso** — lanza `UnknownSourceError` cuando se invoca el
+    `cmd_*` directamente (sin captura), pero el wrapper CLI `main()`
+    traduce correctamente a `EXIT_DOMAIN` (10) y stderr
+    `ERROR (sg_unknown_source): ...`.
+  - Descubrimiento honesto: el test in-process y el acceptance real
+    cubren RUTAS DISTINTAS. El primero documenta que `cmd_*` lanza
+    directo; el segundo documenta que el binario publico traduce a
+    exit code tipado. Ambos son valiosos porque especifican el
+    contrato interno y el externo. NO requiere fix de `cmd_*`:
+    ya esta bien que lance — quien la traduce es `main()`.
+- **Bug menor heredado detectado (NO introducido)**: ya documentado.
+  NO requiere fix (contrato externo cumple spec).
+- **Limitaciones NO cerradas confirmadas**:
+  - `cmd_run` (linea 1315) sigue accediendo a `storage._conn` para
+    pasar `conn=` al `RunController`. Cambio de interfaz mayor
+    (contrato `RunController.storage_input`). Scope aparte;
+    candidato a H9-BSlice3 si surge demanda.
+  - Cobertura in-process CLI de `knowledge compile/trace/refresh/run`
+    queda pendiente menor. `brick register` SI cubierto (3 escenarios).
+- **Decisiones bajo criterio del operador, no en consigna**:
+  - Añadir los 3 acceptance path real (subprocess) ademas de los
+    8 in-process: lo hizo el descubrimiento de la asuncion #2
+    (la ruta in-process != ruta publica). Es consistente con la
+    regla general "verifica el contrato, no el detalle de
+    implementacion".
+  - No intentar refactorizar `cmd_knowledge_invalidate` para
+    convertir `UnknownSourceError` en rc=0 silencioso: eso seria
+    introducir un cambio de comportamiento que el usuario NO pidio
+    y que contradiria el patron del resto del CLI.
+- **Mapa requisito -> check**:
+
+| Requisito | Check | Resultado |
+|---|---|---|
+| 3 cmd_* cubiertos in-process | `test_h9_cli_inproc_knowledge_brick.py` (8 tests) | 8/8 PASS |
+| Wrapper CLI traduce excepcion -> rc | 3 subprocess tests | 3/3 PASS |
+| `cmd_knowledge_invalidate` ghost -> rc=10 | `test_knowledge_invalidate_ghost_returns_exit_domain` | PASS |
+| `cmd_knowledge_stale` empty -> rc=0 + "(0)" | `test_knowledge_stale_empty_returns_ok` | PASS |
+| `cmd_brick_register` valido -> rc=0 + persist | `test_brick_register_valid_persists` | PASS |
+| `ruff format` | `ruff format tests/test_h9_cli_inproc_knowledge_brick.py` | All checks passed |
+| `scripts/ci.sh` | `bash scripts/ci.sh` | `=== ci: OK ===`, 461 passed in ~85s |
