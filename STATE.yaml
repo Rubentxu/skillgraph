@@ -1,0 +1,66 @@
+"""Estado durable recuperable de la iniciativa.
+
+Apunta a la verdad observable (revisión, evidencia, próximo paso),
+no al historial completo (eso vive en SESSION-JOURNAL.md).
+"""
+
+# Schema deliberadamente plano: fácil de leer, fácil de regenerar.
+# NO incluir secretos, paths absolutos de usuario, ni literales de commit
+# que no se hayan verificado contra `git rev-parse`.
+
+goal:
+  id: g-skillgraph-bootstrap
+  title: "Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0+S1) → Etapa 1"
+  source_of_truth: docs/plan/ROADMAP.md
+  principles_source: docs/README.md
+  adr_index: docs/adr/
+
+roadmap:
+  current_stage: 0
+  current_spike: S0
+  next_milestone_gate: H1
+  current_workitem: b1-bootstrap-estructural
+
+python:
+  minimum: "3.11"
+  resolved_runtime: "3.14.7"   # observado en pre-flight; >=3.11 ✓
+  pin_in_ci: "3.11"            # CI barato y portable; el dev local usa 3.14.7
+
+adoption:
+  sddk_mode: pending              # se actualizará tras sddk-mode set
+  adopt_status: pending
+  config_resolved: false
+
+workstreams:
+  - id: bootstrap-estructural
+    status: in_progress
+    owner: orchestrator
+    items: [b1, b2, b4]
+  - id: adopcion-sddk
+    items: [b3]
+    status: pending
+  - id: spike-s0-brick-minimal
+    items: [s0-1, s0-2]
+    status: pending
+  - id: spike-s1-sqlite-local
+    items: [s1-1, s1-2]
+    status: pending
+  - id: etapa1-cli-catalogo
+    items: [e1-1, e1-2]
+    status: pending
+
+deliverables:
+  - docs/README.md + docs/{01..12}-*.md + docs/adr/* + docs/plan/* + docs/references/*
+  - pyproject.toml con paquete skillgraph (Python >=3.11)
+  - src/skillgraph/{__init__,cli}.py + py.typed
+  - tests/ vacío pero versionado
+  - .gitignore con caches, build, .skillgraph/
+  - CURRENT.md, STATE.yaml, SESSION-JOURNAL.md
+
+open_questions:
+  - python_runtime: ¿el CI se queda en 3.11 o subimos a 3.12? (decisión diferida)
+  - sddk_adoption_scope: ¿workspace o project? (decisión diferida)
+
+blockers: []
+
+next_action: "b1 → b2 → b3 → b4 → s0-1"

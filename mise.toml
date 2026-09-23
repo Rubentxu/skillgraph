@@ -1,0 +1,37 @@
+# Toolchain versionado para SkillGraph.
+# Cumple el blueprint ("Python 3.11 o posterior") y la decisión del operador
+# ("versión de Python más actual pero estable").
+#
+# Activar en la sesión con `mise install` y luego `mise use`.
+# NO requiere shims globales: mise escribe su propio PATH al activar.
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+MISE_PYTHON_COMPILE = "0"     # usar solo binarios precompilados, evita compilar
+
+[tools]
+python = "3.13.15"
+uv = "0.12.17"
+
+[settings]
+experimental = true
+
+[tasks.sync]
+run = "uv sync --extra dev"
+description = "Resuelve el venv local con dependencias de producción y dev"
+
+[tasks.test]
+run = "uv run pytest"
+description = "Ejecuta la suite de tests focalizados"
+
+[tasks.lint]
+run = "uv run ruff check src tests"
+description = "Lint rápido (Ruff, E/F/I/B/UP/SIM/RUF)"
+
+[tasks.format]
+run = "uv run ruff format src tests"
+description = "Formato (Ruff, line-length 100)"
+
+[tasks.cli]
+run = "uv run skillgraph --version"
+description = "Smoke test de la CLI instalada en el venv"

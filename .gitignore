@@ -1,0 +1,30 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Build / venv
+.venv/
+venv/
+build/
+dist/
+
+# SkillGraph runtime state (fuera de los proyectos analizados)
+.skillgraph/
+
+# Documentación input del blueprint (se conserva en external/, fuera del repo)
+docs/
+
+# Entradas externas no versionadas (blueprint original, generador, etc.)
+external/
+
+# Input Markdown externo suelto en la raíz
+*.md.bak
+external/inputs/
+
+# IDE
+.vscode/
+.idea/
