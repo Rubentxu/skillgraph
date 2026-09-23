@@ -97,7 +97,7 @@ workstreams:
   - id: h5-skill-import
     items: [skill-importer-module, cmd-pack-import, uat-11-blocked-to-pass]
     status: completed
-    commits: ["PENDIENTE"]
+    commits: ["26ac401"]
   - id: ci-minimo
     items: [scripts-ci-sh]
     status: completed
