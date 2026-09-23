@@ -193,6 +193,16 @@ def new_event_id() -> str:
     return str(uuid.uuid4())
 
 
+def now_iso() -> str:
+    """ISO 8601 UTC sin microsegundos. Centralizado para evitar drift.
+
+    Unico punto de definicion: antes existian 3 copias (_now_iso en
+    git_source/context_controller/knowledge_invalidator). Cualquier
+    serializacion temporal del runtime debe usar este helper.
+    """
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
 # --- Builder funcional para eventos ----------------------------------------
 
 

@@ -19,12 +19,12 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from skillgraph.errors import DulwichNotAvailableError
 from skillgraph.knowledge import Source, SourceID
+from skillgraph.runtime import now_iso as _now_iso
 
 # Tipo solo en tiempo de check: el modulo real no se importa en runtime.
 if TYPE_CHECKING:
@@ -376,13 +376,6 @@ def _compute_content_hash(blob_shas: dict[str, str]) -> str:
         h.update(blob_shas[path].encode())
         h.update(b"\x00")
     return f"sha256:{h.hexdigest()}"
-
-
-def _now_iso() -> str:
-    """ISO 8601 UTC sin microsegundos. Usamos datetime para evitar tzdata."""
-    from datetime import datetime
-
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 __all__ = [

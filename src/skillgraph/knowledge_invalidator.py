@@ -28,13 +28,13 @@ import uuid
 import warnings
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from skillgraph.errors import (
     HopLimitExceededWarning,
 )
 from skillgraph.knowledge import Claim, ClaimID, SourceID
+from skillgraph.runtime import now_iso as _now_iso
 
 if TYPE_CHECKING:
     from skillgraph.knowledge_controller import KnowledgeController
@@ -42,10 +42,6 @@ if TYPE_CHECKING:
 
 DEFAULT_MAX_HOPS: int = 2
 """Default traversal depth (D17)."""
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _new_event_id(kind: str) -> str:

@@ -1,21 +1,21 @@
 {
   "uat_id": "UAT-05",
-  "revision": "e3c6cef2bad3e6c1601936d6af2df2fa95e1b8b4",
-  "timestamp": "2026-09-23T10:14:42Z",
+  "revision": "e69a8e4ab2f3d8d4911809a2524f5ded693b470c",
+  "timestamp": "2026-09-23T10:23:43Z",
   "scenario": "Dado un proyecto con seed knowledge, ejecutar el flujo H3: stale -> invalidate -> compile strict (falla) -> trace (ok).",
   "expected": "UAT-05 cierra H3: compile_strict aborta con exit=10 (StaleKnowledgeError), trace devuelve JSON. Sin historial conversacional necesario.",
-  "observed": "compile_strict rc=10; trace rc=0; steps=8",
+  "observed": "compile_strict rc=10; best_effort rc=0 handoff_json_ok=True; trace rc=0; steps=9",
   "steps": [
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat05-ifdjp5kt/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat05-ifdjp5kt/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat05-oca3ehvq/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat05-oca3ehvq/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat05-ifdjp5kt/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat05-oca3ehvq/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
@@ -49,9 +49,15 @@
       "stderr": "ERROR (sg_stale_knowledge_error): 1 obligatory Claim(s) stale y policy=strict\n"
     },
     {
+      "cmd": "knowledge compile demo local:src/foo.py",
+      "returncode": "0",
+      "stdout": "{\n  \"identity\": {\n    \"tenant_id\": \"default\",\n    \"project_id\": \"demo\",\n    \"run_id\": \"cli-run\",\n    \"node_execution_id\": \"cli-node\",\n    \"attempt\": 1\n  },\n  \"behavior\": {\n    \"definition_kind\": \"ActionNode\",\n    \"definition_name\": \"node\",\n    \"definition_namespace\": \"default\",\n    \"definition_revision\": 1,\n    \"api_version\": \"skillgraph.io/v1\"\n  },\n  \"knowledge\": {\n    \"recipe_ref\": \"local:src/foo.py\",\n    \"included\": [\n      [\n        \"claim\",\n        \"claim:c1\",\n        \"local:src/foo.py\"\n      ]\n    ]\n  },\n  \"execution\": {\n    \"workspace_ref\": \"local\",\n    \"source_revision\": \"HEAD\",\n    \"budget\": {\n      \"token_budget_chars\": 8000\n    }\n  },\n  \"expected_result\": \"execute node (recipe=local:src/foo.py)\",\n  \"capabilities\": [\n    \"stale\"\n  ]\n}\n--- context_hash: 7f2ad8c9276e2885904a52a4e6e77e29d4a364661bd1f3e31f3b7659c5223dbb\n",
+      "stderr": ""
+    },
+    {
       "cmd": "knowledge trace demo --run uat05-run",
       "returncode": "0",
-      "stdout": "{\n  \"trace_id\": \"tr-uat05-run-2026-09-23T10:14:42+00:00\",\n  \"kind\": \"SoftwareExecutionSlice\",\n  \"name\": \"trace-uat05-run\",\n  \"project_id\": \"demo\",\n  \"created_at\": \"2026-09-23T10:14:42+00:00\",\n  \"claim_refs\": [],\n  \"evidence_refs\": []\n}\n",
+      "stdout": "{\n  \"trace_id\": \"tr-uat05-run-2026-09-23T10:23:43+00:00\",\n  \"kind\": \"SoftwareExecutionSlice\",\n  \"name\": \"trace-uat05-run\",\n  \"project_id\": \"demo\",\n  \"created_at\": \"2026-09-23T10:23:43+00:00\",\n  \"claim_refs\": [],\n  \"evidence_refs\": []\n}\n",
       "stderr": ""
     }
   ],

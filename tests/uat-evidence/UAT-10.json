@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-10",
-  "revision": "e3c6cef2bad3e6c1601936d6af2df2fa95e1b8b4",
-  "timestamp": "2026-09-23T10:14:46Z",
+  "revision": "e69a8e4ab2f3d8d4911809a2524f5ded693b470c",
+  "timestamp": "2026-09-23T10:23:45Z",
   "scenario": "Dado un conjunto de Claims vinculados a sources, cuando cambia una source, entonces las Claims afectadas quedan stale y no se presentan como vigentes sin revalidacion.",
   "expected": "invalidate rc=0; stale muestra c1 y c2; compile --strict rc=10 (DOMAIN).",
   "observed": "seed_rc=0 inv_rc=0 stale_listed=True compile_strict_rc=10",
@@ -9,13 +9,13 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat10-kcwsl_vm/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat10-kcwsl_vm/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat10-rhsz9m5t/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat10-rhsz9m5t/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat10-kcwsl_vm/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat10-rhsz9m5t/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
@@ -27,7 +27,7 @@
     {
       "cmd": "knowledge invalidate demo --source local:x.py",
       "returncode": "0",
-      "stdout": "invalidated 2 claim(s) from source=local:x.py\n  - c2\n  - c1\n",
+      "stdout": "invalidated 2 claim(s) from source=local:x.py\n  - c1\n  - c2\n",
       "stderr": ""
     },
     {

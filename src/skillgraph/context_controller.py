@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from skillgraph.errors import (
     MissingObligatoryError,
@@ -35,6 +34,7 @@ from skillgraph.handoff import (
 )
 from skillgraph.knowledge import OutcomeTrace
 from skillgraph.recipe import ContextRecipe
+from skillgraph.runtime import now_iso as _now_iso
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -50,10 +50,6 @@ def approx_chars(obj: object) -> int:
     if isinstance(obj, str):
         return len(obj)
     return len(json.dumps(obj, ensure_ascii=False, sort_keys=True))
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 # ---------------------------------------------------------------------------
