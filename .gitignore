@@ -31,4 +31,4 @@ external/inputs/
 
 # IDE
 .vscode/
-.idea/
+.idea/*.lock
