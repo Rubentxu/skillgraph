@@ -275,25 +275,15 @@ def _find_active_run_id(storage: Storage, *, tenant_id: str, project_id: str) ->
     """Devuelve el run_id del Run mas reciente en estado no terminal
     para (tenant, project), o None si no hay ninguno.
 
-    No terminal = CREATED, ACTIVE o WAITING. COMPLETED/FAILED/CANCELLED
+    No terminal = CREATED, ACTIVE o WAITING (ver
+    ``Storage.NON_TERMINAL_RUN_STATES``). COMPLETED/FAILED/CANCELLED
     se consideran terminales y el siguiente `run` debe crear uno nuevo.
     Cumple UAT-06: tras un crash con un run ACTIVE, el CLI lo encuentra
     y lo reanuda en lugar de crear uno nuevo.
+
+    Refactor H9-BSlice2: delega en ``Storage.find_active_run`` (API publica).
     """
-    conn = storage._conn  # type: ignore[attr-defined]
-    row = conn.execute(
-        """
-        SELECT run_id FROM workflow_runs
-        WHERE tenant_id = ? AND project_id = ?
-          AND state IN ('CREATED', 'ACTIVE', 'WAITING')
-        ORDER BY created_at DESC
-        LIMIT 1
-        """,
-        (tenant_id, project_id),
-    ).fetchone()
-    if row is None:
-        return None
-    return row["run_id"]
+    return storage.find_active_run(tenant_id=tenant_id, project_id=project_id)
 
 
 # ---------------------------------------------------------------------------
@@ -992,41 +982,62 @@ def _default_claim_importer(storage: Storage, *, tenant_id: str, target_project:
     return _apply
 
 
-def _source_to_payload(storage: Storage, *, tenant_id: str, source_id: str) -> dict | None:
-    """Serializa una Source del proyecto origen para el payload de promocion."""
-    try:
-        row = storage._conn.execute(
-            "SELECT * FROM sources WHERE source_id = ? AND tenant_id = ?",
-            (source_id, tenant_id),
-        ).fetchone()
-    except Exception:
+def _source_to_payload(
+    storage: Storage,
+    *,
+    tenant_id: str,
+    project_id: str,
+    source_id: str,
+) -> dict | None:
+    """Serializa una Source del proyecto origen para el payload de promocion.
+
+    Delega en ``Storage.get_source`` (API publica, refactor H9-BSlice2).
+    Devuelve el mismo formato ``dict`` que antes para mantener compatibilidad
+    con el payload JSON que escribe ``promotion.submit_proposal``.
+
+    Mejora de aislamiento: el filtro original usaba solo ``source_id`` +
+    ``tenant_id`` (sin ``project_id``), lo que permitia colisiones entre
+    proyectos del mismo tenant con mismo ``source_id``. El nuevo filtro
+    discrimina tambien por proyecto: mas estricto, mas correcto
+    (cumple blueprint 09 'aislamiento por proyecto').
+    """
+    source = storage.get_source(tenant_id=tenant_id, project_id=project_id, source_id=source_id)
+    if source is None:
         return None
-    if row is None:
-        return None
-    d = dict(row)
+    import dataclasses
     import json as _json
 
+    d = dataclasses.asdict(source)
+    # `asdict` no deserializa los JSON strings; replicamos el parseo previo.
     for k in ("locator", "working_tree_status"):
         if isinstance(d.get(k), str):
             try:
                 d[k] = _json.loads(d[k])
             except (ValueError, TypeError):
                 d[k] = {}
+        elif d.get(k) is None:
+            d[k] = {}
     return d
 
 
-def _entity_to_payload(storage: Storage, *, tenant_id: str, entity_id: str) -> dict | None:
-    """Serializa una Entity del proyecto origen para el payload de promocion."""
-    try:
-        row = storage._conn.execute(
-            "SELECT * FROM entities WHERE entity_id = ? AND tenant_id = ?",
-            (entity_id, tenant_id),
-        ).fetchone()
-    except Exception:
+def _entity_to_payload(
+    storage: Storage,
+    *,
+    tenant_id: str,
+    project_id: str,
+    entity_id: str,
+) -> dict | None:
+    """Serializa una Entity del proyecto origen para el payload de promocion.
+
+    Delega en ``Storage.get_entity`` (API publica, refactor H9-BSlice2).
+    Misma nota de aislamiento que ``_source_to_payload``.
+    """
+    import dataclasses
+
+    entity = storage.get_entity(tenant_id=tenant_id, project_id=project_id, entity_id=entity_id)
+    if entity is None:
         return None
-    if row is None:
-        return None
-    return dict(row)
+    return dataclasses.asdict(entity)
 
 
 def cmd_promotion_submit(args: argparse.Namespace) -> int:
@@ -1058,9 +1069,14 @@ def cmd_promotion_submit(args: argparse.Namespace) -> int:
         payload = {
             "source_project": args.project,
             "target_project": args.target,
-            "source": _source_to_payload(storage, tenant_id=tenant_id, source_id=claim.source_id),
+            "source": _source_to_payload(
+                storage, tenant_id=tenant_id, project_id=args.project, source_id=claim.source_id
+            ),
             "entity": _entity_to_payload(
-                storage, tenant_id=tenant_id, entity_id=claim.subject_entity_id
+                storage,
+                tenant_id=tenant_id,
+                project_id=args.project,
+                entity_id=claim.subject_entity_id,
             ),
             "claim": {
                 "claim_id": claim.claim_id,

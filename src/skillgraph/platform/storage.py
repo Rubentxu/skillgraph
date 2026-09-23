@@ -41,6 +41,12 @@ SCHEMA_VERSION = 1
 # inputs sin acoplarse a la implementacion del schema.
 PROMOTION_STATUSES: frozenset[str] = frozenset({"PENDING", "IN_PROGRESS", "PUBLISHED", "FAILED"})
 
+# Estados no terminales de workflow_runs (CREATED/ACTIVE/WAITING).
+# Un run en cualquiera de estos estados se considera "vivo": si el proceso
+# muere, un nuevo `sg run` debe reanudar el mismo run_id en lugar de
+# crear uno nuevo (cumple UAT-06).
+NON_TERMINAL_RUN_STATES: frozenset[str] = frozenset({"CREATED", "ACTIVE", "WAITING"})
+
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -997,6 +1003,41 @@ class Storage:
             d["payload"] = _json.loads(d.pop("payload_json"))
             result.append(d)
         return result
+
+    def find_active_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+    ) -> str | None:
+        """Devuelve el run_id del Run mas reciente en estado no terminal
+        para (tenant, project), o ``None`` si no hay ninguno.
+
+        No terminal = ``CREATED``, ``ACTIVE`` o ``WAITING`` (ver
+        ``NON_TERMINAL_RUN_STATES``). ``COMPLETED``, ``FAILED`` y
+        ``CANCELLED`` se consideran terminales: el siguiente ``sg run``
+        debe crear un Run nuevo.
+
+        Cumple UAT-06: tras un crash con un Run ACTIVE, el CLI lo
+        encuentra y lo reanuda en lugar de crear otro.
+        """
+        # Construir placeholders de tamaño dinamico (NO expone SQL al caller,
+        # solo la consulta SQL).
+        placeholders = ",".join("?" * len(NON_TERMINAL_RUN_STATES))
+        params: list[Any] = [*NON_TERMINAL_RUN_STATES, tenant_id, project_id]
+        row = self._conn.execute(
+            f"""
+            SELECT run_id FROM workflow_runs
+            WHERE state IN ({placeholders})
+              AND tenant_id = ? AND project_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            params,
+        ).fetchone()
+        if row is None:
+            return None
+        return row["run_id"]
 
     def list_promotions(
         self,
