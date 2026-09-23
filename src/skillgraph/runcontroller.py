@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from skillgraph.agent import AgentAdapter, AgentResult
-from skillgraph.errors import NotFoundError, ValidationError
+from skillgraph.errors import NotFoundError
 from skillgraph.handoff import (
     Handoff,
     HandoffBehavior,
@@ -40,16 +40,13 @@ from skillgraph.handoff import (
     HandoffIdentity,
     HandoffKnowledge,
 )
-from skillgraph.runtime import EventLog, RuntimeEvent, new_event_id
+from skillgraph.runtime import EventBuilder, EventLog
+from skillgraph.runtime_types import RunState, is_terminal_run_state
 from skillgraph.storage import Storage
-from skillgraph.workflow import WorkflowPlan
+from skillgraph.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 
-# Estados posibles (subset del blueprint).
-RUN_STATES = frozenset({"CREATED", "ACTIVE", "WAITING", "COMPLETED", "FAILED", "CANCELLED"})
-NODE_STATES = frozenset(
-    {"READY", "RUNNING", "WAITING", "SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"}
-)
-TERMINAL_RUN_STATES = frozenset({"COMPLETED", "FAILED", "CANCELLED"})
+# Maximo de reintentos por nodo antes de marcar FAILED terminal.
+MAX_NODE_ATTEMPTS = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,10 +54,88 @@ class RunSnapshot:
     """Vista inmutable del estado del run tras reconcile_run."""
 
     run_id: str
-    state: str
+    state: RunState
     current_node: str | None
     executed_nodes: tuple[str, ...]
     events_emitted: int
+
+
+def plan_to_json(plan: WorkflowPlan) -> str:
+    """Serializa un WorkflowPlan a JSON estable para persistencia."""
+    return json.dumps(
+        {
+            "initial": plan.initial,
+            "nodes": [
+                {
+                    "name": n.name,
+                    "kind": n.kind,
+                    "namespace": n.namespace,
+                    "api_version": n.api_version,
+                    "resource_revision": n.resource_revision,
+                    "expected_result": n.expected_result,
+                    "capabilities": list(n.capabilities),
+                    "metadata": n.metadata,
+                }
+                for n in plan.nodes
+            ],
+            "transitions": [
+                {"source": t.source, "outcome": t.outcome, "target": t.target}
+                for t in plan.transitions
+            ],
+        },
+        sort_keys=True,
+    )
+
+
+def plan_from_json(blob: str) -> WorkflowPlan:
+    """Reconstruye un WorkflowPlan desde su JSON persistido."""
+    data = json.loads(blob)
+    nodes = tuple(
+        WorkflowNode(
+            name=n["name"],
+            kind=n["kind"],
+            namespace=n["namespace"],
+            api_version=n["api_version"],
+            resource_revision=n["resource_revision"],
+            expected_result=n["expected_result"],
+            capabilities=tuple(n.get("capabilities") or ()),
+            metadata=n.get("metadata") or {},
+        )
+        for n in data["nodes"]
+    )
+    transitions = tuple(
+        WorkflowTransition(source=t["source"], outcome=t["outcome"], target=t["target"])
+        for t in data.get("transitions") or []
+    )
+    return WorkflowPlan(nodes=nodes, transitions=transitions, initial=data["initial"])
+
+
+def result_to_jsonable(result: AgentResult) -> dict[str, Any]:
+    """Serializa un AgentResult a un dict apto para persistencia."""
+    return {
+        "outcome": result.outcome,
+        "result": dict(result.result),
+        "evidence_ref": result.evidence_ref,
+    }
+
+
+def is_outcome_declared(result: AgentResult, plan: WorkflowPlan, node_name: str) -> bool:
+    """True si `outcome` del Adapter figura como transicion declarada en el plan.
+
+    Un nodo sin transiciones (terminal) acepta cualquier outcome.
+    """
+    declared_outcomes = {t.outcome for t in plan.transitions if t.source == node_name}
+    if not declared_outcomes:
+        return True
+    return result.outcome in declared_outcomes
+
+
+def new_run_id() -> str:
+    return f"run-{uuid.uuid4()}"
+
+
+def new_node_execution_id() -> str:
+    return f"ne-{uuid.uuid4()}"
 
 
 class RunController:
@@ -95,7 +170,7 @@ class RunController:
 
         Devuelve el `run_id`. Emite un evento `RunCreated`.
         """
-        run_id = f"run-{uuid.uuid4()}"
+        run_id = new_run_id()
         with self._conn:
             self._conn.execute(
                 """
@@ -108,22 +183,16 @@ class RunController:
                     run_id,
                     tenant_id,
                     project_id,
-                    _plan_to_json(plan),
+                    plan_to_json(plan),
                     plan.initial,
                 ),
             )
         self._events.append(
-            RuntimeEvent(
-                event_id=new_event_id(),
+            EventBuilder(
                 tenant_id=tenant_id,
                 project_id=project_id,
-                event_kind="RunCreated",
-                run_id=run_id,
-                resource_ref=f"run/{run_id}",
-                causation_id=None,
                 correlation_id=run_id,
-                payload={"initial_node": plan.initial},
-            )
+            ).run_created(run_id=run_id, initial_node=plan.initial)
         )
         return run_id
 
@@ -140,27 +209,15 @@ class RunController:
         devuelve el snapshot sin emitir eventos.
         """
         run = self._load_run(tenant_id, project_id, run_id)
-        plan = _plan_from_json(run["plan_json"])
+        plan = plan_from_json(run["plan_json"])
         state = run["state"]
 
         # UAT-06: si un NodeExecution quedo RUNNING sin finished_at,
         # lo devolvemos a READY (interrupcion).
         self._recover_interrupted(tenant_id, project_id, run_id)
 
-        if state in TERMINAL_RUN_STATES:
-            return RunSnapshot(
-                run_id=run_id,
-                state=state,
-                current_node=run["current_node"],
-                executed_nodes=self._executed_node_names(tenant_id, project_id, run_id),
-                events_emitted=len(
-                    self._events.events_for_run(
-                        tenant_id=tenant_id,
-                        project_id=project_id,
-                        run_id=run_id,
-                    )
-                ),
-            )
+        if is_terminal_run_state(state):
+            return self._snapshot(tenant_id, project_id, run_id)
 
         # Activar el run si estaba CREATED.
         if state == "CREATED":
@@ -182,17 +239,11 @@ class RunController:
                 # FAILED terminal: paramos.
                 self._set_run_state(tenant_id, project_id, run_id, "FAILED", node_name)
                 self._events.append(
-                    RuntimeEvent(
-                        event_id=new_event_id(),
+                    EventBuilder(
                         tenant_id=tenant_id,
                         project_id=project_id,
-                        event_kind="RunCompleted",
-                        run_id=run_id,
-                        resource_ref=f"run/{run_id}",
-                        causation_id=None,
                         correlation_id=run_id,
-                        payload={"state": "FAILED", "at": node_name},
-                    )
+                    ).run_completed(run_id=run_id, state="FAILED", at=node_name)
                 )
                 return self._snapshot(tenant_id, project_id, run_id)
 
@@ -216,17 +267,11 @@ class RunController:
         if not new_frontier:
             self._set_run_state(tenant_id, project_id, run_id, "COMPLETED", None)
             self._events.append(
-                RuntimeEvent(
-                    event_id=new_event_id(),
+                EventBuilder(
                     tenant_id=tenant_id,
                     project_id=project_id,
-                    event_kind="RunCompleted",
-                    run_id=run_id,
-                    resource_ref=f"run/{run_id}",
-                    causation_id=None,
                     correlation_id=run_id,
-                    payload={"state": "COMPLETED"},
-                )
+                ).run_completed(run_id=run_id, state="COMPLETED")
             )
 
         return self._snapshot(tenant_id, project_id, run_id)
@@ -250,11 +295,9 @@ class RunController:
         tenant_id: str,
         project_id: str,
         run_id: str,
-        state: str,
+        state: RunState,
         current_node: str | None,
     ) -> None:
-        if state not in RUN_STATES:
-            raise ValidationError(f"run state invalido: {state!r}")
         with self._conn:
             self._conn.execute(
                 """
@@ -339,78 +382,42 @@ class RunController:
         node = plan.node(node_name)
         attempt = len(existing) + 1
         # Permitimos como maximo un reintento tras fallo.
-        if attempt > 2:
+        if attempt > MAX_NODE_ATTEMPTS:
             return False
-        node_execution_id = f"ne-{uuid.uuid4()}"
+        node_execution_id = new_node_execution_id()
 
-        # Event: NodeScheduled
+        events = EventBuilder(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            correlation_id=run_id,
+        )
+
         self._events.append(
-            RuntimeEvent(
-                event_id=new_event_id(),
-                tenant_id=tenant_id,
-                project_id=project_id,
-                event_kind="NodeScheduled",
+            events.node_scheduled(
                 run_id=run_id,
-                resource_ref=f"node/{node_execution_id}",
-                causation_id=None,
-                correlation_id=run_id,
-                payload={
-                    "node_name": node_name,
-                    "node_execution_id": node_execution_id,
-                    "attempt": attempt,
-                },
+                node_execution_id=node_execution_id,
+                node_name=node_name,
+                attempt=attempt,
             )
         )
 
         # Compilar Handoff
-        identity = HandoffIdentity(
+        handoff = self._build_handoff(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
             node_execution_id=node_execution_id,
             attempt=attempt,
-        )
-        behavior = HandoffBehavior(
-            definition_kind=node.kind,
-            definition_name=node.name,
-            definition_namespace=node.namespace,
-            definition_revision=node.resource_revision,
-            api_version=node.api_version,
-        )
-        knowledge = HandoffKnowledge(
-            recipe_ref=self._recipe_ref,
-            included=(),
-        )
-        execution = HandoffExecution(
-            workspace_ref=self._workspace_ref,
-            source_revision=plan.initial,
-            budget={"max_nodes": len(plan.nodes)},
-        )
-        handoff = Handoff(
-            identity=identity,
-            behavior=behavior,
-            knowledge=knowledge,
-            execution=execution,
-            expected_result=node.expected_result,
-            capabilities=node.capabilities,
+            node=node,
+            plan=plan,
         )
         context_hash = handoff.context_hash
 
-        # Event: HandoffCreated
         self._events.append(
-            RuntimeEvent(
-                event_id=new_event_id(),
-                tenant_id=tenant_id,
-                project_id=project_id,
-                event_kind="HandoffCreated",
+            events.handoff_created(
                 run_id=run_id,
-                resource_ref=f"handoff/{node_execution_id}",
-                causation_id=None,
-                correlation_id=run_id,
-                payload={
-                    "node_execution_id": node_execution_id,
-                    "context_hash": context_hash,
-                },
+                node_execution_id=node_execution_id,
+                context_hash=context_hash,
             )
         )
 
@@ -436,73 +443,43 @@ class RunController:
                 ),
             )
 
-        # Event: NodeStarted
-        self._events.append(
-            RuntimeEvent(
-                event_id=new_event_id(),
-                tenant_id=tenant_id,
-                project_id=project_id,
-                event_kind="NodeStarted",
-                run_id=run_id,
-                resource_ref=f"node/{node_execution_id}",
-                causation_id=None,
-                correlation_id=run_id,
-                payload={"node_execution_id": node_execution_id},
-            )
-        )
+        self._events.append(events.node_started(run_id=run_id, node_execution_id=node_execution_id))
 
         # Invocar Adapter
         try:
             result = self._adapter.invoke(handoff)
         except Exception as exc:
+            error_msg = f"{type(exc).__name__}: {exc}"
             self._mark_node_failed(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 node_execution_id=node_execution_id,
-                error=f"{type(exc).__name__}: {exc}",
+                error=error_msg,
             )
             self._events.append(
-                RuntimeEvent(
-                    event_id=new_event_id(),
-                    tenant_id=tenant_id,
-                    project_id=project_id,
-                    event_kind="NodeFailed",
+                events.node_failed(
                     run_id=run_id,
-                    resource_ref=f"node/{node_execution_id}",
-                    causation_id=None,
-                    correlation_id=run_id,
-                    payload={
-                        "node_execution_id": node_execution_id,
-                        "error": f"{type(exc).__name__}: {exc}",
-                    },
+                    node_execution_id=node_execution_id,
+                    error=error_msg,
                 )
             )
             return False
 
-        # Validar resultado (outcome declarado? en este slice solo
-        # verificamos que outcome sea string).
-        if not _is_valid_outcome(result, plan, node_name):
+        # Validar resultado (outcome declarado?)
+        if not is_outcome_declared(result, plan, node_name):
+            error_msg = f"outcome {result.outcome!r} no declarado en plan"
             self._mark_node_failed(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 node_execution_id=node_execution_id,
-                error=f"outcome {result.outcome!r} no declarado en plan",
+                error=error_msg,
             )
             self._events.append(
-                RuntimeEvent(
-                    event_id=new_event_id(),
-                    tenant_id=tenant_id,
-                    project_id=project_id,
-                    event_kind="NodeFailed",
+                events.node_failed(
                     run_id=run_id,
-                    resource_ref=f"node/{node_execution_id}",
-                    causation_id=None,
-                    correlation_id=run_id,
-                    payload={
-                        "node_execution_id": node_execution_id,
-                        "outcome": result.outcome,
-                        "error": "outcome no declarado",
-                    },
+                    node_execution_id=node_execution_id,
+                    error="outcome no declarado",
+                    outcome=result.outcome,
                 )
             )
             return False
@@ -518,50 +495,79 @@ class RunController:
                 """,
                 (
                     result.outcome,
-                    json.dumps(_result_to_jsonable(result), sort_keys=True),
+                    json.dumps(result_to_jsonable(result), sort_keys=True),
                     node_execution_id,
                 ),
             )
 
-        # Event: NodeCompleted
         self._events.append(
-            RuntimeEvent(
-                event_id=new_event_id(),
-                tenant_id=tenant_id,
-                project_id=project_id,
-                event_kind="NodeCompleted",
+            events.node_completed(
                 run_id=run_id,
-                resource_ref=f"node/{node_execution_id}",
-                causation_id=None,
-                correlation_id=run_id,
-                payload={
-                    "node_execution_id": node_execution_id,
-                    "outcome": result.outcome,
-                    "context_hash": context_hash,
-                },
+                node_execution_id=node_execution_id,
+                outcome=result.outcome,
+                context_hash=context_hash,
             )
         )
 
-        # Event: EvidenceProduced (UAT-04 deja evidencia).
+        # UAT-04: deja evidencia.
         self._events.append(
-            RuntimeEvent(
-                event_id=new_event_id(),
-                tenant_id=tenant_id,
-                project_id=project_id,
-                event_kind="EvidenceProduced",
+            events.evidence_produced(
                 run_id=run_id,
-                resource_ref=f"evidence/{node_execution_id}",
-                causation_id=None,
-                correlation_id=run_id,
-                payload={
-                    "node_execution_id": node_execution_id,
-                    "outcome": result.outcome,
-                    "context_hash": context_hash,
-                    "evidence_ref": result.evidence_ref or context_hash,
-                },
+                node_execution_id=node_execution_id,
+                outcome=result.outcome,
+                context_hash=context_hash,
+                evidence_ref=result.evidence_ref or context_hash,
             )
         )
         return True
+
+    def _build_handoff(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        node_execution_id: str,
+        attempt: int,
+        node: WorkflowNode,
+        plan: WorkflowPlan,
+    ) -> Handoff:
+        """Compila el Handoff para un nodo listo para ejecutar.
+
+        Funcion pura (sin I/O): produce un Handoff inmutable. La logica
+        es identica entre intentos; solo cambian `attempt` y el id.
+        """
+        identity = HandoffIdentity(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            attempt=attempt,
+        )
+        behavior = HandoffBehavior(
+            definition_kind=node.kind,
+            definition_name=node.name,
+            definition_namespace=node.namespace,
+            definition_revision=node.resource_revision,
+            api_version=node.api_version,
+        )
+        knowledge = HandoffKnowledge(
+            recipe_ref=self._recipe_ref,
+            included=(),
+        )
+        execution = HandoffExecution(
+            workspace_ref=self._workspace_ref,
+            source_revision=plan.initial,
+            budget={"max_nodes": len(plan.nodes)},
+        )
+        return Handoff(
+            identity=identity,
+            behavior=behavior,
+            knowledge=knowledge,
+            execution=execution,
+            expected_result=node.expected_result,
+            capabilities=node.capabilities,
+        )
 
     def _mark_node_failed(
         self,
@@ -638,73 +644,14 @@ class RunController:
         )
 
 
-# ---------- helpers de serializacion del plan ----------
-
-
-def _plan_to_json(plan: WorkflowPlan) -> str:
-    return json.dumps(
-        {
-            "initial": plan.initial,
-            "nodes": [
-                {
-                    "name": n.name,
-                    "kind": n.kind,
-                    "namespace": n.namespace,
-                    "api_version": n.api_version,
-                    "resource_revision": n.resource_revision,
-                    "expected_result": n.expected_result,
-                    "capabilities": list(n.capabilities),
-                    "metadata": n.metadata,
-                }
-                for n in plan.nodes
-            ],
-            "transitions": [
-                {"source": t.source, "outcome": t.outcome, "target": t.target}
-                for t in plan.transitions
-            ],
-        },
-        sort_keys=True,
-    )
-
-
-def _plan_from_json(blob: str) -> WorkflowPlan:
-    from skillgraph.workflow import WorkflowNode, WorkflowTransition
-
-    data = json.loads(blob)
-    nodes = tuple(
-        WorkflowNode(
-            name=n["name"],
-            kind=n["kind"],
-            namespace=n["namespace"],
-            api_version=n["api_version"],
-            resource_revision=n["resource_revision"],
-            expected_result=n["expected_result"],
-            capabilities=tuple(n.get("capabilities") or ()),
-            metadata=n.get("metadata") or {},
-        )
-        for n in data["nodes"]
-    )
-    transitions = tuple(
-        WorkflowTransition(source=t["source"], outcome=t["outcome"], target=t["target"])
-        for t in data.get("transitions") or []
-    )
-    return WorkflowPlan(nodes=nodes, transitions=transitions, initial=data["initial"])
-
-
-def _is_valid_outcome(result: AgentResult, plan: WorkflowPlan, node_name: str) -> bool:
-    """Outcome es valido si hay una transicion declarada para el.
-
-    Un nodo sin transiciones (terminal) acepta cualquier outcome
-    porque no hay quien lo contradiga."""
-    declared_outcomes = {t.outcome for t in plan.transitions if t.source == node_name}
-    if not declared_outcomes:
-        return True
-    return result.outcome in declared_outcomes
-
-
-def _result_to_jsonable(result: AgentResult) -> dict[str, Any]:
-    return {
-        "outcome": result.outcome,
-        "result": dict(result.result),
-        "evidence_ref": result.evidence_ref,
-    }
+__all__ = [
+    "MAX_NODE_ATTEMPTS",
+    "RunController",
+    "RunSnapshot",
+    "is_outcome_declared",
+    "new_node_execution_id",
+    "new_run_id",
+    "plan_from_json",
+    "plan_to_json",
+    "result_to_jsonable",
+]

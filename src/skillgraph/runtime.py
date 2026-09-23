@@ -191,3 +191,169 @@ def _row_to_event_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 def new_event_id() -> str:
     return str(uuid.uuid4())
+
+
+# --- Builder funcional para eventos ----------------------------------------
+
+
+class EventBuilder:
+    """Constructor inmutable de `RuntimeEvent` con smart constructors.
+
+    Cada metodo (`run_created`, `node_scheduled`, ...) devuelve un NUEVO
+    `RuntimeEvent` ya validado. Elimina el boilerplate de repetir los
+    7 argumentos comunes en cada sitio del RunController.
+
+    Reglas (AGENTS.md §2 y §11.9):
+    - Inmutable: cada llamada devuelve un nuevo `RuntimeEvent`,
+      no muta estado.
+    - Errores tipados: la validacion vive en `RuntimeEvent.__post_init__`.
+    """
+
+    __slots__ = ("_correlation_id", "_project_id", "_tenant_id")
+
+    def __init__(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        correlation_id: str,
+    ) -> None:
+        self._tenant_id = tenant_id
+        self._project_id = project_id
+        self._correlation_id = correlation_id
+
+    def _emit(
+        self,
+        *,
+        kind: str,
+        run_id: str | None,
+        resource_ref: str,
+        payload: dict[str, Any],
+        causation_id: str | None = None,
+    ) -> RuntimeEvent:
+        return RuntimeEvent(
+            event_id=new_event_id(),
+            tenant_id=self._tenant_id,
+            project_id=self._project_id,
+            event_kind=kind,
+            run_id=run_id,
+            resource_ref=resource_ref,
+            causation_id=causation_id,
+            correlation_id=self._correlation_id,
+            payload=payload,
+        )
+
+    def run_created(self, *, run_id: str, initial_node: str) -> RuntimeEvent:
+        return self._emit(
+            kind="RunCreated",
+            run_id=run_id,
+            resource_ref=f"run/{run_id}",
+            payload={"initial_node": initial_node},
+        )
+
+    def node_scheduled(
+        self, *, run_id: str, node_execution_id: str, node_name: str, attempt: int
+    ) -> RuntimeEvent:
+        return self._emit(
+            kind="NodeScheduled",
+            run_id=run_id,
+            resource_ref=f"node/{node_execution_id}",
+            payload={
+                "node_name": node_name,
+                "node_execution_id": node_execution_id,
+                "attempt": attempt,
+            },
+        )
+
+    def handoff_created(
+        self, *, run_id: str, node_execution_id: str, context_hash: str
+    ) -> RuntimeEvent:
+        return self._emit(
+            kind="HandoffCreated",
+            run_id=run_id,
+            resource_ref=f"handoff/{node_execution_id}",
+            payload={
+                "node_execution_id": node_execution_id,
+                "context_hash": context_hash,
+            },
+        )
+
+    def node_started(self, *, run_id: str, node_execution_id: str) -> RuntimeEvent:
+        return self._emit(
+            kind="NodeStarted",
+            run_id=run_id,
+            resource_ref=f"node/{node_execution_id}",
+            payload={"node_execution_id": node_execution_id},
+        )
+
+    def node_completed(
+        self,
+        *,
+        run_id: str,
+        node_execution_id: str,
+        outcome: str,
+        context_hash: str,
+    ) -> RuntimeEvent:
+        return self._emit(
+            kind="NodeCompleted",
+            run_id=run_id,
+            resource_ref=f"node/{node_execution_id}",
+            payload={
+                "node_execution_id": node_execution_id,
+                "outcome": outcome,
+                "context_hash": context_hash,
+            },
+        )
+
+    def node_failed(
+        self,
+        *,
+        run_id: str,
+        node_execution_id: str,
+        error: str,
+        outcome: str | None = None,
+    ) -> RuntimeEvent:
+        payload: dict[str, Any] = {
+            "node_execution_id": node_execution_id,
+            "error": error,
+        }
+        if outcome is not None:
+            payload["outcome"] = outcome
+        return self._emit(
+            kind="NodeFailed",
+            run_id=run_id,
+            resource_ref=f"node/{node_execution_id}",
+            payload=payload,
+        )
+
+    def evidence_produced(
+        self,
+        *,
+        run_id: str,
+        node_execution_id: str,
+        outcome: str,
+        context_hash: str,
+        evidence_ref: str,
+    ) -> RuntimeEvent:
+        return self._emit(
+            kind="EvidenceProduced",
+            run_id=run_id,
+            resource_ref=f"evidence/{node_execution_id}",
+            payload={
+                "node_execution_id": node_execution_id,
+                "outcome": outcome,
+                "context_hash": context_hash,
+                "evidence_ref": evidence_ref,
+            },
+        )
+
+    def run_completed(self, *, run_id: str, state: str, at: str | None = None) -> RuntimeEvent:
+        payload: dict[str, Any] = {"state": state}
+        if at is not None:
+            payload["at"] = at
+        return self._emit(
+            kind="RunCompleted",
+            run_id=run_id,
+            resource_ref=f"run/{run_id}",
+            payload=payload,
+        )
