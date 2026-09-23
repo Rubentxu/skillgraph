@@ -965,8 +965,8 @@ def uat_10() -> Evidence:
         "c = KnowledgeController(storage=s, tenant_id=DEFAULT_TENANT, project_id='demo');"
         "c.register_source(source=Source(source_id='local:x.py', kind='local_file', content_hash='h', locator={'path':'x.py'}, git_commit_sha=None, git_tree_sha=None, working_tree_status=None, checked_at='2026-01-01T00:00:00Z', freshness='fresh'));"
         "c.upsert_entity(entity=Entity(entity_id='file:x.py', kind='file', stable_key='x.py'));"
-        "c.record_claim(claim=Claim(claim_id='c1', subject_entity_id='file:x.py', predicate='lines', object_literal=10, source_id='local:x.py', extraction_method='manual', extractor_version='skillgraph-rules/0.1.0', checked_at_revision='rev1'));"
-        "c.record_claim(claim=Claim(claim_id='c2', subject_entity_id='file:x.py', predicate='funcs', object_literal=2, source_id='local:x.py', extraction_method='manual', extractor_version='skillgraph-rules/0.1.0', checked_at_revision='rev1'));"
+        "c.record_claim(claim=Claim(claim_id='c1', subject_entity_id='file:x.py', predicate='line_count', object_literal=10, source_id='local:x.py', extraction_method='manual', extractor_version='skillgraph-rules/0.1.0', checked_at_revision='rev1'));"
+        "c.record_claim(claim=Claim(claim_id='c2', subject_entity_id='file:x.py', predicate='function_count', object_literal=2, source_id='local:x.py', extraction_method='manual', extractor_version='skillgraph-rules/0.1.0', checked_at_revision='rev1'));"
     )
     r = subprocess.run(
         [sys.executable, "-c", seed_cmd],
@@ -1013,8 +1013,10 @@ def uat_10() -> Evidence:
 
     rc_inv = int(inv_step["returncode"])
     rc_compile = int(compile_step["returncode"])
-    ok = rc_inv == 0 and rc_compile == 10
-    observed = f"inv_rc={rc_inv} compile_strict_rc={rc_compile} stale_listed={'c1' in stale_step['stdout'] and 'c2' in stale_step['stdout']}"
+    seed_rc = int(steps[2]["returncode"])  # el seed es el tercer step
+    stale_listed = "c1" in stale_step["stdout"] and "c2" in stale_step["stdout"]
+    ok = seed_rc == 0 and rc_inv == 0 and stale_listed and rc_compile == 10
+    observed = f"seed_rc={seed_rc} inv_rc={rc_inv} stale_listed={stale_listed} compile_strict_rc={rc_compile}"
 
     return Evidence(
         uat_id="UAT-10",

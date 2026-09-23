@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-11",
-  "revision": "b7b2d5e2ca5ac1455bf0ce7858bcc4d110a126c2",
-  "timestamp": "2026-09-23T10:07:17Z",
+  "revision": "e3c6cef2bad3e6c1601936d6af2df2fa95e1b8b4",
+  "timestamp": "2026-09-23T10:14:46Z",
   "scenario": "Dada una skill convencional, cuando se importa, entonces se conserva la fuente original y se genera un informe de estructuracion.",
   "expected": "Las partes ambiguas deben permanecer senaladas; no se presentan como decisiones verificadas.",
   "observed": "No auditado: requiere feature no implementada.",

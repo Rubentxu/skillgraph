@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-09",
-  "revision": "b7b2d5e2ca5ac1455bf0ce7858bcc4d110a126c2",
-  "timestamp": "2026-09-23T10:07:16Z",
+  "revision": "e3c6cef2bad3e6c1601936d6af2df2fa95e1b8b4",
+  "timestamp": "2026-09-23T10:14:45Z",
   "scenario": "Dada una propuesta que solicita nuevas capacidades, cuando no existe autorizacion, entonces el motor no incorpora la ampliacion.",
   "expected": "Debe conservarse evidencia de su rechazo o de su estado de espera.",
   "observed": "No auditado: requiere feature no implementada.",
