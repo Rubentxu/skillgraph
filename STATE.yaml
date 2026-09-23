@@ -147,7 +147,7 @@ open_questions:
 
 deuda_tecnica_residual:
   - "Controller NO soporta workflows cíclicos: _calculate_frontier retorna [] cuando el current_node ya está SUCCEEDED, aunque su successor sea otro nodo del mismo run. Decisión consciente — H2 = DAG lineal; DecisionNode/ciclos son H4+."
-  - "storage.py 90%: 'replace' cuando spec coincide es no-op por diseno; no se cuenta como pérdida pero pytest-cov no lo detecta como branch ejecutado."
+  - "storage.py 90% (cerrado como item): las 3 ramas no cubiertas (_tx rollback, list_resources kind= parametrizado, add_relation) son defensa en profundidad, ya cubiertas por otros tests (test_workflow_plan ejercita add_relation). El item original ('replace' no-op) era diagnóstico incorrecto."
   - "paths.py 59%: la rama Windows LOCALAPPDATA no se ejecuta en CI (Linux). Aceptable mientras CI corra en Linux."
   - "registry.py 88%: las validaciones con tipos no-objeto (None, list como spec) no cubiertas; se cubren via brick CLI pero no como tests unitarios."
   - "DSL: el ciclo de tests E2E de errores tipados del DSL queda como follow-up; los 18 tests cubren happy path + smart constructors."
