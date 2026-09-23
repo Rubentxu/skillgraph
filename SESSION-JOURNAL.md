@@ -2221,3 +2221,134 @@ como defensive branch no testeable.
 - `scripts/ci.sh`: **586/586 verde en 136s**.
 - `ruff check src tests`: All checks passed.
 
+
+## 2026-09-23 23:00 — CIERRE DE SESION: H9-Coverage (10 slices)
+
+### Resumen ejecutivo
+
+Sesión enfocada en extender la cobertura del nucleo al umbral ≥95%
+del blueprint. 10 slices ejecutadas, todas en cadena, sin tocar
+producción. **+51 tests** (553 → 604).
+
+### Slices cerradas (orden cronologico inverso, HEAD al final)
+
+| # | Commit       | Módulo                                | Antes | Después | +Tests |
+|---|--------------|---------------------------------------|-------|---------|--------|
+| 10 | `1d4cb7c` | `resources/bricks.py`                 | 91%   | **100%** | +2 |
+|  9 | `b88b9b2` | `knowledge/knowledge_controller.py`   | 93%   | **96%**  | +5 |
+|  8 | `eeb0c71` | `runtime/runcontroller.py`            | 94%   | **96%**  | +3 |
+|  7 | `9488cc6` | `resources/workflow.py`               | 93%   | **100%** | +8 |
+|  6 | `13c1c7b` | `resources/registry.py`               | 93%   | **95%**  | +3 |
+|  5 | `a0d6389` | `resources/catalog.py`                | 88%   | **100%** | +4 |
+|  4 | `25b1136` | `knowledge/git_source.py`             | 86%   | **95%**  | +8 |
+|  3 | `44bba84` | `domain/skill_importer.py`            | 89%   | **98%**  | +8 |
+|  2 | `f06cb03` | `domain/pack_loader.py`               | 78%   | **97%**  | +10 |
+|  1 | `f1bea13` | `domain/graph_expansion.py`           | 86%   | **98%**  | +17 |
+
+Cada slice commit `test(coverage)` va acompañado de un commit
+`docs(state)` aparte que sincroniza `tests/uat-evidence/UAT-08.json`
+y `tests/uat-evidence/UAT-09.json` (politica operativa: descartar
+del stage, sincronizar aparte).
+
+### Hallazgos metodologicos
+
+**Dead code por construccion** documentado en specs:
+
+- `runtime/runcontroller.py`: 4 lineas/5 branches son ramas
+  defensivas inalcanzables (`L257 continue`, `L387 SUCCEEDED ya
+  cubierto`, `L405 idempotencia inalcanzable`, `L410 attempt >
+  MAX`). Smoke empirico + lectura confirman que el flujo normal
+  no las ejercita, y simularlas requiere mutar `_conn` directamente
+  (fragility).
+- `resources/registry.py`: linea 79 (`brick_type.api_version !=
+  brick.api_version`) es dead porque el dict lookup usa
+  `key = (brick.api_version, brick.kind)` y el BrickType
+  recuperado SIEMPRE tiene la misma api_version.
+- `knowledge/knowledge_controller.py`: `raise` re-raise genericos
+  (L216, L280-281) requieren errores no-FK de Storage — no
+  reproducibles sin mock fragility.
+
+**Smoke empirico descubrio asunciones defectuosas**:
+
+- `mimetypes.guess_type('.xyz')` retorna `('chemical/x-xyz', None)`
+  en Linux; para forzar branch "unknown" se uso `.foobar`.
+- `Storage.initialize_schema()` no existe; el schema se inicializa
+  al instanciar `Storage(path)`.
+- `Storage.db_path` no existe; el atributo publico es `.path`.
+- `Repo.init_bare` necesita el parent dir pre-existente; se uso
+  `Repo()` + `object_store.add_object(blob)` directamente.
+- Fixture del FakeAgentAdapter requiere estructura
+  `<fx>/<tenant>/<project>/<node>.json` (NO `<fx>/<node>.json`).
+- Fixture requiere schema completo `{outcome, result, evidence_ref}`
+  — `{outcome: "ok"}` falla con "falta result (dict)".
+- `FindingResult` es `Literal["pass","fail","inconclusive"]`,
+  NO `dict`.
+- `RunController.__init__` ya no acepta `clock=` (H9-BSlice3-S8/S9).
+- `_next_frontier` no existe como metodo; la logica vive inline en
+  `_calculate_frontier`.
+- `KnowledgeController.register_entity` tampoco existe;
+  el metodo se llama `upsert_entity`.
+
+### Bloqueo pendiente para retomar manana
+
+**`knowledge/context_controller.py` 82%**: SQL directo sobre
+`ctrl.storage._conn` (8 puntos `cursor.execute` directos). Esto
+rompe la regla arquitectonica "Storage encapsula SQL" introducida
+en H9-BSlice3. Opciones para la proxima sesion:
+
+1. **Refactor arquitectonico** (recomendado): extraer las 8
+   operaciones a metodos publicos de `Storage` (con tests TDD) y
+   delegar desde `ContextController`. Es trabajo no trivial
+   (~30-40 tests + 8 metodos nuevos + actualizaciones de
+   `ContextController`). Requiere aprobacion explicita del
+   operador porque cambia la API publica de Storage.
+2. **Aceptar la deuda** y documentar: dejar `context_controller`
+   con `_conn.execute` y cubrir solo las 6 ramas que SÍ son
+   alcanzables via flujo normal (subiria de 82% a ~90-93%, no
+   llegaria al 95% del blueprint sin refactor).
+
+**No decidir en autonomia**: es decision arquitectonica
+(afecta la separacion Storage/Controller), no slice automatizable.
+
+### Estado durable al cierre
+
+- **HEAD**: `34faacf docs(state): regenera UAT-08 y UAT-09 tras coverage-10`
+- **Working tree**: 3 archivos del operador sin commitear
+  (`.pipeline.kts`, `.tool-versions`, `ci/`) + `AGENTS.md`
+  modificado por el operador (NO TOCAR — son CI local del operador).
+- **Tests**: 604 verde, 0 fail, 0 skip.
+- **Cobertura nucleo**: 100% o >=95% en todos los modulos excepto
+  `context_controller.py` (82%, bloqueo documentado).
+- **Specs creadas en esta sesion** (10 archivos en `specs/`):
+  `h9-coverage-{graph-expansion,pack-loader,skill-importer,
+  git-source,catalog,registry,workflow,runcontroller,
+  knowledge-controller,bricks}.md`.
+- **Tests creados en esta sesion** (10 archivos en `tests/`):
+  `test_h9_coverage_*.py`.
+
+### Comprobacion final
+
+- `scripts/ci.sh`: 604/604 verde.
+- `ruff check src tests`: All checks passed.
+- `ruff format --check`: sin diffs.
+- `pytest --cov=skillgraph`: nucleo >=95% (ver `STATE.yaml`
+  seccion `coverage_snapshot_2026-09-23` para detalle).
+
+### Para retomar manana
+
+1. Operador decide opcion (1) refactor o (2) aceptar deuda.
+2. Si opcion (1): abrir ADR en `external/blueprint-v1/adr/` con
+   la lista de 8 operaciones a extraer a Storage.
+3. Si opcion (2): escribir spec `h9-coverage-context-controller.md`
+   documentando el porcentaje final y el dead code residual.
+4. Cualquiera de las dos: actualizar `STATE.yaml` (snapshot,
+   nota_cobertura, lista de tests) y regenerar UAT-08/09.
+
+### Nota sobre CI local del operador
+
+El operador confirmo a mitad de sesion que `.pipeline.kts`,
+`.tool-versions` y `ci/` son su CI local, NO parte del proyecto.
+**NO TOCAR, NO BORRAR, NO COMMITEAR** esos archivos.
+Tampoco comitear los cambios del operador en `AGENTS.md`
+(anadio seccion "§CI Local Obligatorio" que describe su pipelinek).
+
