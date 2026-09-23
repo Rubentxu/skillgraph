@@ -290,7 +290,7 @@ def _emit_uat_08_evidence(
                     f"expansion apply demo --proposal {proposal.name} --plan-file {plan_file.name}"
                 ),
                 "returncode": str(apply.returncode),
-                "stdout": apply.stdout,
+                "stdout": "(omitido; contiene path absoluto de pytest scratch, no reproducible)",
                 "stderr": apply.stderr,
             },
         ],
@@ -330,6 +330,8 @@ def _emit_uat_09_evidence(
 
     payload = json.loads(rejection_files[0].read_text())
 
+    # Solo proposal_id (reproducible); NO path absoluto de pytest scratch
+    # (cambia entre ejecuciones y no es parte de la evidencia legal).
     evidence = {
         "uat_id": "UAT-09",
         "revision": "HEAD",
@@ -343,9 +345,10 @@ def _emit_uat_09_evidence(
         "expected": "apply rc=10; expansion_rejections/*.json con reason=I3",
         "observed": (
             f"apply_rc={apply.returncode}; "
-            f"rejection_file={rejection_files[0].name}; "
+            f"rejection_proposal_id={payload['proposal_id']}; "
             f"reason={payload['reason']!r}; "
-            f"violations={list(payload.get('violated_invariants', []))}"
+            f"violations={list(payload.get('violated_invariants', []))}; "
+            f"policy_violations={list(payload.get('policy_violations', []))}"
         ),
         "steps": [
             {
@@ -370,17 +373,19 @@ def _emit_uat_09_evidence(
                 "cmd": f"expansion apply demo --proposal {proposal.name}",
                 "returncode": str(apply.returncode),
                 "stdout": apply.stdout,
-                "stderr": apply.stderr,
+                "stderr": "(omitido; contiene path absoluto de pytest scratch, no reproducible)",
             },
         ],
-        "artifacts": [str(rejection_files[0])],
+        "artifacts": [],
         "status": "PASS",
         "notes": (
             "UAT-09 cierra: la propuesta con capability 'fantasma_xyz' "
             "viola I3 (capability no registrada en el registry). El CLI "
             "rechaza (rc=10 EXIT_DOMAIN) y persiste la evidencia JSON en "
             "expansion_rejections/<proposal_id>.json con reason, "
-            "violated_invariants, rejected_by, rejected_at."
+            "violated_invariants, rejected_by, rejected_at. "
+            "NO se incluye path absoluto del scratch de pytest porque "
+            "cambia entre ejecuciones; el proposal_id SI es reproducible."
         ),
     }
     target.write_text(json.dumps(evidence, indent=2, sort_keys=True))

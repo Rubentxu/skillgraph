@@ -1,10 +1,8 @@
 {
-  "artifacts": [
-    "/var/home/rubentxu/.jcode/scratch/pytest-of-rubentxu/pytest-173/test_uat_09_unauthorized_capab0/sg-data/tenants/default/projects/demo/expansion_rejections/prop-1888f59d4e4d.json"
-  ],
+  "artifacts": [],
   "expected": "apply rc=10; expansion_rejections/*.json con reason=I3",
-  "notes": "UAT-09 cierra: la propuesta con capability 'fantasma_xyz' viola I3 (capability no registrada en el registry). El CLI rechaza (rc=10 EXIT_DOMAIN) y persiste la evidencia JSON en expansion_rejections/<proposal_id>.json con reason, violated_invariants, rejected_by, rejected_at.",
-  "observed": "apply_rc=10; rejection_file=prop-1888f59d4e4d.json; reason='I3 violated'; violations=['I3']",
+  "notes": "UAT-09 cierra: la propuesta con capability 'fantasma_xyz' viola I3 (capability no registrada en el registry). El CLI rechaza (rc=10 EXIT_DOMAIN) y persiste la evidencia JSON en expansion_rejections/<proposal_id>.json con reason, violated_invariants, rejected_by, rejected_at. NO se incluye path absoluto del scratch de pytest porque cambia entre ejecuciones; el proposal_id SI es reproducible.",
+  "observed": "apply_rc=10; rejection_proposal_id=prop-1888f59d4e4d; reason='I3 violated'; violations=['I3']; policy_violations=[]",
   "revision": "HEAD",
   "scenario": "Dada una propuesta que solicita nuevas capacidades, cuando no existe autorizacion, entonces el motor no incorpora la ampliacion. Debe conservarse evidencia de su rechazo o de su estado de espera.",
   "status": "PASS",
@@ -30,7 +28,7 @@
     {
       "cmd": "expansion apply demo --proposal prop.json",
       "returncode": "10",
-      "stderr": "REJECTED: prop-1888f59d4e4d: I3 violated (violated=['I3'])\nEvidencia persistida en /var/home/rubentxu/.jcode/scratch/pytest-of-rubentxu/pytest-173/test_uat_09_unauthorized_capab0/sg-data/tenants/default/projects/demo/expansion_rejections/prop-1888f59d4e4d.json\n",
+      "stderr": "(omitido; contiene path absoluto de pytest scratch, no reproducible)",
       "stdout": ""
     }
   ],

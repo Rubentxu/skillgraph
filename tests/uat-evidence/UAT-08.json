@@ -29,7 +29,7 @@
       "cmd": "expansion apply demo --proposal prop.json --plan-file plan.json",
       "returncode": "0",
       "stderr": "",
-      "stdout": "OK: prop-621232e781c4 aplicado. Nuevo plan en /var/home/rubentxu/.jcode/scratch/pytest-of-rubentxu/pytest-173/test_uat_08_authorized_applied0/sg-data/tenants/default/projects/demo/plan.json\nNodos antes: 2 -> despues: 3\n"
+      "stdout": "(omitido; contiene path absoluto de pytest scratch, no reproducible)"
     }
   ],
   "timestamp": "2026-09-23T11:00:00Z",
