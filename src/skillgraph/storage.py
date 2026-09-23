@@ -78,6 +78,60 @@ CREATE TABLE IF NOT EXISTS operations (
     phase TEXT NOT NULL,
     result_ref TEXT
 );
+
+CREATE TABLE IF NOT EXISTS workflow_runs (
+    run_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    state TEXT NOT NULL,
+    plan_json TEXT NOT NULL,
+    current_node TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS workflow_runs_by_state
+    ON workflow_runs(tenant_id, project_id, state);
+
+CREATE TABLE IF NOT EXISTS node_executions (
+    node_execution_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    node_name TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 1,
+    state TEXT NOT NULL,
+    outcome TEXT,
+    context_hash TEXT,
+    handoff_json TEXT,
+    result_json TEXT,
+    error TEXT,
+    started_at TEXT,
+    finished_at TEXT,
+    FOREIGN KEY (run_id) REFERENCES workflow_runs(run_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS node_executions_by_run
+    ON node_executions(tenant_id, project_id, run_id, node_name);
+CREATE INDEX IF NOT EXISTS node_executions_by_state
+    ON node_executions(tenant_id, project_id, state);
+
+CREATE TABLE IF NOT EXISTS runtime_events (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
+    tenant_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    event_kind TEXT NOT NULL,
+    run_id TEXT,
+    resource_ref TEXT NOT NULL,
+    causation_id TEXT,
+    correlation_id TEXT,
+    payload_json TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    schema_version INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_by_run
+    ON runtime_events(tenant_id, project_id, run_id);
+CREATE INDEX IF NOT EXISTS events_by_resource
+    ON runtime_events(tenant_id, project_id, resource_ref);
 """
 
 
