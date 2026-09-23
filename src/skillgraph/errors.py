@@ -67,6 +67,30 @@ class MaxIterationsExceeded(SkillGraphError):
     code = "sg_max_iterations"
 
 
+# --- H4 Slice 1: errores de expansion controlada -----------------------
+
+
+class InvalidExpansionError(SkillGraphError):
+    """Una propuesta de expansion controlada viola una invariante.
+
+    Ver blueprint §5 §6 (literal). Las invariantes se codifican como
+    ``I1..I6`` en el resultado de ``validate`` y en ``InvalidProposal``.
+    """
+
+    code = "sg_invalid_expansion"
+
+
+class UnauthorizedExpansionError(SkillGraphError):
+    """La propuesta no tiene una autorizacion explicita valida.
+
+    El modo ``manual_signed`` requiere firmante + timestamp;
+    ``policy_approved`` requiere timestamp; ``auto_low_risk`` se
+    auto-aprueba por la naturaleza de las operaciones.
+    """
+
+    code = "sg_unauthorized_expansion"
+
+
 # --- H3 Slice 1: errores del modelo de conocimiento -----------------------
 
 
