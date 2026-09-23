@@ -72,6 +72,18 @@ TraceKind = Literal["SoftwareExecutionSlice"]
 RuleRef = Literal["max_lines_per_function", "max_complexity", "naming_convention"]
 """Reglas de software disponibles en H3."""
 
+EventType = Literal[
+    "RunCreated",
+    "RunStarted",
+    "NodeStarted",
+    "NodeFinished",
+    "RunFinished",
+    "RunFailed",
+    "KnowledgeInvalidated",
+    "KnowledgeRefreshed",
+]
+"""Tipos de evento que pueden aparecer en `runtime_events` (H3 + slice 4)."""
+
 # --- NewType: evita confusion entre strings ------------------------------
 # Un NodeName NO es un Outcome, aunque ambos sean str. Los NewType
 # desaparecen en runtime (no afectan performance) pero hacen que el

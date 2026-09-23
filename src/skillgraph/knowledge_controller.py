@@ -391,6 +391,49 @@ class KnowledgeController:
             position=position,
         )
 
+    # ----- Invalidation (delegates to knowledge_invalidator) -----
+    # Import lazy aqui para evitar ciclos y para que el invalidator se
+    # pueda importar standalone en tests.
+
+    def invalidate_from_source(
+        self,
+        *,
+        source_id: SourceID,
+        max_hops: int = 2,
+    ) -> list[ClaimID]:
+        """Marca stale las Claims que dependen del source (transitivo).
+
+        Wrapper de `knowledge_invalidator.invalidate_from_source`.
+        """
+        from skillgraph.knowledge_invalidator import invalidate_from_source as _inv
+
+        return _inv(
+            self,
+            source_id=source_id,
+            max_hops=max_hops,
+        )
+
+    def refresh_source(
+        self,
+        *,
+        source_id: SourceID,
+        new_revision: str,
+    ) -> list[ClaimID]:
+        """Re-valida Claims contra nueva revision (las reactiva)."""
+        from skillgraph.knowledge_invalidator import refresh_source as _ref
+
+        return _ref(
+            self,
+            source_id=source_id,
+            new_revision=new_revision,
+        )
+
+    def list_stale_claims(self) -> list[Claim]:
+        """Lista todas las Claims stale del proyecto actual."""
+        from skillgraph.knowledge_invalidator import list_stale_claims as _ls
+
+        return list(_ls(self))
+
 
 __all__ = [
     "NAMESPACE_KNOWLEDGE",

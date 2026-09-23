@@ -143,3 +143,44 @@ class DulwichNotAvailableError(SkillGraphError):
     """
 
     code = "sg_dulwich_not_installed"
+
+
+class CyclicDependencyError(SkillGraphError):
+    """El traversal de dependencias encontro un ciclo.
+
+    NO aborta la operacion global; aborta SOLO el traversal. El caller
+    puede recibir este error si configura ciclos como no permisibles.
+    """
+
+    code = "sg_cyclic_dependency"
+
+
+#: Subclase de Warning para reportar ciclos durante traversal.
+#: Hereda de SkillGraphWarning para que el caller pueda usar
+#: `warnings.filterwarnings("error::CyclicDependencyWarning", ...)`
+#: si quiere tratar ciclos como fatales.
+class CyclicDependencyWarning(SkillGraphWarning):
+    """El traversal detecto un ciclo. Continua, NO aborta."""
+
+    code = "sg_cyclic_dependency_warn"
+
+
+class RefreshFailedError(SkillGraphError):
+    """`refresh_source` no pudo reactivar ninguna Claim.
+
+    Indica que la `new_revision` no aporta evidences compatibles con
+    las Claims stale. NO aborta el flujo, pero el caller deberia
+    registrar el incidente.
+    """
+
+    code = "sg_refresh_failed"
+
+
+class HopLimitExceededWarning(SkillGraphWarning):
+    """El traversal de dependencias alcanzo `max_hops` antes de agotar.
+
+    NO fatal. El caller decide si continuar o re-intentar con mas hops
+    (`-W error::HopLimitExceededWarning` lo convertiria en error).
+    """
+
+    code = "sg_hop_limit_exceeded"

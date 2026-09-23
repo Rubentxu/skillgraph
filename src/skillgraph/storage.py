@@ -16,8 +16,9 @@ Auditoría de duplicación:
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -808,6 +809,75 @@ class Storage:
                 """,
                 (trace_id, link_kind, link_id, position),
             )
+
+    # ----- Events (H3 Slice 4) -----
+
+    def record_event(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        event_id: str,
+        event_kind: str,
+        resource_ref: str,
+        payload: Mapping[str, Any],
+        run_id: str | None = None,
+        causation_id: str | None = None,
+        correlation_id: str | None = None,
+        timestamp: str | None = None,
+    ) -> int:
+        """Registra un evento en `runtime_events`. Devuelve su sequence.
+
+        `payload` se serializa como JSON. `timestamp` por defecto = now UTC.
+        """
+        import json as _json
+        from datetime import datetime
+
+        ts = timestamp or datetime.now(UTC).replace(microsecond=0).isoformat()
+        with self._tx() as cur:
+            cur.execute(
+                """
+                INSERT INTO runtime_events
+                    (event_id, tenant_id, project_id, event_kind, run_id,
+                     resource_ref, causation_id, correlation_id,
+                     payload_json, timestamp, schema_version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    tenant_id,
+                    project_id,
+                    event_kind,
+                    run_id,
+                    resource_ref,
+                    causation_id,
+                    correlation_id,
+                    _json.dumps(dict(payload), ensure_ascii=False),
+                    ts,
+                    1,
+                ),
+            )
+            return cur.lastrowid or 0
+
+    def list_events(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        resource_ref: str | None = None,
+        event_kind: str | None = None,
+    ) -> list[sqlite3.Row]:
+        """Lista eventos filtrados por (tenant, project) + resource_ref/kind."""
+        q = "SELECT * FROM runtime_events WHERE tenant_id = ? AND project_id = ?"
+        params: list[Any] = [tenant_id, project_id]
+        if resource_ref is not None:
+            q += " AND resource_ref = ?"
+            params.append(resource_ref)
+        if event_kind is not None:
+            q += " AND event_kind = ?"
+            params.append(event_kind)
+        q += " ORDER BY sequence ASC"
+        return self._conn.execute(q, params).fetchall()
 
 
 # --- Helpers de conversion row -> ADT -------------------------------------

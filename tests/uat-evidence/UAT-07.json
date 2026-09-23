@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-07",
-  "revision": "dd2f7a7986d14d357103dcd38e2d3bb838adafb8",
-  "timestamp": "2026-09-23T09:06:03Z",
+  "revision": "01dd3acb596fa3631325b5cef9b56fd1087fce6e",
+  "timestamp": "2026-09-23T09:12:27Z",
   "scenario": "Dado un evento entregado dos veces, cuando el controlador lo procesa, no se duplica la accion ni el resultado.",
   "expected": "1 ejecucion por nodo (UNIQUE node_execution_id); INSERT duplicado de runtime_events.event_id falla por UNIQUE.",
   "observed": "runs_count=2; a_execs=(2, 'SUCCEEDED'); b_execs=(2, 'SUCCEEDED'); c_execs=(2, 'SUCCEEDED'); dup_failed=True; run1_rc=0; run2_rc=0",
@@ -9,30 +9,30 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/fixtures --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/fixtures --max-iterations 2 demo /home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/plan.md",
       "returncode": "0",
-      "stdout": "Run: run-d0cb2c21-16fd-49c5-943c-e0ef5dbac35b\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/fixtures\n",
+      "stdout": "Run: run-48dfc165-ed92-483e-8df9-c3a0d8ca6a17\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/fixtures\n",
       "stderr": ""
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/plan.md",
       "returncode": "0",
-      "stdout": "Run: run-0ae27b80-51b8-46dd-9568-b2546604b651\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp/fixtures\n",
+      "stdout": "Run: run-5cf36e18-9611-44ce-ba7b-66ec737f1d16\nEstado: COMPLETED\nNodos ejecutados: a, b, c\nEventos emitidos: 17\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz/fixtures\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat07-xjq5vapp"
+    "/home/rubentxu/.jcode/scratch/sg-uat07-_s68vfjz"
   ],
   "status": "PASS",
   "notes": "Idempotencia verificada: (1) UNIQUE node_execution_id impide duplicar ejecuciones; (2) UNIQUE event_id impide duplicar eventos. runs_count puede ser >1 por bug _calculate_frontier (deuda H4+)."
