@@ -51,9 +51,7 @@ def _identity() -> ResourceIdentity:
 
 
 class TestParserShape:
-    def test_decision_valid_returns_brick_with_all_components(
-        self, fixtures_dir: Path
-    ) -> None:
+    def test_decision_valid_returns_brick_with_all_components(self, fixtures_dir: Path) -> None:
         brick = parse_file(
             fixtures_dir / "s0" / "decision-valid.md",
             identity=_identity(),
@@ -64,9 +62,7 @@ class TestParserShape:
         assert len(brick.spec["outcomes"]) == 3
         assert "Seleccionar implementación" in brick.markdown_body
 
-    def test_action_valid_parses_with_transitions(
-        self, fixtures_dir: Path
-    ) -> None:
+    def test_action_valid_parses_with_transitions(self, fixtures_dir: Path) -> None:
         brick = parse_file(
             fixtures_dir / "s0" / "action-valid.md",
             identity=ResourceIdentity(
@@ -81,9 +77,7 @@ class TestParserShape:
         assert "SUCCEEDED" in brick.spec["transitions"]
         assert "FAILED" in brick.spec["transitions"]
 
-    def test_domain_pack_valid_parses_with_capabilities(
-        self, fixtures_dir: Path
-    ) -> None:
+    def test_domain_pack_valid_parses_with_capabilities(self, fixtures_dir: Path) -> None:
         brick = parse_file(
             fixtures_dir / "s0" / "domain-pack-valid.md",
             identity=ResourceIdentity(
@@ -127,9 +121,7 @@ class TestRegistry:
         assert reg.has("skillgraph.dev/v1alpha1", "ActionNode")
         assert reg.has("skillgraph.dev/v1alpha1", "DomainPack")
 
-    def test_validate_decision_missing_outcomes_raises(
-        self, fixtures_dir: Path
-    ) -> None:
+    def test_validate_decision_missing_outcomes_raises(self, fixtures_dir: Path) -> None:
         brick = parse_file(
             fixtures_dir / "s0" / "decision-missing-outcomes.md",
             identity=_identity(),
