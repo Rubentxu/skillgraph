@@ -1,65 +1,118 @@
-"""Tests pytest explicitos para UATs esperados BLOCKED.
+"""Gap explicito: tests pytest para UAT-12 (H6) y UAT-13 (H7).
 
-Estos UATs NO pasan y NO deben pasar todavia. La razon es que
-los hitos del blueprint que los cubren (H6, H7) no estan
-implementados.
+Estos UATs ya NO estan BLOCKED. La evidencia real vive en:
+- tests/uat-evidence/UAT-12.json (criteria h6, status=PASS)
+- tests/uat-evidence/UAT-13.json (criteria h7, status=PASS)
 
-Este modulo cierra un gap de honestidad: si en algun momento
-estos UATs cambian a PASS o FAIL (porque alguien implemento
-H6/H7 parcialmente, o porque uat_audit.py cambio), CI lo
-detectara automaticamente. Sin este test, el cambio pasaria
-desapercibido hasta una auditoria manual.
+Los tests reales son:
+- tests/test_h6_multiproposito.py (12 tests, criterios declarativos)
+- tests/test_h7_promocion.py (16 tests, criterios outbox/reconciliacion)
 
-Cobertura:
-- UAT-12: Dominio especializado (H6 multipropósito Character/StoryArc).
-- UAT-13: Promocion entre bases (H7 release candidate).
+Este modulo cierra el gap de cobertura CI verificando que:
+1. Las evidencias JSON dicen PASS con la revision actual.
+2. Los tests reales pasan.
+3. La implementacion existe en los modulos esperados.
 
-Para que estos tests sean robustos ante refactors futuros,
-NO acoplamos al texto literal de `notes` (puede cambiar).
-Acoplamos solo al status y al uat_id.
+Si en algun momento H6 o H7 se rompen (alguien borra un test,
+la evidencia vuelve a BLOCKED, etc.), CI lo detectara automaticamente.
 """
 
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 from pathlib import Path
 
-# tests/ no es un paquete Python; importamos el script via sys.path.
+import pytest
+
+# tests/ no es un paquete Python; importamos modulos via sys.path.
 _TESTS_DIR = Path(__file__).parent
 if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
-import uat_audit  # type: ignore[import-not-found]  # noqa: E402
+_EVIDENCE_DIR = _TESTS_DIR / "uat-evidence"
 
 
-def test_uat_12_h6_multiproposito_blocked() -> None:
-    """UAT-12 debe seguir BLOCKED hasta que H6 multipropósito se implemente.
+def _read_evidence(uat_id: str) -> dict[str, object]:
+    path = _EVIDENCE_DIR / f"{uat_id}.json"
+    if not path.exists():
+        pytest.fail(f"Evidencia {uat_id} no existe en {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
 
-    H6 = Domain Pack de software + Domain Pack narrativo/educativo
-    + tipos y relaciones extensibles. Sin H6, UAT-12 NO puede pasar.
-    Si este test falla con status=PASS, alguien implemento H6 sin
-    actualizar el STATE/audit (signal para revisar).
-    """
-    evidence = uat_audit.uat_12()
-    assert evidence.uat_id == "UAT-12"
-    assert evidence.status == "BLOCKED", (
-        f"UAT-12 status={evidence.status!r}. Si esto es PASS, "
-        f"H6 multipropósito ha sido implementado y STATE.yaml "
-        f"debe actualizarse (mover UAT-12 a PASS, no a BLOCKED). "
-        f"observed: {evidence.observed}"
+
+def _assert_evidence_passes(uat_id: str) -> dict[str, object]:
+    evidence = _read_evidence(uat_id)
+    assert evidence["uat_id"] == uat_id
+    assert evidence["status"] == "PASS", (
+        f"{uat_id} status={evidence['status']!r}, esperado 'PASS'. "
+        f"Si esto es BLOCKED, alguien revirtio la feature sin actualizar "
+        f"la evidencia. observed={evidence.get('observed', '')}"
     )
+    return evidence
 
 
-def test_uat_13_h7_promocion_blocked() -> None:
-    """UAT-13 debe seguir BLOCKED hasta que H7 promoción se implemente.
-
-    H7 = release candidate, promoción entre bases, reconciliación
-    tras interrupción. Sin H7, UAT-13 NO puede pasar.
-    """
-    evidence = uat_audit.uat_13()
-    assert evidence.uat_id == "UAT-13"
-    assert evidence.status == "BLOCKED", (
-        f"UAT-13 status={evidence.status!r}. Si esto es PASS, "
-        f"H7 promoción ha sido implementado y STATE.yaml debe "
-        f"actualizarse. observed: {evidence.observed}"
+def _run_pytest(test_file: str) -> tuple[int, str]:
+    """Ejecuta pytest sobre un archivo y retorna (exit, output)."""
+    result = subprocess.run(
+        ["uv", "run", "pytest", test_file, "-v", "--tb=short"],
+        capture_output=True,
+        text=True,
+        cwd=str(_TESTS_DIR.parent),
     )
+    return result.returncode, result.stdout + result.stderr
+
+
+def test_uat_12_evidence_passes() -> None:
+    """UAT-12 evidencia debe estar en PASS con SHA real."""
+    evidence = _assert_evidence_passes("UAT-12")
+    sha = evidence["revision"]
+    assert isinstance(sha, str) and len(sha) >= 12, f"SHA invalido: {sha!r}"
+    assert evidence["tests_passed"] == 12
+    assert evidence["tests_failed"] == 0
+
+
+def test_uat_13_evidence_passes() -> None:
+    """UAT-13 evidencia debe estar en PASS con SHA real."""
+    evidence = _assert_evidence_passes("UAT-13")
+    sha = evidence["revision"]
+    assert isinstance(sha, str) and len(sha) >= 12, f"SHA invalido: {sha!r}"
+    assert evidence["tests_passed"] == 16
+    assert evidence["tests_failed"] == 0
+
+
+def test_uat_12_h6_real_tests_pass() -> None:
+    """Los tests reales de H6 deben estar en verde."""
+    rc, output = _run_pytest("tests/test_h6_multiproposito.py")
+    assert rc == 0, (
+        f"tests/test_h6_multiproposito.py FALLO (exit={rc}). "
+        f"Esto contradice UAT-12 PASS. Output:\n{output[-1500:]}"
+    )
+    assert "12 passed" in output, f"Salida inesperada: {output[-500:]}"
+
+
+def test_uat_13_h7_real_tests_pass() -> None:
+    """Los tests reales de H7 deben estar en verde."""
+    rc, output = _run_pytest("tests/test_h7_promocion.py")
+    assert rc == 0, (
+        f"tests/test_h7_promocion.py FALLO (exit={rc}). "
+        f"Esto contradice UAT-13 PASS. Output:\n{output[-1500:]}"
+    )
+    assert "16 passed" in output, f"Salida inesperada: {output[-500:]}"
+
+
+def test_h6_pack_loader_module_exists() -> None:
+    """src/skillgraph/pack_loader.py debe existir y exponer declare_types_from_pack."""
+    from skillgraph import pack_loader  # type: ignore[import-not-found]
+
+    assert hasattr(pack_loader, "declare_types_from_pack")
+    assert hasattr(pack_loader, "validate_instance_against_registry")
+
+
+def test_h7_promotion_module_exists() -> None:
+    """src/skillgraph/promotion.py debe existir y exponer las 3 funciones."""
+    from skillgraph import promotion  # type: ignore[import-not-found]
+
+    assert hasattr(promotion, "submit_proposal")
+    assert hasattr(promotion, "apply_proposal")
+    assert hasattr(promotion, "reconcile_pending")
