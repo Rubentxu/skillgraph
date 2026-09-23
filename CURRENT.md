@@ -1,35 +1,58 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 12:32 (Europe/Madrid).
-> Revisión: pendiente (H5 skill_import implementado; commit en curso).
+> Última verificación: 2026-09-23 15:48 (Europe/Madrid).
+> **INICIATIVA CERRADA** tras v0.5.0. Ver `.next-decision.md`.
 
 ## Goal
 
-Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0 + S1) → Etapa 1 → Etapa 2 → Etapa 3.
-Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1/plan/HITOS.md`,
-`external/blueprint-v1/plan/UAT.md`, `external/blueprint-v1/adr/`.
+**COMPLETED** (2026-09-23).
+
+`g-skillgraph-bootstrap`: "Arrancar SkillGraph siguiendo el blueprint:
+Etapa 0 (S0 + S1) → Etapa 1 → Etapa 2".
+
+Closure rationale y criterios verificados en `.next-decision.md`
+(sección "Por qué está cerrado") y en `STATE.yaml` (campos
+`goal.status`, `goal.closed_at`, `goal.closure_rationale`).
 
 ## Hito y trabajo activo
 
-- H0 (Blueprint validado) **cerrado**.
-- H1 (Recursos persistentes) **cerrado**.
-- H2 (Ejecución local) **cerrado**.
-- **H3 (Conocimiento & Context) CERRADO**. 5 slices implementadas.
-- **H5 (Asimilación de skills) CERRADO**. UAT-11 verificado end-to-end.
-- H4 (Expansion controlada), H6 (multipropósito), H7 (release candidate)
-  del blueprint NO implementados (UAT-08/09/12/13 BLOCKED honestos).
-- UAT-16 cerrado (H7 release candidate NO implementado, pero el
-  criterio legal del blueprint ya se cumple via persistencia de
-  handoff_json en node_executions).
-- Trabajo activo: H5 skill_import (skill_importer.py + cmd_pack_import
-  + 8 tests focalizados + UAT-11 BLOCKED→PASS).
-- Siguiente: H4 Expansion controlada o H6 multipropósito. Operador decide.
+**Sin trabajo activo.** Iniciativa cerrada.
+
+- H0 (Blueprint validado) — cerrado.
+- H1 (Recursos persistentes) — cerrado.
+- H2 (Ejecución local) — cerrado.
+- H3 (Conocimiento & Context) — cerrado (5 slices).
+- H4 (Expansion controlada slice-1+2+3) — cerrado.
+- H5 (Asimilación de skills) — cerrado.
+- H6 (Multipropósito, UAT-12) — **NO implementado**, BLOCKED honesto
+  por falta de spec del operador. Documentado para futuro.
+- H7 (Promoción entre bases, UAT-13) — **NO implementado**, BLOCKED
+  honesto por falta de spec del operador. Documentado para futuro.
 
 ## Último estado comprobado
 
-- Repo: rama `main`, **253 tests pytest verde**, lint format+check limpio.
-- Auditoría UAT honesta: **12/16 PASS, 0 FAIL, 4 BLOCKED honestos**.
-- Python 3.13.15 via `mise`; `uv` para resolver venv reproducible.
+- HEAD: `1159f64` (post v0.5.0, working tree limpio).
+- Tests: **373/373 PASS** en 73s (`scripts/ci.sh`).
+- 4 releases emitidas: v0.3.0, v0.4.0, v0.4.1, v0.5.0.
+- UATs: 14/16 PASS, 2 BLOCKED honestos (H6, H7).
+- Cobertura módulos críticos: parser 100%, plan_loader 100%,
+  recipe 100%, errors 100%, runtime 100%.
+- Footgun crítico `tests/uat_audit.py main()`: **CERRADO** en v0.5.0.
+- Documentación sincronizada: CHANGELOG.md, STATE.yaml, CURRENT.md,
+  SESSION-JOURNAL.md, .next-decision.md, AGENTS.md, specs/.
+
+## Próximos pasos posibles (fuera de esta iniciativa)
+
+Ver `.next-decision.md` sección "Próximos pasos (fuera de esta
+iniciativa)". Resumen:
+
+1. H6 multipropósito (requiere spec operador).
+2. H7 promoción entre bases (requiere spec operador).
+3. cli.py stewardship focal (~10-15 tests in-process para los 3
+   comandos más críticos).
+4. Audit transversal (UAT-MATRIX.md, ARCHITECTURE.md, HITOS.md
+   regenerado).
+5. Cualquier otro work item fuera del scope: nuevo goal en SDDK.
 
 ### H5 skill_import — diseño
 

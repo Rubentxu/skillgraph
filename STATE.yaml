@@ -14,6 +14,10 @@ goal:
   source_of_truth: external/blueprint-v1/plan/ROADMAP.md
   principles_source: external/blueprint-v1/README.md
   adr_index: external/blueprint-v1/adr/
+  status: COMPLETED
+  closed_at: 2026-09-23
+  closed_after_tag: v0.5.0
+  closure_rationale: "Cierre tras 4 releases verificadas (v0.3.0/v0.4.0/v0.4.1/v0.5.0). 373/373 tests verde. 14/16 UAT PASS, 2 BLOCKED honestos (H6/H7 sin spec operador). Footgun crítico cerrado. Cobertura de módulos críticos al 100%. Sin deuda técnica testeable abierta. Detalles en .next-decision.md (sección 'Por qué está cerrado')."
 
 roadmap:
   current_stage: 4
@@ -318,7 +322,7 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader + Recipe coverage stewardship + v0.4.0 APPLIED marker + v0.4.1 portability fixes + v0.5.0 CLI safety cerrada. 4 releases taggeadas (v0.3.0, v0.4.0, v0.4.1, v0.5.0). 373 tests verde (368 -> 373, +5 CLI safety). Cobertura: parser 100%, plan_loader 100%, recipe 100%. 14/16 UAT PASS. Footgun de uat_audit.py main() destructivo: RESUELTO en v0.5.0 (default read-only, --write opt-in, --yes para stubs). 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12, Character/StoryArc, sin spec), (c) H7 promocion entre bases (UAT-13, sin spec). Sin mas stewardship de cobertura de valor real. Decisiones posibles: 1) cerrar iniciativa (4 releases emitidas, criterios verificados, sin gaps materiales de cobertura), 2) ejecutar H6 o H7 (necesita spec operador o consigna auto-propón), 3) audit transversal final (UAT-MATRIX + ARCHITECTURE.md sync), 4) cli.py stewardship (cubrir in-process gaps, debatable)."
+next_action: "INICIATIVA CERRADA (2026-09-23 tras v0.5.0). Ver .next-decision.md para próximos pasos posibles (H6/H7 requieren spec operador; cli.py stewardship defer; audit transversal defer). El checkpoint durable permite reanudar en cualquier sesión futura sin pérdida de contexto."
 
 
 release:

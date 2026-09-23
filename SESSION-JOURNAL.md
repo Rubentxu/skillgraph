@@ -1297,3 +1297,71 @@ codes, firmas, ni formatos). Tag v0.4.0 emitido en `1f1ec2f`.
 - UAT-12 H6: BLOCKED.
 - UAT-13 H7: BLOCKED.
 - H4 slice-4 deferred (storage SQLite migracion, auto_signed gating).
+
+## 2026-09-23 15:48 — Cierre de iniciativa (post v0.5.0)
+
+### Estado final verificable
+
+- **HEAD**: `1159f64` (post v0.5.0, working tree limpio).
+- **Tests**: 373/373 PASS en 73s (`scripts/ci.sh`).
+- **Tags emitidos en este día**: v0.3.0, v0.4.0, v0.4.1, v0.5.0.
+- **UATs**: 14/16 PASS, 2 BLOCKED honestos (H6/H7 sin spec operador).
+- **Cobertura**: parser 100%, plan_loader 100%, recipe 100%, errors 100%,
+  runtime 100%. cli.py 30% in-process (esperado, cubierto por E2E).
+
+### Releases de esta tanda
+
+| Tag | Bump | SHA | Contenido principal |
+|---|---|---|---|
+| v0.3.0 | MINOR | `f1c9f2e` | Primera release taggeada; H0-H5 cerrados, 14/16 UAT PASS |
+| v0.4.0 | MINOR | `3b26ada` | APPLIED marker + `show.stage` field (cierra gap declarado) |
+| v0.4.1 | PATCH | `92cb092` | Portability: `REPO_ROOT` portable + SHA real en evidencia |
+| v0.5.0 | MINOR | `8bab8ab` | CLI safety en `tests/uat_audit.py` (cierra footgun crítico) |
+
+### Decisión de cierre
+
+Análisis honesto (regla 2):
+- **Sin deuda técnica testeable abierta**: footgun crítico cerrado en
+  v0.5.0, 3 módulos críticos al 100%, todos los demás >80% (excepto
+  cli.py que es E2E por diseño).
+- **Sin gaps materiales de cobertura**: el stewardship de parser,
+  plan_loader y recipe cerró las 3 únicas ramas <80% testeables en
+  módulos de producción.
+- **Sin spec pendiente para features materialmente divergentes**:
+  H6 (UAT-12) y H7 (UAT-13) requieren spec del operador. El
+  orquestador SDDK no elige por defecto en features divergentes sin
+  gate humano. UATs siguen BLOCKED honestos.
+
+Caminos posibles evaluados:
+- **(A) Cerrar iniciativa**: ✅ ELEGIDO.
+- **(B) H6 multipropósito**: defer (sin spec).
+- **(C) H7 promoción**: defer (sin spec).
+- **(D) Audit transversal**: defer (bajo valor marginal, docs
+  existentes ya cubren el estado real).
+- **(E) cli.py stewardship**: defer (cobertura E2E ya cubre los
+  comandos críticos).
+
+### Documentación sincronizada
+
+- `STATE.yaml`: `goal.status = COMPLETED`, `closed_at = 2026-09-23`,
+  `closed_after_tag = v0.5.0`, `next_action` actualizado.
+- `CURRENT.md`: reescrito para reflejar cierre (sin trabajo activo).
+- `.next-decision.md`: actualizado a estado CERRADO con caminos
+  evaluados documentados.
+- `CHANGELOG.md`: contiene las 4 entradas de release con criterios
+  verificables.
+
+### Próxima sesión (si el operador lo desea)
+
+El checkpoint durable permite reanudar sin pérdida de contexto. Las
+opciones documentadas en `.next-decision.md` son:
+
+1. **H6 multipropósito**: necesita spec operador (Character, StoryArc).
+2. **H7 promoción entre bases**: necesita spec operador.
+3. **cli.py stewardship focal**: 10-15 tests in-process para los
+   comandos más críticos. Solo si surge regresión no detectable por
+   subprocess E2E.
+4. **Audit transversal**: docs narrativas (UAT-MATRIX.md,
+   ARCHITECTURE.md, HITOS.md regenerado). Solo si el operador lo pide.
+5. **Cualquier otro work item fuera del scope**: nuevo goal en SDDK.
+
