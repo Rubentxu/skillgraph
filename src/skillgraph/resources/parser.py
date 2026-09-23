@@ -18,8 +18,8 @@ from typing import Any
 
 import yaml
 
-from skillgraph.bricks import Brick, ResourceIdentity
-from skillgraph.errors import ParseError
+from skillgraph.core.errors import ParseError
+from skillgraph.resources.bricks import Brick, ResourceIdentity
 
 # Delimitadores YAML de front matter. Coinciden con la convención
 # habitual en herramientas de agent para Markdown+YAML.

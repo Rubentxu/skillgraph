@@ -45,7 +45,7 @@ def _run_cli(*args: str, cwd: Path, data_root: Path) -> subprocess.CompletedProc
     env = os.environ.copy()
     env["SKILLGRAPH_DATA_ROOT"] = str(data_root)
     return subprocess.run(
-        [sys.executable, "-m", "skillgraph.cli", "--data-root", str(data_root), *args],
+        [sys.executable, "-m", "skillgraph", "--data-root", str(data_root), *args],
         capture_output=True,
         text=True,
         cwd=cwd,
@@ -307,7 +307,7 @@ def _seed_active_run(
 
     storage = Storage(_project_db_path(data_root))
     try:
-        from skillgraph.plan_loader import _plan_from_dict  # interno OK en tests
+        from skillgraph.resources.plan_loader import _plan_from_dict  # interno OK en tests
 
         plan = _plan_from_dict(data, source=str(plan_path))
         adapter = FakeAgentAdapter(fixtures_root)

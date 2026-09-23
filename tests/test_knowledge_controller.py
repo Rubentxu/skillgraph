@@ -23,7 +23,7 @@ from skillgraph.errors import (
     UnknownEntityError,
     UnknownSourceError,
 )
-from skillgraph.knowledge import (
+from skillgraph.knowledge.graph import (
     Claim,
     Entity,
     Evidence,

@@ -19,7 +19,7 @@ from skillgraph.errors import (
     HopLimitExceededWarning,
     UnknownSourceError,
 )
-from skillgraph.knowledge import Claim, Entity, Evidence, Source
+from skillgraph.knowledge.graph import Claim, Entity, Evidence, Source
 from skillgraph.knowledge_controller import KnowledgeController
 from skillgraph.storage import Storage
 

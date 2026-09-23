@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from skillgraph.errors import IdempotencyError, ValidationError
+from skillgraph.core.errors import IdempotencyError, ValidationError
 
 SCHEMA_VERSION = 1
 

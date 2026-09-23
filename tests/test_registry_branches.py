@@ -38,21 +38,21 @@ def _no_op(spec: dict) -> None:
 
 class TestRegistryDecisionBranches:
     def test_decision_with_empty_outcomes_rejected(self) -> None:
-        from skillgraph.registry import _validate_decision
+        from skillgraph.resources.registry import _validate_decision
 
         spec = {"ctx_recipe_ref": "x", "outcomes": []}
         with pytest.raises(ValidationError, match="outcomes"):
             _validate_decision(spec)
 
     def test_decision_with_non_list_outcomes_rejected(self) -> None:
-        from skillgraph.registry import _validate_decision
+        from skillgraph.resources.registry import _validate_decision
 
         spec = {"ctx_recipe_ref": "x", "outcomes": "no-lista"}
         with pytest.raises(ValidationError, match="outcomes"):
             _validate_decision(spec)
 
     def test_decision_outcome_not_mapping_rejected(self) -> None:
-        from skillgraph.registry import _validate_decision
+        from skillgraph.resources.registry import _validate_decision
 
         spec = {
             "ctx_recipe_ref": "x",
@@ -62,7 +62,7 @@ class TestRegistryDecisionBranches:
             _validate_decision(spec)
 
     def test_decision_outcome_name_not_string_rejected(self) -> None:
-        from skillgraph.registry import _validate_decision
+        from skillgraph.resources.registry import _validate_decision
 
         spec = {
             "ctx_recipe_ref": "x",
@@ -72,7 +72,7 @@ class TestRegistryDecisionBranches:
             _validate_decision(spec)
 
     def test_decision_ctx_recipe_ref_not_string_rejected(self) -> None:
-        from skillgraph.registry import _validate_decision
+        from skillgraph.resources.registry import _validate_decision
 
         spec = {"ctx_recipe_ref": 99, "outcomes": [{"name": "OK"}]}
         with pytest.raises(ValidationError, match="ctx_recipe_ref"):
@@ -81,21 +81,21 @@ class TestRegistryDecisionBranches:
 
 class TestRegistryActionBranches:
     def test_action_with_empty_transitions_rejected(self) -> None:
-        from skillgraph.registry import _validate_action
+        from skillgraph.resources.registry import _validate_action
 
         spec = {"inputs": [], "transitions": {}}
         with pytest.raises(ValidationError, match="transitions"):
             _validate_action(spec)
 
     def test_action_with_non_dict_transitions_rejected(self) -> None:
-        from skillgraph.registry import _validate_action
+        from skillgraph.resources.registry import _validate_action
 
         spec = {"inputs": [], "transitions": []}
         with pytest.raises(ValidationError, match="transitions"):
             _validate_action(spec)
 
     def test_action_with_non_list_inputs_rejected(self) -> None:
-        from skillgraph.registry import _validate_action
+        from skillgraph.resources.registry import _validate_action
 
         spec = {"inputs": "no-lista", "transitions": {"X": "y"}}
         with pytest.raises(ValidationError, match="inputs"):
@@ -104,14 +104,14 @@ class TestRegistryActionBranches:
 
 class TestRegistryDomainPackBranches:
     def test_domain_pack_capabilities_not_list_rejected(self) -> None:
-        from skillgraph.registry import _validate_domain_pack
+        from skillgraph.resources.registry import _validate_domain_pack
 
         spec = {"version": "1.0.0", "capabilities": "no-lista"}
         with pytest.raises(ValidationError, match="capabilities"):
             _validate_domain_pack(spec)
 
     def test_domain_pack_version_not_string_rejected(self) -> None:
-        from skillgraph.registry import _validate_domain_pack
+        from skillgraph.resources.registry import _validate_domain_pack
 
         spec = {"version": 1.0}
         with pytest.raises(ValidationError, match="version"):

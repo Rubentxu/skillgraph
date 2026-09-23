@@ -16,7 +16,7 @@ import sqlite3
 import pytest
 
 from skillgraph.errors import IdempotencyError, ValidationError
-from skillgraph.runtime import (
+from skillgraph.runtime.engine import (
     EVENT_KINDS,
     EventLog,
     RuntimeEvent,

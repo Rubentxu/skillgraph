@@ -24,7 +24,7 @@ from skillgraph.errors import (
     InvalidSourceIDError,
     UnknownClaimPredicateError,
 )
-from skillgraph.knowledge import (
+from skillgraph.knowledge.graph import (
     Claim,
     Entity,
     Evidence,

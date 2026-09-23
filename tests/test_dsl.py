@@ -24,7 +24,7 @@ from skillgraph.dsl import (
     revision,
 )
 from skillgraph.errors import ParseError, ValidationError
-from skillgraph.plan_loader import _plan_from_dict
+from skillgraph.resources.plan_loader import _plan_from_dict
 from skillgraph.workflow import WorkflowPlan
 
 

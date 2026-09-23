@@ -17,8 +17,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
-from skillgraph.bricks import Brick
-from skillgraph.errors import UnknownKindError, ValidationError
+from skillgraph.core.errors import UnknownKindError, ValidationError
+from skillgraph.resources.bricks import Brick
 
 # Validador puro: recibe el `spec` (dict) y devuelve None si OK;
 # lanza `ValidationError` con mensaje tipado si falla.

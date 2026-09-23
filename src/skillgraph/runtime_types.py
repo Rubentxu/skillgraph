@@ -1,8 +1,8 @@
 """Backward-compatibility shim.
 
 .. deprecated::
-    Import from :mod:`skillgraph.core.runtime_types` instead. This
-    module will be removed in a future major release.
+    Import from :mod:`skillgraph.core.runtime_types` instead. This module
+    will be removed in a future major release.
 """
 
 from skillgraph.core.runtime_types import *  # noqa: F403

@@ -27,14 +27,13 @@ from skillgraph import (
     load_defaults,
     parse_file,
 )
-from skillgraph.catalog import open_catalog
-from skillgraph.errors import (
+from skillgraph.core.errors import (
     ParseError,
     SkillGraphError,
     UnknownKindError,
     ValidationError,
 )
-from skillgraph.graph_expansion import (
+from skillgraph.governance.graph_expansion import (
     AddNode,
     AddTransition,
     Authorization,
@@ -45,16 +44,17 @@ from skillgraph.graph_expansion import (
     record_rejection,
     validate,
 )
-from skillgraph.paths import (
+from skillgraph.platform.paths import (
     DEFAULT_TENANT,
     catalog_path,
     is_safe_name,
     project_db_path,
     resolve_data_root,
 )
-from skillgraph.plan_loader import load_plan_file
-from skillgraph.storage import Storage
-from skillgraph.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
+from skillgraph.platform.storage import Storage
+from skillgraph.resources.catalog import open_catalog
+from skillgraph.resources.plan_loader import load_plan_file
+from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 
 # --- Codigos de salida tipados (AGENTS.md §11.15 / contrato CLI) -------------
 #  0 OK
@@ -310,7 +310,7 @@ def _open_known_project(args: argparse.Namespace, project: str) -> tuple[str, st
 
 def cmd_knowledge_stale(args: argparse.Namespace) -> int:
     """Lista Claims stale del proyecto."""
-    from skillgraph.knowledge_controller import KnowledgeController
+    from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
     ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
@@ -323,7 +323,7 @@ def cmd_knowledge_stale(args: argparse.Namespace) -> int:
 
 def cmd_knowledge_invalidate(args: argparse.Namespace) -> int:
     """Invalida Claims dependientes de un source."""
-    from skillgraph.knowledge_controller import KnowledgeController
+    from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
     ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
@@ -339,7 +339,7 @@ def cmd_knowledge_invalidate(args: argparse.Namespace) -> int:
 
 def cmd_knowledge_refresh(args: argparse.Namespace) -> int:
     """Re-valida Claims contra nueva revision."""
-    from skillgraph.knowledge_controller import KnowledgeController
+    from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
     ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
@@ -357,9 +357,9 @@ def cmd_knowledge_compile(args: argparse.Namespace) -> int:
     """Compila un handoff desde una receta inline."""
     import json
 
-    from skillgraph.context_controller import ContextController
-    from skillgraph.knowledge_controller import KnowledgeController
-    from skillgraph.recipe import ContextRecipe
+    from skillgraph.core.recipe import ContextRecipe
+    from skillgraph.knowledge.context_controller import ContextController
+    from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
     ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
@@ -398,8 +398,8 @@ def cmd_knowledge_trace(args: argparse.Namespace) -> int:
     """Extrae un OutcomeTrace desde un run."""
     import json
 
-    from skillgraph.context_controller import OutcomeTracer
-    from skillgraph.knowledge_controller import KnowledgeController
+    from skillgraph.knowledge.context_controller import OutcomeTracer
+    from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
     ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
@@ -766,8 +766,8 @@ def cmd_pack_import(args: argparse.Namespace) -> int:
     y emite un informe de estructuracion en JSON. Las partes ambiguas
     permanecen senaladas; NO se presentan como decisiones verificadas.
     """
-    from skillgraph.skill_importer import analyze_skill, register_imported_skill
-    from skillgraph.storage import Storage
+    from skillgraph.domain.skill_importer import analyze_skill, register_imported_skill
+    from skillgraph.platform.storage import Storage
 
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.project)
@@ -825,11 +825,11 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     Cierra H2 por la via UAT: el usuario real ejecuta el CLI.
     """
-    from skillgraph.agent import FakeAgentAdapter
-    from skillgraph.paths import agents_root
-    from skillgraph.plan_loader import load_plan_file
-    from skillgraph.runcontroller import RunController
-    from skillgraph.runtime_types import is_terminal_run_state
+    from skillgraph.core.runtime_types import is_terminal_run_state
+    from skillgraph.platform.paths import agents_root
+    from skillgraph.resources.plan_loader import load_plan_file
+    from skillgraph.runtime.agent import FakeAgentAdapter
+    from skillgraph.runtime.runcontroller import RunController
 
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.project)
@@ -1437,3 +1437,43 @@ def cmd_expansion_archive(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# Public API surface for `from skillgraph.cli.runner import *`.
+__all__ = [
+    "EXIT_BAD_NAME",
+    "EXIT_DB_MISSING",
+    "EXIT_DOMAIN",
+    "EXIT_OK",
+    "EXIT_PARSE",
+    "EXIT_PLAN_NOT_FOUND",
+    "EXIT_PROJECT_EXISTS",
+    "EXIT_PROJECT_NOT_FOUND",
+    "EXIT_RUN_FAILED",
+    "EXIT_RUN_INCOMPLETE",
+    "EXIT_USAGE",
+    "EXIT_VALIDATION",
+    "ProjectResolver",
+    "cmd_brick_register",
+    "cmd_expansion_apply",
+    "cmd_expansion_archive",
+    "cmd_expansion_list",
+    "cmd_expansion_propose",
+    "cmd_expansion_rejections",
+    "cmd_expansion_show",
+    "cmd_expansion_validate",
+    "cmd_init",
+    "cmd_knowledge_compile",
+    "cmd_knowledge_invalidate",
+    "cmd_knowledge_refresh",
+    "cmd_knowledge_stale",
+    "cmd_knowledge_trace",
+    "cmd_pack_import",
+    "cmd_project_create",
+    "cmd_project_inspect",
+    "cmd_project_list",
+    "cmd_run",
+    "main",
+    # Re-exported for monkeypatching in tests.
+    "open_catalog",
+]

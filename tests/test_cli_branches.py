@@ -37,7 +37,7 @@ def _run_cli(*args: str, cwd: Path, data_root: Path) -> subprocess.CompletedProc
     env = os.environ.copy()
     env["SKILLGRAPH_DATA_ROOT"] = str(data_root)
     return subprocess.run(
-        [sys.executable, "-m", "skillgraph.cli", "--data-root", str(data_root), *args],
+        [sys.executable, "-m", "skillgraph", "--data-root", str(data_root), *args],
         capture_output=True,
         text=True,
         cwd=cwd,
@@ -156,17 +156,19 @@ class TestCliExitDomain:
         Forzamos un error monkeypatching storage para que lance
         IdempotencyError (que es SkillGraphError) en medio del flujo.
         """
-        from skillgraph import cli
+        from skillgraph.cli import runner
         from skillgraph.errors import IdempotencyError
 
         # Forzamos que cmd_project_list lance una excepcion de dominio
         # interceptando catalog para que get_project lance IdempotencyError
         # en una llamada que normalmente no lo haria.
+        # NOTA: parcheamos runner (no cli) porque cmd_project_list resuelve
+        # open_catalog en los globals del modulo runner.
         def boom(*args, **kwargs):
             raise IdempotencyError("simulado")
 
-        monkeypatch.setattr(cli, "open_catalog", boom)
-        result = cli.main(["--data-root", str(tmp_path / "data"), "project", "list"])
+        monkeypatch.setattr(runner, "open_catalog", boom)
+        result = runner.main(["--data-root", str(tmp_path / "data"), "project", "list"])
         assert result == 10
 
 
@@ -335,7 +337,7 @@ def _seed_knowledge(data_root: Path, *, source_id: str = "local:src/foo.py") -> 
         "from skillgraph.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;"
         "from skillgraph.storage import Storage;"
         "from skillgraph.knowledge_controller import KnowledgeController;"
-        "from skillgraph.knowledge import Claim, Entity, Source;"
+        "from skillgraph.knowledge.graph import Claim, Entity, Source;"
         f"data_root = resolve_data_root(Path({str(data_root)!r}));"
         "db = project_db_path(data_root, 'demo', DEFAULT_TENANT);"
         "s = Storage(db);"

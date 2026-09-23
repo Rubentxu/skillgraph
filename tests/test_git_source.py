@@ -18,7 +18,7 @@ from skillgraph.git_source import (
     GitSource,
     set_dulwich_import_failed,
 )
-from skillgraph.knowledge import Source
+from skillgraph.knowledge.graph import Source
 from skillgraph.knowledge_controller import KnowledgeController
 from skillgraph.storage import Storage
 

@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 
 from skillgraph import ParseError, ResourceIdentity
-from skillgraph.parser import parse_markdown
+from skillgraph.resources.parser import parse_markdown
 
 # ---------------------------------------------------------------------------
 # Fixtures

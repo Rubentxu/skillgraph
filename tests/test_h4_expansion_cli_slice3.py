@@ -34,7 +34,7 @@ def _run_cli(*args: str, cwd: Path, data_root: Path) -> subprocess.CompletedProc
     env = os.environ.copy()
     env["SKILLGRAPH_DATA_ROOT"] = str(data_root)
     return subprocess.run(
-        [sys.executable, "-m", "skillgraph.cli", "--data-root", str(data_root), *args],
+        [sys.executable, "-m", "skillgraph", "--data-root", str(data_root), *args],
         capture_output=True,
         text=True,
         cwd=cwd,

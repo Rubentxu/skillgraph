@@ -309,7 +309,7 @@ class TestIdempotency:
             "SELECT event_id FROM runtime_events WHERE run_id = ?",
             (run_id,),
         ).fetchone()
-        from skillgraph.runtime import EventLog, RuntimeEvent
+        from skillgraph.runtime.engine import EventLog, RuntimeEvent
 
         log = EventLog(conn)
         with pytest.raises(IdempotencyError):

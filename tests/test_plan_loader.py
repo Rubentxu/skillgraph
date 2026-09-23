@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from skillgraph import ParseError
-from skillgraph.plan_loader import load_plan_file
+from skillgraph.resources.plan_loader import load_plan_file
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -29,8 +29,8 @@ from skillgraph.pack_loader import (
     declare_types_from_pack,
     validate_instance_against_registry,
 )
-from skillgraph.parser import parse_file
-from skillgraph.registry import load_defaults
+from skillgraph.resources.parser import parse_file
+from skillgraph.resources.registry import load_defaults
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "packs"
 
@@ -259,14 +259,16 @@ def test_pack_loader_does_not_touch_kernel_modules() -> None:
     # El nucleo no debe depender de pack_loader (seria inversion de
     # dependencias). Si alguien anade ese import, este test detectara
     # la regresion.
-    registry_src = Path("src/skillgraph/registry.py").read_text(encoding="utf-8")
-    bricks_src = Path("src/skillgraph/bricks.py").read_text(encoding="utf-8")
-    parser_src = Path("src/skillgraph/parser.py").read_text(encoding="utf-8")
+    # Tras v0.7.0 (refactor bounded contexts): nucleo vive en
+    # src/skillgraph/resources/{registry,bricks,parser}.py.
+    registry_src = Path("src/skillgraph/resources/registry.py").read_text(encoding="utf-8")
+    bricks_src = Path("src/skillgraph/resources/bricks.py").read_text(encoding="utf-8")
+    parser_src = Path("src/skillgraph/resources/parser.py").read_text(encoding="utf-8")
 
     for name, src in [
-        ("registry.py", registry_src),
-        ("bricks.py", bricks_src),
-        ("parser.py", parser_src),
+        ("resources/registry.py", registry_src),
+        ("resources/bricks.py", bricks_src),
+        ("resources/parser.py", parser_src),
     ]:
         assert "pack_loader" not in src, (
             f"{name} importa pack_loader: rompe el aislamiento del nucleo respecto a multiprosito"

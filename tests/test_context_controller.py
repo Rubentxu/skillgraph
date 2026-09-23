@@ -20,7 +20,7 @@ from skillgraph.errors import (
     StaleKnowledgeError,
     TokenBudgetExceededError,
 )
-from skillgraph.knowledge import (
+from skillgraph.knowledge.graph import (
     Claim,
     Entity,
     Evidence,

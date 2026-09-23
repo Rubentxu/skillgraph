@@ -43,8 +43,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from skillgraph.errors import ParseError
-from skillgraph.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
+from skillgraph.core.errors import ParseError
+from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 
 # YAML es opcional para el caso comun de no tener PyYAML... pero
 # el proyecto ya incluye PyYAML como dependencia de S0. Lo usamos.

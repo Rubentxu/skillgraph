@@ -32,13 +32,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, NewType
 
-from skillgraph.errors import (
+from skillgraph.core.errors import (
     InvalidEntityIDError,
     InvalidSourceError,
     InvalidSourceIDError,
     UnknownClaimPredicateError,
 )
-from skillgraph.runtime_types import (
+from skillgraph.core.runtime_types import (
     CLAIM_PREDICATES,
     ClaimPredicate,
     FindingResult,
