@@ -1302,7 +1302,7 @@ codes, firmas, ni formatos). Tag v0.4.0 emitido en `1f1ec2f`.
 
 ### Estado final verificable
 
-- **HEAD**: `1159f64` (post v0.5.0, working tree limpio).
+- **HEAD**: `1159f64` (post v0.5.0). Posterior re-apertura y cierre en v0.6.0; HEAD actual `8d87348`.
 - **Tests**: 373/373 PASS en 73s (`scripts/ci.sh`).
 - **Tags emitidos en este día**: v0.3.0, v0.4.0, v0.4.1, v0.5.0.
 - **UATs**: 14/16 PASS, 2 BLOCKED honestos (H6/H7 sin spec operador).

@@ -36,7 +36,7 @@ de v0.5.0-CLOSED a v0.6.0-CLOSED. Ver SESSION-JOURNAL.md entrada
 
 ## Último estado comprobado
 
-- HEAD: `fbb5e1c` con tag `v0.6.0`.
+- HEAD: `8d87348` (v0.6.0 + refactor bounded-contexts y shims de compatibilidad).
 - Tests: **405/405 PASS** en 106s (`scripts/ci.sh`).
 - 5 releases emitidas: v0.3.0, v0.4.0, v0.4.1, v0.5.0, **v0.6.0**.
 - **UATs: 16/16 PASS, 0 FAIL, 0 BLOCKED** (primera vez en la historia del proyecto).
