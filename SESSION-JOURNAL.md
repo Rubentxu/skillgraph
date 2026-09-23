@@ -2125,3 +2125,39 @@ del módulo `domain/skill_importer.py` (H5 skill_import).
 - `scripts/ci.sh`: **571/571 verde en 124s**.
 - `ruff check src tests`: All checks passed.
 
+
+### H9-Coverage-4 — cobertura `knowledge/git_source.py` 86% → 95% (2026-09-23 21:47)
+
+**Slice**: 8 tests focales para cubrir las ramas no ejercitadas
+del módulo `knowledge/git_source.py` (H3 slice 3, Git fingerprinting
+con dulwich).
+
+**Spec**: `specs/h9-coverage-git-source.md`.
+
+**Tests añadidos** (`tests/test_h9_coverage_git_source.py`,
+281 líneas, 8 tests):
+
+- `from_commit` con SHA no-commit (Blob en object store via
+  `dulwich.objects.Blob`) → `ValueError("sha no apunta a un commit")`.
+- `refresh()` con pathspecs → filtra blobs por prefijo-segmento.
+- `detect_changes` con `until_commit=None` → usa HEAD.
+- `detect_changes` con pathspecs → filtra cambios correctamente.
+- `detect_changes` status `added` (file nuevo en sha2).
+- `detect_changes` status `deleted` (file eliminado en sha2 via
+  `porcelain.remove`).
+- `_matches_pathspec` literal como prefijo-segmento (`'src'`
+  matchea `'src/a.py'` pero NO `'src_old/x.py'`).
+- `_safe_capture_status` éxito en repo limpio devuelve dict.
+
+**Verificación**:
+
+- `pytest tests/test_h9_coverage_git_source.py`: 8/8 verde en 0.63s.
+- `pytest --cov=skillgraph.knowledge.git_source`:
+  135 stmts, 5 miss, 42 br, 4 brpart → **95%** (objetivo ≥95%).
+- `scripts/ci.sh`: **579/579 verde en 109s**.
+- `ruff check src tests`: All checks passed.
+
+**Nota del operador (2026-09-23 21:47)**: `.pipeline.kts`,
+`.tool-versions`, `ci/` son CI local del operador — no tocar ni
+borrar. Confirmado en working tree tras esta nota.
+

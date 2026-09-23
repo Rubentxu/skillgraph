@@ -737,3 +737,32 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
 - **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos.
 - **Próximo paso**: cobertura de `knowledge/context_controller.py`
   81% (rama que requiere refactor SQL directo → Storage API).
+
+## UPDATE 2026-09-23 21:47 — H9-Coverage-4 cerrado
+
+- **Slice**: cobertura de `src/skillgraph/knowledge/git_source.py`
+  del 86% al 95% con 8 tests focales. Sin tocar código de
+  producción.
+- **Ramas cubiertas**:
+  - `from_commit`: SHA no-commit (Blob en object store) → `ValueError`.
+  - `refresh()`: con pathspecs filtra blobs por prefijo-segmento.
+  - `detect_changes`: `until_commit=None` usa HEAD;
+    pathspecs filtra cambios; status `added` (old_sha None);
+    status `deleted` (new_sha None).
+  - `_matches_pathspec`: literal (no glob) matchea como
+    prefijo-segmento (`'src'` matchea `'src/a.py'` pero NO
+    `'src_old/x.py'`).
+  - `_safe_capture_status`: éxito en repo limpio devuelve dict.
+- **Resultado**: 579/579 tests verde (`scripts/ci.sh` 109s).
+  `ruff check` All checks passed.
+- **Lo que queda sin cubrir** (3 stmts + 1 brpart):
+  stmts 78-79 (ImportError dulwich, requiere env sin dulwich),
+  252->254 (path None defensivo), 325->exit (rama else no tree),
+  357-358 (rama que entra en except — ya testeada la no-entrada).
+- **Spec**: `specs/h9-coverage-git-source.md`.
+- **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos.
+- **Próximo paso**: módulos <90% restantes: `resources/catalog.py`
+  88%, `resources/registry.py` 93%, `resources/workflow.py` 93%,
+  `knowledge/context_controller.py` 82% (SQL directo).
+- **Nota externa**: operador confirma que `.pipeline.kts` y
+  `.tool-versions` son CI local suyo (no tocar/borrar).
