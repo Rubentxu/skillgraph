@@ -1469,3 +1469,90 @@ tras tag.
 - Documentación: README (ES/EN) sincronizado con ADR-0013; STATE.yaml y
   CURRENT.md actualizados.
 - Siguiente: alcance de H9 (endurecimiento) o cierre definitivo.
+
+
+## 2026-09-23 16:38 — H9-BSlice1 cerrado: Storage.list_promotions() pública
+
+Decision y alcance:
+
+- Reabre el goal tras consigna del operador ("continuamos, ejecucion autonoma")
+  aplicando el primer slice de H9 (endurecimiento). H9 queda dividido en
+  slices independientes; este commit es el BSlice1.
+- Cierra la limitacion declarada en CHANGELOG (post-H8) segun la cual
+  `sg promotion list` realizaba SQL directo sobre `storage._conn`. La
+  fachada Storage seguia el contrato "no expone SQL al caller" del modulo
+  (linea 8 de `src/skillgraph/platform/storage.py`); este slice lo honra.
+
+Commits:
+
+- `7be26a6` docs(readme): sincro leftover de H8 (reconoce H8 y mantiene
+  honestas las limitaciones restantes: stress concurrencia real, cobertura
+  in-process CLI, sin API Storage listar promotions).
+- `fe6b020` refactor(h9): storage.list_promotions() publica y mueve
+  cmd_promotion_list fuera de SQL directo.
+
+Evidencia:
+
+- Storage API nueva:
+  `Storage.list_promotions(status: str | None = None) -> list[dict]`.
+  Valida `status` contra `PROMOTION_STATUSES` (frozenset exportado) y lanza
+  `ValidationError` si no es valido.
+- Compat: `Storage.list_pending_promotions()` se conserva sin cambio de
+  firma; sigue devolviendo PENDING + IN_PROGRESS (la semantica exacta
+  que `cmd_promotion_reconcile` necesita).
+- CLI: `cmd_promotion_list` ya no toca `storage._conn`. Branch `--pending`
+  delega en `list_pending_promotions()`; branch sin `--pending` delega
+  en `list_promotions()`. Lo verifica `TestPromotionListInvariant` con
+  `inspect.getsource` (assert simbolico: ni `storage._conn` ni `_json`
+  en el codigo).
+- Cobertura in-process del runner aportada (5 tests en
+  `tests/test_h9_cli_promo_list_inproc.py`). Esto cierra **parcialmente**
+  la otra limitacion declarada en README ("Cobertura 1st-person del CLI"),
+  al menos para el comando `promotion list`.
+
+Verificacion:
+
+- CI completo: OK (`scripts/ci.sh` -> `=== ci: OK ===`).
+- 425 passed en ~80s (410 antes de este slice -> +15 tests: 10 storage
+  + 5 in-process CLI).
+- Sin regresion en H7/H8 (31 tests previos verdes).
+
+Sin release:
+
+- Commit `refactor` por Conventional Commits -> 0 feat, 0 fix, 0 breaking.
+- SEMVER no incrementa. Sin tag. CHANGELOG solo lista entries de release;
+  no aplica entrada nueva.
+
+Trazabilidad:
+
+- STATE.yaml: actualizar `tests.total`, `tests.passed`,
+  `tests.duration_s` (re-medido), y anadir `deuda_tecnica_residual`
+  para documentar que la limitacion "sin API Storage listar promotions"
+  esta cerrada y que la limitacion "cobertura in-process del CLI"
+  esta parcialmente cerrada para `sg promotion list`.
+- CURRENT.md: anadir bloque "H9-BSlice1 cerrado" al final del bloque
+  "Hito y trabajo activo".
+
+Limitacion detectable durante el slice:
+
+- `resolve_data_root(explicit)` espera `Path | None`, no `str`. Detectado
+  al escribir el primer test in-process (BUG pre-existente en la API,
+  no introducido por este commit). Decido no tocarlo en este slice:
+  scope creep. Anotado para slice posterior si surge otra vez.
+
+Siguiente:
+
+- Auto-stop aqui. H9-BSlice1 cierra las dos limitaciones en su minima
+  expresion. Siguiente trabajo candidato (en orden de valor):
+  1) Cerrar otras llamadas `storage._conn` en `cmd_expansion_show` y
+     hooks de init (H9-BSlice2). Tamano similar.
+  2) Cobertura in-process del runner para OTROS comandos criticos
+     (`pack load`, `promotion submit`, `promotion reconcile`). Mismo
+     patron que este slice, replicable.
+  3) Concurrencia real en `submit`/`reconcile` (H9-A; requiere lock por
+     `idempotency_key` y multi-proceso; ADR material por el cambio de
+     contrato de promotion). Decidir antes con el operador si conviene.
+  4) Cierre definitivo de la iniciativa tras v0.6.0 + H8 + H9-BSlice1.
+- Operador o AUTO decide cual ejecutar. Si AUTO sin mas consigna:
+  empezar por (2) (coste bajo, replicar patron) y mantener deuda (1)
+  visible.

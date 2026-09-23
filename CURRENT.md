@@ -423,3 +423,50 @@ Tag v0.6.0 y cierre COMPLETED se conservan como hechos históricos.
 Definir alcance de H9 (endurecimiento: concurrencia real, API pública
 de listado de promociones, cobertura in-process del CLI) o cerrar la
 iniciativa definitivamente con la desviación documentada en ADR-0013.
+
+
+## UPDATE 2026-09-23 16:38 — H9-BSlice1 cerrado
+
+### Goal (sin cambio)
+
+`g-skillgraph-bootstrap` sigue COMPLETED en v0.6.0. Este UPDATE documenta
+un slice de seguimiento fuera del scope original del goal pero dentro del
+ambito declarado para H9 (`STATE.yaml#next_workitem`).
+
+### Hito y trabajo activo
+
+- H0..H6, H8, H9-BSlice1 cerrados.
+- H9-BSlice1 cierra la limitacion "sin API Storage listar promotions".
+- LIMITACION parcialmente cerrada: "cobertura in-process del CLI" — solo
+  cubre `sg promotion list`. Pendiente extender a pack load, promotion
+  submit, promotion reconcile.
+
+### Commits en este turno
+
+- `7be26a6` docs(readme): sincro leftover de H8 (reconoce H8 y mantiene
+  honestas las limitaciones restantes).
+- `fe6b020` refactor(h9): storage.list_promotions() publica y mueve
+  cmd_promotion_list fuera de SQL directo.
+
+### Último estado comprobado
+
+- HEAD: post `fe6b020`. 425/425 tests pytest verde en ~80s (`scripts/ci.sh`
+  -> `=== ci: OK ===`).
+- 15 tests nuevos (10 storage + 5 in-process CLI runner).
+- `TestPromotionListInvariant` valida via `inspect.getsource` que
+  `cmd_promotion_list` no toca atributos privados de Storage.
+
+### Bloqueos
+
+- Ninguno. Siguiente slice candidato: H9-BSlice2 (mover los otros
+  `storage._conn` del runner) o cobertura in-process de otros comandos.
+
+### Siguiente acción concreta
+
+- Auto-stop aqui. Operador puede:
+  1) Seguir con H9-BSlice2 (mover otros `storage._conn`).
+  2) Extender cobertura in-process a `pack load`, `promotion submit`,
+     `promotion reconcile`.
+  3) H9-A concurrencia real (ADR material; requiere decision).
+  4) Cerrar la iniciativa definitivamente.
+- Si AUTO: prioriza (2) por coste/valor, manteniendo (1) en cola.

@@ -212,9 +212,10 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 405
-  passed: 405
-  duration_s: 121
+  total: 425
+  passed: 425
+  duration_s: 80
+  h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -239,17 +240,18 @@ tests:
     - tests/test_reconcile_one_node.py: 4
     - tests/test_h4_expansion.py: 15
     - tests/test_h4_expansion_cli.py: 6
-    - tests/test_h4_expansion_slice3.py: 15  # policy engine library
-    - tests/test_h4_expansion_cli_slice3.py: 9   # E2E list/show/archive
-    - tests/test_uat_audit.py: 5    # wrappers pytest para UAT-05/10/11/15/16
-    - tests/test_uat_blocked.py: 2   # honest blockers UAT-12/13
-    - tests/test_parser.py: 12   # ramas de error parser Markdown+YAML (coverage 77% -> 100%)
-    - tests/test_plan_loader.py: 13  # load_plan_file happy + 9 error branches (coverage 48% -> 100%)
-    - tests/test_recipe.py: 22   # validaciones __post_init__ + from_dict (coverage 73% -> 100%)
-    - tests/test_h4_expansion_cli_slice3.py: 15   # +6 focales APPLIED marker (5 nuevos + 1 refactor) en v0.4.0
-    - tests/test_h6_multiproposito.py: 12  # UAT-12 H6 multiprosito: pack_loader declarativo (v0.6.0)
-    - tests/test_h7_promocion.py: 16   # UAT-13 H7 promocion: outbox + reconciliacion idempotente (v0.6.0)
-    - tests/test_uat_blocked.py: 6    # gap tests UAT-12/13 PASS (antes 2 honest blockers, ahora invertido a PASS)
+    - tests/test_h4_expansion_slice3.py: 15
+    - tests/test_h4_expansion_cli_slice3.py: 9
+    - tests/test_uat_audit.py: 5
+    - tests/test_uat_blocked.py: 6
+    - tests/test_parser.py: 12
+    - tests/test_plan_loader.py: 13
+    - tests/test_recipe.py: 22
+    - tests/test_h6_multiproposito.py: 12
+    - tests/test_h7_promocion.py: 16
+    - tests/test_h8_public_paths.py: 5
+    - tests/test_h9_storage_promo_list.py: 10   # H9-BSlice1: API publica Storage.list_promotions
+    - tests/test_h9_cli_promo_list_inproc.py: 5   # H9-BSlice1: cobertura in-process CLI runner
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -324,7 +326,9 @@ nota_honesta_revision: >
   CI pasa de 9/16 (manuales) a 16/16 (todos con test pytest vivo).
 
 deuda_tecnica_residual:
-  - "H4 Expansion controlada slice-1+slice-2+slice-3 CERRADOS (UAT-08/09 PASS): GraphExpansionProposal+PatchOp+Authorization+validate+authorize+apply_expansion+record_rejection + CLI sg expansion propose|apply|validate|rejections|list|show|archive + 45 tests (36 library + 9 E2E subprocess). slice-3 anade policy engine (P1..P5) + EVALUATE stage + CLI extendido."
+  - "H9-BSlice1 cerrado (commit fe6b020): API publica Storage.list_promotions(status=None); cmd_promotion_list ya no accede a storage._conn. +15 tests (10 storage + 5 in-process CLI). Limitacion 'sin API Storage listar promotions' CERRADA."
+  - "Limitacion 'cobertura in-process del CLI' parcialmente cerrada: cubre sg promotion list. Pendiente extender a pack load, promotion submit, promotion reconcile, expansion show."
+  - "Otras llamadas storage._conn en runner: lineas 283 (init), 998 y 1021 (cmd_expansion_show), 1302 (otro hook). H9-BSlice2 si surge demanda real."
   - "H4 slice-3 SCOPE REDUCIDO (no full spec): SIN migration SQLite (JSON files planos funcionan, riesgo alto; defer slice-4 con demanda real). Pipeline gating de auto_signed via evaluation_result DEFERIDO a slice-4 (decision explicita documentada en h4-slice-3-policy-engine workstream)."
   - "H6 multiprosito (Character/StoryArc): UAT-12 PASS. pack_loader.py declarativo + fixture narrative-core.md. 0 LoC modificados en nucleo (registry/bricks/parser)."
   - "H7 promocion entre bases: UAT-13 PASS. promotion.py + outbox en storage.py. Caso de interrupcion (IN_PROGRESS dejado por crash) cubierto por test_reconcile_after_interruption_completes_pending."
