@@ -687,3 +687,24 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
 - **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos
   (preservada por construcción, ADR pendiente).
 - **Próximo paso**: seleccionar siguiente slice del roadmap.
+
+## UPDATE 2026-09-23 21:29 — H9-Coverage-2 cerrado
+
+- **Slice**: cobertura de `src/skillgraph/domain/pack_loader.py`
+  del 78% al 97% con 10 tests focales. Sin tocar código de
+  producción.
+- **Ramas cubiertas**:
+  - `_make_schema_validator`: `refs` passthrough (NO valida FK);
+    `list_of` con value no-lista; `number`/`boolean` mismatch;
+    dict no soportado; schema tipo inválido (no str ni dict).
+  - `declare_types_from_pack`: `types` no-lista; entry no-dict;
+    kind vacío; schema no-dict.
+- **Resultado**: 563/563 tests verde (`scripts/ci.sh` 133s).
+  `ruff check` All checks passed.
+- **Lo que queda sin cubrir** (1 stmt + 1 brpart):
+  stmt 61 (list_of con elem_type no primitivo) y brpart 87->54
+  (rama false de `field_schema is str` que ya está cubierta
+  implícitamente por stmt 102).
+- **Spec**: `specs/h9-coverage-pack-loader.md`.
+- **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos.
+- **Próximo paso**: seleccionar siguiente slice del roadmap.

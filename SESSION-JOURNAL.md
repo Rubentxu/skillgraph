@@ -2039,3 +2039,49 @@ de `_sort_nodes_topologically`. Son defensive branches y un
 assert de invariante interna. Justificación de no cubrir en
 spec.
 
+
+### H9-Coverage-2 — cobertura `pack_loader.py` 78% → 97% (2026-09-23 21:29)
+
+**Slice**: 10 tests focales para cubrir las ramas no ejercitadas
+del módulo `domain/pack_loader.py` (H6 multipropósito, UAT-12).
+
+**Spec**: `specs/h9-coverage-pack-loader.md` con inventario de
+las 12 ramas no cubiertas.
+
+**Tests añadidos** (`tests/test_h9_coverage_pack_loader.py`,
+328 líneas, 10 tests):
+
+- **Schema validator (6 tests)**:
+  - `refs` passthrough (FK NO validada en pack_loader)
+  - `list_of` con value no-lista → "esperaba lista"
+  - `number` mismatch → "number"
+  - `boolean` mismatch → "boolean"
+  - dict con clave desconocida → "no soportado"
+  - schema tipo inválido (int) → "invalido"
+- **declare_types_from_pack (4 tests)**:
+  - `types` no-lista → "spec.types debe ser lista"
+  - entry no-dict → "esperaba mapping"
+  - kind vacío → "kind"
+  - schema no-dict → "schema"
+
+**Verificación**:
+
+- `mise exec -- uv run pytest tests/test_h9_coverage_pack_loader.py`:
+  10/10 verde en 0.06s.
+- `pytest --cov=skillgraph.domain.pack_loader`:
+  68 stmts, 1 miss, 46 br, 2 brpart → **97%** (objetivo ≥95%).
+- `scripts/ci.sh`: **563/563 verde en 133s**.
+- `ruff check src tests`: All checks passed.
+
+**Sin tocar código de producción**: el refactor es 100% cobertura,
+no funcionalidad.
+
+**Ramas restantes (1 stmt + 1 brpart)**:
+
+- Stmt 61: `list_of` con `elem_type` no primitivo (no es un caso
+  real: el `for` no valida nada si elem_type no es primitivo, así
+  que es código que ya no hace nada — bug latente menor que un
+  futuro ADR podría refactorizar).
+- Brpart 87->54: ya cubierto implícitamente por línea 102 (rama
+  else cuando no es str ni dict).
+
