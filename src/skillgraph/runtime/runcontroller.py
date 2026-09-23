@@ -508,21 +508,16 @@ class RunController:
             )
             return False
 
-        # Marcar SUCCEEDED
-        with self._conn:
-            self._conn.execute(
-                """
-                UPDATE node_executions
-                SET state = 'SUCCEEDED', outcome = ?, result_json = ?,
-                    finished_at = datetime('now')
-                WHERE node_execution_id = ?
-                """,
-                (
-                    result.outcome,
-                    json.dumps(result_to_jsonable(result), sort_keys=True),
-                    node_execution_id,
-                ),
-            )
+        # H9-BSlice3-S6: delega el UPDATE a SUCCEEDED en
+        # `Storage.complete_node_execution`. Las dos emisiones de
+        # eventos (node_completed + evidence_produced) quedan justo
+        # despues, fuera de la transaccion; storage no coordina
+        # eventos (decision arquitectonica del 2026-09-23 18:24).
+        self._storage.complete_node_execution(
+            node_execution_id=node_execution_id,
+            outcome=result.outcome,
+            result_json=json.dumps(result_to_jsonable(result), sort_keys=True),
+        )
 
         self._events.append(
             events.node_completed(

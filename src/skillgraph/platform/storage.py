@@ -1234,6 +1234,37 @@ class Storage:
                 ),
             )
 
+    def complete_node_execution(
+        self,
+        *,
+        node_execution_id: str,
+        outcome: str,
+        result_json: str,
+    ) -> None:
+        """Transiciona un NodeExecution a ``SUCCEEDED`` con outcome y
+        result_json ya serializado.
+
+        Sustituye a la parte UPDATE SUCCEEDED del RunController._execute_one.
+
+        No emite eventos. La coordinacion con
+        ``EventLog.append(events.node_completed(...))`` y
+        ``EventLog.append(events.evidence_produced(...))`` sigue siendo
+        del llamador.
+
+        ``result_json`` debe llegar ya como string (la API no serializa;
+        es responsabilidad del llamador que ``result`` sea JSON-able).
+        """
+        with self._conn:
+            self._conn.execute(
+                """
+                UPDATE node_executions
+                SET state = 'SUCCEEDED', outcome = ?, result_json = ?,
+                    finished_at = datetime('now')
+                WHERE node_execution_id = ?
+                """,
+                (outcome, result_json, node_execution_id),
+            )
+
     def list_promotions(
         self,
         status: str | None = None,
