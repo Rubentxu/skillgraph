@@ -1365,3 +1365,94 @@ opciones documentadas en `.next-decision.md` son:
    ARCHITECTURE.md, HITOS.md regenerado). Solo si el operador lo pide.
 5. **Cualquier otro work item fuera del scope**: nuevo goal en SDDK.
 
+---
+
+## 2026-09-23 (reinicio) — H6 + H7 implementados, iniciativa reabierta
+
+**Comando operador**: "todo esta en el roadmap, siguelo aplicando
+criterio". Reabre la iniciativa v0.5.0-COMPLETED con autorización
+explícita para ejecutar H6 y H7. Modo AUTO total activado.
+
+**Resultado**: H6 (UAT-12) y H7 (UAT-13) implementados, testeados
+y commiteados. Initiative de vuelta a in_progress, en vías de cierre
+definitivo con v0.6.0.
+
+### H6 multiprosito (UAT-12) — cerrado
+
+- **Decisión de diseño**: pack_loader DEBE ser declarativo, NO
+  ejecutar código del pack. La seguridad viene del schema
+  (`required + fields + refs`), no de imports dinámicos.
+- **Implementación**: `src/skillgraph/pack_loader.py` (215 LoC):
+  `declare_types_from_pack()`, `validate_instance_against_registry()`,
+  `_make_schema_validator()`.
+- **Fixture**: `tests/fixtures/packs/narrative-core.md` — Domain Pack
+  narrativo con `Character` y `StoryArc`.
+- **Protección**:
+  - Shadowing de tipos core (DecisionNode, ActionNode, DomainPack)
+    rechazado.
+  - Namespaces reservados (`core`, `skillgraph`) rechazados.
+- **Kernel intacto**: 0 LoC modificados en
+  `src/skillgraph/{registry,bricks,parser}.py`. Test de regresión
+  `test_pack_loader_does_not_touch_kernel_modules` lo verifica.
+- **Tests**: 12/12 PASS (`tests/test_h6_multiproposito.py`).
+- **Commit**: `1722fa5` (3 files, 513 insertions).
+
+### H7 promocion entre bases (UAT-13) — cerrado
+
+- **Patrón del blueprint §9 (Outbox + Reconciliación)**: 5 pasos
+  (resultado origen → outbox → aplicación idempotente → confirmación
+  → reconciliación tras interrupción).
+- **Implementación**:
+  - `src/skillgraph/promotion.py` (160 LoC nuevo): `submit_proposal`,
+    `apply_proposal` (idempotente), `reconcile_pending`,
+    `_compute_idempotency_key`.
+  - `src/skillgraph/storage.py` (+146 LoC, 0 modificados): tabla
+    `promotion_outbox` + 6 métodos (register/get/list_pending/
+    mark_in_progress/_published/_failed).
+- **Contrato clave**:
+  - `apply_proposal` sobre PUBLISHED es NO-OP (idempotente: apply_fn
+    counter NO incrementa en segundo intento).
+  - FAILED no se reintenta (requiere inspección manual).
+  - `reconcile_pending` procesa PENDING+IN_PROGRESS, ignora
+    PUBLISHED+FAILED.
+- **Caso crítico UAT-13**: tras interrupción con N propuestas en
+  IN_PROGRESS, `reconcile_pending` las completa sin duplicar.
+  Test `test_reconcile_after_interruption_completes_pending` lo
+  verifica con spy que cuenta invocaciones.
+- **Tests**: 16/16 PASS (`tests/test_h7_promocion.py`).
+- **Commit**: `95a0ca9` (3 files, 675 insertions).
+
+### Inversión del gap test (UAT-12/13 BLOCKED → PASS)
+
+- `tests/uat-evidence/UAT-12.json`: status BLOCKED → PASS,
+  revision real `95a0ca9`, 12 criterios observados, design_decisions
+  (no_execution, schema_validator, shadowing_protection,
+  explicit_imports).
+- `tests/uat-evidence/UAT-13.json`: status BLOCKED → PASS,
+  revision real `95a0ca9`, 16 criterios observados, incluido el
+  CASO CRITICO reconcile_after_interruption.
+- `tests/test_uat_blocked.py` invertido: antes validaba que
+  UAT-12/13 siguieran BLOCKED. Ahora valida que estén PASS y que los
+  tests reales corran verde. 6 tests en este módulo: 2 evidencias
+  PASS, 2 ejecutan suites reales (`test_h6_*`/`test_h7_*`), 2
+  verifican que los módulos existen con API esperada.
+- **Commit**: `92cff48` (3 files, 181 insertions).
+
+### Estado verificable
+
+- **HEAD**: `92cff48`.
+- **Tests**: **405/405 PASS** en 121s (373 → 405, delta +32).
+  - `tests/test_h6_multiproposito.py`: +12.
+  - `tests/test_h7_promocion.py`: +16.
+  - `tests/test_uat_blocked.py`: -2 +6 = +4 (neto).
+  - Delta total: +32 (coincide con 405 - 373).
+- **UATs**: **16/16 PASS, 0 FAIL, 0 BLOCKED** — primera vez en la
+  historia del proyecto (verificado con `python tests/uat_audit.py`).
+- **`scripts/ci.sh`**: OK. ruff format+check: limpios.
+
+### Próximo paso
+
+Tag v0.6.0 (MINOR bump: feat H6 + feat H7) + CHANGELOG ya actualizado
+en este turno. Initiative elegible para cierre definitivo `COMPLETED`
+tras tag.
+

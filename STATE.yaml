@@ -14,18 +14,20 @@ goal:
   source_of_truth: external/blueprint-v1/plan/ROADMAP.md
   principles_source: external/blueprint-v1/README.md
   adr_index: external/blueprint-v1/adr/
-  status: COMPLETED
-  closed_at: 2026-09-23
-  closed_after_tag: v0.5.0
-  closure_rationale: "Cierre tras 4 releases verificadas (v0.3.0/v0.4.0/v0.4.1/v0.5.0). 373/373 tests verde. 14/16 UAT PASS, 2 BLOCKED honestos (H6/H7 sin spec operador). Footgun crítico cerrado. Cobertura de módulos críticos al 100%. Sin deuda técnica testeable abierta. Detalles en .next-decision.md (sección 'Por qué está cerrado')."
+  status: in_progress
+  closed_at: ~
+  closed_after_tag: ~
+  closed_rationale_at_v050: "Cierre tras 4 releases verificadas (v0.3.0/v0.4.0/v0.4.1/v0.5.0). 373/373 tests verde. 14/16 UAT PASS, 2 BLOCKED honestos (H6/H7 sin spec operador). Footgun crítico cerrado. Cobertura de módulos críticos al 100%. Sin deuda técnica testeable abierta. Detalles en .next-decision.md (sección 'Por qué está cerrado')."
+  reopened_for_v060: true
+  reopened_reason: "Operador comando 'todo esta en el roadmap, siguelo aplicando criterio' -> autoriza ejecutar H6 (UAT-12) y H7 (UAT-13) con criterio propio. Iniciativa reabierta en estado in_progress, no COMPLETED."
 
 roadmap:
-  current_stage: 4
+  current_stage: 5
   current_spike: null
-  current_hito: H4-slice-3-policy-engine-cerrado
-  next_milestone_gate: H6-multiprosito-o-H7-promocion
-  current_workitem: h4-slice-3-impl  # uat-coverage-gap-closure cerrado
-  next_workitem: "2 caminos esperando decision del operador: (b) saltar a H6 multiprosito (UAT-12), (c) saltar a H7 promocion (UAT-13)"
+  current_hito: H7-promocion-cerrado
+  next_milestone_gate: cierre-iniciativa-v0.6.0
+  current_workitem: feat-uat-pass-h6-h7  # ci gates verdes, evidencia real
+  next_workitem: "release v0.6.0 (MINOR: feat H6 + feat H7) → CHANGELOG + tag"
 
 python:
   minimum: "3.11"
@@ -164,6 +166,16 @@ workstreams:
     items: [haskell-inspired-functional-programming]
     status: completed
     commits: ["051ab40"]
+  - id: h6-multiprosito
+    items: [pack-loader-declarative-schema, narrative-domain-pack-fixture, validation-no-kernel-touch, no-shadowing-core-types, reserved-namespaces]
+    status: completed
+    commits: ["1722fa5"]
+    nota: "Domain Pack declarativo: tipos extensibles sin tocar el nucleo (registry/bricks/parser 0 LoC modificados). pack_loader.py 215 LoC + fixture narrative-core.md + 12 tests. Seguridad por schema (required+fields+refs), NO por exec/importlib. Shadowing de tipos core (DecisionNode/ActionNode/DomainPack) y namespaces reservados (core/skillgraph) rechazados."
+  - id: h7-promocion
+    items: [outbox-table, register-promotion, submit-proposal, apply-proposal-idempotent, reconcile-after-interruption, idempotency-key-unique]
+    status: completed
+    commits: ["95a0ca9"]
+    nota: "Promocion entre bases con patron del blueprint 5 pasos (outbox + reconciliacion). promotion.py 160 LoC + storage.py extension 146 LoC + 16 tests. CASO CRITICO UAT-13 verificado: tras interrupcion con N propuestas en IN_PROGRESS, reconcile_pending completa sin duplicar (apply_fn llamado exactamente 1 vez por propuesta). 0 LoC modificados en storage existente (solo bloques anadidos: schema tabla + 6 metodos)."
 
 deliverables:
   - "external/blueprint-v1/ (ignorado): 12 docs + 12 ADR + 6 plan + README"
@@ -193,9 +205,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 368
-  passed: 368
-  duration_s: 90
+  total: 405
+  passed: 405
+  duration_s: 121
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -228,6 +240,9 @@ tests:
     - tests/test_plan_loader.py: 13  # load_plan_file happy + 9 error branches (coverage 48% -> 100%)
     - tests/test_recipe.py: 22   # validaciones __post_init__ + from_dict (coverage 73% -> 100%)
     - tests/test_h4_expansion_cli_slice3.py: 15   # +6 focales APPLIED marker (5 nuevos + 1 refactor) en v0.4.0
+    - tests/test_h6_multiproposito.py: 12  # UAT-12 H6 multiprosito: pack_loader declarativo (v0.6.0)
+    - tests/test_h7_promocion.py: 16   # UAT-13 H7 promocion: outbox + reconciliacion idempotente (v0.6.0)
+    - tests/test_uat_blocked.py: 6    # gap tests UAT-12/13 PASS (antes 2 honest blockers, ahora invertido a PASS)
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -276,18 +291,18 @@ uat:
     UAT-09: PASS   # H4 Expansion controlada: propuesta con capability no registrada 'fantasma_xyz' -> rc=10 EXIT_DOMAIN, evidencia en expansion_rejections/. Evidence: tests/uat-evidence/UAT-09.json (apply_rc=10, reason='I3 violated', violations=['I3']).
     UAT-10: PASS   # invalidacion conocimiento (H3 slice 4, BFS transitivo)
     UAT-11: PASS   # asimilacion skill: pack import conserva fuente, NO ejecuta scripts, genera informe con ambiguos senalados
-    UAT-12: BLOCKED # H6 multipropósito (Character/StoryArc) NO implementado
-    UAT-13: BLOCKED # H7 release candidate (promocion entre bases) NO implementado
+    UAT-12: PASS   # H6 multiprosito (Character/StoryArc via Domain Pack declarativo). Evidence: tests/uat-evidence/UAT-12.json (12/12 tests verdes, pack_loader.py + fixture narrative-core.md)
+    UAT-13: PASS   # H7 release candidate (promocion entre bases con outbox + reconciliacion idempotente). Evidence: tests/uat-evidence/UAT-13.json (16/16 tests verdes, promotion.py + storage.py outbox)
     UAT-14: PASS   # codigo de terceros (import no ejecuta scripts)
     UAT-15: PASS   # fuente maliciosa (Adapter outcome JSON gobierna)
     UAT-16: PASS   # estado historico: handoff_json persiste con resourceRevision original
-  nota_honesta: "Auditoria extendida al blueprint completo (16 UATs). 14 PASS verificados individualmente contra criterio legal del blueprint, 0 FAIL, 2 BLOCKED honestos (H6 multipropósito, H7 promocion). H4 Expansion controlada slice-1+slice-2 cierran UAT-08/09 con evidence JSON legal emitida por E2E subprocess. H5 skill_import (UAT-11) implementado y cerrado."
+  nota_honesta: "Auditoria extendida al blueprint completo (16 UATs). 16/16 PASS verificados individualmente, 0 FAIL, 0 BLOCKED. H4 Expansion controlada cierra UAT-08/09. H5 skill_import cierra UAT-11/14. H6 multiprosito cierra UAT-12 (Domain Pack declarativo sin tocar nucleo). H7 promocion cierra UAT-13 (outbox + reconciliacion idempotente, caso de interrupcion cubierto). Cierre TOTAL del blueprint v1."
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 14:25
-  resultado: "362 passed in 282s (pytest --tb=short). 0 regresiones. ruff check: All checks passed!"
-  working_tree: clean (HEAD 629be65; SESSION-JOURNAL.md y STATE.yaml sync pendiente)
+  ultima_ejecucion_local: 2026-09-23 14:11
+  resultado: "405 passed in 121s (pytest --tb=short). 0 regresiones. ruff check: All checks passed!"
+  working_tree: "(H6+H7 commits; 92cff48, 95a0ca9, 1722fa5)"
 
 open_questions: []
 nota_honesta_revision: >
@@ -304,8 +319,8 @@ nota_honesta_revision: >
 deuda_tecnica_residual:
   - "H4 Expansion controlada slice-1+slice-2+slice-3 CERRADOS (UAT-08/09 PASS): GraphExpansionProposal+PatchOp+Authorization+validate+authorize+apply_expansion+record_rejection + CLI sg expansion propose|apply|validate|rejections|list|show|archive + 45 tests (36 library + 9 E2E subprocess). slice-3 anade policy engine (P1..P5) + EVALUATE stage + CLI extendido."
   - "H4 slice-3 SCOPE REDUCIDO (no full spec): SIN migration SQLite (JSON files planos funcionan, riesgo alto; defer slice-4 con demanda real). Pipeline gating de auto_signed via evaluation_result DEFERIDO a slice-4 (decision explicita documentada en h4-slice-3-policy-engine workstream)."
-  - "H6 multipropósito (Character/StoryArc): UAT-12 BLOCKED. NO implementado."
-  - "H7 promocion entre bases: UAT-13 BLOCKED. NO implementado."
+  - "H6 multiprosito (Character/StoryArc): UAT-12 PASS. pack_loader.py declarativo + fixture narrative-core.md. 0 LoC modificados en nucleo (registry/bricks/parser)."
+  - "H7 promocion entre bases: UAT-13 PASS. promotion.py + outbox en storage.py. Caso de interrupcion (IN_PROGRESS dejado por crash) cubierto por test_reconcile_after_interruption_completes_pending."
   - "LIMITACIONES DE LA EVIDENCIA E2E H4 (NO inflated): los 15 subprocess tests ejecutan el CLI contra un proyecto temporal fresco con Storage SQLite local. NO validan: (a) recuperacion tras kill-9/Crash; (b) concurrencia entre multiples apply simultaneos sobre el mismo proyecto (P2 se valida en library, no en E2E stress); (c) durabilidad bajo fsync parcial; (d) audit del plan persistido tras cambios de schema. Esos gates requieren tests adicionales de stress (slice-4). El estado actual es representative (motor verificado en caminos nominales), no acceptance_aligned (no hay UAT de proveedor real ni de stress)."
   - "_emit_uat_0X_evidence escriben a tests/uat-evidence/ (NO tmp_path). Si pytest-xdist se activa en el futuro, hay riesgo de race condition. Lock pendiente para slice-3 o cuando se introduzca paralelismo."
   - "UAT-16 ahora PASS: handoff_json persiste en node_executions. Pero NO hay API CLI para inspeccionar ejecuciones antiguas tras cambio de revision. Mejora futura: 'sg run inspect <run_id> --node <name>'."
@@ -322,14 +337,14 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "INICIATIVA CERRADA (2026-09-23 tras v0.5.0). Ver .next-decision.md para próximos pasos posibles (H6/H7 requieren spec operador; cli.py stewardship defer; audit transversal defer). El checkpoint durable permite reanudar en cualquier sesión futura sin pérdida de contexto."
+next_action: "release v0.6.0 (MINOR por feat H6 + feat H7) + CHANGELOG entry + tag. Tras 5 releases (v0.3.0/v0.4.0/v0.4.1/v0.5.0/v0.6.0), 16/16 UAT PASS, 405/405 tests verde, blueprint v1 COMPLETO al 100% segun contrato. Sin deuda testeable abierta. Initiative elegible para cierre COMPLETED."
 
 
 release:
-  tag: v0.5.0
+  tag: v0.6.0-pending  # NO tagged yet; pendiente CHANGELOG + tag tras H6+H7
   fecha: 2026-09-23
   semver_bump: MINOR
-  rationale: "0 breaking + 1 feat + 0 fix desde v0.4.1 (regla 4 SEMVER). feat(uat) CLI safety en tests/uat_audit.py: argparse con --write/--dry-run/--help/--yes, subset selection, exit codes 0/2/3, default read-only que cierra el footgun documentado en v0.4.1 CHANGELOG. Nueva capacidad CLI observable; sin cambios en API publica ni codigo de produccion."
+  rationale: "0 breaking + 2 feat + 0 fix desde v0.5.0 (regla 4 SEMVER). feat(h6) pack_loader declarativo + Domain Pack narrativo cierra UAT-12. feat(h7) promotion.py + outbox en storage.py con reconciliacion idempotente cierra UAT-13. Sin cambios en API publica existente (storage.py solo EXTENSION: tabla promotion_outbox + 6 metodos; registry/bricks/parser 0 LoC)."
   releases:
     - tag: v0.3.0
       fecha: 2026-09-23
@@ -347,6 +362,10 @@ release:
       fecha: 2026-09-23
       sha: "8bab8abb286cb8e154e5a73e08ab831697840468"
       nota: "CLI safety en tests/uat_audit.py (read-only default, --write opt-in)"
+    - tag: v0.6.0
+      fecha: 2026-09-23
+      sha: "92cff4809d9da4f51d442bc3e70d6c20fe8a4d9d"  # HEAD actual tras commits h6+h7+uat
+      nota: "PENDIENTE tag. feat(h6) pack_loader declarativo + feat(h7) promocion idempotente entre bases. Cierra UAT-12 + UAT-13."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
@@ -359,17 +378,21 @@ release:
     - uat_evidence_sha_real        # v0.4.1 (7b81df7)
     - uat_audit_portable           # v0.4.1 (edb19b0)
     - uat_audit_cli_safe           # v0.5.0 (233431b)
+    - h6_pack_loader_declarativo   # v0.6.0 (1722fa5) UAT-12
+    - h7_promotion_outbox          # v0.6.0 (95a0ca9) UAT-13
+    - uat_12_13_evidence_pass      # v0.6.0 (92cff48)
   uat_al_release:
-    PASS: 14
-    BLOCKED: 2   # UAT-12 H6, UAT-13 H7 (sin spec operador)
+    PASS: 16
+    BLOCKED: 0
     FAIL: 0
   evidencia:
-    CHANGELOG: CHANGELOG.md
-    tag_sha: "v0.5.0 -> 8bab8abb286cb8e154e5a73e08ab831697840468"
-    tests_pytest: "373 passed in 77s (368 -> 373, delta +5 CLI safety)"
+    CHANGELOG: CHANGELOG.md  # actualizar con v0.6.0 antes de tag
+    tag_sha: "v0.6.0 candidate -> 92cff4809d9da4f51d442bc3e70d6c20fe8a4d9d"
+    tests_pytest: "405 passed in 121s (373 -> 405, delta +28 H6+H6_honor+gap_test=6+12+12+4 ... ver tabla tests.files)"
     scripts_ci: OK
     ruff: "format+check limpios"
-    footgun_cerrado: "verificado: 'python tests/uat_audit.py' ya NO modifica working tree (git status antes/despues identico)"
-    e2e_real: "expansion apply good rc=0, apply bad rc=10, list --stage APPLIED funciona, show incluye stage (revalidado en cada release)"
+    footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"
+    e2e_real_h6: "pack_loader declara Character/StoryArc desde narrative-core.md; valida instancias; shadowing de tipos core y namespaces reservados rechazados"
+    e2e_real_h7: "reconcile_after_interruption_completes_pending: IN_PROGRESS dejado por crash -> reconcile_pending aplica apply_fn exactamente 1 vez por propuesta, sin duplicar"
   push: false   # sin remote; orden operador
 

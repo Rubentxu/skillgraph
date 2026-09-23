@@ -12,6 +12,156 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.6.0] — 2026-09-23
+
+**Resumen**: cierra los dos únicos gaps restantes del blueprint v1.
+**H6 multiprosito** aníade declaracion de tipos extensibles via Domain
+Pack (Character/StoryArc como ejemplo narrativo) SIN tocar el nucleo.
+**H7 promocion entre bases** aníade outbox persistente con aplicacion
+idempotente y reconciliacion tras interrupcion.
+
+**Resultado neto**: 16/16 UAT PASS, 0 FAIL, 0 BLOCKED. El blueprint
+queda COMPLETO al 100% segun contrato.
+
+Sin cambios en la API publica existente. Registry/bricks/parser
+intactos (0 LoC modificados). Storage.py solo EXTENSION (anade tabla
+promotion_outbox + 6 metodos; nada existente modificado).
+
+### Features (MINOR bump)
+
+- `1722fa5` **feat(h6): multiprosito - Domain Pack declara tipos extensibles**.
+  - Modulo nuevo `src/skillgraph/pack_loader.py` (215 LoC):
+    - `declare_types_from_pack(pack_text)`: parsea un Domain Pack
+      Markdown+frontmatter y emite tipos en RuntimeType registry.
+      **NO ejecuta codigo del pack**: la seguridad viene del schema
+      declarativo (required + fields + refs), no de imports dinamicos.
+    - `validate_instance_against_registry(instance)`: valida una
+      instancia contra los tipos declarados del Domain Pack.
+    - `_make_schema_validator()`: helper que construye un
+      SpecValidator desde un schema declarativo.
+  - Fixture `tests/fixtures/packs/narrative-core.md`: Domain Pack
+    narrativo con `Character` (name, archetype, backstory, relations)
+    y `StoryArc` (title, premise, acts, characters).
+  - Proteccion contra shadowing:
+    - Tipos core (`DecisionNode`, `ActionNode`, `DomainPack`) no se
+      pueden redefinir desde un pack.
+    - Namespaces reservados (`core`, `skillgraph`) se rechazan.
+  - **Kernel intacto**: 0 LoC modificados en `registry.py`/`bricks.py`/`parser.py`.
+- `95a0ca9` **feat(h7): promocion entre bases - outbox + reconciliacion idempotente**.
+  - Modulo nuevo `src/skillgraph/promotion.py` (160 LoC):
+    - `submit_proposal()`: inserta propuesta en outbox origen con
+      `idempotency_key`. Duplicado -> `IdentityConflictError`.
+    - `apply_proposal(proposal_id, apply_fn)`: transiciona
+      PENDING/IN_PROGRESS -> PUBLISHED. **Idempotente**: si ya
+      PUBLISHED, NO reaplica. Si FAILED, NO reintenta (segun contrato:
+      requiere inspeccion manual).
+    - `reconcile_pending()`: procesa TODAS las propuestas en
+      PENDING/IN_PROGRESS. Aplica idempotencia. Publicadas y fallidas
+      se ignoran.
+    - `_compute_idempotency_key()`: combinacion deterministica de
+      `project_id + reference_signature`. Rechaza inputs vacios.
+  - Storage extension (`src/skillgraph/storage.py`, +146 LoC, 0 modificados):
+    - Schema: tabla `promotion_outbox` con
+      `proposal_id` PK, `idempotency_key` UNIQUE, `status` CHECK
+      IN (`PENDING`,`IN_PROGRESS`,`PUBLISHED`,`FAILED`), `attempts`,
+      timestamps, indice por status.
+    - 6 metodos anadidos: `register_promotion`, `get_promotion`,
+      `list_pending_promotions`, `mark_promotion_in_progress`,
+      `mark_promotion_published`, `mark_promotion_failed`.
+  - Patron del blueprint §9 (Outbox + Reconciliacion):
+    1. Resultado persistido en origen (`register_promotion`).
+    2. Mensaje de outbox (`promotion_outbox` row).
+    3. Aplicacion idempotente en destino (`apply_fn` + `idempotency_key`).
+    4. Confirmacion (`mark_promotion_published`).
+    5. Reconciliacion si se interrumpe el proceso (`reconcile_pending`).
+- `92cff48` **feat(uat)**: UAT-12 y UAT-13 ahora PASS con evidencia real.
+  - `tests/uat-evidence/UAT-12.json` migrado BLOCKED → PASS:
+    revision=95a0ca9, criteria_observed con 12 tests de
+    test_h6_multiproposito.py, design_decisions (no_execution,
+    schema_validator, shadowing_protection, explicit_imports).
+  - `tests/uat-evidence/UAT-13.json` migrado BLOCKED → PASS:
+    revision=95a0ca9, criteria_observed con 16 tests de
+    test_h7_promocion.py incluyendo el CASO CRITICO
+    `reconcile_after_interruption_completes_pending` (IN_PROGRESS
+    dejado por crash → reconciliacion completa sin duplicar,
+    apply_fn llamado 1 sola vez por propuesta).
+  - `tests/test_uat_blocked.py` invertido: antes validaba que UAT-12/13
+    siguieran BLOCKED con razon honesta. Ahora valida que UAT-12/13
+    estan PASS, que las evidencias JSON dicen PASS con SHA real, y que
+    los tests reales (`test_h6_*` / `test_h7_*`) corren verde.
+    Contrato invertido: este modulo es el "gap test" que detecta si
+    alguien revierte H6 o H7 sin actualizar la evidencia.
+    6 tests: 2 evidencias PASS, 2 ejecutan suites reales, 2 modulos
+    existen con API esperada.
+
+### Tests anadidos (sin bump)
+
+- `1722fa5` **test(h6)**: 12 tests focalizados en pack_loader.py.
+  - `test_pack_loader_declares_types_from_narrative_pack`: pack
+    narrativo declara Character/StoryArc desde YAML.
+  - `test_pack_loader_valid_character_passes` /
+    `test_pack_loader_valid_storyarc_passes`: instancias validas
+    se aceptan (name, archetype, backstory, relations).
+  - `test_pack_loader_character_missing_archetype_fails` /
+    `test_pack_loader_storyarc_missing_premise_fails`: campo
+    requerido ausente → error de validacion.
+  - `test_pack_loader_unknown_kind_raises`: kind desconocido →
+    `UnknownKindError`.
+  - `test_pack_loader_cannot_shadow_core_type`: 'Character' no
+    puede redefinir DecisionNode/ActionNode/DomainPack.
+  - `test_pack_loader_cannot_use_reserved_namespace`: namespaces
+    'core'/'skillgraph' rechazados.
+  - `test_pack_loader_rejects_non_domain_pack`: doc sin
+    frontmatter Domain Pack → error.
+  - `test_pack_loader_field_type_mismatch_fails`: tipo de campo
+    invalido → error.
+  - `test_pack_loader_list_of_field_validates_elements`: list_of
+    valida elementos internos.
+  - `test_pack_loader_does_not_touch_kernel_modules`: pack_loader
+    NO importa registry/bricks/parser (test de regresion).
+- `95a0ca9` **test(h7)**: 16 tests focalizados en promotion.py +
+  storage outbox.
+  - `TestPromotionIdempotencyKey` (3): combinacion project+ref
+    deterministica, inputs distintos producen keys distintas,
+    inputs vacios rechazados.
+  - `TestSubmitProposal` (2): submit crea PENDING, duplicate con
+    misma idempotency_key → `IdentityConflictError`.
+  - `TestApplyProposal` (6): apply exitoso→PUBLISHED, apply
+    failed→FAILED, excepcion→FAILED, idempotencia sobre PUBLISHED
+    (counter apply_fn no incrementa), FAILED no se reintenta,
+    proposal_id inexistente → KeyError.
+  - `TestReconcilePending` (5): empty→empty, procesa multiples
+    PENDING, **CASO CRITICO after-interruption** (IN_PROGRESS dejado
+    por crash → completa sin duplicar), no duplica PUBLISHED,
+    mezcla PENDING+IN_PROGRESS+FAILED → cada uno se trata
+    segun corresponde.
+- `92cff48` **test(uat)**: 6 tests en `tests/test_uat_blocked.py`
+  (inversion del contrato, ver feat anterior).
+
+### Estado verificable al tag
+
+- **HEAD**: `92cff48` (post-commits h6+h7+uat).
+- **Tests**: 405 passed en 121s (373 → 405, delta +32 tests
+  H6+H7+gap-invertidos).
+- **UATs**: **16/16 PASS, 0 FAIL, 0 BLOCKED** — primera vez en la
+  historia del proyecto.
+- **`scripts/ci.sh`**: OK.
+- **ruff format+check**: limpios.
+- **Audit CLI**: `python tests/uat_audit.py` reporta 16/16 PASS.
+
+### Limitaciones y deudas conocidas
+
+- **H6/H7 sin CLI hooks publicos**: `sg pack load` y
+  `sg promotion submit/list/reconcile` NO son comandos CLI. El
+  contrato del blueprint es la API Python (pack_loader.declare_*,
+  promotion.submit/apply/reconcile). La interfaz CLI es una mejora
+  diferible, no un gap funcional.
+- **Sin migracion de evidencias legacy**: las evidencias que vivian
+  con status=BLOCKED y revision=`cb7e3482` (v0.3.0) se migraron
+  sobreescribiendo el archivo a status=PASS con la revision real del
+  commit que implemento la feature. Si alguien quiere preservar el
+  historial pre-implementacion, mirar git log de tests/uat-evidence/.
+
 ## [0.5.0] — 2026-09-23
 
 **Resumen**: añade CLI propio al módulo `tests/uat_audit.py`. Antes

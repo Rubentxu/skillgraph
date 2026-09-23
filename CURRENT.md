@@ -1,22 +1,24 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 15:48 (Europe/Madrid).
-> **INICIATIVA CERRADA** tras v0.5.0. Ver `.next-decision.md`.
+> Última verificación: 2026-09-23 14:11 (Europe/Madrid).
+> **INICIATIVA RE-ABIERTA para cierre v0.6.0**. Ver `.next-decision.md`.
 
 ## Goal
 
-**COMPLETED** (2026-09-23).
+**in_progress** (post H6 + H7 implementados, pendiente release v0.6.0).
 
 `g-skillgraph-bootstrap`: "Arrancar SkillGraph siguiendo el blueprint:
 Etapa 0 (S0 + S1) → Etapa 1 → Etapa 2".
 
-Closure rationale y criterios verificados en `.next-decision.md`
-(sección "Por qué está cerrado") y en `STATE.yaml` (campos
-`goal.status`, `goal.closed_at`, `goal.closure_rationale`).
+**Re-abierto por**: operador comando 'todo esta en el roadmap,
+siguelo aplicando criterio' (2026-09-23). Autoriza H6 + H7.
+
+Closure rationale original en `.next-decision.md` ("Por qué estaba cerrado
+a v0.5.0"). Reapertura documentada en `STATE.yaml` (`goal.reopened_for_v060`).
 
 ## Hito y trabajo activo
 
-**Sin trabajo activo.** Iniciativa cerrada.
+**Trabajo activo: cierre v0.6.0 (CHANGELOG + tag)**.
 
 - H0 (Blueprint validado) — cerrado.
 - H1 (Recursos persistentes) — cerrado.
@@ -24,22 +26,28 @@ Closure rationale y criterios verificados en `.next-decision.md`
 - H3 (Conocimiento & Context) — cerrado (5 slices).
 - H4 (Expansion controlada slice-1+2+3) — cerrado.
 - H5 (Asimilación de skills) — cerrado.
-- H6 (Multipropósito, UAT-12) — **NO implementado**, BLOCKED honesto
-  por falta de spec del operador. Documentado para futuro.
-- H7 (Promoción entre bases, UAT-13) — **NO implementado**, BLOCKED
-  honesto por falta de spec del operador. Documentado para futuro.
+- **H6 (Multipropósito, UAT-12) — CERRADO** en este turno (commit `1722fa5`).
+- **H7 (Promoción entre bases, UAT-13) — CERRADO** en este turno (commit `95a0ca9`).
 
 ## Último estado comprobado
 
-- HEAD: `1159f64` (post v0.5.0, working tree limpio).
-- Tests: **373/373 PASS** en 73s (`scripts/ci.sh`).
-- 4 releases emitidas: v0.3.0, v0.4.0, v0.4.1, v0.5.0.
-- UATs: 14/16 PASS, 2 BLOCKED honestos (H6, H7).
+- HEAD: `92cff48` (post commit evidencias UAT-12/13 PASS).
+- Tests: **405/405 PASS** en 121s (`scripts/ci.sh`).
+- 4 releases emitidas + 1 pendiente (v0.6.0).
+- **UATs: 16/16 PASS, 0 FAIL, 0 BLOCKED.**
 - Cobertura módulos críticos: parser 100%, plan_loader 100%,
   recipe 100%, errors 100%, runtime 100%.
 - Footgun crítico `tests/uat_audit.py main()`: **CERRADO** en v0.5.0.
-- Documentación sincronizada: CHANGELOG.md, STATE.yaml, CURRENT.md,
-  SESSION-JOURNAL.md, .next-decision.md, AGENTS.md, specs/.
+- Documentación sincronizada: CHANGELOG.md (pendiente), STATE.yaml (sync),
+  CURRENT.md (este update), SESSION-JOURNAL.md (pendiente), .next-decision.md,
+  AGENTS.md, specs/.
+
+## Próximos pasos posibles (en esta iniciativa, pre-cierre)
+
+1. **CHANGELOG.md** entry para v0.6.0 (este turno).
+2. **Tag v0.6.0** (este turno, tras CHANGELOG).
+3. Cierre initiative: COMPLETED en STATE.yaml tras tag.
+4. Push a remoto (orden operador, no hay remote).
 
 ## Próximos pasos posibles (fuera de esta iniciativa)
 
