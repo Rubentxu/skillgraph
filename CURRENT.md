@@ -1,43 +1,61 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 08:42 (Europe/Madrid).
-> Revisión: pre-commit (no hay commit todavía en este bootstrap).
+> Última verificación: 2026-09-23 09:00 (Europe/Madrid).
+> Revisión: `0433b63 test(registry): cerrar ramas de validacion + properties en relations`.
 
 ## Goal
 
 Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0 + S1) → Etapa 1.
-Source of truth: `docs/plan/ROADMAP.md`, `docs/README.md`, `docs/adr/`.
+Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1/README.md`,
+`external/blueprint-v1/adr/`.
 
 ## Hito y trabajo activo
 
-- Hito: **H0** (Blueprint validado).
-- Trabajo activo: **b1 — bootstrap estructural** (en curso).
-- Siguiente desbloqueado: **b2** (pyproject + commit del blueprint), **b3** (adopción SDDK), **b4** (documentos de estado).
+- Hito: **H0** (Blueprint validado) + **H1** (Recursos persistentes) **cerrados**.
+- Trabajo activo: **continuación del roadmap** (Etapa 2 — ejecución recuperable).
+- Siguiente desbloqueado: **b3** (SDDK, bloqueado por bug externo) →
+  **`spec → tasks → apply`** del primer WorkItem de Etapa 2.
 
 ## Último estado comprobado
 
-- `git init -b main` OK; identidad `SDDK Orchestrator <sddk@skillgraph.local>`.
-- `python3 --version` → **3.14.7** (>=3.11 ✓; registrado en `STATE.yaml.python`).
-- Blueprint reubicado en `docs/` con su estructura (12 docs + 12 ADR + 6 plan + referencias + README).
-- `.gitignore` creado; `src/skillgraph/` y `tests/` listos para contenido.
+- Repo: rama `main` con 5 commits limpios, lint verde, 40 tests verdes en 11 s.
+- Python 3.13.15 via `mise`; `uv` para resolver venv reproducible.
+- Bootstrap del paquete: `hatchling`, `py.typed`, dev deps PEP 735.
+- Spikes S0 y S1 ejecutados y verificados con tests de extremo a extremo.
+- CLI ejecuta `init/project create/list/inspect/brick` con códigos de error tipados.
+- UAT-01..03 PASS contra la CLI real (subprocess).
+- Deuda H0 cerrada: `registry.py` 88% cobertura; ramas de validación
+  tipada y properties de relaciones ejercitadas.
 
 ## Decisiones del operador registradas
 
-1. SDDK **on** en este workspace (pendiente ejecutar `sddk-mode set on --workspace`).
+1. SDDK **on** en este workspace (intento fallido por bug externo).
 2. `.zip` y `create.py` se conservan hasta confirmar versión de la copia descomprimida.
-3. Python 3.11+ (runtime disponible: 3.14.7; CI candidato: 3.11).
+3. Python 3.11+ (runtime: 3.13.15 en local; 3.14.7 disponible en sistema).
+4. **No Rust en el bootstrap**: solo cuando un cuello de botella justifique
+   la integración, detrás de interfaz Python.
 
 ## Bloqueos abiertos
 
-Ninguno técnico.
+- **b3 (SDDK adopción real)** bloqueado por bug del binario SDDK:
+  cada invocación de `sddk config resolve --cwd` devuelve un `workspace_id`
+  distinto, así que el `set on --workspace` no se encuentra con el
+  `resolve`. Confirmado reproduciendo: `w-403ce06c...`, `w-680bc8...`,
+  `w-b90869...`, etc. El shim pasa el cwd pero el binario parece ignorar
+  el determinismo por path. **No es un gate del usuario**; es bug de
+  toolchain. Workaround aplicado: continuamos sin SDDK porque S0, S1 y
+  Etapa 1 no dependen de él. Reabrir b3 cuando arreglen el binario.
 
 ## Próxima acción concreta
 
-1. Terminar **b1**: añadir el `pyproject.toml` (hecho en este ciclo) y los stubs de paquete.
-2. **b2**: primer commit del blueprint + estructura.
-4. **b3**: ejecutar `sddk-mode set on --workspace` + `sddk adopt apply` + `sddk config resolve`.
-5. **b4**: regenerar `CURRENT.md`/`STATE.yaml`/`SESSION-JOURNAL.md` tras el primer commit.
-6. **s0-1**: crear fixtures Markdown+YAML y parser mínimo para S0.
+1. Cerrar ciclo de bootstrap con `STATE.yaml`/`SESSION-JOURNAL.md`
+   actualizados.
+2. **Siguiente WorkItem (Etapa 2)**: diseño del primer vertical slice
+   de ejecución determinista — `RunController` + `FakeAgentAdapter` +
+   handoff mínimo (subgrafo de 2-3 nodos: decisión → acción → result).
+3. Documentar el WorkItem y delegar a través del workflow SDDK cuando
+   el bug de adopción esté resuelto. Si no se resuelve, ejecutar
+   directamente con TDD focalizado como en S0/S1/Etapa1.
 
 ## Valoración Rust (decisión operador 2026-09-23)
 

@@ -10,57 +10,95 @@ no al historial completo (eso vive en SESSION-JOURNAL.md).
 
 goal:
   id: g-skillgraph-bootstrap
-  title: "Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0+S1) → Etapa 1"
-  source_of_truth: docs/plan/ROADMAP.md
-  principles_source: docs/README.md
-  adr_index: docs/adr/
+  title: "Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0+S1) -> Etapa 1"
+  source_of_truth: external/blueprint-v1/plan/ROADMAP.md
+  principles_source: external/blueprint-v1/README.md
+  adr_index: external/blueprint-v1/adr/
 
 roadmap:
-  current_stage: 0
-  current_spike: S0
-  next_milestone_gate: H1
-  current_workitem: b1-bootstrap-estructural
+  current_stage: 1
+  current_spike: null
+  next_milestone_gate: H2
+  current_workitem: cierre-b4-documents
 
 python:
   minimum: "3.11"
-  resolved_runtime: "3.14.7"   # observado en pre-flight; >=3.11 ✓
-  pin_in_ci: "3.11"            # CI barato y portable; el dev local usa 3.14.7
+  resolved_runtime: "3.13.15"
+  pin_in_ci: "3.11"
 
 adoption:
-  sddk_mode: pending              # se actualizará tras sddk-mode set
-  adopt_status: pending
-  config_resolved: false
+  sddk_mode: attempted_on_failed
+  adopt_status: blocked_toolchain
+  config_resolved: true
+  blocker: "sddk config resolve devuelve un workspace_id distinto en cada llamada; set/resolve nunca se encuentran. Bug del binario, no del workflow."
 
 workstreams:
   - id: bootstrap-estructural
-    status: in_progress
-    owner: orchestrator
+    status: completed
     items: [b1, b2, b4]
+    commits: ["26dec58", "0433b63"]
   - id: adopcion-sddk
     items: [b3]
-    status: pending
+    status: blocked_toolchain
   - id: spike-s0-brick-minimal
     items: [s0-1, s0-2]
-    status: pending
+    status: completed
+    commit: "0a92c84"
   - id: spike-s1-sqlite-local
     items: [s1-1, s1-2]
-    status: pending
+    status: completed
+    commit: "15957d7"
   - id: etapa1-cli-catalogo
     items: [e1-1, e1-2]
-    status: pending
+    status: completed
+    commit: "fb0e56a"
+  - id: registro-ramas
+    status: completed
+    commit: "0433b63"
 
 deliverables:
-  - docs/README.md + docs/{01..12}-*.md + docs/adr/* + docs/plan/* + docs/references/*
-  - pyproject.toml con paquete skillgraph (Python >=3.11)
-  - src/skillgraph/{__init__,cli}.py + py.typed
-  - tests/ vacío pero versionado
-  - .gitignore con caches, build, .skillgraph/
-  - CURRENT.md, STATE.yaml, SESSION-JOURNAL.md
+  - "external/blueprint-v1/ (ignorado): 12 docs + 12 ADR + 6 plan + README"
+  - "pyproject.toml con hatchling + dynamic version + PEP 735 dev group"
+  - "src/skillgraph/: __init__, cli, errors, bricks, parser, registry, storage, catalog, paths"
+  - "tests/: test_s0_brick_minimo, test_s1_sqlite, test_cli_uat, test_registry_branches + conftest + fixtures/s0/"
+  - ".gitignore con caches, build, .skillgraph/, docs/, external/"
+  - ".gitattributes con LF + diffs limpios"
+  - "mise.toml: python 3.13.15, uv 0.12.17, tasks sync/test/lint/format/cli"
+  - "CURRENT.md, STATE.yaml, SESSION-JOURNAL.md"
+  - "uv.lock reproducible"
+
+tests:
+  total: 40
+  passed: 40
+  duration_s: 11.7
+  coverage:
+    registry.py: 88%
+    storage.py: 90%
+    catalog.py: 88%
+    parser.py: 77%
+    bricks.py: 91%
+    errors.py: 100%
+    cli.py: 41%   # paths de error no ejercitados explicitamente
+    paths.py: 59% # helpers de OS-especficos no cubiertos en CI
+
+uat:
+  status:
+    UAT-01: PASS  # no contamination
+    UAT-02: PASS  # project isolation
+    UAT-03: PASS  # brick declarative
+  evidence: tests/test_cli_uat.py (10 tests subprocess)
 
 open_questions:
-  - python_runtime: ¿el CI se queda en 3.11 o subimos a 3.12? (decisión diferida)
-  - sddk_adoption_scope: ¿workspace o project? (decisión diferida)
+  - "Etapa 2: ¿qué escenario end-to-end concreto atacamos primero? candidatos: 'decidir entre 2 alternativas' o 'caracterizar un símbolo software'."
+  - "Adopción SDDK: ¿escalamos el bug al mantenedor (mantainmer_feedback) o esperamos?"
+  - "CI: ¿GitHub Actions mínimo al que nunca necesitaremos?"
 
 blockers: []
 
-next_action: "b1 → b2 → b3 → b4 → s0-1"
+deuda_tecnica_residual:
+  - "registry.py 88%: las ramas de _validate_decision/_validate_action/_validate_domain_pack con tipos no-objeto (None, etc.) no cubiertas."
+  - "cli.py 41%: caminos de error de inspect (DB ausente) no cubiertos con subprocess, solo con main() directo."
+  - "paths.py 59%: la rama de Windows (LOCALAPPDATA) no se ejecuta en CI."
+  - "storage.py 90%: la rama de 'replace' cuando spec coincide (no-op) no se cuenta como pérdida."
+
+next_action: "b4 (este commit de cierre) -> Etapa 2 (diseño del RunController mínimo)"

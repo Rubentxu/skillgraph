@@ -54,3 +54,78 @@ Resumen + referencia verificable. NO reproducir logs ni transcripciones.
 ### Siguiente paso
 
 b2 (primer commit del bootstrap) → b3 (adopción SDDK) → b4 (regenerar documentos de estado con el commit) → s0-1 (fixtures + parser Markdown+YAML).
+
+## 2026-09-23 — Sesión 2: bootstrap S0 + S1 + Etapa 1 + deuda H0 cerrada
+
+### Resumen
+
+- **Modo AUTO**, autorización amplia del operador, modo continuo sin pausa.
+- Ejecución disciplinada por vertical slices: S0 → S1 → Etapa 1 → deuda H0.
+- 5 commits limpios en la rama `main`, sin merges ni force-pushes.
+- 40 tests verdes en 11.7 s, 70% cobertura global.
+
+### Commits
+
+1. `26dec58` chore(bootstrap): initial repo with hatchling, mise, lint/test config
+2. `0a92c84` feat(s0): brick minimo Markdown+YAML con parser, registro y validacion
+3. `15957d7` feat(s1): almacenamiento SQLite con WAL, aislamiento y latencia
+4. `fb0e56a` feat(e1): CLI real + catalogo + UAT-01..03 PASS
+5. `0433b63` test(registry): cerrar ramas de validacion + properties en relations
+
+### Decisiones tomadas durante AUTO
+
+- H0/H1 del roadmap se cierran aquí. La próxima parada es H2 (ejecución
+  recuperable, fake agent, handoff mínimo). NO se salta a H3 ni se hace
+  multipropósito.
+- No se mete Rust en el bootstrap. Valoración registrada en CURRENT.md
+  con triggers GO medibles para los 5 puntos futuros.
+- Adopción SDDK real NO se completó: el binario `sddk config resolve`
+  genera un `workspace_id` distinto cada llamada, así que `set on
+  --workspace` no se encuentra con el `resolve` posterior. Es un bug
+  externo del binario, no del workflow. El bootstrap no depende de
+  SDDK, así que continuamos.
+- El paquete se construye con `hatchling` (no `setuptools`), versión
+  `dynamic = ["version"]`, dev deps en PEP 735. Wheel reproducible
+  instalado en venv fresco funciona.
+
+### Bugs cazados durante AUTO (no por tests, por uso real)
+
+- `parser.py` inicial: la identidad del brick se construía con los
+  valores del caller (namespace="software", name="any") en lugar de
+  leerlos del front matter. Riesgo de escalada silenciosa de
+  capacidades. Arreglado: la identidad viene SIEMPRE del metadata.
+- `cli.py _count_resources`: dos queries con dedupe manual. Simplificado
+  a una sola query + agrupación. La doble query era bug latente que
+  los tests no cazaban.
+- `__init__.py`: cuando reorganicé el paquete para exportar API
+  pública, quité `__version__` accidentalmente. Restaurado.
+- `storage.py _tx` con `isolation_level=None` + `BEGIN/COMMIT` manual:
+  SQLite rechazaba "no transaction is active". Fix: dejar a sqlite3
+  manejar la tx via `with self._conn:`.
+- `registry.py` 51% de cobertura: ramas de validación con tipos no
+  string, listas vacías, mappings no dict, apiVersion inconsistente.
+  **Cerrado** con tests/test_registry_branches.py (88% final).
+
+### Bloqueos actuales
+
+- **b3 (SDDK adopción real)**: bug del binario (cada `resolve`
+  genera id nuevo). No es gate de usuario; trabajo de bootstrap no
+  depende de SDDK. Reabrir cuando arreglen el binario o cuando
+  entremos a Etapa 5+ (asimilación) que sí necesita SDDK workflow.
+
+### Cierre honesto de capacidades (no ceremonial)
+
+- H0 (Blueprint validado): criterios de salida cumplidos.
+  El equipo puede describir núcleo/agentes/almacenamiento sin
+  contradicciones. → **GO**.
+- H1 (Recursos persistentes): entregables + UAT cumplidos.
+  Dos proyectos con aislamiento, Domain Pack registrado. → **GO**.
+
+NO se cierra H2 (no se ha implementado RunController ni
+FakeAgentAdapter). El siguiente paso es el diseño de Etapa 2.
+
+### Siguiente paso
+
+Etapa 2 (ejecución recuperable): diseño del primer vertical slice
+(decision → action → result con FakeAgentAdapter). Mantener la
+disciplina de vertical slices y TDD focalizado; no saltar a Etapa 3.
