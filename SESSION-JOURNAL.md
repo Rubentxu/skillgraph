@@ -608,3 +608,76 @@ el criterio legal exacto del blueprint. Detecte:
 - paths.py rama Windows no ejecutada en CI Linux.
 - registry.py validaciones con tipos no-objeto.
 - Workflows ciclicos con self-loop sin max_visits quedan ACTIVE.
+
+
+## 2026-09-23 — H5 skill_import implementado + UAT-11 cerrado
+
+### Resumen
+
+Operador: "actua sobre gaps verificables". Decidi H5 skill_import
+porque es el mas cercano al state actual (H3 ya persiste Sources) y
+el criterio legal del blueprint es verificable end-to-end sin
+requerir H4 GraphPatch ni H6 multipropósito.
+
+### Implementacion
+
+- `src/skillgraph/skill_importer.py` (321 LoC):
+  - `analyze_skill(path)`: pipeline IMPORT -> ANALYZE -> STRUCTURE
+    -> VALIDATE. Hashea contenido, clasifica archivos, NUNCA
+    ejecuta scripts Python.
+  - `register_imported_skill(storage, ...)`: persiste Source con
+    `kind='skill_pack'` + `content_hash`.
+  - `SkillImportReport`: dataclass frozen con files_structured,
+    entries_ambiguous, scripts_detected, capabilities_extracted,
+    nota_honesta.
+  - Capacidades extraidas = headers h2/h3 LITERALES (no reinventa).
+  - nota_honesta afirma literalmente "NO decisiones verificadas".
+
+- `src/skillgraph/cli.py`:
+  - Nuevo subparser `pack import <project> <path> [--report PATH]`.
+  - `cmd_pack_import`: ejecuta el pipeline, persiste Source,
+    escribe informe.
+
+- `tests/test_skill_importer.py` (156 LoC, 8 tests):
+  - test_script_never_executes_during_import (regla dura)
+  - test_structured_files_get_kind_and_hash
+  - test_capabilities_are_signals_not_decisions
+  - test_binary_files_marked_unparsed
+  - test_content_hash_stable
+  - test_raises_for_missing_path
+  - test_source_persisted_with_skill_pack_kind
+  - test_to_dict_roundtrip
+
+### Verificacion end-to-end
+
+Creado skill de prueba (README.md + config.json + dangerous.py
+con `print('pwned')`). Ejecutado `sg pack import demo ./myskill
+--report ./report.json`:
+
+- rc=0
+- 3 archivos: 2 estructurados, 1 ambiguo (dangerous.py con
+  reason explicito)
+- 1 script detectado pero NO ejecutado
+- 3 capabilities extraidas como SENALES (NO decisiones)
+- Source registrado en storage con kind='skill_pack'
+
+### UAT-11 BLOCKED -> PASS
+
+Reemplazado `uat_11()` con implementacion real que verifica 8
+criterios legales del blueprint:
+- pack_import rc=0
+- files_structured=2 (README.md + config.json)
+- script.py en entries_ambiguous como 'ignored'
+- scripts_detected incluye dangerous.py
+- capabilities_extracted son senales (NO decisiones)
+- nota_honesta_ok
+- Source registrado en storage con kind='skill_pack'
+- script NO ejecutado (stdout sin 'pwned')
+
+### Estado final
+
+- 42 commits en `main`. 253 tests pytest verde (+8 nuevos).
+- 12/16 UAT PASS, 0 FAIL, 4 BLOCKED honestos (H4 Expansion,
+  H6 multipropósito, H7 promocion).
+- Sin regresiones: 91 tests focal sobre módulos tocados + 253
+  global + lint format+check limpio.

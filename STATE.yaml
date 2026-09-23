@@ -94,6 +94,10 @@ workstreams:
     status: feature-complete
     nota: "NO es H4 del blueprint (Expansion controlada). Es feature de ciclos y DecisionNode."
     commits: ["b7b2d5e"]
+  - id: h5-skill-import
+    items: [skill-importer-module, cmd-pack-import, uat-11-blocked-to-pass]
+    status: completed
+    commits: ["PENDIENTE"]
   - id: ci-minimo
     items: [scripts-ci-sh]
     status: completed
@@ -180,13 +184,13 @@ uat:
     UAT-08: BLOCKED # H4 Expansion controlada (GraphExpansion/GraphPatch) NO implementado
     UAT-09: BLOCKED # H4 Expansion controlada policy engine NO implementado
     UAT-10: PASS   # invalidacion conocimiento (H3 slice 4, BFS transitivo)
-    UAT-11: BLOCKED # H5 adopcion de skills (import/skill_import) NO implementado
+    UAT-11: PASS   # asimilacion skill: pack import conserva fuente, NO ejecuta scripts, genera informe con ambiguos senalados
     UAT-12: BLOCKED # H6 multipropósito (Character/StoryArc) NO implementado
     UAT-13: BLOCKED # H7 release candidate (promocion entre bases) NO implementado
     UAT-14: PASS   # codigo de terceros (import no ejecuta scripts)
     UAT-15: PASS   # fuente maliciosa (Adapter outcome JSON gobierna)
     UAT-16: PASS   # estado historico: handoff_json persiste con resourceRevision original
-  nota_honesta: "Auditoria extendida al blueprint completo (16 UATs). 11 PASS verificados individualmente contra criterio legal del blueprint, 0 FAIL, 5 BLOCKED honestos (H4 Expansion controlada, H5 skill_import, H6 multipropósito, H7 promocion). Pasamos UAT-16 de BLOCKED a PASS al verificar que node_executions.handoff_json persiste el handoff completo con resourceRevision original tras cambio de brick."
+  nota_honesta: "Auditoria extendida al blueprint completo (16 UATs). 12 PASS verificados individualmente contra criterio legal del blueprint, 0 FAIL, 4 BLOCKED honestos (H4 Expansion controlada, H6 multipropósito, H7 promocion). H5 skill_import (UAT-11) implementado y cerrado. UAT-16 cerrado via persistencia de handoff_json en node_executions."
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
@@ -198,10 +202,10 @@ open_questions: []  # H3 cerrado; D2/D3/D4 firmadas y aplicadas.
 
 deuda_tecnica_residual:
   - "H4 Expansion controlada (GraphExpansion/GraphPatch/policy engine): UAT-08/09 BLOCKED. NO implementado."
-  - "H5 adopcion de skills: UAT-11 BLOCKED. NO implementado."
   - "H6 multipropósito (Character/StoryArc): UAT-12 BLOCKED. NO implementado."
   - "H7 promocion entre bases: UAT-13 BLOCKED. NO implementado."
   - "UAT-16 ahora PASS: handoff_json persiste en node_executions. Pero NO hay API CLI para inspeccionar ejecuciones antiguas tras cambio de revision (consulta directa al storage). Mejora futura: comando 'sg run inspect <run_id> --node <name>'."
+  - "UAT-11 H5 skill_import implementado: scripts Python NUNCA se ejecutan. Capacidades extraidas son SENALES heuristicas (headers Markdown), NO decisiones verificadas. Limitacion: capacidades no se interpretan (sin Adapter real); quedan como headers literales en el informe."
   - "Workflows ciclicos con self-loop sin max_visits: quedan ACTIVE infinitamente (limite viene del caller --max-iterations)."
   - "Token budget aproximado (chars, no tokens reales): tiktoken solo si H4+ exige Adapter real."
   - "Duplicacion catalog.py/storage.py: defensa en profundidad intencional. No unificar sin diseno."
@@ -210,4 +214,4 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "11/16 UAT PASS, 0 FAIL, 5 BLOCKED honestos (H4 Expansion controlada, H5/H6/H7 features NO implementadas). Siguiente: H4 Expansion controlada (GraphExpansion/GraphPatch + policy engine) o H5 skill_import. Operador decide."
+next_action: "12/16 UAT PASS, 0 FAIL, 4 BLOCKED honestos (H4 Expansion controlada, H6 multipropósito, H7 promocion). Siguiente: H4 Expansion controlada o H6 multipropósito. Operador decide."

@@ -1072,16 +1072,153 @@ def uat_10() -> Evidence:
 
 
 def uat_11() -> Evidence:
-    return uats_blocked_gap(
-        [
-            (
-                "UAT-11",
-                "Dada una skill convencional, cuando se importa, entonces se conserva la fuente original y se genera un informe de estructuracion.",
-                "Las partes ambiguas deben permanecer senaladas; no se presentan como decisiones verificadas.",
-                "H5 Adopcion de skills (import/skill_import) NO implementado.",
-            )
-        ]
-    )[0]
+    """UAT-11: asimilacion de skill (H5 skill_import).
+
+    Criterio legal del blueprint:
+    - 'Dada una skill convencional, cuando se importa, entonces se
+      conserva la fuente original y se genera un informe de
+      estructuracion.'
+    - 'Las partes ambiguas deben permanecer senaladas; no se
+      presentan como decisiones verificadas.'
+
+    Verificacion honesta:
+    1. Crear un directorio skill con varios tipos de archivo
+       (markdown_doc, json_config, python_script).
+    2. Ejecutar 'sg pack import demo <skill>' con --report.
+    3. Comprobar:
+       - El informe contiene files_structured, entries_ambiguous,
+         scripts_detected, capabilities_extracted.
+       - El script.py esta en entries_ambiguous con ambiguity='ignored'
+         (NO se ejecuto).
+       - El Source esta registrado en storage con kind='skill_pack'.
+       - Las capabilities extraidas son SEÑALES (no decisiones
+         verificadas).
+    """
+    revision = _git_rev()
+    work_dir = Path(tempfile.mkdtemp(prefix="sg-uat11-"))
+    data_root = work_dir / "data"
+    skill_dir = work_dir / "skill"
+    skill_dir.mkdir()
+    steps: list[dict[str, str]] = []
+
+    # Crear skill con markdown, json y un script Python.
+    (skill_dir / "README.md").write_text(
+        "# Skill\n\n## Capability: review\nReviews files.\n\n## Capability: lint\nLints.\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "config.json").write_text(
+        '{"key": "value"}',
+        encoding="utf-8",
+    )
+    (skill_dir / "dangerous.py").write_text(
+        "# Should NOT execute during import.\nprint('pwned')\n",
+        encoding="utf-8",
+    )
+
+    def step(cmd: list[str]) -> dict[str, str]:
+        r = _run_cli(cmd, cwd=work_dir, data_root=data_root)
+        return {
+            "cmd": " ".join(cmd),
+            "returncode": str(r.returncode),
+            "stdout": r.stdout,
+            "stderr": r.stderr,
+        }
+
+    steps.append(step(["init"]))
+    steps.append(step(["project", "create", "demo"]))
+
+    # Capturar stdout del pack import (sirve como 'informe').
+    report_step = step(
+        ["pack", "import", "demo", str(skill_dir), "--report", str(work_dir / "report.json")]
+    )
+    steps.append(report_step)
+
+    # Verificaciones legales.
+    report_path = work_dir / "report.json"
+    report_data: dict[str, object] = {}
+    if report_path.exists():
+        report_data = json.loads(report_path.read_text(encoding="utf-8"))
+
+    structured_ok = (
+        len(report_data.get("files_structured", [])) == 2  # README.md + config.json
+    )
+    script_ignored = any(
+        e.get("path") == "dangerous.py" and e.get("ambiguity") == "ignored"
+        for e in report_data.get("entries_ambiguous", [])
+    )
+    scripts_detected = "dangerous.py" in report_data.get("scripts_detected", [])
+    capabilities_señales = len(
+        report_data.get("capabilities_extracted", [])
+    ) >= 2 and "review" in str(report_data.get("capabilities_extracted", []))
+    nota_honesta_ok = "NO decisiones verificadas" in str(report_data.get("nota_honesta", ""))
+
+    # Verificar Source registrado en storage.
+    db = data_root / "tenants" / "default" / "projects" / "demo" / "project.sqlite"
+    source_persisted = False
+    source_id_seen: str | None = None
+    if db.exists():
+        with sqlite3.connect(db) as conn:
+            row = conn.execute(
+                "SELECT source_id, kind FROM sources WHERE kind = 'skill_pack' LIMIT 1"
+            ).fetchone()
+        if row:
+            source_persisted = True
+            source_id_seen = row[0]
+
+    # Verificar que el script NO se ejecutó: el stdout del comando
+    # NO debe contener 'pwned'.
+    script_not_executed = "pwned" not in report_step["stdout"]
+
+    ok = (
+        report_step["returncode"] == "0"
+        and structured_ok
+        and script_ignored
+        and scripts_detected
+        and capabilities_señales
+        and nota_honesta_ok
+        and source_persisted
+        and script_not_executed
+    )
+    observed = (
+        f"pack_import rc={report_step['returncode']}; "
+        f"structured_ok={structured_ok}; "
+        f"script_ignored={script_ignored}; "
+        f"scripts_detected={scripts_detected}; "
+        f"capabilities_señales={capabilities_señales}; "
+        f"nota_honesta_ok={nota_honesta_ok}; "
+        f"source_persisted={source_persisted} ({source_id_seen}); "
+        f"script_not_executed={script_not_executed}"
+    )
+
+    return Evidence(
+        uat_id="UAT-11",
+        revision=revision,
+        timestamp=_now(),
+        scenario=(
+            "Dada una skill convencional (markdown+json+script.py), "
+            "cuando se importa via 'sg pack import', entonces se "
+            "conserva la fuente original y se genera un informe de "
+            "estructuracion con partes ambiguas senaladas."
+        ),
+        expected=(
+            "rc=0; files_structured=2 (README.md, config.json); "
+            "script.py en entries_ambiguous como 'ignored'; "
+            "scripts_detected incluye 'dangerous.py'; "
+            "capabilities_extracted son senales (NO decisiones); "
+            "Source registrado en storage con kind='skill_pack'; "
+            "script NO ejecutado (stdout sin 'pwned')."
+        ),
+        observed=observed,
+        steps=steps,
+        artifacts=[str(work_dir)],
+        status="PASS" if ok else "FAIL",
+        notes=(
+            "H5 skill_import implementado: src/skillgraph/skill_importer.py + "
+            "cmd_pack_import en cli.py. Pipeline: IMPORT->ANALYZE->STRUCTURE->"
+            "VALIDATE->REGISTER. Scripts Python detectados pero NUNCA "
+            "ejecutados (cumple UAT-14)."
+        ),
+    )
 
 
 def uat_12() -> Evidence:

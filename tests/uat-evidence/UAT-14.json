@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-14",
-  "revision": "3f8f170d26974c946b88a1bc6097016868d50c93",
-  "timestamp": "2026-09-23T10:26:26Z",
+  "revision": "d72bbff41a3e453d267ae2b8ca54a1ff82a22ca7",
+  "timestamp": "2026-09-23T10:31:49Z",
   "scenario": "Dado un Domain Pack con un script Python, cuando se importa y valida, entonces el script NO se ejecuta automaticamente.",
   "expected": "import skillgraph.registry/bricks/cli no ejecuta codigo del Domain Pack; marker sigue sin existir.",
   "observed": "import rc=0; stdout='ok'; marker_after_import=False",
@@ -20,7 +20,7 @@
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat14-mu1sps9n/executed.marker"
+    "/home/rubentxu/.jcode/scratch/sg-uat14-6jga4ozk/executed.marker"
   ],
   "status": "PASS",
   "notes": "UAT-14 verificable honestamente: import no ejecuta scripts. Limitacion: el Domain Pack concreto con scripts no esta implementado (H5 pendiente); esta verificacion es para el camino del import ya existente."

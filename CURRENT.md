@@ -1,7 +1,7 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 12:26 (Europe/Madrid).
-> Revisión: `3f8f170 refactor: dedup now_iso + strengthen UAT-03/05/06`.
+> Última verificación: 2026-09-23 12:32 (Europe/Madrid).
+> Revisión: pendiente (H5 skill_import implementado; commit en curso).
 
 ## Goal
 
@@ -15,21 +15,53 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 - H1 (Recursos persistentes) **cerrado**.
 - H2 (Ejecución local) **cerrado**.
 - **H3 (Conocimiento & Context) CERRADO**. 5 slices implementadas.
-- H4-H7 del blueprint NO implementados (UAT-08/09/11/12/13 BLOCKED).
-- **UAT-16 cerrado** (H7 release candidate NO implementado, pero el
+- **H5 (Asimilación de skills) CERRADO**. UAT-11 verificado end-to-end.
+- H4 (Expansion controlada), H6 (multipropósito), H7 (release candidate)
+  del blueprint NO implementados (UAT-08/09/12/13 BLOCKED honestos).
+- UAT-16 cerrado (H7 release candidate NO implementado, pero el
   criterio legal del blueprint ya se cumple via persistencia de
   handoff_json en node_executions).
-- Trabajo activo: auditoría honesta completa al blueprint (16 UATs),
-  dedup código (`now_iso` x3 → 1), verificación legal de criterios
-  UAT-03 (capacities), UAT-05 (contenido handoff), UAT-16 (brick revision).
-- Siguiente: H4 Expansion controlada (GraphExpansion/GraphPatch/policy
-  engine) o H5 skill_import. Operador decide.
+- Trabajo activo: H5 skill_import (skill_importer.py + cmd_pack_import
+  + 8 tests focalizados + UAT-11 BLOCKED→PASS).
+- Siguiente: H4 Expansion controlada o H6 multipropósito. Operador decide.
 
 ## Último estado comprobado
 
-- Repo: rama `main`, **40+ commits limpios, lint verde, 245 tests verdes**.
-- Auditoría UAT honesta: **11/16 PASS, 0 FAIL, 5 BLOCKED honestos**.
+- Repo: rama `main`, **253 tests pytest verde**, lint format+check limpio.
+- Auditoría UAT honesta: **12/16 PASS, 0 FAIL, 4 BLOCKED honestos**.
 - Python 3.13.15 via `mise`; `uv` para resolver venv reproducible.
+
+### H5 skill_import — diseño
+
+Pipeline: `IMPORT → ANALYZE → STRUCTURE → VALIDATE → REGISTER`.
+
+- `analyze_skill(path)`:
+  - Hashea contenido (sha256) sin ejecutarlo.
+  - Clasifica archivos por extension (markdown_doc, json_config,
+    yaml_config, python_script, plain_text, binary, unknown).
+  - **python_script**: detectado, registrado en `scripts_detected`
+    y `entries_ambiguous` con `ambiguity='ignored'`. **NUNCA se ejecuta.**
+  - Capacidades extraidas = headers h2/h3 literales (NO reinterpreta).
+- `register_imported_skill(storage, ...)`: persiste Source con
+  `kind='skill_pack'` y `content_hash`. NO inventa claims/entities;
+  la fuente se conserva como material original.
+- CLI: `sg pack import <project> <path> [--report PATH]`.
+
+### Reglas duras (verificadas en tests)
+
+- Script Python con `raise SystemExit(99)` NO hace fallar el import
+  (test_script_never_executes_during_import).
+- `print('pwned')` en script NO aparece en stdout (verificado en UAT-11).
+- Capacidades extraidas: el campo `nota_honesta` afirma literalmente
+  "NO decisiones verificadas".
+
+### Limitaciones declaradas
+
+- Capacidades extraidas son SEÑALES heurísticas, no decisiones.
+  Sin Adapter real (H7+) no se pueden 'verificar' capacidades de
+  comportamiento.
+- Sin API CLI para listar packs importados (`sg pack list`).
+  Mejora futura.
 
 ### Mejoras legales de UATs en este turno
 

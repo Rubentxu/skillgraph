@@ -15,6 +15,7 @@ Auditoria de duplicacion:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -415,6 +416,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help="(reservado) override de kind para tests avanzados.",
     )
 
+    # H5 skill_import: pack import (asimila una skill, conserva fuente,
+    # genera informe; NO ejecuta scripts).
+    pp = sub.add_parser(
+        "pack",
+        help="Asimilacion de skills externas (H5).",
+    )
+    pp_sub = pp.add_subparsers(dest="pack_command", required=True)
+    pi = pp_sub.add_parser(
+        "import",
+        help="Importa una skill: conserva fuente y genera informe de estructuracion.",
+    )
+    pi.add_argument("project", help="Proyecto destino (donde se registra el Source).")
+    pi.add_argument("path", type=Path, help="Ruta al directorio o archivo de la skill.")
+    pi.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="Ruta donde escribir el informe JSON. Default: stdout.",
+    )
+
     rp = sub.add_parser(
         "run",
         help="Crea un Run desde un WorkflowPlan.md y reconcilia hasta terminal.",
@@ -509,6 +530,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_project_inspect(args)
         if args.command == "brick":
             return cmd_brick_register(args)
+        if args.command == "pack" and args.pack_command == "import":
+            return cmd_pack_import(args)
         if args.command == "run":
             return cmd_run(args)
         if args.command == "knowledge":
@@ -572,6 +595,68 @@ def cmd_brick_register(args: argparse.Namespace) -> int:
         storage.close()
     print(f"Brick registrado: {brick.kind}/{brick.identity.namespace}/{brick.identity.name}")
     print(f"UID: {uid}")
+    return EXIT_OK
+
+
+def cmd_pack_import(args: argparse.Namespace) -> int:
+    """H5 skill_import: asimila una skill externa sin ejecutar su codigo.
+
+    Pipeline: IMPORT -> ANALYZE -> STRUCTURE -> VALIDATE -> REGISTER.
+    Conserva el material original (Source con content_hash + locator)
+    y emite un informe de estructuracion en JSON. Las partes ambiguas
+    permanecen senaladas; NO se presentan como decisiones verificadas.
+    """
+    from skillgraph.skill_importer import analyze_skill, register_imported_skill
+    from skillgraph.storage import Storage
+
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return err
+
+    skill_path = args.path
+    if not skill_path.exists():
+        print(f"ERROR: skill path no existe: {skill_path}", file=sys.stderr)
+        return EXIT_VALIDATION
+
+    # IMPORT + ANALYZE + STRUCTURE + VALIDATE
+    report = analyze_skill(skill_path)
+
+    # REGISTER: persistir el Source en el storage del proyecto.
+    db_path = Path(project["db_path"])
+    if not db_path.exists():
+        print(f"ERROR: base de datos ausente: {db_path}", file=sys.stderr)
+        return EXIT_DB_MISSING
+    storage = Storage(db_path)
+    try:
+        register_imported_skill(
+            storage=storage,
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+            report=report,
+        )
+    finally:
+        storage.close()
+
+    # Reporte: stdout o --report path.
+    payload = json.dumps(report.to_dict(), indent=2, ensure_ascii=False)
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(payload, encoding="utf-8")
+        print(f"Fuente conservada: source_id={report.source_id}")
+        print(f"Content hash: {report.content_hash}")
+        print(
+            f"Archivos: {report.files_total} "
+            f"(estructurados={len(report.files_structured)}, "
+            f"ambiguos={len(report.entries_ambiguous)})"
+        )
+        print(f"Scripts detectados (NO ejecutados): {len(report.scripts_detected)}")
+        print(
+            f"Capacidades extraidas (senales, no verificadas): {len(report.capabilities_extracted)}"
+        )
+        print(f"Informe escrito en: {args.report}")
+    else:
+        print(payload)
     return EXIT_OK
 
 
