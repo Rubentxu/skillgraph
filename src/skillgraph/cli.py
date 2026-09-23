@@ -33,6 +33,17 @@ from skillgraph.errors import (
     UnknownKindError,
     ValidationError,
 )
+from skillgraph.graph_expansion import (
+    AddNode,
+    AddTransition,
+    Authorization,
+    GraphExpansionProposal,
+    RemoveTransition,
+    apply_expansion,
+    propose,
+    record_rejection,
+    validate,
+)
 from skillgraph.paths import (
     DEFAULT_TENANT,
     catalog_path,
@@ -40,7 +51,9 @@ from skillgraph.paths import (
     project_db_path,
     resolve_data_root,
 )
+from skillgraph.plan_loader import load_plan_file
 from skillgraph.storage import Storage
+from skillgraph.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 
 # --- Codigos de salida tipados (AGENTS.md §11.15 / contrato CLI) -------------
 #  0 OK
@@ -455,6 +468,53 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximo de pasadas de reconcile_run (default: 50).",
     )
 
+    # ----- expansion subcommand (H4 Slice 1) ---------------------------
+    # DISCOVER -> PROPOSE -> VALIDATE -> AUTHORIZE -> APPLY.
+    # Ver specs/h4-slice-1.md y blueprint §5 §5-§6.
+    ex = sub.add_parser(
+        "expansion",
+        help="Expansion controlada del WorkflowPlan (H4).",
+    )
+    ex_sub = ex.add_subparsers(dest="expansion_command", required=True)
+
+    ep = ex_sub.add_parser(
+        "propose",
+        help="Crea una propuesta desde un archivo JSON.",
+    )
+    ep.add_argument("project", help="Proyecto destino (debe existir).")
+    ep.add_argument(
+        "proposal_json",
+        type=Path,
+        help="Archivo JSON con la propuesta.",
+    )
+
+    ea = ex_sub.add_parser(
+        "apply",
+        help="Aplica una propuesta (validacion + APPLY).",
+    )
+    ea.add_argument("project", help="Proyecto destino.")
+    ea.add_argument("--proposal", type=Path, required=True)
+    ea.add_argument(
+        "--plan-file",
+        type=Path,
+        default=None,
+        help="WorkflowPlan a expandir (default: <data>/plans/<project>.json).",
+    )
+
+    er = ex_sub.add_parser(
+        "rejections",
+        help="Lista propuestas rechazadas (UAT-09 evidencia).",
+    )
+    er.add_argument("project", help="Proyecto destino.")
+
+    eval_p = ex_sub.add_parser(
+        "validate",
+        help="Solo valida, no aplica. Imprime el resultado.",
+    )
+    eval_p.add_argument("project", help="Proyecto destino.")
+    eval_p.add_argument("--proposal", type=Path, required=True)
+    eval_p.add_argument("--plan-file", type=Path, default=None)
+
     # ----- knowledge subcommand (H3 Slice 5) -----
     kn = sub.add_parser(
         "knowledge",
@@ -536,6 +596,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_run(args)
         if args.command == "knowledge":
             return _route_knowledge(args)
+        if args.command == "expansion":
+            return _route_expansion(args)
     except SkillGraphError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
         return EXIT_DOMAIN
@@ -559,6 +621,22 @@ def _route_knowledge(args: argparse.Namespace) -> int:
         return cmd_knowledge_trace(args)
     parser_local = _build_parser()
     parser_local.parse_args(["knowledge", "--help"])
+    return EXIT_USAGE  # unreachable
+
+
+def _route_expansion(args: argparse.Namespace) -> int:
+    """Enruta subcommand `expansion` al handler correspondiente."""
+    sub = args.expansion_command
+    if sub == "propose":
+        return cmd_expansion_propose(args)
+    if sub == "apply":
+        return cmd_expansion_apply(args)
+    if sub == "validate":
+        return cmd_expansion_validate(args)
+    if sub == "rejections":
+        return cmd_expansion_rejections(args)
+    parser_local = _build_parser()
+    parser_local.parse_args(["expansion", "--help"])
     return EXIT_USAGE  # unreachable
 
 
@@ -762,6 +840,361 @@ def cmd_run(args: argparse.Namespace) -> int:
     if snap.state == "FAILED":
         return EXIT_RUN_FAILED
     return EXIT_RUN_INCOMPLETE
+
+
+# ---------------------------------------------------------------------------
+# H4 Slice 1: expansion controlada CLI (UAT-08/09)
+# ---------------------------------------------------------------------------
+
+
+def _open_project_or_error(
+    args: argparse.Namespace, project_name: str
+) -> tuple[dict[str, str] | None, int]:
+    """Helper: resuelve un proyecto y abre su DB."""
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, err = resolver.lookup(project_name)
+    if err is not None:
+        return None, err
+    db_path = Path(project["db_path"])
+    if not db_path.exists():
+        print(
+            f"ERROR: base de datos ausente: {db_path}",
+            file=sys.stderr,
+        )
+        return None, EXIT_DB_MISSING
+    return project, EXIT_OK
+
+
+def _load_registry(project_db: Path, *, tenant_id: str, project_id: str) -> dict[str, str]:
+    """Devuelve dict capability_name -> brick_ref, leido de los resources
+    del proyecto.
+
+    Usa la API publica ``Storage.list_resources`` (H1). Las capabilities
+    viven en ``spec_json.spec.capabilities`` (JSON del brick).
+    """
+    storage = Storage(project_db)
+    try:
+        rows = storage.list_resources(tenant_id=tenant_id, project_id=project_id)
+    finally:
+        storage.close()
+    out: dict[str, str] = {}
+    for r in rows:
+        try:
+            spec = json.loads(r.get("spec_json", "{}") or "{}")
+        except (ValueError, TypeError):
+            continue
+        caps = (spec or {}).get("capabilities", []) or []
+        ns = r.get("namespace", "?")
+        kind = r.get("kind", "?")
+        name = r.get("name", "?")
+        for cap in caps:
+            out[cap] = f"{ns}:{kind}/{name}"
+    return out
+
+
+def _plan_path(project_dir: Path) -> Path:
+    return project_dir / "plan.json"
+
+
+def _load_plan_from_storage(project_dir: Path) -> WorkflowPlan:
+    """Carga el WorkflowPlan asociado al proyecto desde ``<project_dir>/plan.json``.
+
+    Si no existe, levanta EXIT_PLAN_NOT_FOUND. Para H4 slice-1 el formato
+    es el mismo JSON que produce ``WorkflowPlan``-as-dict en tests; extendido
+    en slice-2 (storage dedicado).
+    """
+    path = _plan_path(project_dir)
+    if not path.is_file():
+        print(
+            f"ERROR: plan no encontrado en {path}. "
+            "El slice-1 espera <data>/tenants/default/projects/<p>/plan.json",
+            file=sys.stderr,
+        )
+        sys.exit(EXIT_PLAN_NOT_FOUND)
+    import json as _json
+
+    raw = _json.loads(path.read_text())
+    nodes = tuple(
+        WorkflowNode(
+            name=n["name"],
+            kind=n["kind"],
+            namespace=n["namespace"],
+            api_version=n["api_version"],
+            resource_revision=n["resource_revision"],
+            expected_result=n["expected_result"],
+            capabilities=tuple(n.get("capabilities", ())),
+            metadata=n.get("metadata", {}) or {},
+        )
+        for n in raw["nodes"]
+    )
+    transitions = tuple(
+        WorkflowTransition(
+            source=t["source"],
+            outcome=t["outcome"],
+            target=t["target"],
+        )
+        for t in raw.get("transitions", ())
+    )
+    return WorkflowPlan(
+        nodes=nodes,
+        initial=raw["initial"],
+        transitions=transitions,
+    )
+
+
+def _load_plan_from_path(plan_path: Path) -> WorkflowPlan:
+    """Carga un WorkflowPlan desde un archivo: JSON interno o YAML/Markdown.
+
+    Slice-1: detecta por extension/presencia de front matter.
+    - Si empieza con ``{`` -> JSON directo.
+    - Si empieza con ``---\\n`` -> YAML via ``load_plan_file``.
+    """
+    raw = plan_path.read_text()
+    stripped = raw.lstrip()
+    if stripped.startswith("{"):
+        return _load_plan_from_storage(plan_path.parent)
+    return load_plan_file(plan_path)
+
+
+def _write_plan_to_storage(project_dir: Path, plan: WorkflowPlan) -> None:
+    """Persiste el plan nuevo tras ``apply_expansion``."""
+    import json as _json
+
+    payload = {
+        "nodes": [
+            {
+                "name": n.name,
+                "kind": n.kind,
+                "namespace": n.namespace,
+                "api_version": n.api_version,
+                "resource_revision": n.resource_revision,
+                "expected_result": n.expected_result,
+                "capabilities": list(n.capabilities),
+                "metadata": n.metadata,
+            }
+            for n in plan.nodes
+        ],
+        "initial": plan.initial,
+        "transitions": [
+            {"source": t.source, "outcome": t.outcome, "target": t.target} for t in plan.transitions
+        ],
+    }
+    path = _plan_path(project_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _ops_from_dict(ops_json: list[dict[str, object]]) -> tuple[object, ...]:
+    """Deserializa la lista de operaciones PatchOp desde JSON."""
+    ops: list[object] = []
+    for op in ops_json:
+        kind = op["op"]
+        if kind == "add_node":
+            node_data = op["node"]  # type: ignore[assignment]
+            assert isinstance(node_data, dict)
+            node = WorkflowNode(
+                name=node_data["name"],
+                kind=node_data["kind"],
+                namespace=node_data["namespace"],
+                api_version=node_data["api_version"],
+                resource_revision=node_data["resource_revision"],
+                expected_result=node_data["expected_result"],
+                capabilities=tuple(node_data.get("capabilities", [])),
+                metadata=node_data.get("metadata", {}) or {},
+            )
+            ops.append(AddNode(node=node))
+        elif kind == "add_transition":
+            t_data = op["transition"]  # type: ignore[assignment]
+            assert isinstance(t_data, dict)
+            trans = WorkflowTransition(
+                source=t_data["source"],
+                outcome=t_data["outcome"],
+                target=t_data["target"],
+            )
+            ops.append(AddTransition(transition=trans))
+        elif kind == "remove_transition":
+            ops.append(
+                RemoveTransition(
+                    from_node=op["from_node"],  # type: ignore[arg-type]
+                    outcome=op["outcome"],  # type: ignore[arg-type]
+                )
+            )
+        else:
+            raise ValidationError(f"op desconocida: {kind!r}")
+    return tuple(ops)
+
+
+def _load_proposal_json(path: Path) -> GraphExpansionProposal:
+    """Carga una propuesta desde JSON, validando campos minimos."""
+    import json as _json
+
+    raw = _json.loads(path.read_text())
+    auth_raw = raw["authorization"]
+    authorization = Authorization(
+        mode=auth_raw["mode"],
+        granted_by=auth_raw.get("granted_by"),
+        granted_at=auth_raw.get("granted_at"),
+    )
+    return propose(
+        base_revision=raw["base_revision"],
+        problem_observed=raw["problem_observed"],
+        evidence=tuple(raw.get("evidence", [])),
+        operations=_ops_from_dict(raw["operations"]),
+        new_dependencies=tuple(raw.get("new_dependencies", [])),
+        capabilities_needed=tuple(raw.get("capabilities_needed", [])),
+        scope=raw.get("scope", "NODE"),
+        attachment_point=raw["attachment_point"],
+        rollback_plan=tuple(raw.get("rollback_plan", [])),
+        authorization=authorization,
+        author=raw["author"],
+    )
+
+
+def cmd_expansion_propose(args: argparse.Namespace) -> int:
+    """``sg expansion propose <project> <proposal.json>``: imprime el proposal_id."""
+    project, rc = _open_project_or_error(args, args.project)
+    if rc != EXIT_OK:
+        return rc
+    assert project is not None
+    try:
+        proposal = _load_proposal_json(args.proposal_json)
+    except (KeyError, ValueError, ValidationError) as exc:
+        print(f"ERROR: propuesta invalida: {exc}", file=sys.stderr)
+        return EXIT_VALIDATION
+    project_dir = Path(project["db_path"]).parent
+    proposals_dir = project_dir.parent.parent / "expansion_proposals"
+    proposals_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "proposal_id": proposal.proposal_id,
+        "author": proposal.author,
+        "created_at": proposal.created_at,
+        "problem_observed": proposal.problem_observed,
+        "operations": str(args.proposal_json),
+        "capabilities_needed": list(proposal.capabilities_needed),
+        "new_dependencies": list(proposal.new_dependencies),
+        "attachment_point": proposal.attachment_point,
+        "authorization_mode": proposal.authorization.mode,
+    }
+    out = proposals_dir / f"{proposal.proposal_id}.json"
+    out.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    print(f"Propuesta {proposal.proposal_id} registrada en {out}")
+    return EXIT_OK
+
+
+def cmd_expansion_apply(args: argparse.Namespace) -> int:
+    """``sg expansion apply <project> --proposal P --plan-file F``: aplica."""
+    project, rc = _open_project_or_error(args, args.project)
+    if rc != EXIT_OK:
+        return rc
+    assert project is not None
+    project_dir = Path(project["db_path"]).parent
+    try:
+        proposal = _load_proposal_json(args.proposal)
+    except (KeyError, ValueError, ValidationError) as exc:
+        print(f"ERROR: propuesta invalida: {exc}", file=sys.stderr)
+        return EXIT_VALIDATION
+
+    if args.plan_file is not None:
+        # Carga desde Markdown+YAML o JSON interno (segun formato del archivo).
+        plan = _load_plan_from_path(args.plan_file)
+        # Persiste la version "canonica" del plan en project_dir/plan.json
+        # para que ``apply`` pueda usarla como base y la propuesta modifique
+        # ese archivo al aplicar.
+        _write_plan_to_storage(project_dir, plan)
+    try:
+        plan = _load_plan_from_storage(project_dir)
+    except SystemExit:
+        return EXIT_PLAN_NOT_FOUND
+
+    registry = _load_registry(
+        Path(project["db_path"]),
+        tenant_id=project["tenant_id"],
+        project_id=project["name"],
+    )
+    result = apply_expansion(proposal, plan, registry=registry)
+
+    if result.is_err():
+        err = result.unwrap_err()
+        rejection_path = record_rejection(
+            proposal,
+            reason=err.reason,
+            rejected_by="validator-cli",
+            project_dir=project_dir,
+            violated_invariants=err.violated_invariants,
+        )
+        print(
+            f"REJECTED: {proposal.proposal_id}: {err.reason} (violated={list(err.violated_invariants)})",
+            file=sys.stderr,
+        )
+        print(f"Evidencia persistida en {rejection_path}", file=sys.stderr)
+        return EXIT_DOMAIN
+
+    new_plan = result.unwrap()
+    _write_plan_to_storage(project_dir, new_plan)
+    print(f"OK: {proposal.proposal_id} aplicado. Nuevo plan en {_plan_path(project_dir)}")
+    print(f"Nodos antes: {len(plan.nodes)} -> despues: {len(new_plan.nodes)}")
+    return EXIT_OK
+
+
+def cmd_expansion_validate(args: argparse.Namespace) -> int:
+    """``sg expansion validate ...``: imprime ValidationResult, no muta."""
+    project, rc = _open_project_or_error(args, args.project)
+    if rc != EXIT_OK:
+        return rc
+    assert project is not None
+    project_dir = Path(project["db_path"]).parent
+    try:
+        proposal = _load_proposal_json(args.proposal)
+    except (KeyError, ValueError, ValidationError) as exc:
+        print(f"ERROR: propuesta invalida: {exc}", file=sys.stderr)
+        return EXIT_VALIDATION
+
+    if args.plan_file is not None:
+        plan = _load_plan_from_path(args.plan_file)
+        _write_plan_to_storage(project_dir, plan)
+    try:
+        plan = _load_plan_from_storage(project_dir)
+    except SystemExit:
+        return EXIT_PLAN_NOT_FOUND
+
+    registry = _load_registry(
+        Path(project["db_path"]),
+        tenant_id=project["tenant_id"],
+        project_id=project["name"],
+    )
+    result = validate(proposal, plan=plan, registry=registry)
+    out = {
+        "accepted": result.accepted,
+        "reason": result.reason,
+        "violated_invariants": list(result.violated_invariants),
+        "warnings": list(result.warnings),
+    }
+    print(json.dumps(out, indent=2))
+    return EXIT_OK if result.accepted else EXIT_DOMAIN
+
+
+def cmd_expansion_rejections(args: argparse.Namespace) -> int:
+    """``sg expansion rejections <project>``: lista rechazos persistidos."""
+    project, rc = _open_project_or_error(args, args.project)
+    if rc != EXIT_OK:
+        return rc
+    assert project is not None
+    project_dir = Path(project["db_path"]).parent
+    rej_dir = project_dir / "expansion_rejections"
+    if not rej_dir.is_dir():
+        print("(sin rechazos)")
+        return EXIT_OK
+    files = sorted(p for p in rej_dir.iterdir() if p.suffix == ".json")
+    if not files:
+        print("(sin rechazos)")
+        return EXIT_OK
+    for p in files:
+        data = json.loads(p.read_text())
+        print(
+            f"- {data['proposal_id']}: reason={data['reason']!r} "
+            f"rejected_by={data['rejected_by']!r} at={data['rejected_at']}"
+        )
+    return EXIT_OK
 
 
 if __name__ == "__main__":

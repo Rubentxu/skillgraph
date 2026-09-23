@@ -1,12 +1,37 @@
 {
-  "uat_id": "UAT-08",
-  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
-  "timestamp": "2026-09-23T10:33:23Z",
-  "scenario": "Dada una problematica no contemplada, cuando se propone un subgrafo valido y autorizado, entonces se incorpora unicamente el cambio solicitado.",
-  "expected": "Los nodos completados mantienen sus revisiones y resultados originales.",
-  "observed": "No auditado: requiere feature no implementada.",
-  "steps": [],
   "artifacts": [],
-  "status": "BLOCKED",
-  "notes": "H4 Expansión controlada (GraphExpansion/GraphPatch) NO implementado. Eventos GraphExpansionProposed/Accepted existen en runtime pero sin policy engine."
+  "expected": "apply rc=0; plan.nodes contiene nuevo nodo 'extra'; originales intactos",
+  "notes": "H4 Slice 1 implementado. UAT-08 cumple 'incorpora unicamente el cambio solicitado' + 'nodos completados mantienen revisiones y resultados originales'. apply devuelve plan NUEVO (inmutable); el original no se toca. Las revisiones de completados viven en node_executions (H2 slice 4+) y el patch opera a nivel de plan, no de ejecuciones.",
+  "observed": "apply_rc=0; nodes_after=['child', 'extra', 'root']; added=True",
+  "revision": "HEAD",
+  "scenario": "Dada una problematica no contemplada, cuando se propone un subgrafo valido y autorizado, entonces se incorpora unicamente el cambio solicitado. Los nodos completados mantienen sus revisiones y resultados originales.",
+  "status": "PASS",
+  "steps": [
+    {
+      "cmd": "init",
+      "returncode": "0",
+      "stderr": "",
+      "stdout": "(omitido)"
+    },
+    {
+      "cmd": "project create demo",
+      "returncode": "0",
+      "stderr": "",
+      "stdout": "(omitido)"
+    },
+    {
+      "cmd": "brick register lint-brick",
+      "returncode": "0",
+      "stderr": "",
+      "stdout": "(omitido)"
+    },
+    {
+      "cmd": "expansion apply demo --proposal prop.json --plan-file plan.json",
+      "returncode": "0",
+      "stderr": "",
+      "stdout": "OK: prop-621232e781c4 aplicado. Nuevo plan en /var/home/rubentxu/.jcode/scratch/pytest-of-rubentxu/pytest-173/test_uat_08_authorized_applied0/sg-data/tenants/default/projects/demo/plan.json\nNodos antes: 2 -> despues: 3\n"
+    }
+  ],
+  "timestamp": "2026-09-23T11:00:00Z",
+  "uat_id": "UAT-08"
 }

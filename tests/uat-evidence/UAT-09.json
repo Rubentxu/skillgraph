@@ -1,12 +1,39 @@
 {
-  "uat_id": "UAT-09",
-  "revision": "cb7e34822b611312c28f8fd9dd96690ddffcccd6",
-  "timestamp": "2026-09-23T10:33:23Z",
-  "scenario": "Dada una propuesta que solicita nuevas capacidades, cuando no existe autorizacion, entonces el motor no incorpora la ampliacion.",
-  "expected": "Debe conservarse evidencia de su rechazo o de su estado de espera.",
-  "observed": "No auditado: requiere feature no implementada.",
-  "steps": [],
-  "artifacts": [],
-  "status": "BLOCKED",
-  "notes": "H4 Expansión controlada (policy engine) NO implementado."
+  "artifacts": [
+    "/var/home/rubentxu/.jcode/scratch/pytest-of-rubentxu/pytest-173/test_uat_09_unauthorized_capab0/sg-data/tenants/default/projects/demo/expansion_rejections/prop-1888f59d4e4d.json"
+  ],
+  "expected": "apply rc=10; expansion_rejections/*.json con reason=I3",
+  "notes": "UAT-09 cierra: la propuesta con capability 'fantasma_xyz' viola I3 (capability no registrada en el registry). El CLI rechaza (rc=10 EXIT_DOMAIN) y persiste la evidencia JSON en expansion_rejections/<proposal_id>.json con reason, violated_invariants, rejected_by, rejected_at.",
+  "observed": "apply_rc=10; rejection_file=prop-1888f59d4e4d.json; reason='I3 violated'; violations=['I3']",
+  "revision": "HEAD",
+  "scenario": "Dada una propuesta que solicita nuevas capacidades, cuando no existe autorizacion, entonces el motor no incorpora la ampliacion. Debe conservarse evidencia de su rechazo o de su estado de espera.",
+  "status": "PASS",
+  "steps": [
+    {
+      "cmd": "init",
+      "returncode": "0",
+      "stderr": "",
+      "stdout": "(omitido)"
+    },
+    {
+      "cmd": "project create demo",
+      "returncode": "0",
+      "stderr": "",
+      "stdout": "(omitido)"
+    },
+    {
+      "cmd": "brick register lint-brick",
+      "returncode": "0",
+      "stderr": "",
+      "stdout": "(omitido)"
+    },
+    {
+      "cmd": "expansion apply demo --proposal prop.json",
+      "returncode": "10",
+      "stderr": "REJECTED: prop-1888f59d4e4d: I3 violated (violated=['I3'])\nEvidencia persistida en /var/home/rubentxu/.jcode/scratch/pytest-of-rubentxu/pytest-173/test_uat_09_unauthorized_capab0/sg-data/tenants/default/projects/demo/expansion_rejections/prop-1888f59d4e4d.json\n",
+      "stdout": ""
+    }
+  ],
+  "timestamp": "2026-09-23T11:00:00Z",
+  "uat_id": "UAT-09"
 }

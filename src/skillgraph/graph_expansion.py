@@ -542,11 +542,16 @@ def record_rejection(
     reason: str,
     rejected_by: str,
     project_dir: Path,
+    violated_invariants: tuple[str, ...] = (),
 ) -> Path:
     """Persiste evidencia de rechazo (UAT-09).
 
     Crea un archivo ``expansion_rejections/<proposal_id>.json`` dentro
     del directorio del proyecto. Devuelve la ruta del archivo.
+
+    ``violated_invariants`` es opcional: si la rechazo viene del
+    validador (I1..I6), se persiste para audit. Los rechazos por
+    autorizacion (I0) o por error de carga no llevan invariantes.
     """
     target_dir = project_dir / "expansion_rejections"
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -564,6 +569,7 @@ def record_rejection(
         "rejected_by": rejected_by,
         "rejected_at": now_iso(),
         "reason": reason,
+        "violated_invariants": list(violated_invariants),
     }
     target.write_text(json.dumps(payload, indent=2, sort_keys=True))
     return target
