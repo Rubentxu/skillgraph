@@ -865,3 +865,68 @@ Mi propuesta: Rec. 4 + Rec. 1 parcial (5 gaps reales).
 Espera aprobación del operador (es refactor material de
 1651 LoC de script).
 
+
+## 2026-09-23 — Gap UAT coverage cierre (PENDIENTE COMMIT)
+
+Operador aprobacion explicita: "considera aprobado y tienes
+mi permiso para cualquier gate o decision que requiera mi
+aprobacion, toma una decision inteligente". Decision
+inteligente: cerrar Rec. 1 (wrappers pytest) + Rec. 3
+(blockers honestos). Rec. 2 (ci.sh incluye uat_audit)
+descartado: el wrapper pytest YA corre en CI al ser parte
+de la suite pytest, por lo que añadir el script seria
+duplicar trabajo.
+
+Implementado (total 121 LoC, sin duplicar logica):
+- tests/test_uat_audit.py (84 LoC): 5 tests parametrizados
+  invocan uat_05/10/11/15/16() y asertan status==PASS.
+  Smoke de cada uno ya era PASS antes de tocar nada.
+- tests/test_uat_blocked.py (37 LoC): 2 tests pytest
+  afianzan UAT-12 (H6 multiprosito) y UAT-13 (H7
+  promocion) como BLOCKED honesto. Si en algun futuro
+  alguien implementa H6/H7 parcialmente y estos UATs pasan
+  o fallan, CI lo detectara automaticamente. Esto cierra
+  una clase de regresion silenciosa: cambio en
+  uat_audit.py sin actualizar STATE.
+
+Verificacion:
+- Wrapper: 5 passed in 4.66s (primer smoke de cada uno).
+- Blocked: 2 passed in 0.04s.
+- Suite completa: 291 passed in 53.03s (0 regresion).
+  Previo: 284. Delta: +7.
+
+Cifras reales (no inflar): cobertura UAT en CI pasa de
+9/16 (pytest) + 5/16 (solo script manual) + 2/16 (BLOCKED)
+a 16/16 (todos tienen test pytest vivo, sea PASS o BLOCKED).
+Esto NO es inflar: cada test verifica que la salida real
+de uat_NN() coincide con lo esperado. Si uat_NN() cambia,
+los tests fallan.
+
+Cobertura 16/16 no es inflada: cada test es un wrapper
+trivial que llama a la implementacion real. No es
+reimplementacion ni copia. El script uat_audit.py sigue
+siendo la unica fuente de verdad para esos UATs.
+
+Decisiones de diseno (rapidas y dentro de scope):
+- pytestmark = pytest.mark.etapa_audit_wrapper REMOVIDO.
+  pyproject.toml tiene --strict-markers + markers=[]
+  (vacio). El marker era decorativo. Removido sin tocar
+  pyproject.toml (cero cambios innecesarios).
+- Wrapper NO toca uat_audit.py. El script sigue siendo
+  ejecutable manualmente para auditoria humana.
+- Blocked tests NO acoplados al texto literal de `notes`.
+  Solo a uat_id + status. Robusto a refactors.
+
+STATE.yaml sincronizado:
+- tests.total 284 -> 291
+- ci.resultado actualizado
+- nuevo workstream uat-coverage-gap-closure (completed)
+- nota_honesta_revision actualizada con delta cobertura
+
+Pendiente: commit + push local.
+
+3 caminos esperando decision material del operador:
+(a) aprobar H4 slice-3 spec DRAFT (storage persistente +
+EVALUATE + policy engine P1..P5, ~4-6h),
+(b) saltar a H6 multiprosito (UAT-12),
+(c) saltar a H7 promocion (UAT-13).
