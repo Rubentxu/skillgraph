@@ -1814,3 +1814,79 @@ coste bajo. (1), (3), (4) mantienen su prioridad documentada.
 | No emitir eventos | inspeccion | OK (no aparece EventLog) |
 | ruff format+check | `ruff format src tests && ruff check src tests` | All checks passed |
 | `scripts/ci.sh` | `bash scripts/ci.sh` | 487 passed in ~173s, OK |
+
+---
+
+## 2026-09-23 19:14 — H9-BSlice3: S6 + S7 + S1(create_run) cerrados en cadena
+
+### Slices ejecutados (3 commits atomicos)
+
+- **eb573d1 (S6)**: `Storage.complete_node_execution` +
+  shim trivial en `RunController._execute_one`. UPDATE
+  node_executions SUCCEEDED + outcome + result_json +
+  finished_at. Las dos emisiones de eventos (node_completed
+  + evidence_produced) siguen del RunController.
+
+- **cc7dadb (S7)**: `Storage.mark_node_failed` + shim en
+  `RunController._mark_node_failed`. UPDATE node_executions
+  FAILED + error + finished_at. El RunController orquesta
+  `node_failed`.
+
+- **6f8337e (S1-create_run)**: `Storage.create_run` + shim en
+  `RunController.create_run`. INSERT workflow_runs con
+  state=CREATED + plan_json + current_node. Storage genera
+  el `run_id` (es la unica pieza que sabe de IDs); el caller
+  pasa plan_json ya serializado. Import lazy de `new_run_id`
+  desde runtime (la funcion vive ahi desde Etapa 0) para
+  evitar ciclo runtime<->platform.
+
+### Patron uniforme S3-S7-S1
+
+- Storage: API keyword-only, encapsula 1 mutacion atomica,
+  docstring que aclara "no emite eventos; llamador orquesta".
+- RunController: shim trivial que delega y sigue orquestando
+  el evento inmediatamente despues, fuera de transaccion.
+- Tests: 5-7 contrato observable + 1 introspeccion no-regresion
+  (regex `\bINSERT INTO <tabla>\b` o `\bUPDATE <tabla>\b`
+  ausente en el metodo RunController correspondiente).
+- Test "passed-through verbatim": blindan contra una
+  regresion donde Storage intente serializar, transformar
+  o reordenar el payload del caller (plan_json, result_json,
+  error).
+
+### Estado final del inventario original (10 SQL sites)
+
+- **Cerrados** (8): S1(create_run), S2 (lecturas iniciales en S1),
+  S3, S4, S5, S6, S7, S8/9-parcialmente (ya no hay SQL directo
+  que dependa de `self._conn`).
+- **Vivos** (2): S8 (parametro `conn=` en
+  `RunController.__init__`) y S9 (`self._conn` asignado pero
+  sin uso). Ambos son **eliminables** pero implican cambio de
+  API publica: 16+ callsites en CLI + tests pasan
+  `conn=storage._conn`.
+
+### Bloqueo actual: S8+S9 requieren decision
+
+- **Consigna del operador** (politica H9): "parar y presentar"
+  cuando aparezca cambio de API publica. S8+S9 eliminan
+  `conn=` del `__init__` del RunController, lo cual rompe la
+  firma externa (16+ callsites).
+- **Opciones** que se presentaran:
+  1. S8+S9 juntos: refactor del constructor + actualizar todos
+     los callsites. Es un slice mas grande (no atomico), pero
+     elimina definitivamente la posibilidad de SQL directo
+     fuera de Storage.
+  2. S8+S9 con `conn: sqlite3.Connection | None = None`:
+     retro-compatible. El `self._conn` se asigna solo si llega,
+     y el RunController nunca lo usa.
+  3. Mover `EventLog` a Storage: `Storage.append_event(...)`
+     pasa a ser la API publica para eventos. El RunController
+     deja de construir `EventLog` y desaparece la razon de
+     pasar `conn`.
+
+### Validacion al cierre de este tramo
+
+- `scripts/ci.sh` completo: **518/518 verde en 106s**.
+- `ruff format+check`: All checks passed.
+- Working tree limpio (3 commits atomicos + docs(state)).
+

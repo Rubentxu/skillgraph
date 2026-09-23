@@ -564,6 +564,31 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
   observable. Las pruebas T1..T6 de caracterización siguen verdes
   sin tocar nada.
 
+## UPDATE 2026-09-23 19:14 — H9-BSlice3 S1+S3+S5+S6+S7 (cuatro slices) cerrados
+
+- **S6 cerrado**: `Storage.complete_node_execution` +
+  `RunController._execute_one` shim (UPDATE node_executions
+  SUCCEEDED + outcome + result_json). Las dos emisiones de
+  eventos (node_completed + evidence_produced) siguen siendo
+  del RunController. +6 tests.
+- **S7 cerrado**: `Storage.mark_node_failed` +
+  `RunController._mark_node_failed` shim (UPDATE node_executions
+  FAILED + error). El RunController orquesta `node_failed`.
+  +6 tests.
+- **S1 cerrado (create_run)**: `Storage.create_run` + shim en
+  `RunController.create_run`. Storage pasa a generar el
+  `run_id` (es la unica pieza que sabe de IDs). Import lazy
+  de `new_run_id` desde runtime para evitar ciclo. +7 tests.
+- **Tras estos 3 slices**, el inventario original de 10 SQL
+  sites del RunController queda en **2 sitios vivos**:
+  S8 (parametro `conn=` en `__init__`) y S9
+  (`self._conn` ya no se usa pero sigue asignado).
+- **518/518 verde** (`scripts/ci.sh` ~106s).
+- **Siguiente paso bloqueado por decision arquitectonica**:
+  S8+S9 son **cambio de API publica** (16+ callsites en CLI
+  + tests que pasan `conn=storage._conn` al constructor).
+  Política H9: parar y presentar.
+
 ## UPDATE 2026-09-23 18:38 — H9-BSlice3-S4 (recuperación sin evento) cerrado
 
 - **Slice**: `_recover_interrupted` migrado a API pública
