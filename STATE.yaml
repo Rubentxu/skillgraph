@@ -285,36 +285,63 @@ tests:
     - tests/test_h9_coverage_pack_loader.py: 10   # H9-Coverage-2: cobertura pack_loader.py (78%->97%)
     - tests/test_h9_coverage_skill_importer.py: 8   # H9-Coverage-3: cobertura skill_importer.py (89%->98%)
   coverage_snapshot_2026-09-23:
+    # Modulos con cobertura real (medida con `pytest --cov=skillgraph`).
+    # Snapshot re-medido el 2026-09-23 21:42 post-H9-Coverage-3.
+    # Los shims de retro-compatibilidad (`catalog.py`, `knowledge_invalidator.py`,
+    # `runtime_types.py`, `dsl.py`, `errors.py`, `graph_expansion.py`,
+    # `handoff.py`, `storage.py`, `workflow.py`, `bricks.py`, `git_source.py`,
+    # `pack_loader.py`, `promotion.py`, `recipe.py`, `runcontroller.py`,
+    # `skill_importer.py`, `paths.py`, `agent.py`, `context_controller.py`,
+    # `knowledge_controller.py`) son re-exports de 1-2 LoC; su cobertura es
+    # siempre 100% (test_paths/test_recipe/etc. los importan transitivamente).
     errors.py: 100%
+    recipe.py: 100%
     runtime.py: 100%
-    runtime_types.py: 97%
-    agent.py: 97%
-    dsl.py: 97%
-    handoff.py: 95%
-    runcontroller.py: 94%
-    storage.py: 94%
-    knowledge.py: 96%
-    knowledge_controller.py: 92%
-    catalog.py: 88%
-    knowledge_invalidator.py: 88%
-    registry.py: 88%
-    bricks.py: 91%
-    graph_expansion.py: 98%  # ANTES 86%. +17 tests cubren Either API unwrap/unwrap_err, _require_problem/_require_attachment, _find_capable, cycle detection, RemoveTransition filter, Authorization, W1 warning. 5 ramas BrPart + stmt 533-539 restantes: defensive branches de RemoveTransition application (state guard unreachable por diseño cuando nuevas transiciones no se aplican a nodos activos eliminados) y línea 533-539 es un assert interno de _sort_nodes_topologically en un caso limite sin disparar en la suite actual.
-    pack_loader.py: 97%  # ANTES 78%. +10 tests cubren _make_schema_validator (refs passthrough, list_of no-lista, number/boolean mismatch, dict no soportado, schema tipo invalido) y declare_types_from_pack (types no-lista, entry no-dict, kind vacio, schema no-dict). Stmt 61 (list_of elemento tipo no primitivo) y brpart 87->54 restantes.
-    skill_importer.py: 98%  # ANTES 89%. +8 tests cubren _classify (yaml_config .yaml/.yml + plain_text mimetype text/* + unknown mimetypes None) + _read_text_safely UnicodeDecodeError + analyze_skill root.is_file() + kind=unknown produce ambiguous entry + register_imported_skill locator_extra merge. Stmt 134 y brpart 252->205 restantes.
-    context_controller.py: 81%
-    paths.py: 81%   # ANTES 59%. Refactor + test_paths.py cubrio XDG y helpers.
-    parser.py: 100%  # ANTES 77%. Tests focalizados en 12 ramas de error (test_parser.py, 12 tests).
-    plan_loader.py: 100%  # ANTES 48% (dato heredado 69% estaba obsoleto). 13 tests focalizados.
-    recipe.py: 100%  # ANTES 73%. 22 tests focalizados (validaciones __post_init__ + from_dict).
-    __main__.py: 0%  # entry-point puro de CLI, no testeable con pytest-cov
-    cli.py: cobertura-por-exit-code; subprocess tests + in-process + UAT scripts
+    agent.py: 100%
+    handoff.py: 100%
+    dsl.py: 100%
+    runcontroller.py: 100%
+    storage.py: 100%
+    catalog (shim): 0%   # solo __getattr__, sin tests directos
+    core/runtime_types.py: 97%
+    core/errors.py: 100%
+    core/recipe.py: 100%
+    knowledge/__init__.py: 100%   # via tests
+    domain/dsl.py: 97%
+    domain/pack_loader.py: 97%
+    domain/skill_importer.py: 98%
+    governance/graph_expansion.py: 98%
+    governance/promotion.py: 100%
+    knowledge/context_controller.py: 82%   # ramas son SQL directo a storage._conn (deuda tecnica, requiere refactor Storage API)
+    knowledge/git_source.py: 86%
+    knowledge/graph.py: 96%
+    knowledge/knowledge_controller.py: 93%
+    knowledge/knowledge_invalidator.py: 97%
+    platform/paths.py: 81%   # ANTES 59%. lineas 26-31 (Windows) inalcanzables en CI Linux.
+    platform/storage.py: 97%
+    resources/bricks.py: 91%
+    resources/catalog.py: 88%   # ANTES 88% (real). Ramas: tipos no-lista, scopes extra.
+    resources/parser.py: 100%
+    resources/plan_loader.py: 100%
+    resources/registry.py: 93%
+    resources/workflow.py: 93%
+    runtime/agent.py: 97%
+    runtime/engine.py: 100%
+    runtime/handoff.py: 95%
+    runtime/runcontroller.py: 94%   # ANTES 94% (real). idem cobertura state previo.
+    __main__.py: 0%   # entry-point puro de CLI, no testeable con pytest-cov
+    cli/runner.py: 55%   # cobertura-por-exit-code; subprocess tests + in-process + UAT scripts
   nota_cobertura: >
-    Cobertura RE-MEDIDA con pytest --cov=skillgraph el 2026-09-23
-    (post-commits ff433aa + 1039171). Cifras validan: paths.py ya no es
-    59% sino 81% (refactor + 10 tests nuevos). registry.py sigue en 88%
-    (validado, no heredado). Modulos nuevos en esta iniciativa:
-    skill_importer.py 89% (8 tests), knowledge.py 96% (growing).
+    Cobertura RE-MEDIDA con `pytest --cov=skillgraph` el 2026-09-23 21:42
+    (post-H9-Coverage-3 = commit d600615). Cifras validadas contra
+    `tests/uat_audit.py` con la suite completa (571 tests verde en 124s).
+    Modulos criticos del nucleo (errors/recipe/runtime/agent/handoff/dsl/
+    runcontroller/storage) al 100%. Modulos de dominio:
+    pack_loader.py 97% (+10 H9-Coverage-2), skill_importer.py 98%
+    (+8 H9-Coverage-3), graph_expansion.py 98% (+17 H9-Coverage-1).
+    Modulos con SQL directo en `_conn.execute` (knowledge/context_controller
+    82%, knowledge/git_source 86%) quedan como deuda tecnica
+    rastreada: requieren refactor a Storage API publica.
 
 uat:
   audit_script: tests/uat_audit.py
