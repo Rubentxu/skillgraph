@@ -21,7 +21,7 @@ roadmap:
   current_hito: H4-Expansion-controlada-slice-2-cerrado
   next_milestone_gate: H4-slice-3-storage-persistente
   current_workitem: h4-expansion-cli-e2e
-  next_workitem: H4 slice-3 (storage.py persistente + EVALUATE stage + policy engine)
+  next_workitem: "4 caminos esperando decision del operador: (a) aprobar H4 slice-3 spec, (b) saltar a H6 multiprosito, (c) saltar a H7 promocion, (d) aprobar gap closure cobertura UAT en CI"
 
 python:
   minimum: "3.11"
@@ -272,4 +272,4 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "H4 slice-1+2+audit penal cerrados (commits 6f93eb2/bd95d29/7233fac). Slice-3 spec publicado DRAFT en specs/h4-slice-3.md (411 LoC) esperando aprobacion del operador (3 preguntas abiertas en §7). Sin trabajo desbloqueado de mayor ROI: H6 multiproposito (UAT-12) y H7 promocion (UAT-13) son saltos materiales que requieren decision del operador."
+next_action: "Sesion H4 Expansion controlada cerrada: 13 commits (6f93eb2..e088bee), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 14/16 UAT PASS honestos. 4 caminos bloqueados por decision material del operador (no trabajo desbloqueado de mayor ROI sin su input): (a) aprobar H4 slice-3 spec, (b) saltar a H6 multiprosito, (c) saltar a H7 promocion, (d) aprobar gap closure cobertura UAT."
