@@ -260,14 +260,42 @@ Cada slice entrega una pieza vertical observable. Cierran
 
 ## 8. Riesgos y decisiones pendientes
 
-### Decisión D1 — Librería Git
+### Decisión D1 — Librería Git ✅ (cerrada 2026-09-23)
 
-- Opción A: `pygit2` (binding libgit2, robusto pero binario).
-- Opción B: `dulwich` (pure Python, más portable).
-- Recomendación: **B (`dulwich`)**. SkillGraph es local-first;
-  evitar binarios C reduce la superficie de instalación.
-- Pendiente: spike de 1h para confirmar que cubre `blob`,
-  `commit`, `tree` y `status` que necesitamos.
+**Decisión: `dulwich`**.
+
+Evidencia del spike (probe en `/tmp/sg-git-spike`):
+
+| Métrica | dulwich | pygit2 |
+|---|---|---|
+| Tiempo de import | **5.76 ms** | 103.45 ms (~18× más) |
+| Binarios nativos | ninguno (pure Python) | `pygit2.libs/` = 14 MB (libgit2 C) |
+| Wheel instalado | 7 MB | 17 MB total |
+| API HEAD/Tree/Blob | `Repo.head()` + `repo[head]` + `tree.items()` | `repo.head.target` + `repo[tree]` |
+| API status | `porcelain.status(repo)` con `.staged`/`.unstaged`/`.untracked` separados | `repo.status()` dict {filename: flags} |
+| Cross-check SHAs | ✅ HEAD/tree/blob SHA coinciden con pygit2 | ✅ |
+
+**Motivos para `dulwich`:**
+- SkillGraph es **local-first**: al no usar networking ni push/pull,
+  pygit2 no aporta ventajas de rendimiento.
+- Pure Python reduce la superficie de instalación: `uv pip install dulwich`
+  no requiere compilador C ni dependencias de sistema.
+- API más limpia para nuestro caso: separar staged/unstaged/untracked
+  es exactamente el modelo conceptual del blueprint §5 (índice + working tree).
+- Wheel 2.5× menor: relevante para `mise` install limpio.
+
+**Trade-offs aceptados:**
+- pygit2 es ~2× más rápido en operaciones masivas (clones, fetch).
+  SkillGraph H3 NO clona repos remotos: solo lee `.git/` local. No aplica.
+- pygit2 soporta más features de libgit2 (worktrees múltiples, submodules).
+  SkillGraph H3 NO usa submodules; worktrees múltiples están fuera de scope.
+  Si H4+ los necesita, se reconsidera.
+
+**Pendiente operativo:** ~~spike de 1h para confirmar `dulwich` cubre también
+`git_log`.~~ **CERRADO 2026-09-23**: `dulwich.repo.Repo.get_walker(paths=[...])`
+cubre `git_log -- <path>` exactamente como necesitamos para
+`OutcomeTracer.from_run`. Filtros por pathspec funcionan. D1 cerrada
+por completo con evidencia reproducible.
 
 ### Decisión D2 — ContextRecipe como brick
 
