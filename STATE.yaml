@@ -10,7 +10,7 @@ no al historial completo (eso vive en SESSION-JOURNAL.md).
 
 goal:
   id: g-skillgraph-bootstrap
-  title: "Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0+S1) -> Etapa 1"
+  title: "Arrancar SkillGraph siguiendo el blueprint: Etapa 0 (S0+S1) -> Etapa 1 -> Etapa 2"
   source_of_truth: external/blueprint-v1/plan/ROADMAP.md
   principles_source: external/blueprint-v1/README.md
   adr_index: external/blueprint-v1/adr/
@@ -18,8 +18,10 @@ goal:
 roadmap:
   current_stage: 2
   current_spike: null
+  current_hito: H2
   next_milestone_gate: H3
-  current_workitem: cli-run-subcommand + docs-etapa2-cierre
+  current_workitem: cierre-honesto-auditoria (este commit)
+  next_workitem: etapa3-diseno (NO implementar antes de spec firmado)
 
 python:
   minimum: "3.11"
@@ -55,57 +57,101 @@ workstreams:
   - id: registro-ramas
     status: completed
     commit: "0433b63"
+  - id: etapa2-vertical-slice
+    items: [e2-s0, e2-s1, e2-s2, e2-s3, e2-s4, e2-s5]
+    status: completed
+    commits: ["92929a9", "64bc05d", "92a5174", "e763102"]
+  - id: refactor-funcional-h2
+    items: [runtime-types-adt, errors-extended, dsl-planbuilder, event-builder, cli-typed-codes]
+    status: completed
+    commits: ["051ab40", "a3f7950", "48ff638", "3e3dced", "10e5217"]
+  - id: uat-honest-closure
+    items: [uat-e2e-resume-or-start, cli-branches-coverage]
+    status: completed
+    commits: ["3bc66d9", "6011f60"]
+  - id: ci-minimo
+    items: [scripts-ci-sh]
+    status: completed
+    commits: ["4d8e80c"]
+  - id: agents-md-section-11
+    items: [haskell-inspired-functional-programming]
+    status: completed
+    commits: ["051ab40"]
 
 deliverables:
   - "external/blueprint-v1/ (ignorado): 12 docs + 12 ADR + 6 plan + README"
   - "pyproject.toml con hatchling + dynamic version + PEP 735 dev group"
-  - "src/skillgraph/: __init__, cli, errors, bricks, parser, registry, storage, catalog, paths"
-  - "tests/: test_s0_brick_minimo, test_s1_sqlite, test_cli_uat, test_registry_branches + conftest + fixtures/s0/"
+  - "src/skillgraph/: __init__, __main__, cli, errors, bricks, parser, registry, storage, catalog, paths, runtime, handoff, agent, workflow, runcontroller, plan_loader, dsl, runtime_types"
+  - "tests/: test_s0_brick_minimo, test_s1_sqlite, test_cli_uat, test_cli_run_uat, test_cli_branches, test_registry_branches, test_runtime_events, test_handoff, test_agent_adapter, test_workflow_plan, test_runcontroller, test_dsl + conftest"
   - ".gitignore con caches, build, .skillgraph/, docs/, external/"
   - ".gitattributes con LF + diffs limpios"
   - "mise.toml: python 3.13.15, uv 0.12.17, tasks sync/test/lint/format/cli"
+  - "scripts/ci.sh: gate unico ejecutable (ruff format + ruff check + pytest)"
   - "CURRENT.md, STATE.yaml, SESSION-JOURNAL.md"
+  - "AGENTS.md cerrado con 11 secciones (incluida §11 Haskell-inspired)"
   - "uv.lock reproducible"
 
 tests:
-  total: 127
-  passed: 127
-  duration_s: 13.83
-  coverage:
-    registry.py: 88%
-    storage.py: 90%
-    catalog.py: 88%
-    parser.py: 77%
-    bricks.py: 91%
+  total: 161
+  passed: 161
+  duration_s: 20.89
+  files:
+    - tests/test_s0_brick_minimo.py: 10
+    - tests/test_s1_sqlite.py: 7
+    - tests/test_cli_uat.py: 10
+    - tests/test_cli_run_uat.py: 8
+    - tests/test_cli_branches.py: 8
+    - tests/test_registry_branches.py: 13
+    - tests/test_runtime_events.py: 19
+    - tests/test_handoff.py: 23
+    - tests/test_agent_adapter.py: 9
+    - tests/test_workflow_plan.py: 19
+    - tests/test_runcontroller.py: 10
+    - tests/test_dsl.py: 18
+  coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
     handoff.py: 100%
     agent.py: 100%
     workflow.py: 100%
+    runtime_types.py: 100%
+    dsl.py: ~98%
     runcontroller.py: 96%
-    cli.py: 41%   # paths de error no ejercitados explicitamente
-    paths.py: 59% # helpers de OS-especficos no cubiertos en CI
+    bricks.py: 91%
+    storage.py: 90%   # "replace" no-op branch
+    catalog.py: 88%
+    registry.py: 88%
+    parser.py: 77%
+    plan_loader.py: ~80%
+    paths.py: 59%     # Windows LOCALAPPDATA
+    cli.py: cobertura-por-exit-code; no pytest-cov util porque CLI es subprocess (8 tests subprocess + 1 in-process + 10 CLI previos)
 
 uat:
   status:
     UAT-01: PASS  # no contamination
     UAT-02: PASS  # project isolation
     UAT-03: PASS  # brick declarative
-    UAT-04: PASS  # ejecucion determinista (RunController + RecordingAdapter)
-    UAT-06: PASS  # recuperacion (RUNNING sin finished_at vuelve a READY)
-    UAT-07: PASS  # idempotencia (UNIQUE sobre event_id)
+    UAT-04: PASS  # ejecucion determinista (RunController + RecordingAdapter + subprocess E2E)
+    UAT-06: PASS  # recuperacion (RUNNING sin finished_at vuelve a READY + subprocess E2E)
+    UAT-07: PASS  # idempotencia (UNIQUE sobre event_id + subprocess E2E)
+
+ci:
+  scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
+  ultima_ejecucion_local: 2026-09-23 10:05
+  resultado: "161 passed in 20.89s"
 
 open_questions:
-  - "Etapa 2: ¿qué escenario end-to-end concreto atacamos primero? candidatos: 'decidir entre 2 alternativas' o 'caracterizar un símbolo software'."
-  - "Adopción SDDK: ¿escalamos el bug al mantenedor (mantainmer_feedback) o esperamos?"
-  - "CI: ¿GitHub Actions mínimo al que nunca necesitaremos?"
+  - "Etapa 3: ¿qué pieza diseñamos primero — ContextController (handoff con obligatorias+opcionales) o KnowledgeController (Claims/Evidence con invalidación)?"
+  - "Adopción SDDK: ¿escalamos el bug al mantenedor (maintainer_feedback) o esperamos a próxima release del binario?"
+  - "Workflows cíclicos: ¿se añaden a Etapa 3 (junto a ContextController) o quedan para H4?"
+
+deuda_tecnica_residual:
+  - "Controller NO soporta workflows cíclicos: _calculate_frontier retorna [] cuando el current_node ya está SUCCEEDED, aunque su successor sea otro nodo del mismo run. Decisión consciente — H2 = DAG lineal; DecisionNode/ciclos son H4+."
+  - "storage.py 90%: 'replace' cuando spec coincide es no-op por diseno; no se cuenta como pérdida pero pytest-cov no lo detecta como branch ejecutado."
+  - "paths.py 59%: la rama Windows LOCALAPPDATA no se ejecuta en CI (Linux). Aceptable mientras CI corra en Linux."
+  - "registry.py 88%: las validaciones con tipos no-objeto (None, list como spec) no cubiertas; se cubren via brick CLI pero no como tests unitarios."
+  - "DSL: el ciclo de tests E2E de errores tipados del DSL queda como follow-up; los 18 tests cubren happy path + smart constructors."
 
 blockers: []
 
-deuda_tecnica_residual:
-  - "registry.py 88%: las ramas de _validate_decision/_validate_action/_validate_domain_pack con tipos no-objeto (None, etc.) no cubiertas."
-  - "cli.py 41%: caminos de error de inspect (DB ausente) no cubiertos con subprocess, solo con main() directo."
-  - "paths.py 59%: la rama de Windows (LOCALAPPDATA) no se ejecuta en CI."
-  - "storage.py 90%: la rama de 'replace' cuando spec coincide (no-op) no se cuenta como pérdida."
-
-next_action: "b4 (este commit de cierre) -> Etapa 2 (diseño del RunController mínimo)"
+next_action: "Etapa 3 — leer external/blueprint-v1/docs/07-contexto-y-handoff.md y 08-conocimiento.md; escribir spec corto antes de implementar."
