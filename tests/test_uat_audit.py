@@ -37,6 +37,7 @@ ejecucion manual.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -77,3 +78,96 @@ def test_uat_wrapper_runs_and_passes(uat_id: str, fn_name: str, expected: str) -
         f"{uat_id} status={evidence.status!r}, esperado {expected!r}.\n"
         f"observed: {evidence.observed}\nnotes: {evidence.notes}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Tests del CLI de uat_audit (proteccion contra escritura destructiva)
+# ---------------------------------------------------------------------------
+
+
+def test_main_default_is_readonly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sin args, main() debe leer evidencia y NO escribir nada nuevo."""
+    import uat_audit
+
+    # Redirigir EVIDENCE_DIR a un tmp para verificar que NO crea archivos.
+    fake_evidence = tmp_path / "evidence"
+    fake_evidence.mkdir()
+    # Copiar un file valido preexistente para que el read-only lo reporte.
+    (fake_evidence / "UAT-05.json").write_text(
+        '{"uat_id": "UAT-05", "status": "PASS", "revision": "abc1234"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(uat_audit, "EVIDENCE_DIR", fake_evidence)
+
+    rc = uat_audit.main([])
+
+    # Exit 0 y NO se escribio nada nuevo en el tmp.
+    assert rc == 0
+    created = [p.name for p in fake_evidence.iterdir() if p.name != "UAT-05.json"]
+    assert created == [], f"main() creo archivos en modo lectura: {created}"
+
+
+def test_main_write_unknown_uat_returns_2(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """--write sobre un UAT desconocido retorna rc=2."""
+    import uat_audit
+
+    fake_evidence = tmp_path / "evidence"
+    fake_evidence.mkdir()
+    monkeypatch.setattr(uat_audit, "EVIDENCE_DIR", fake_evidence)
+
+    rc = uat_audit.main(["--write", "UAT-99"])
+
+    assert rc == 2
+
+
+def test_main_write_stub_without_yes_returns_3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--write sobre un UAT stub (UAT-08/09/12/13) SIN --yes retorna rc=3 y NO escribe."""
+    import uat_audit
+
+    fake_evidence = tmp_path / "evidence"
+    fake_evidence.mkdir()
+    # Pre-poblar con evidencia PASS que NO debe ser pisada.
+    (fake_evidence / "UAT-08.json").write_text(
+        '{"uat_id": "UAT-08", "status": "PASS", "revision": "must-survive"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(uat_audit, "EVIDENCE_DIR", fake_evidence)
+
+    rc = uat_audit.main(["--write", "UAT-08"])
+
+    assert rc == 3
+    # Evidencia preexistente intacta.
+    survived = json.loads((fake_evidence / "UAT-08.json").read_text(encoding="utf-8"))
+    assert survived["revision"] == "must-survive", (
+        f"--write UAT-08 sin --yes piso la evidencia: {survived}"
+    )
+
+
+def test_main_dry_run_does_not_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """--dry-run ejecuta los UATs pero NO escribe evidencia."""
+    import uat_audit
+
+    fake_evidence = tmp_path / "evidence"
+    fake_evidence.mkdir()
+    monkeypatch.setattr(uat_audit, "EVIDENCE_DIR", fake_evidence)
+
+    rc = uat_audit.main(["--dry-run", "UAT-05"])
+
+    assert rc == 0
+    # No se creo UAT-05.json (UAT-05 no es stub; --dry-run nunca escribe).
+    assert not (fake_evidence / "UAT-05.json").exists()
+
+
+def test_main_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
+    """--help imprime uso y sale con rc=0 (argparse usa SystemExit)."""
+    import uat_audit
+
+    with pytest.raises(SystemExit) as exc_info:
+        uat_audit.main(["--help"])
+    assert exc_info.value.code == 0
+
+    out = capsys.readouterr().out
+    assert "Auditoria UAT de SkillGraph" in out
+    assert "--write" in out
