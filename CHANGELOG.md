@@ -12,6 +12,45 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.4.0] — 2026-09-23
+
+**Resumen**: cierra el gap declarado en `specs/h4-slice-3.md` limitación 3.
+`expansion apply` ahora persiste la propuesta y crea marker `.applied`,
+haciendo que `list --stage APPLIED` funcione (antes retornaba vacío).
+`expansion show` ahora incluye el campo `stage` en el payload JSON.
+
+Compatibilidad hacia atrás mantenida: ningún cambio en códigos de salida,
+firmas de comandos, ni en el formato del plan persistido.
+
+### Features (MINOR bump)
+
+- `162a708` **feat(h4-slice-3)**: APPLIED marker + `show.stage` field.
+  - `cmd_expansion_apply` ahora persiste la propuesta en
+    `expansion_proposals/<id>.json` (si no existe, mismo patrón que
+    `cmd_expansion_propose`) y crea marker adyacente `<id>.json.applied`
+    con timestamp UTC y `applied_by: "expansion-apply-cli"`.
+  - `cmd_expansion_list` y `cmd_expansion_show` leen markers:
+    precedencia `ARCHIVED > APPLIED > REJECTED > PROPOSED`.
+  - `cmd_expansion_show` añade `"stage": "..."` al payload JSON.
+  - Refactor: extrae `_infer_proposal_stage()` y
+    `_collect_rejection_ids()` para evitar duplicación entre list y show.
+
+### Estado verificable al tag
+
+- **HEAD**: `162a708` (pre-tag).
+- **Tests**: 368 passed en 117s (362 → 368, delta +6 tests focales).
+- **Cobertura**: sin cambio material (cli.py 31% in-process; tests
+  reales E2E).
+- **UATs**: 14/16 PASS, 2 BLOCKED honestos (sin cambio).
+- **`scripts/ci.sh`**: OK.
+- **ruff format+check**: limpios.
+
+### Limitaciones y deudas conocidas (sin cambio desde v0.3.0)
+
+- UAT-12 H6 multipropósito: BLOCKED.
+- UAT-13 H7 promoción: BLOCKED.
+- H4 slice-4 deferred.
+
 ## [0.3.0] — 2026-09-23
 
 **Resumen**: primera release taggeada. H0-H5 (excepto H6 y H7)
