@@ -1265,6 +1265,31 @@ class Storage:
                 (outcome, result_json, node_execution_id),
             )
 
+    def mark_node_failed(
+        self,
+        *,
+        node_execution_id: str,
+        error: str,
+    ) -> None:
+        """Transiciona un NodeExecution a ``FAILED`` con un mensaje de
+        error legible (sin stack).
+
+        Sustituye a ``RunController._mark_node_failed``.
+
+        No emite eventos. La coordinacion con
+        ``EventLog.append(events.node_failed(...))`` sigue siendo del
+        llamador.
+        """
+        with self._conn:
+            self._conn.execute(
+                """
+                UPDATE node_executions
+                SET state = 'FAILED', error = ?, finished_at = datetime('now')
+                WHERE node_execution_id = ?
+                """,
+                (error, node_execution_id),
+            )
+
     def list_promotions(
         self,
         status: str | None = None,

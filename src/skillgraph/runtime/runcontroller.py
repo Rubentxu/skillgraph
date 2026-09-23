@@ -596,15 +596,14 @@ class RunController:
         node_execution_id: str,
         error: str,
     ) -> None:
-        with self._conn:
-            self._conn.execute(
-                """
-                UPDATE node_executions
-                SET state = 'FAILED', error = ?, finished_at = datetime('now')
-                WHERE node_execution_id = ?
-                """,
-                (error, node_execution_id),
-            )
+        # H9-BSlice3-S7: shim que delega el UPDATE a FAILED en
+        # `Storage.mark_node_failed`. La emision del evento
+        # `node_failed` sigue siendo del caller (ver _execute_one).
+        del tenant_id, project_id  # conservados por compatibilidad de firma
+        self._storage.mark_node_failed(
+            node_execution_id=node_execution_id,
+            error=error,
+        )
 
     def _node_executions_for(
         self, tenant_id: str, project_id: str, run_id: str, node_name: str
