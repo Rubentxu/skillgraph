@@ -210,6 +210,33 @@ def _count_resources(storage: Storage, *, tenant_id: str, project_id: str) -> di
     return {"total": len(rows), "by_kind": by_kind}
 
 
+def _find_active_run_id(
+    storage: Storage, *, tenant_id: str, project_id: str
+) -> str | None:
+    """Devuelve el run_id del Run mas reciente en estado no terminal
+    para (tenant, project), o None si no hay ninguno.
+
+    No terminal = CREATED, ACTIVE o WAITING. COMPLETED/FAILED/CANCELLED
+    se consideran terminales y el siguiente `run` debe crear uno nuevo.
+    Cumple UAT-06: tras un crash con un run ACTIVE, el CLI lo encuentra
+    y lo reanuda en lugar de crear uno nuevo.
+    """
+    conn = storage._conn  # type: ignore[attr-defined]
+    row = conn.execute(
+        """
+        SELECT run_id FROM workflow_runs
+        WHERE tenant_id = ? AND project_id = ?
+          AND state IN ('CREATED', 'ACTIVE', 'WAITING')
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (tenant_id, project_id),
+    ).fetchone()
+    if row is None:
+        return None
+    return row["run_id"]
+
+
 # ---------------------------------------------------------------------------
 # Parser principal
 # ---------------------------------------------------------------------------
@@ -398,11 +425,23 @@ def cmd_run(args: argparse.Namespace) -> int:
             adapter=adapter,
             conn=storage._conn,  # type: ignore[attr-defined]
         )
-        run_id = ctl.create_run(
+        # Resume-or-start: si ya existe un Run no terminal para este
+        # proyecto, lo reanudamos. Asi el usuario puede re-invocar
+        # `run` tras un crash y el controller reanuda el mismo Run
+        # con su current_node y sus NodeExecutions. Cumple UAT-06.
+        existing_run_id = _find_active_run_id(
+            storage,
             tenant_id=project["tenant_id"],
             project_id=project["name"],
-            plan=plan,
         )
+        if existing_run_id is not None:
+            run_id = existing_run_id
+        else:
+            run_id = ctl.create_run(
+                tenant_id=project["tenant_id"],
+                project_id=project["name"],
+                plan=plan,
+            )
         snap = ctl.reconcile_run(
             tenant_id=project["tenant_id"],
             project_id=project["name"],
