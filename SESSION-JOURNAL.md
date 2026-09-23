@@ -1945,3 +1945,51 @@ con EventLog).
 - `ruff format+check`: All checks passed.
 - Working tree limpio (1 commit atomico + docs(state)).
 
+
+---
+
+## 2026-09-23 20:21 — H9-InProcess-4 cerrado
+
+Cobertura in-process CLI runner para los 3 comandos de
+conocimiento que quedaron sin cubrir tras H9-InProcess-3:
+- `sg knowledge refresh`
+- `sg knowledge compile`
+- `sg knowledge trace`
+
+Replicando patron de test_h9_cli_inproc_knowledge_brick.py.
++12 tests focales:
+- 4 refresh (happy + invalidate->refresh reactivates +
+  UnknownSourceError propagada + FileNotFoundError propagada
+  con DummyStorage).
+- 4 compile (recipe inline JSON OK + --strict stale rc=10 +
+  ValidationError propagada por overflow invalido +
+  source ghost rc=10).
+- 4 trace (json OK + --name custom + empty refs + 
+  FileNotFoundError propagada).
+
+Asunciones defectuosas corregidas tras smoke empirico
+(2026-09-23 20:18):
+(a) proyecto inexistente NO devuelve rc=0 silencioso: el
+    _DummyStorage lanza FileNotFoundError en cada acceso
+    y el wrapper no lo captura.
+(b) compile con overflow invalido NO devuelve rc=10 via
+    except general: la validacion de overflow_strategy
+    ocurre en ContextRecipe.from_dict (FUERA del try/except
+    del wrapper), asi que ValidationError se PROPAGA al
+    caller.
+(c) el selector source del CLI compile espera un source_id
+    (e.g. 'src-1') como value, no un locator (e.g.
+    'local:src/foo.py'). argparse lo pasa tal cual al
+    wrapper, que lo mete en recipe.obligatory[0].value.
+
+Estos 2 primeros son bugs menores de UX conocidos
+(documentados, sin fix en este slice: refactor de cobertura,
+no de funcionalidad).
+
+### Validacion al cierre
+
+- `scripts/ci.sh`: **536/536 verde en 105s**.
+- Cobertura in-process CLI: 10 comandos cerrados
+  (4 InProcess-2 + 3 InProcess-3 + 3 InProcess-4).
+- Working tree limpio.
+

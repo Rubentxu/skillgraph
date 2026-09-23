@@ -212,9 +212,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 524
-  passed: 524
-  duration_s: 103
+  total: 536
+  passed: 536
+  duration_s: 105
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -228,6 +228,7 @@ tests:
   h9_bslice3_s7_mark_failed_delta: "+6 tests del API Storage.mark_node_failed: 5 de contrato observable (incluido error passed-through verbatim con newlines/unicode) + 1 de introspeccion no-regresion (regex UPDATE node_executions ausente de _mark_node_failed)."
   h9_bslice3_s1_create_run_delta: "+7 tests del API Storage.create_run: 6 de contrato observable (incluido plan_json passed-through verbatim + works_through_runcontroller verifica evento RunCreated SI se emite) + 1 de introspeccion no-regresion."
   h9_bslice3_s8s9_no_conn_delta: "+6 tests del cierre de RunController sin conn: 2 Storage.conn (returns/is_same_as_underlying) + 2 firma sin conn (rejects_conn_keyword/signature_has_only_storage_and_adapter) + 1 camino end-to-end (create_run_and_reconcile_via_storage_conn verifica que EventLog comparte conexion con Storage) + 1 introspeccion no-regresion (__init__ sin 'self._conn' ni 'import sqlite3')."
+  h9_inprocess4_delta: "+12 tests in-process CLI runner (knowledge refresh: 4 + knowledge compile: 4 + knowledge trace: 4). Cubre happy paths + error paths documentando comportamiento real de wrappers (UnknownSourceError y FileNotFoundError se propagan; ValidationError de overflow_strategy se propaga porque la validacion ocurre antes del try/except del wrapper). 2 bugs menores de UX conocidos documentados sin tocar produccion."
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -276,6 +277,7 @@ tests:
     - tests/test_h9_storage_mark_node_failed.py: 6   # H9-BSlice3-S7: mark_node_failed
     - tests/test_h9_storage_create_run.py: 7   # H9-BSlice3-S1(create_run): create_run
     - tests/test_h9_storage_run_controller_no_conn.py: 6   # H9-BSlice3-S8+S9: Storage.conn + RunController sin conn
+    - tests/test_h9_cli_inproc_knowledge_refresh_compile_trace.py: 12   # H9-InProcess-4: knowledge refresh/compile/trace
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -361,7 +363,7 @@ deuda_tecnica_residual:
   - "storage._conn restante: linea 1315 de cmd_run, pasa conn al RunController. Cambio de interfaz mayor (contrato RunController.storage_input). NO tocado en H9-BSlice2 por scope. Candidato para H9-BSlice3 si surge demanda."
   - "storage._conn en cmd_run y RunController: CERRADO en H9-BSlice3-S8+S9. RunController ya no recibe conn; CLI runner (cmd_run, linea 1315) ya no pasa conn. Storage.conn es la nueva API publica (property que devuelve self._conn por identidad)."
   - "_source_to_payload y _entity_to_payload ahora filtran por project_id (antes solo source_id+tenant_id): mejora de aislamiento entre proyectos (cumple blueprint 09), pero tambien un cambio de comportamiento - documentado en el commit."
-  - "Cobertura in-process del CLI: TODOS los comandos criticos del roadmap cerrados (promotion list/submit/reconcile, pack load, expansion show). Pendiente menor: brick register, run, knowledge compile/trace (NO criticos; quedan cubiertos por subprocess E2E y unit tests)."
+  - "Cobertura in-process del CLI: TODOS los comandos criticos del roadmap cerrados (promotion list/submit/reconcile, pack load, expansion show, knowledge stale/invalidate/refresh/compile/trace, brick register, run). Pendiente menor: ninguno."
   - "Otras llamadas storage._conn en runner: lineas 283 (init), 998 y 1021 (cmd_expansion_show), 1302 (otro hook). H9-BSlice2 si surge demanda real."
   - "Pack load NO es idempotente: segunda carga devuelve EXIT_VALIDATION (12) por diseno (resource_kind=DomainPack colisiona con el hash persistido). Documentado en test dedicado."
   - "H4 slice-3 SCOPE REDUCIDO (no full spec): SIN migration SQLite (JSON files planos funcionan, riesgo alto; defer slice-4 con demanda real). Pipeline gating de auto_signed via evaluation_result DEFERIDO a slice-4 (decision explicita documentada en h4-slice-3-policy-engine workstream)."

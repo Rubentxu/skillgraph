@@ -564,6 +564,29 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
   observable. Las pruebas T1..T6 de caracterización siguen verdes
   sin tocar nada.
 
+## UPDATE 2026-09-23 20:21 — H9-InProcess-4 cerrado
+
+- Cobertura in-process CLI runner para los 3 comandos de
+  conocimiento pendientes: `knowledge refresh`, `knowledge
+  compile`, `knowledge trace`. Patron igual a InProcess-3.
+- **+12 tests** (`test_h9_cli_inproc_knowledge_refresh_compile_trace.py`):
+  4 refresh + 4 compile + 4 trace. Cada uno con happy path
+  + error path documentando el comportamiento real del wrapper.
+- **3 asunciones defectuosas corregidas tras smoke empirico**:
+  (a) proyecto inexistente lanza `FileNotFoundError` (no rc=0
+  silencioso); (b) compile con overflow invalido propaga
+  `ValidationError` (la validacion ocurre en
+  `ContextRecipe.from_dict` antes del try/except del wrapper);
+  (c) el selector source espera `source_id` (e.g. `'src-1'`)
+  como value, no locator (e.g. `'local:src/foo.py'`).
+- **2 bugs menores de UX documentados** (UnknownSourceError y
+  FileNotFoundError propagadas en refresh/trace): sin fix en
+  este slice (refactor de cobertura, no de funcionalidad).
+- **536/536 verde** (`scripts/ci.sh` ~105s).
+- **Cobertura in-process CLI**: 10 comandos cerrados
+  (4 InProcess-2 + 3 InProcess-3 + 3 InProcess-4). **Pendiente
+  menor: ninguno.**
+
 ## UPDATE 2026-09-23 19:42 — H9-BSlice3 cerrado completo (S8+S9)
 
 - **Opcion 1 aplicada** (consigna del operador): refactor del
