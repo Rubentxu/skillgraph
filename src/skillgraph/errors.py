@@ -132,3 +132,14 @@ class StaleKnowledgeWarning(SkillGraphWarning):
     """
 
     code = "sg_stale_knowledge"
+
+
+class DulwichNotAvailableError(SkillGraphError):
+    """Operacion Git solicitada pero `dulwich` no esta instalado.
+
+    Se lanza desde `git_source.py` cuando el caller pide funcionalidad
+    que requiere la dependencia opcional `skillgraph[git]` y el modulo
+    no se puede importar.
+    """
+
+    code = "sg_dulwich_not_installed"

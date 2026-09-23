@@ -27,6 +27,9 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+git = ["dulwich>=0.21,<1.0"]
+
 [project.urls]
 Homepage = "https://example.invalid/skillgraph"
 Issues = "https://example.invalid/skillgraph/issues"
@@ -40,6 +43,7 @@ dev = [
     "pytest>=8.3",
     "pytest-cov>=6",
     "ruff>=0.6",
+    "dulwich>=0.21",  # Slice 3+ (git fingerprinting)
 ]
 docs = []
 
