@@ -76,7 +76,7 @@ class TestLoadRun:
         storage: tuple[Storage, sqlite3.Connection, FakeAgentAdapter],
     ) -> None:
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         row = s.load_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert isinstance(row, dict)
@@ -107,7 +107,7 @@ class TestLoadRun:
     ) -> None:
         """Un run en (t,p) NO se devuelve al consultar (other_t, p)."""
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         with pytest.raises(NotFoundError):
             s.load_run(
@@ -139,7 +139,7 @@ class TestListNodeExecutions:
         storage: tuple[Storage, sqlite3.Connection, FakeAgentAdapter],
     ) -> None:
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("ordered"))
         # Renombrar para determinismo.
         _conn.execute(
@@ -174,7 +174,7 @@ class TestListNodeExecutions:
         storage: tuple[Storage, sqlite3.Connection, FakeAgentAdapter],
     ) -> None:
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a", "b"))
         _conn.execute(
             "INSERT INTO node_executions (node_execution_id, run_id, "
@@ -217,7 +217,7 @@ class TestListExecutedNodeNames:
         storage: tuple[Storage, sqlite3.Connection, FakeAgentAdapter],
     ) -> None:
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("z_node"))
         _conn.execute(
             "UPDATE workflow_runs SET run_id = ? WHERE run_id = ?",
@@ -267,7 +267,7 @@ class TestListExecutedNodeNames:
     ) -> None:
         """Inmutable: el contrato es tuple, no list."""
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("only"))
         # Con un SUCCEEDED insertado directo:
         _conn.execute(
@@ -307,7 +307,7 @@ class TestRunControllerNoLongerSqlReads:
         import inspect
 
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         src = inspect.getsource(ctl._load_run)
         assert "SELECT" not in src
         assert "_conn" not in src
@@ -319,7 +319,7 @@ class TestRunControllerNoLongerSqlReads:
         import inspect
 
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         src = inspect.getsource(ctl._node_executions_for)
         assert "SELECT" not in src
         assert "_conn" not in src
@@ -331,7 +331,7 @@ class TestRunControllerNoLongerSqlReads:
         import inspect
 
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         src = inspect.getsource(ctl._executed_node_names)
         assert "SELECT" not in src
         assert "_conn" not in src

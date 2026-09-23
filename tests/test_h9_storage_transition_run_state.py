@@ -63,7 +63,7 @@ def _seed_run(
     run_id: str,
     *node_names: str,
 ) -> None:
-    ctl = RunController(storage=s, adapter=adapter, conn=conn)
+    ctl = RunController(storage=s, adapter=adapter)
     real_run_id = ctl.create_run(
         tenant_id=TENANT,
         project_id=PROJECT,
@@ -217,7 +217,7 @@ class TestRunControllerNoLongerSqlInSetRunState:
         storage: tuple[Storage, sqlite3.Connection, FakeAgentAdapter],
     ) -> None:
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         src = inspect.getsource(ctl._set_run_state)
         # Buscamos `UPDATE`, `SELECT`, `INSERT`, `DELETE` solo como
         # palabras completas (con boundary). Asi no da positivo el

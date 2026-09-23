@@ -311,7 +311,7 @@ def _seed_active_run(
 
         plan = _plan_from_dict(data, source=str(plan_path))
         adapter = FakeAgentAdapter(fixtures_root)
-        ctl = RunController(storage=storage, adapter=adapter, conn=storage._conn)  # type: ignore[attr-defined]
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id="default", project_id="demo", plan=plan)
         # Forzar el run a ACTIVE en current_node=node_crashed.
         ctl._set_run_state(  # type: ignore[attr-defined]

@@ -102,7 +102,7 @@ class TestCreateRun:
     ) -> None:
         storage, adapter, conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         row = conn.execute(
             "SELECT state, current_node FROM workflow_runs WHERE run_id = ?",
@@ -116,7 +116,7 @@ class TestCreateRun:
     ) -> None:
         storage, adapter, conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         rows = conn.execute(
             "SELECT event_kind FROM runtime_events WHERE run_id = ? ORDER BY sequence ASC",
@@ -131,12 +131,12 @@ class TestReconcileTerminal:
         fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
         tmp_path: Path,
     ) -> None:
-        storage, adapter, conn = fixture_setup
+        storage, adapter, _conn = fixture_setup
         fixtures_root = tmp_path / "fixtures"
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan((_node("a"),))
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="a", outcome="ok")
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap.state == "COMPLETED"
@@ -153,7 +153,7 @@ class TestReconcileTerminal:
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan((_node("a"),))
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="a", outcome="ok")
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         events_before = conn.execute(
@@ -175,7 +175,7 @@ class TestReconcileSequential:
         fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
         tmp_path: Path,
     ) -> None:
-        storage, adapter, conn = fixture_setup
+        storage, adapter, _conn = fixture_setup
         fixtures_root = tmp_path / "fixtures"
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan(
@@ -184,7 +184,7 @@ class TestReconcileSequential:
         )
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="a", outcome="ok")
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="b", outcome="done")
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap1 = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap1.state == "ACTIVE"
@@ -207,7 +207,7 @@ class TestReconcileFailure:
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan((_node("a"),))
         # NO sembramos fixture.
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap.state == "FAILED"
@@ -238,7 +238,7 @@ class TestReconcileFailure:
             node_name="a",
             outcome="surprise",  # NO declarado
         )
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap.state == "FAILED"
@@ -264,7 +264,7 @@ class TestRecovery:
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan((_node("a"),))
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="a", outcome="ok")
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # Simulamos crash: insertamos manualmente un NodeExecution RUNNING
         # sin finished_at para el nodo a.
@@ -302,7 +302,7 @@ class TestIdempotency:
         duplicado no duplica la accion."""
         storage, adapter, conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # Tomamos el event_id del primer RunCreated y lo reusamos.
         row = conn.execute(
@@ -334,7 +334,7 @@ class TestRecordingAdapter:
         fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
         tmp_path: Path,
     ) -> None:
-        storage, _, conn = fixture_setup
+        storage, _, _conn = fixture_setup
         fixtures_root = tmp_path / "fixtures"
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan(
@@ -345,7 +345,7 @@ class TestRecordingAdapter:
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="b", outcome="done")
         fake = FakeAgentAdapter(fixtures_root)
         rec = RecordingAdapter(fake)
-        ctl = RunController(storage=storage, adapter=rec, conn=conn)
+        ctl = RunController(storage=storage, adapter=rec)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)

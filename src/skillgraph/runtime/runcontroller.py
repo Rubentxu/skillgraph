@@ -26,7 +26,6 @@ No responsabilidades:
 from __future__ import annotations
 
 import json
-import sqlite3
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -154,12 +153,17 @@ class RunController:
         *,
         storage: Storage,
         adapter: AgentAdapter,
-        conn: sqlite3.Connection,
     ) -> None:
+        # H9-BSlice3-S8/S9: el constructor deja de recibir
+        # ``conn``. La conexion se obtiene de ``storage.conn``
+        # (API publica a partir de esta misma entrega). Tras
+        # S1..S7 ya no hay SQL directo en el RunController, asi
+        # que el atributo ``<conn_privado>`` se elimina tambien:
+        # solo ``EventLog`` lo necesita, y EventLog lo toma via
+        # ``storage.conn``.
         self._storage = storage
         self._adapter = adapter
-        self._conn = conn
-        self._events = EventLog(conn)
+        self._events = EventLog(storage.conn)
         # Stubs para Etapa 3: el ContextController (receta) y
         # KnowledgeController se aniadiran cuando hagan falta.
         self._recipe_ref = "default-empty-recipe/v1"

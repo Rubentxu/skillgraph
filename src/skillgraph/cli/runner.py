@@ -1309,7 +1309,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         ctl = RunController(
             storage=storage,
             adapter=adapter,
-            conn=storage._conn,  # type: ignore[attr-defined]
         )
         # Resume-or-start: si ya existe un Run no terminal para este
         # proyecto, lo reanudamos. Asi el usuario puede re-invocar

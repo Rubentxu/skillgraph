@@ -316,6 +316,23 @@ class Storage:
     def close(self) -> None:
         self._conn.close()
 
+    @property
+    def conn(self) -> sqlite3.Connection:
+        """Conexion SQLite subyacente.
+
+        API publica a partir de H9-BSlice3-S8: RunController
+        construye ``EventLog(self.conn)`` desde aqui en lugar de
+        recibir ``conn`` por parametro. Antes este atributo era
+        ``_conn`` (privado por convencion) y los tests/CLI lo
+        usaban via ``storage._conn``.
+
+        Mantener ``_conn`` como el verdadero storage (no un
+        wrapper): cualquier mutacion del lado de ``Storage``
+        sigue siendo visible de inmediato para ``EventLog``,
+        que comparte la misma conexion.
+        """
+        return self._conn
+
     # ----- ciclo de vida -----
 
     def _migrate(self) -> None:

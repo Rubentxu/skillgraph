@@ -65,7 +65,7 @@ def _seed_run(
     *node_names: str,
 ) -> str:
     """Helper: crea un run con plan de N nodos y devuelve run_id real."""
-    ctl = RunController(storage=s, adapter=adapter, conn=conn)
+    ctl = RunController(storage=s, adapter=adapter)
     real_run_id = ctl.create_run(
         tenant_id=TENANT,
         project_id=PROJECT,
@@ -340,7 +340,7 @@ class TestRunControllerNoLongerSqlInRecoverInterrupted:
         storage: tuple[Storage, sqlite3.Connection, FakeAgentAdapter],
     ) -> None:
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         src = inspect.getsource(ctl._recover_interrupted)
         # Buscamos SQL como palabras completas (regex word boundary).
         for stmt in ("SELECT", "UPDATE", "INSERT", "DELETE"):

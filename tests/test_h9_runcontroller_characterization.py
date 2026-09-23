@@ -107,7 +107,7 @@ class TestT1CreateRunStatePersistsIfAppendFails:
         storage_conn: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
     ) -> None:
         storage, _adapter, conn = storage_conn
-        ctl = RunController(storage=storage, adapter=_adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=_adapter)
         plan = _plan((_node("a"),))
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
 
@@ -169,7 +169,7 @@ class TestT2CompleteNodeExecutionAtomicityObservable:
         fixtures_root = tmp_path / "fixtures"
         _seed_fixture(fixtures_root, node_name="only", outcome="ok")
 
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         plan = _plan((_node("only"),))
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
@@ -218,7 +218,7 @@ class TestT3RecoverInterruptedPerRowAtomic:
         storage, _adapter, conn = storage_conn
 
         # Primero creamos un workflow_run real para satisfacer las FK.
-        ctl = RunController(storage=storage, adapter=_adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=_adapter)
         plan = _plan((_node("stays_running"), (_node("to_recover"))))
         real_run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
 
@@ -279,7 +279,7 @@ class TestT4StateChangeBeforeEvent:
         fixtures_root = tmp_path / "fixtures"
         _seed_fixture(fixtures_root, node_name="only", outcome="ok")
 
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         plan = _plan((_node("only"),))
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
@@ -312,7 +312,7 @@ class TestT5NodeExecutionsForOrdering:
         storage, _adapter, conn = storage_conn
 
         # Primero workflow_run real para satisfacer FK.
-        ctl = RunController(storage=storage, adapter=_adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=_adapter)
         plan = _plan((_node("ordered"),))
         real_run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         conn.execute(
@@ -359,7 +359,7 @@ class TestT6ExecutedNodeNamesDistinctSorted:
         storage, _adapter, conn = storage_conn
 
         # Primero workflow_run real para satisfacer FK.
-        ctl = RunController(storage=storage, adapter=_adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=_adapter)
         plan = _plan((_node("z_node"),))
         real_run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         conn.execute(

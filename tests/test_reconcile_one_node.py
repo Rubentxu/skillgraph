@@ -70,8 +70,7 @@ class TestReconcileOneNodePerCall:
         fixtures_root.mkdir()
         _seed_ok_fixtures(fixtures_root)
         adapter = FakeAgentAdapter(fixtures_root)
-        conn = storage._conn  # type: ignore[attr-defined]
-        ctl = RunController(storage=storage, adapter=adapter, conn=conn)
+        ctl = RunController(storage=storage, adapter=adapter)
         return storage, ctl, _plan_a_b_c()
 
     def test_first_reconcile_executes_only_a(self, tmp_path: Path) -> None:

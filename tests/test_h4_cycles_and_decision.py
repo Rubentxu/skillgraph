@@ -56,7 +56,7 @@ def _build(tmp_path: Path, plan: WorkflowPlan) -> tuple[Storage, RunController]:
     fx = tmp_path / "fx"
     fx.mkdir()
     adapter = FakeAgentAdapter(fx)
-    ctl = RunController(storage=storage, adapter=adapter, conn=storage._conn)  # type: ignore[attr-defined]
+    ctl = RunController(storage=storage, adapter=adapter)
     return storage, ctl
 
 

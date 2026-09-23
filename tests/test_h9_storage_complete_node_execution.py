@@ -64,7 +64,7 @@ def _seed_run_and_running_node(
     node_execution_id: str,
     node_name: str = "a",
 ) -> None:
-    ctl = RunController(storage=s, adapter=adapter, conn=conn)
+    ctl = RunController(storage=s, adapter=adapter)
     real_run_id = ctl.create_run(
         tenant_id=TENANT,
         project_id=PROJECT,
@@ -204,7 +204,7 @@ class TestRunControllerExecuteOneNoLongerUpdateDirect:
         import inspect
 
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         src = inspect.getsource(ctl._execute_one)
         # Ni INSERT INTO node_executions (S5), ni
         # UPDATE node_executions SET state='SUCCEEDED' (S6).

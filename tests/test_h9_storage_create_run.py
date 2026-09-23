@@ -171,7 +171,7 @@ class TestCreateRun:
     ) -> None:
         """Camino real: RunController.create_run -> Storage.create_run."""
         s, conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=conn)
+        ctl = RunController(storage=s, adapter=adapter)
 
         run_id = ctl.create_run(
             tenant_id=TENANT,
@@ -207,7 +207,7 @@ class TestRunControllerCreateRunNoLongerUpdateDirect:
         import inspect
 
         s, _conn, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter, conn=_conn)
+        ctl = RunController(storage=s, adapter=adapter)
         src = inspect.getsource(ctl.create_run)
         assert not re.search(r"\bINSERT\s+INTO\s+workflow_runs\b", src, re.IGNORECASE), (
             "INSERT INTO workflow_runs presente en create_run: "
