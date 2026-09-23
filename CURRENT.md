@@ -384,3 +384,42 @@ y su anexo de trazado.
 - H9 (nuevo): endurecimiento (el H7 original).
 
 Tag v0.6.0 y cierre COMPLETED se conservan como hechos históricos.
+
+## UPDATE 2026-09-23 16:00 — H8 Integración pública CLI: CERRADO
+
+### Qué se cerró (contrato de 5 puntos, ADR-0013)
+
+1. **`sg pack load`** (`e616b58`): DomainPack persistido como recurso;
+   registry reconstruido multi-proceso (`_build_registry_for_project`);
+   `sg brick register` valida contra tipos del pack.
+2. **`sg promotion submit/list/reconcile`** (`b7619a9`): promoción pública
+   por CLI; apply sobre base destino; failpoints
+   `SKILLGRAPH_FAILPOINT_PROMOTION=before_apply|mid_apply` (`os._exit(9)`).
+3. **E2E subprocess** (`d220ec2`): 5 tests en
+   `tests/test_h8_public_paths.py` (UAT-12: ciclo completo, spec inválida
+   exit 12, UnknownKind sin pack; UAT-13: submit idempotente + crash
+   mid_apply → reconcile completa → re-reconcile sin duplicar 1/1/1).
+4. **Evidencia append-only** (`e303dda`): `_save_evidence` archiva en
+   `history/<uat_id>/` con `os.replace` atómico bajo `fcntl.flock`;
+   UAT-12/13 regeneradas PASS desde los E2E reales.
+5. **Docs sincronizados**: README (ES/EN) ya no presenta H6/H7 como
+   recorridos cerrados sin ruta pública; limitaciones honestas
+   (failpoint vs concurrencia real; `promotion list` por SQL directo).
+
+### Último estado comprobado
+
+- HEAD `8e7e702`, working tree limpio.
+- `bash scripts/ci.sh` → **OK, 410 tests PASS** (405 + 5 H8).
+- `tests/test_uat_blocked.py`: 6/6 PASS contra evidencias regeneradas.
+- UATs: 16/16 PASS; UAT-12/13 ahora certificadas por ruta pública CLI.
+
+### Bloqueos
+
+- Ninguno. H9 (endurecimiento, el H7 original del blueprint) queda como
+  siguiente work item pendiente de alcance, NO bloqueado.
+
+### Próxima acción concreta
+
+Definir alcance de H9 (endurecimiento: concurrencia real, API pública
+de listado de promociones, cobertura in-process del CLI) o cerrar la
+iniciativa definitivamente con la desviación documentada en ADR-0013.

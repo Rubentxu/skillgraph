@@ -26,10 +26,10 @@ goal:
 roadmap:
   current_stage: 5
   current_spike: null
-  current_hito: H7-promocion-cerrado  # tagged en v0.6.0
-  next_milestone_gate: ~  # sin gates pendientes; initiative COMPLETED
-  current_workitem: ~  # sin trabajo activo
-  next_workitem: ~  # initiative cerrada; ver .next-decision.md para trabajos fuera de scope
+  current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
+  next_milestone_gate: ~  # H8 cerrado; H9 (endurecimiento) pendiente de alcance
+  current_workitem: ~
+  next_workitem: H9-endurecimiento  # el H7 original del blueprint; requiere alcance
 
 python:
   minimum: "3.11"
@@ -173,6 +173,11 @@ workstreams:
     status: completed
     commits: ["1722fa5"]
     nota: "Domain Pack declarativo: tipos extensibles sin tocar el nucleo (registry/bricks/parser 0 LoC modificados). pack_loader.py 215 LoC + fixture narrative-core.md + 12 tests. Seguridad por schema (required+fields+refs), NO por exec/importlib. Shadowing de tipos core (DecisionNode/ActionNode/DomainPack) y namespaces reservados (core/skillgraph) rechazados."
+  - id: h8-integracion-publica
+    items: [cmd-pack-load-registry-persistente, cmd-brick-register-valida-pack, cmd-promotion-submit-list-reconcile, failpoints-promotion, e2e-uat12-uat13-publico, uat-evidence-append-only-lock]
+    status: completed
+    commits: ["e616b58", "b7619a9", "d220ec2", "e303dda"]
+    nota: "Cierra el gap ADR-0013: H6/H7 eran bibliotecas sin ruta de usuario. sg pack load persiste DomainPack y reconstruye registry multi-proceso; sg promotion submit/list/reconcile publica la promocion por CLI con failpoints de crash (SKILLGRAPH_FAILPOINT_PROMOTION=before_apply|mid_apply) verificados E2E con recuperacion sin duplicar. UAT-12/13 re-certificados por ruta publica. Limitaciones: promotion list por SQL directo (sin API publica Storage); failpoint inyectado, no concurrencia real."
   - id: h7-promocion
     items: [outbox-table, register-promotion, submit-proposal, apply-proposal-idempotent, reconcile-after-interruption, idempotency-key-unique]
     status: completed
@@ -383,6 +388,10 @@ release:
     - h6_pack_loader_declarativo   # v0.6.0 (1722fa5) UAT-12
     - h7_promotion_outbox          # v0.6.0 (95a0ca9) UAT-13
     - uat_12_13_evidence_pass      # v0.6.0 (92cff48)
+    - h8_cmd_pack_load             # post-v0.6.0 (e616b58) ruta publica pack load
+    - h8_cmd_promotion             # post-v0.6.0 (b7619a9) submit/list/reconcile + failpoints
+    - h8_e2e_public_paths          # post-v0.6.0 (d220ec2) 5 tests E2E subprocess
+    - h8_evidence_append_only      # post-v0.6.0 (e303dda) history/ + flock
   uat_al_release:
     PASS: 16
     BLOCKED: 0

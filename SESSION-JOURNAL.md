@@ -1456,3 +1456,16 @@ Tag v0.6.0 (MINOR bump: feat H6 + feat H7) + CHANGELOG ya actualizado
 en este turno. Initiative elegible para cierre definitivo `COMPLETED`
 tras tag.
 
+
+## 2026-09-23 16:00 — H8 integración pública CLI cerrado
+
+- Commits: `e616b58` (pack load), `b7619a9` (promotion CLI + failpoints),
+  `d220ec2` (E2E subprocess), `e303dda` (evidencia append-only),
+  `8e7e702` (gitignore locks).
+- Evidencia: `tests/uat-evidence/UAT-12.json`, `UAT-13.json` regeneradas
+  PASS desde `tests/test_h8_public_paths.py`; historial en
+  `tests/uat-evidence/history/`.
+- CI completo: OK (`scripts/ci.sh`, ~410 tests).
+- Documentación: README (ES/EN) sincronizado con ADR-0013; STATE.yaml y
+  CURRENT.md actualizados.
+- Siguiente: alcance de H9 (endurecimiento) o cierre definitivo.
