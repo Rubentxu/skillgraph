@@ -1104,3 +1104,50 @@ cobertura <80%. Ahora 100%. Deuda residual:
 - recipe.py 73% (similar; defer.)
 
 Ambos son mejorables pero NO deuda crítica funcional.
+
+## 2026-09-23 — plan_loader coverage stewardship (PENDIENTE COMMIT)
+
+Continuación del stewardship de cobertura. Operador insiste
+en ciclos rápidos. plan_loader.py era el siguiente candidato
+deuda.
+
+Re-medición honesta:
+- Mi cálculo previo era 69% (dato heredado de STATE.yaml).
+- Real: 48%. Dato heredado obsoleto.
+- load_plan_file no tenia tests directos; el CLI lo cubre
+  solo via subprocess E2E.
+- 23 missing lines: 19 en load_plan_file (58-76), 1 en
+  _plan_from_dict nodes-check (83), 1 en transitions-check
+  (86), 1 en _node_from_dict (95), 1 en _transition_from_dict
+  (110), 1 en _required (124).
+
+### Implementación
+
+tests/test_plan_loader.py (269 LoC, 13 tests):
+- T1 happy path: full plan, snake_case fields, empty transitions.
+- T2 load_plan_file errors: no fm, fm incompleto, YAML inválido,
+  YAML top-level no-dict.
+- T3 _plan_from_dict errors: nodes no-list, transitions no-list,
+  node entry no-dict, transition entry no-dict.
+- T4 _required errors: initial missing, nodes missing.
+
+NO duplica test_workflow_plan.py (que prueba el constructor
+WorkflowPlan, no el loader Markdown+YAML).
+
+### Verificación
+
+- 13 tests verde en 0.17s.
+- plan_loader.py: 49/49 statements, 16/16 branches = 100%.
+- Suite completa: 340 passed in 58s (327 -> 340, delta +13).
+- 0 regresión. ruff format+check limpios.
+
+### Cifras reales (no inflar)
+
+- src/skillgraph/plan_loader.py: 0 LoC modificado.
+- tests/test_plan_loader.py: nuevo, 269 LoC.
+- Cierre del segundo módulo crítico con cobertura <80%.
+
+Deuda residual actualizada:
+- parser.py: 100% (cerrado turno previo).
+- plan_loader.py: 100% (cerrado este turno).
+- recipe.py: 73% (defer; scope similar pero menos crítico).

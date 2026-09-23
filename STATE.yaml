@@ -141,6 +141,11 @@ workstreams:
     status: completed
     commits: ["0e96495"]
     nota: "Stewardship: parser.py 77% -> 100% cobertura. 12 tests focalizados en ramas de error (YAML invalido, no-dict, input no-string, campos faltantes/no-string). NO duplica happy paths ya cubiertos por test_s0_brick_minimo.py. 0 LoC produccion modificado. Cierre de la unica rama de cobertura <80% en modulos de parser critico."
+  - id: plan-loader-coverage-stewardship
+    items: [test-plan-loader-py-13-tests-load-file-happy-9-error-branches]
+    status: completed
+    commits: []   # pendiente commit en este turno
+    nota: "Stewardship: plan_loader.py 48% -> 100% cobertura. 13 tests focalizados: load_plan_file happy path (que no tenia tests directos; CLI lo cubria solo via subprocess E2E) + 4 ramas de error de load_plan_file + 2 de _plan_from_dict + 1 de _node/_transition + 1 de _required. Dato heredado 69% estaba obsoleto. 0 LoC produccion modificado. Cierre del segundo modulo critico con cobertura <80%."
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
     status: completed
@@ -174,9 +179,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 327
-  passed: 327
-  duration_s: 55
+  total: 340
+  passed: 340
+  duration_s: 58
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -206,6 +211,7 @@ tests:
     - tests/test_uat_audit.py: 5    # wrappers pytest para UAT-05/10/11/15/16
     - tests/test_uat_blocked.py: 2   # honest blockers UAT-12/13
     - tests/test_parser.py: 12   # ramas de error parser Markdown+YAML (coverage 77% -> 100%)
+    - tests/test_plan_loader.py: 13  # load_plan_file happy + 9 error branches (coverage 48% -> 100%)
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -226,8 +232,8 @@ tests:
     context_controller.py: 81%
     paths.py: 81%   # ANTES 59%. Refactor + test_paths.py cubrio XDG y helpers.
     parser.py: 100%  # ANTES 77%. Tests focalizados en 12 ramas de error (test_parser.py, 12 tests).
+    plan_loader.py: 100%  # ANTES 48% (dato heredado 69% estaba obsoleto). 13 tests focalizados.
     recipe.py: 73%
-    plan_loader.py: 69%
     __main__.py: 0%  # entry-point puro de CLI, no testeable con pytest-cov
     cli.py: cobertura-por-exit-code; subprocess tests + in-process + UAT scripts
   nota_cobertura: >
@@ -263,9 +269,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 14:11
-  resultado: "327 passed in 55s (pytest --tb=short)"
-  working_tree: clean (despues de commit 0e96495)
+  ultima_ejecucion_local: 2026-09-23 14:16
+  resultado: "340 passed in 58s (pytest --tb=short)"
+  working_tree: pending-commit (plan_loader coverage + state sync)
 
 open_questions: []
 nota_honesta_revision: >
@@ -293,10 +299,10 @@ deuda_tecnica_residual:
   - "Duplicacion catalog.py/storage.py: defensa en profundidad intencional. No unificar sin diseno."
   - "paths.py 81%: rama nt (LOCALAPPDATA/USERPROFILE) no ejercitable en CI Linux. Documentada en docstring como limitacion aceptada. Cobertura +22pts en este turno."
   - "registry.py 88% validado: mismas cifras; no es dato heredado falso."
-  - "plan_loader.py 69%, recipe.py 73%: modulos con minimo de cobertura util pero mejorables. parser.py 100% (cerrado en este turno). NO son deuda critica funcional."
+  - "recipe.py 73%: modulo con cobertura util pero mejorable. parser.py y plan_loader.py cerrados al 100% en este turno. NO es deuda critica funcional."
   - "SourceKind Literal validado en runtime: nuevo __post_init__ valida kind contra typing.get_args. Cierra bug silencioso donde from __future__ import annotations desactiva Literal-check en runtime."
   - "H5 'conservar material original' DECIDIDO (specs/h5-source-conservation-decision.md): referencia (path+content_hash), NO duplicar bytes. Justificado por blueprint §10 §5-6."
 
 blockers: []
 
-next_action: "Sesion H4 Expansion slice-1+2+3 + Parser coverage cerrada: 17 commits (6f93eb2..3741f30 + parser pendiente), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 7 tests gap closure, 24 tests slice-3 (15 library + 9 E2E), 12 tests parser coverage stewardship (77% -> 100%). 327 tests verde (315 -> 327, delta +12). parser.py 100% cobertura (de <80% a 100%). 14/16 UAT PASS. 2 caminos esperando decision material del operador: H6 multiprosito (UAT-12), H7 promocion (UAT-13). Próximo stewardship candidate: plan_loader.py 48% cobertura (scope mayor, requiere análisis previo)."
+next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader coverage cerrada: 19 commits (6f93eb2..b28a723 + plan_loader pendiente), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 7 tests gap closure, 24 tests slice-3 (15 library + 9 E2E), 12 tests parser stewardship (77% -> 100%), 13 tests plan_loader stewardship (48% -> 100%). 340 tests verde (327 -> 340, delta +13). parser.py + plan_loader.py ahora ambos al 100% cobertura. 14/16 UAT PASS. Deuda residual: recipe.py 73%. 2 caminos esperando decision material del operador: H6 multiprosito (UAT-12), H7 promocion (UAT-13)."
