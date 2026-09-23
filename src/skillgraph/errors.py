@@ -41,3 +41,9 @@ class IdempotencyError(SkillGraphError):
     """La operacion ya habia sido aplicada (UNIQUE sobre event_id)."""
 
     code = "sg_idempotency"
+
+
+class NotFoundError(SkillGraphError):
+    """Un recurso o fixture solicitada no existe."""
+
+    code = "sg_not_found"
