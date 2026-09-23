@@ -35,3 +35,9 @@ class IdentityConflictError(ValidationError):
     """Mismo (tenant, project, namespace, kind, name) ya registrado."""
 
     code = "sg_identity_conflict"
+
+
+class IdempotencyError(SkillGraphError):
+    """La operacion ya habia sido aplicada (UNIQUE sobre event_id)."""
+
+    code = "sg_idempotency"
