@@ -18,6 +18,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
 
 from skillgraph import (
@@ -218,6 +219,54 @@ def _count_resources(storage: Storage, *, tenant_id: str, project_id: str) -> di
     for row in rows:
         by_kind[row["kind"]] = by_kind.get(row["kind"], 0) + 1
     return {"total": len(rows), "by_kind": by_kind}
+
+
+def _utcnow_iso() -> str:
+    """ISO-8601 UTC con sufijo +00:00 (legible, ordenable lexicograficamente)."""
+    from datetime import datetime
+
+    return datetime.now(UTC).isoformat()
+
+
+def _infer_proposal_stage(
+    proposal_path: Path,
+    proposal_id: str,
+    rejection_ids: set[str],
+) -> str:
+    """Inferir stage desde markers en disco (mismo patron que list/show).
+
+    Precedencia: ARCHIVED > APPLIED > REJECTED > PROPOSED.
+    """
+    base = proposal_path.with_suffix(proposal_path.suffix)
+    archived_marker = base.with_suffix(base.suffix + ".archived")
+    applied_marker = base.with_suffix(base.suffix + ".applied")
+    if archived_marker.is_file():
+        return "ARCHIVED"
+    if applied_marker.is_file():
+        return "APPLIED"
+    if proposal_id in rejection_ids:
+        return "REJECTED"
+    return "PROPOSED"
+
+
+def _collect_rejection_ids(rejections_dir: Path) -> set[str]:
+    """Lee ``expansion_rejections/*.json`` y devuelve proposal_ids rechazados.
+
+    Tolerante a JSON corrupto y a archivos sin ``proposal_id``.
+    """
+    ids: set[str] = set()
+    if not rejections_dir.is_dir():
+        return ids
+    for p in rejections_dir.iterdir():
+        if p.suffix != ".json":
+            continue
+        try:
+            d = json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(d, dict) and "proposal_id" in d:
+            ids.add(str(d["proposal_id"]))
+    return ids
 
 
 def _find_active_run_id(storage: Storage, *, tenant_id: str, project_id: str) -> str | None:
@@ -1164,6 +1213,45 @@ def cmd_expansion_apply(args: argparse.Namespace) -> int:
 
     new_plan = result.unwrap()
     _write_plan_to_storage(project_dir, new_plan)
+    # Persiste la propuesta aplicada en ``expansion_proposals/`` (mismo
+    # patron que ``cmd_expansion_propose``) para que ``list``/``show`` la
+    # puedan descubrir tras el apply. Tambien crea el marker APPLIED,
+    # analogo al marker ARCHIVED de ``cmd_expansion_archive``.
+    proposals_dir = project_dir.parent.parent / "expansion_proposals"
+    proposals_dir.mkdir(parents=True, exist_ok=True)
+    proposal_json = proposals_dir / f"{proposal.proposal_id}.json"
+    if not proposal_json.is_file():
+        proposal_json.write_text(
+            json.dumps(
+                {
+                    "proposal_id": proposal.proposal_id,
+                    "author": proposal.author,
+                    "created_at": proposal.created_at,
+                    "problem_observed": proposal.problem_observed,
+                    "operations": str(args.proposal),
+                    "capabilities_needed": list(proposal.capabilities_needed),
+                    "new_dependencies": list(proposal.new_dependencies),
+                    "attachment_point": proposal.attachment_point,
+                    "authorization_mode": proposal.authorization.mode,
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+    applied_marker = proposals_dir / f"{proposal.proposal_id}.json.applied"
+    applied_marker.write_text(
+        json.dumps(
+            {
+                "proposal_id": proposal.proposal_id,
+                "applied_at": _utcnow_iso(),
+                "applied_by": "expansion-apply-cli",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     print(f"OK: {proposal.proposal_id} aplicado. Nuevo plan en {_plan_path(project_dir)}")
     print(f"Nodos antes: {len(plan.nodes)} -> despues: {len(new_plan.nodes)}")
     return EXIT_OK
@@ -1263,13 +1351,12 @@ def cmd_expansion_list(args: argparse.Namespace) -> int:
     (JSON files planos, source-of-truth actual; ver specs/h4-slice-3.md
     limitacion 3). NO migra a SQLite (deferido slice-4).
 
-    Stage inferido:
+    Stage inferido (precedencia: ARCHIVED > APPLIED > REJECTED > PROPOSED):
     - ARCHIVED: existe ``<proposal_id>.archived`` (marker file).
-    - APPLIED: existe un plan que contiene el nodo/tr de la propuesta.
-      Por simplicidad slice-3 marcamos APPLIED solo si ARCHIVED+APPLIED
-      marker existe; sino = PROPOSED (estado inicial tras cmd_expansion_propose).
+    - APPLIED: existe ``<proposal_id>.applied`` (marker file, creado por
+      ``cmd_expansion_apply`` al persistir el nuevo plan).
     - REJECTED: hay un archivo en ``expansion_rejections/`` con ese proposal_id.
-    - Si nada match: PROPOSED.
+    - Si nada match: PROPOSED (estado inicial tras cmd_expansion_propose).
     """
     project, rc = _open_project_or_error(args, args.project)
     if rc != EXIT_OK:
@@ -1279,17 +1366,7 @@ def cmd_expansion_list(args: argparse.Namespace) -> int:
     proposals_dir = project_dir.parent.parent / "expansion_proposals"
     rejections_dir = project_dir / "expansion_rejections"
 
-    rejection_ids: set[str] = set()
-    if rejections_dir.is_dir():
-        for p in rejections_dir.iterdir():
-            if p.suffix != ".json":
-                continue
-            try:
-                d = json.loads(p.read_text())
-            except (json.JSONDecodeError, OSError):
-                continue
-            if isinstance(d, dict) and "proposal_id" in d:
-                rejection_ids.add(str(d["proposal_id"]))
+    rejection_ids = _collect_rejection_ids(rejections_dir)
 
     rows = _scan_proposals_dir(proposals_dir)
     if not rows:
@@ -1299,13 +1376,7 @@ def cmd_expansion_list(args: argparse.Namespace) -> int:
     shown = 0
     for path, data in rows:
         proposal_id = str(data.get("proposal_id", path.stem))
-        archived_marker = path.with_suffix(path.suffix + ".archived")
-        if archived_marker.is_file():
-            stage = "ARCHIVED"
-        elif proposal_id in rejection_ids:
-            stage = "REJECTED"
-        else:
-            stage = "PROPOSED"
+        stage = _infer_proposal_stage(path, proposal_id, rejection_ids)
         if args.stage is not None and args.stage != stage:
             continue
         created = data.get("created_at", "?")
@@ -1325,11 +1396,16 @@ def cmd_expansion_show(args: argparse.Namespace) -> int:
     assert project is not None
     project_dir = Path(project["db_path"]).parent
     proposals_dir = project_dir.parent.parent / "expansion_proposals"
+    rejections_dir = project_dir / "expansion_rejections"
+
+    rejection_ids = _collect_rejection_ids(rejections_dir)
 
     rows = _scan_proposals_dir(proposals_dir)
-    for _, data in rows:
+    for path, data in rows:
         if str(data.get("proposal_id", "")) == args.proposal_id:
-            print(json.dumps(data, indent=2, sort_keys=True))
+            stage = _infer_proposal_stage(path, str(data["proposal_id"]), rejection_ids)
+            payload = {**data, "stage": stage}
+            print(json.dumps(payload, indent=2, sort_keys=True))
             return EXIT_OK
     print(f"ERROR: proposal_id={args.proposal_id!r} no encontrado", file=sys.stderr)
     return EXIT_PROJECT_NOT_FOUND

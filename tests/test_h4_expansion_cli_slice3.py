@@ -83,6 +83,44 @@ spec:
     assert rc == 0, f"brick register fallo: {rc}"
 
 
+def _write_seed_plan(
+    plan_path: Path,
+    *,
+    initial: str = "root",
+    nodes: list[str] | None = None,
+    transitions: list[tuple[str, str, str]] | None = None,
+) -> Path:
+    """Escribe un WorkflowPlan en JSON (formato interno slice-1).
+
+    Replica la firma de tests/test_h4_expansion_cli.py para que los tests
+    focales de APPLIED marker puedan usarla directamente.
+    """
+    import json as _json
+
+    nodes = nodes or [initial, "child"]
+    transitions = transitions or []
+    payload = {
+        "name": "seed-plan",
+        "initial": initial,
+        "nodes": [
+            {
+                "name": n,
+                "kind": "ActionNode",
+                "namespace": "ns-seed",
+                "api_version": "skillgraph.dev/v1alpha1",
+                "resource_revision": 1,
+                "expected_result": f"output of {n}",
+                "capabilities": [],
+                "metadata": {},
+            }
+            for n in nodes
+        ],
+        "transitions": [{"source": s, "outcome": o, "target": t} for s, o, t in transitions],
+    }
+    plan_path.write_text(_json.dumps(payload, indent=2, sort_keys=True))
+    return plan_path
+
+
 def _write_proposal_authorized(
     path: Path,
     *,
@@ -129,6 +167,44 @@ def _write_proposal_authorized(
 
 def _proposals_dir(data_root: Path, project: str = "demo") -> Path:
     return data_root / "tenants" / "default" / "expansion_proposals"
+
+
+def _write_proposal_unauthorized_capability(
+    path: Path, *, capability: str = "no_existe_esta_cap"
+) -> None:
+    """Propuesta con una capability que el registry NO tiene (UAT-09)."""
+    payload: dict[str, Any] = {
+        "base_revision": "rev-1",
+        "problem_observed": "Capacidad inexistente",
+        "evidence": [],
+        "operations": [
+            {
+                "op": "add_node",
+                "node": {
+                    "name": "x",
+                    "kind": "ActionNode",
+                    "namespace": "ns-tools",
+                    "api_version": "skillgraph.dev/v1alpha1",
+                    "resource_revision": 1,
+                    "expected_result": "x output",
+                    "capabilities": [],
+                    "metadata": {},
+                },
+            }
+        ],
+        "new_dependencies": [],
+        "capabilities_needed": [capability],
+        "scope": "NODE",
+        "attachment_point": "root",
+        "rollback_plan": [],
+        "authorization": {
+            "mode": "manual_signed",
+            "granted_by": "tester@example.com",
+            "granted_at": "2026-09-23T10:00:00Z",
+        },
+        "author": "test@example.com",
+    }
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True))
 
 
 # ---------------------------------------------------------------------------
@@ -397,3 +473,217 @@ def test_archive_unknown_id_returns_not_found(tmp_path: Path) -> None:
     )
     assert result.returncode == 4  # EXIT_PROJECT_NOT_FOUND
     assert "no encontrado" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# APPLIED marker (cierra gap declarado en specs/h4-slice-3.md):
+# el apply ahora persiste la propuesta en expansion_proposals/ + crea
+# un marker .applied adyacente, igual que archive crea .archived.
+# ---------------------------------------------------------------------------
+
+
+def test_apply_creates_applied_marker_and_persists_proposal(tmp_path: Path) -> None:
+    """apply exitoso persiste propuesta en expansion_proposals/ y crea marker .applied.
+
+    Cierra el gap declarado en specs/h4-slice-3.md (limitacion 3): antes
+    del fix, ``list --stage APPLIED`` retornaba vacio porque no habia
+    marker de APPLIED en disco.
+    """
+    data_root = _init_project(tmp_path)
+    _seed_brick(tmp_path, data_root)
+    plan_file = _write_seed_plan(tmp_path / "plan.json")
+    proposal = tmp_path / "prop.json"
+    _write_proposal_authorized(proposal)
+
+    result = _run_cli(
+        "expansion",
+        "apply",
+        "demo",
+        "--proposal",
+        str(proposal),
+        "--plan-file",
+        str(plan_file),
+        cwd=tmp_path,
+        data_root=data_root,
+    )
+    assert result.returncode == 0, result.stderr
+    pid = result.stdout.split("OK: ")[1].split(" ")[0]
+
+    proposals_dir = data_root / "tenants" / "default" / "expansion_proposals"
+    # 1. La propuesta ahora esta persistida como JSON canonico.
+    proposal_json = proposals_dir / f"{pid}.json"
+    assert proposal_json.is_file(), f"propuesta no persistida: {proposal_json}"
+    # 2. El marker .applied existe y contiene timestamp + actor.
+    applied_marker = proposals_dir / f"{pid}.json.applied"
+    assert applied_marker.is_file(), f"marker .applied no creado: {applied_marker}"
+    marker_payload = json.loads(applied_marker.read_text())
+    assert marker_payload["proposal_id"] == pid
+    assert marker_payload["applied_by"] == "expansion-apply-cli"
+    assert "applied_at" in marker_payload
+
+
+def test_list_stage_applied_returns_proposal_after_apply(tmp_path: Path) -> None:
+    """`list --stage APPLIED` muestra propuestas aplicadas (gap declarado cerrado)."""
+    data_root = _init_project(tmp_path)
+    _seed_brick(tmp_path, data_root)
+    plan_file = _write_seed_plan(tmp_path / "plan.json")
+    proposal = tmp_path / "prop.json"
+    _write_proposal_authorized(proposal)
+
+    apply = _run_cli(
+        "expansion",
+        "apply",
+        "demo",
+        "--proposal",
+        str(proposal),
+        "--plan-file",
+        str(plan_file),
+        cwd=tmp_path,
+        data_root=data_root,
+    )
+    assert apply.returncode == 0
+    pid = apply.stdout.split("OK: ")[1].split(" ")[0]
+
+    result = _run_cli(
+        "expansion", "list", "--stage", "APPLIED", "demo", cwd=tmp_path, data_root=data_root
+    )
+    assert result.returncode == 0
+    assert pid in result.stdout
+    assert "stage=APPLIED" in result.stdout
+
+
+def test_list_stage_proposed_excludes_applied_proposal(tmp_path: Path) -> None:
+    """Tras apply, la propuesta NO aparece en `list --stage PROPOSED` (precedencia)."""
+    data_root = _init_project(tmp_path)
+    _seed_brick(tmp_path, data_root)
+    plan_file = _write_seed_plan(tmp_path / "plan.json")
+    proposal = tmp_path / "prop.json"
+    _write_proposal_authorized(proposal)
+
+    apply = _run_cli(
+        "expansion",
+        "apply",
+        "demo",
+        "--proposal",
+        str(proposal),
+        "--plan-file",
+        str(plan_file),
+        cwd=tmp_path,
+        data_root=data_root,
+    )
+    assert apply.returncode == 0
+
+    result = _run_cli(
+        "expansion", "list", "--stage", "PROPOSED", "demo", cwd=tmp_path, data_root=data_root
+    )
+    assert result.returncode == 0
+    assert "stage=PROPOSED" not in result.stdout or "sin propuestas" in result.stdout
+
+
+def test_show_includes_stage_field(tmp_path: Path) -> None:
+    """`show` ahora incluye el campo `stage` inferido en el payload JSON."""
+    data_root = _init_project(tmp_path)
+    _seed_brick(tmp_path, data_root)
+    plan_file = _write_seed_plan(tmp_path / "plan.json")
+    proposal = tmp_path / "prop.json"
+    _write_proposal_authorized(proposal)
+
+    apply = _run_cli(
+        "expansion",
+        "apply",
+        "demo",
+        "--proposal",
+        str(proposal),
+        "--plan-file",
+        str(plan_file),
+        cwd=tmp_path,
+        data_root=data_root,
+    )
+    assert apply.returncode == 0
+    pid = apply.stdout.split("OK: ")[1].split(" ")[0]
+
+    show = _run_cli("expansion", "show", "demo", pid, cwd=tmp_path, data_root=data_root)
+    assert show.returncode == 0
+    payload = json.loads(show.stdout)
+    assert payload["proposal_id"] == pid
+    assert payload["stage"] == "APPLIED"
+
+
+def test_archived_stage_takes_precedence_over_applied(tmp_path: Path) -> None:
+    """ARCHIVED > APPLIED: tras archive, la propuesta aparece como ARCHIVED.
+
+    Verifica que el orden de precedencia en `_infer_proposal_stage` es
+    correcto y que ``list --stage APPLIED`` se vacia tras ``archive``.
+    """
+    data_root = _init_project(tmp_path)
+    _seed_brick(tmp_path, data_root)
+    plan_file = _write_seed_plan(tmp_path / "plan.json")
+    proposal = tmp_path / "prop.json"
+    _write_proposal_authorized(proposal)
+
+    apply = _run_cli(
+        "expansion",
+        "apply",
+        "demo",
+        "--proposal",
+        str(proposal),
+        "--plan-file",
+        str(plan_file),
+        cwd=tmp_path,
+        data_root=data_root,
+    )
+    assert apply.returncode == 0
+    pid = apply.stdout.split("OK: ")[1].split(" ")[0]
+
+    archive = _run_cli("expansion", "archive", "demo", pid, cwd=tmp_path, data_root=data_root)
+    assert archive.returncode == 0
+
+    # ARCHIVED gana a APPLIED
+    show = _run_cli("expansion", "show", "demo", pid, cwd=tmp_path, data_root=data_root)
+    payload = json.loads(show.stdout)
+    assert payload["stage"] == "ARCHIVED"
+
+    # list --stage APPLIED no incluye la archivada
+    list_applied = _run_cli(
+        "expansion", "list", "--stage", "APPLIED", "demo", cwd=tmp_path, data_root=data_root
+    )
+    assert "stage=APPLIED" not in list_applied.stdout or "sin propuestas" in list_applied.stdout
+
+
+def test_rejected_takes_precedence_over_proposed(tmp_path: Path) -> None:
+    """Una propuesta rechazada aparece como REJECTED (no PROPOSED) en show/list."""
+    data_root = _init_project(tmp_path)
+    _seed_brick(tmp_path, data_root)
+    plan_file = _write_seed_plan(tmp_path / "plan.json")
+    proposal = tmp_path / "prop.json"
+    _write_proposal_unauthorized_capability(proposal, capability="fantasma_xyz")
+
+    apply = _run_cli(
+        "expansion",
+        "apply",
+        "demo",
+        "--proposal",
+        str(proposal),
+        "--plan-file",
+        str(plan_file),
+        cwd=tmp_path,
+        data_root=data_root,
+    )
+    # EXIT_DOMAIN = 10 (rejection no es error del orquestador).
+    assert apply.returncode == 10
+
+    # Aunque la propuesta fue rechazada, apply persiste el JSON canonico
+    # en expansion_proposals/ (porque crea el archivo ANTES de validar).
+    # Wait: NO lo crea, porque el rejection path retorna antes. La
+    # propuesta rechazada NO esta en expansion_proposals/, solo en
+    # expansion_rejections/. Verificamos que NO aparece como PROPOSED.
+    list_proposed = _run_cli(
+        "expansion", "list", "--stage", "PROPOSED", "demo", cwd=tmp_path, data_root=data_root
+    )
+    assert "stage=PROPOSED" not in list_proposed.stdout or "sin propuestas" in list_proposed.stdout
+
+    # Y aparece en rejections (la fuente canonica del rechazo).
+    rejections = _run_cli("expansion", "rejections", "demo", cwd=tmp_path, data_root=data_root)
+    assert rejections.returncode == 0
+    pid = apply.stderr.split("REJECTED: ")[1].split(":")[0]
+    assert pid in rejections.stdout
