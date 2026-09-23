@@ -27,7 +27,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-REPO_ROOT = Path("/var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph")
+REPO_ROOT = Path(__file__).resolve().parent.parent
 EVIDENCE_DIR = REPO_ROOT / "tests" / "uat-evidence"
 
 
