@@ -23,6 +23,14 @@ from typing import Any
 
 from skillgraph.bricks import Brick
 from skillgraph.errors import IdentityConflictError, ValidationError
+from skillgraph.knowledge import (
+    Claim,
+    Entity,
+    Evidence,
+    Finding,
+    OutcomeTrace,
+    Source,
+)
 
 SCHEMA_VERSION = 1
 
@@ -132,6 +140,104 @@ CREATE INDEX IF NOT EXISTS events_by_run
     ON runtime_events(tenant_id, project_id, run_id);
 CREATE INDEX IF NOT EXISTS events_by_resource
     ON runtime_events(tenant_id, project_id, resource_ref);
+
+-- ============================================================
+-- H3 Slice 1: tablas del subsistema de conocimiento
+-- ============================================================
+-- 7 tablas nuevas (sources, entities, evidences, claims,
+-- claim_evidence, findings, outcome_traces, outcome_trace_links).
+-- NO se modifican tablas existentes: el bloque CREATE TABLE
+-- IF NOT EXISTS es idempotente y los ALTER no son necesarios.
+
+CREATE TABLE IF NOT EXISTS sources (
+    source_id        TEXT PRIMARY KEY,
+    tenant_id        TEXT NOT NULL,
+    project_id       TEXT NOT NULL,
+    kind             TEXT NOT NULL,
+    content_hash     TEXT NOT NULL,
+    locator_json     TEXT NOT NULL,
+    git_commit_sha   TEXT,
+    git_tree_sha     TEXT,
+    working_tree_status_json TEXT,
+    checked_at       TEXT NOT NULL,
+    freshness        TEXT NOT NULL DEFAULT 'fresh'
+);
+CREATE INDEX IF NOT EXISTS idx_sources_project
+    ON sources(tenant_id, project_id);
+
+CREATE TABLE IF NOT EXISTS entities (
+    entity_id        TEXT PRIMARY KEY,
+    tenant_id        TEXT NOT NULL,
+    project_id       TEXT NOT NULL,
+    kind             TEXT NOT NULL,
+    stable_key       TEXT NOT NULL,
+    UNIQUE (tenant_id, project_id, kind, stable_key)
+);
+
+CREATE TABLE IF NOT EXISTS evidences (
+    evidence_id      TEXT PRIMARY KEY,
+    tenant_id        TEXT NOT NULL,
+    project_id       TEXT NOT NULL,
+    kind             TEXT NOT NULL,
+    content_json     TEXT NOT NULL,
+    source_id        TEXT NOT NULL REFERENCES sources(source_id),
+    observed_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS claims (
+    claim_id              TEXT PRIMARY KEY,
+    tenant_id             TEXT NOT NULL,
+    project_id            TEXT NOT NULL,
+    subject_entity_id     TEXT NOT NULL REFERENCES entities(entity_id),
+    predicate             TEXT NOT NULL,
+    object_literal_json   TEXT NOT NULL,
+    source_id             TEXT NOT NULL REFERENCES sources(source_id),
+    extraction_method     TEXT NOT NULL,
+    extractor_version     TEXT NOT NULL,
+    checked_at_revision   TEXT NOT NULL,
+    stale                 INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (subject_entity_id, predicate, source_id, checked_at_revision)
+);
+CREATE INDEX IF NOT EXISTS idx_claims_subject
+    ON claims(subject_entity_id, predicate);
+CREATE INDEX IF NOT EXISTS idx_claims_stale
+    ON claims(stale) WHERE stale = 1;
+
+CREATE TABLE IF NOT EXISTS claim_evidence (
+    claim_id      TEXT NOT NULL REFERENCES claims(claim_id),
+    evidence_id   TEXT NOT NULL REFERENCES evidences(evidence_id),
+    PRIMARY KEY (claim_id, evidence_id)
+);
+
+CREATE TABLE IF NOT EXISTS findings (
+    finding_id          TEXT PRIMARY KEY,
+    tenant_id           TEXT NOT NULL,
+    project_id          TEXT NOT NULL,
+    entity_id           TEXT NOT NULL REFERENCES entities(entity_id),
+    observation         TEXT NOT NULL,
+    rule_ref            TEXT NOT NULL,
+    rule_version        TEXT NOT NULL,
+    evidence_ids_json   TEXT NOT NULL,
+    result              TEXT NOT NULL,
+    valid_until_revision TEXT
+);
+
+CREATE TABLE IF NOT EXISTS outcome_traces (
+    trace_id      TEXT PRIMARY KEY,
+    tenant_id     TEXT NOT NULL,
+    project_id    TEXT NOT NULL,
+    kind          TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS outcome_trace_links (
+    trace_id      TEXT NOT NULL REFERENCES outcome_traces(trace_id),
+    link_kind     TEXT NOT NULL CHECK (link_kind IN ('claim','evidence','relation')),
+    link_id       TEXT NOT NULL,
+    position      INTEGER NOT NULL,
+    PRIMARY KEY (trace_id, link_kind, link_id)
+);
 """
 
 
@@ -306,6 +412,448 @@ class Storage:
         """Aristas entrantes: 'qué recursos apuntan a este' (source)."""
         rows = self._conn.execute("SELECT * FROM relations WHERE target_uid = ?", (uid,)).fetchall()
         return [dict(r) for r in rows]
+
+    # ----- H3 Slice 1: conocimiento (sources, entities, claims, etc.) -----
+    #
+    # Estas APIs NO son CRUD plano: devuelven los ADT de `skillgraph.knowledge`
+    # cuando es posible, y dejan la logica de negocio (invalidacion
+    # transitiva, hashing, glosario) al KnowledgeController que se introduce
+    # en Slice 2.
+
+    # ---- Sources
+
+    def register_source(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        source: Source,
+    ) -> None:
+        """Registra una Source. Idempotente por `source_id` (PK)."""
+        import json
+
+        locator_json = json.dumps(source.locator, sort_keys=True)
+        wts_json = (
+            json.dumps(source.working_tree_status, sort_keys=True)
+            if source.working_tree_status is not None
+            else None
+        )
+        with self._tx() as cur:
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO sources
+                    (source_id, tenant_id, project_id, kind, content_hash,
+                     locator_json, git_commit_sha, git_tree_sha,
+                     working_tree_status_json, checked_at, freshness)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    source.source_id,
+                    tenant_id,
+                    project_id,
+                    source.kind,
+                    source.content_hash,
+                    locator_json,
+                    source.git_commit_sha,
+                    source.git_tree_sha,
+                    wts_json,
+                    source.checked_at,
+                    source.freshness,
+                ),
+            )
+
+    def get_source(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        source_id: str,
+    ) -> Source | None:
+        """Recupera una Source por ID; `None` si no existe."""
+        import json
+
+        row = self._conn.execute(
+            "SELECT * FROM sources WHERE source_id = ? AND tenant_id = ? AND project_id = ?",
+            (source_id, tenant_id, project_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return _row_to_source(row, json)
+
+    def update_source_freshness(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        source_id: str,
+        freshness: str,
+    ) -> None:
+        """Cambia `freshness` de una Source (e.g. fresh -> stale)."""
+        with self._tx() as cur:
+            cur.execute(
+                "UPDATE sources SET freshness = ? WHERE source_id = ? AND tenant_id = ? AND project_id = ?",
+                (freshness, source_id, tenant_id, project_id),
+            )
+
+    # ---- Entities
+
+    def upsert_entity(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        entity: Entity,
+    ) -> None:
+        """Inserta o reemplaza una Entity. UNIQUE(kind, stable_key) por tenant/project."""
+        with self._tx() as cur:
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO entities
+                    (entity_id, tenant_id, project_id, kind, stable_key)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    entity.entity_id,
+                    tenant_id,
+                    project_id,
+                    entity.kind,
+                    entity.stable_key,
+                ),
+            )
+
+    def get_entity(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        entity_id: str,
+    ) -> Entity | None:
+        row = self._conn.execute(
+            "SELECT * FROM entities WHERE entity_id = ? AND tenant_id = ? AND project_id = ?",
+            (entity_id, tenant_id, project_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return Entity(
+            entity_id=row["entity_id"],
+            kind=row["kind"],
+            stable_key=row["stable_key"],
+        )
+
+    # ---- Evidences
+
+    def record_evidence(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        evidence: Evidence,
+    ) -> None:
+        """Registra una Evidence (FK a sources). Inmutable: re-registrar con
+        mismo `evidence_id` es no-op (INSERT OR IGNORE)."""
+        import json
+
+        content_json = (
+            json.dumps(evidence.content, sort_keys=True)
+            if not isinstance(evidence.content, str)
+            else json.dumps(evidence.content)
+        )
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT OR IGNORE INTO evidences (evidence_id, tenant_id, project_id, kind, content_json, source_id, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    evidence.evidence_id,
+                    tenant_id,
+                    project_id,
+                    evidence.kind,
+                    content_json,
+                    evidence.source_id,
+                    evidence.observed_at,
+                ),
+            )
+
+    def get_evidences_for_claim(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        claim_id: str,
+    ) -> tuple[Evidence, ...]:
+        """Devuelve las Evidences asociadas a un Claim (N:M via claim_evidence)."""
+        import json
+
+        rows = self._conn.execute(
+            """
+            SELECT e.*
+            FROM evidences e
+            JOIN claim_evidence ce ON ce.evidence_id = e.evidence_id
+            JOIN claims c ON c.claim_id = ce.claim_id
+            WHERE c.claim_id = ? AND c.tenant_id = ? AND c.project_id = ?
+            """,
+            (claim_id, tenant_id, project_id),
+        ).fetchall()
+        return tuple(_row_to_evidence(r, json) for r in rows)
+
+    # ---- Claims
+
+    def record_claim(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        claim: Claim,
+    ) -> str:
+        """Registra una Claim. Devuelve su claim_id. Idempotente por
+        (subject, predicate, source, checked_at_revision)."""
+        import json
+
+        obj_json = json.dumps(claim.object_literal, sort_keys=True)
+        with self._tx() as cur:
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO claims
+                    (claim_id, tenant_id, project_id, subject_entity_id,
+                     predicate, object_literal_json, source_id,
+                     extraction_method, extractor_version,
+                     checked_at_revision, stale)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    claim.claim_id,
+                    tenant_id,
+                    project_id,
+                    claim.subject_entity_id,
+                    claim.predicate,
+                    obj_json,
+                    claim.source_id,
+                    claim.extraction_method,
+                    claim.extractor_version,
+                    claim.checked_at_revision,
+                    int(claim.stale),
+                ),
+            )
+            # Attach evidence links (idempotente).
+            for evidence_id in claim.evidence_ids:
+                cur.execute(
+                    "INSERT OR IGNORE INTO claim_evidence (claim_id, evidence_id) VALUES (?, ?)",
+                    (claim.claim_id, evidence_id),
+                )
+        return claim.claim_id
+
+    def get_claim(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        claim_id: str,
+    ) -> Claim | None:
+        import json
+
+        row = self._conn.execute(
+            "SELECT * FROM claims WHERE claim_id = ? AND tenant_id = ? AND project_id = ?",
+            (claim_id, tenant_id, project_id),
+        ).fetchone()
+        if row is None:
+            return None
+        # Recoger evidence_ids del join.
+        ev_rows = self._conn.execute(
+            "SELECT evidence_id FROM claim_evidence WHERE claim_id = ?",
+            (claim_id,),
+        ).fetchall()
+        return _row_to_claim(row, [r["evidence_id"] for r in ev_rows], json)
+
+    def list_claims_for_source(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        source_id: str,
+    ) -> list[Claim]:
+        import json
+
+        rows = self._conn.execute(
+            "SELECT * FROM claims WHERE source_id = ? AND tenant_id = ? AND project_id = ?",
+            (source_id, tenant_id, project_id),
+        ).fetchall()
+        out: list[Claim] = []
+        for row in rows:
+            ev_rows = self._conn.execute(
+                "SELECT evidence_id FROM claim_evidence WHERE claim_id = ?",
+                (row["claim_id"],),
+            ).fetchall()
+            out.append(_row_to_claim(row, [r["evidence_id"] for r in ev_rows], json))
+        return out
+
+    def attach_evidence_to_claim(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        claim_id: str,
+        evidence_id: str,
+    ) -> None:
+        """Adjunta una Evidence a un Claim (N:M). Idempotente (PK compuesta)."""
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT OR IGNORE INTO claim_evidence (claim_id, evidence_id) VALUES (?, ?)",
+                (claim_id, evidence_id),
+            )
+
+    # ---- Findings
+
+    def record_finding(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        finding: Finding,
+    ) -> None:
+        """Registra un Finding. Idempotente por `finding_id` (PK)."""
+        import json
+
+        ev_json = json.dumps(list(finding.evidence_ids), sort_keys=True)
+        with self._tx() as cur:
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO findings
+                    (finding_id, tenant_id, project_id, entity_id,
+                     observation, rule_ref, rule_version,
+                     evidence_ids_json, result, valid_until_revision)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    finding.finding_id,
+                    tenant_id,
+                    project_id,
+                    finding.entity_id,
+                    finding.observation,
+                    finding.rule_ref,
+                    finding.rule_version,
+                    ev_json,
+                    finding.result,
+                    finding.valid_until_revision,
+                ),
+            )
+
+    # ---- Outcome traces
+
+    def record_trace(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        trace: OutcomeTrace,
+    ) -> None:
+        """Registra un OutcomeTrace y sus enlaces (claim/evidence en orden).
+
+        Idempotente por `trace_id` y por `(trace_id, link_kind, link_id)`."""
+        with self._tx() as cur:
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO outcome_traces
+                    (trace_id, tenant_id, project_id, kind, name, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    trace.trace_id,
+                    tenant_id,
+                    project_id,
+                    trace.kind,
+                    trace.name,
+                    trace.created_at,
+                ),
+            )
+            # Enlazar claims y evidences preservando orden via `position`.
+            for position, claim_id in enumerate(trace.claim_refs):
+                cur.execute(
+                    """
+                    INSERT OR REPLACE INTO outcome_trace_links
+                        (trace_id, link_kind, link_id, position)
+                    VALUES (?, 'claim', ?, ?)
+                    """,
+                    (trace.trace_id, claim_id, position),
+                )
+            for position, evidence_id in enumerate(trace.evidence_refs):
+                cur.execute(
+                    """
+                    INSERT OR REPLACE INTO outcome_trace_links
+                        (trace_id, link_kind, link_id, position)
+                    VALUES (?, 'evidence', ?, ?)
+                    """,
+                    (trace.trace_id, evidence_id, position),
+                )
+
+    def link_trace(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        trace_id: str,
+        link_kind: str,
+        link_id: str,
+        position: int,
+    ) -> None:
+        """Adjunta un enlace adicional a un trace. `link_kind` ∈
+        {'claim', 'evidence', 'relation'}."""
+        if link_kind not in {"claim", "evidence", "relation"}:
+            raise ValidationError(
+                f"link_kind invalido: {link_kind!r} (esperado claim/evidence/relation)"
+            )
+        with self._tx() as cur:
+            cur.execute(
+                """
+                INSERT OR REPLACE INTO outcome_trace_links
+                    (trace_id, link_kind, link_id, position)
+                VALUES (?, ?, ?, ?)
+                """,
+                (trace_id, link_kind, link_id, position),
+            )
+
+
+# --- Helpers de conversion row -> ADT -------------------------------------
+
+
+def _row_to_source(row: sqlite3.Row, json: Any) -> Source:
+    """Convierte una fila de `sources` al ADT `Source`."""
+    locator = json.loads(row["locator_json"])
+    wts = row["working_tree_status_json"]
+    return Source(
+        source_id=row["source_id"],
+        kind=row["kind"],
+        content_hash=row["content_hash"],
+        locator=locator,
+        git_commit_sha=row["git_commit_sha"],
+        git_tree_sha=row["git_tree_sha"],
+        working_tree_status=json.loads(wts) if wts else None,
+        checked_at=row["checked_at"],
+        freshness=row["freshness"],
+    )
+
+
+def _row_to_evidence(row: sqlite3.Row, json: Any) -> Evidence:
+    content: Any = json.loads(row["content_json"])
+    return Evidence(
+        evidence_id=row["evidence_id"],
+        kind=row["kind"],
+        content=content,
+        source_id=row["source_id"],
+        observed_at=row["observed_at"],
+    )
+
+
+def _row_to_claim(row: sqlite3.Row, evidence_ids: list[str], json: Any) -> Claim:
+    return Claim(
+        claim_id=row["claim_id"],
+        subject_entity_id=row["subject_entity_id"],
+        predicate=row["predicate"],
+        object_literal=json.loads(row["object_literal_json"]),
+        source_id=row["source_id"],
+        evidence_ids=tuple(evidence_ids),
+        extraction_method=row["extraction_method"],
+        extractor_version=row["extractor_version"],
+        checked_at_revision=row["checked_at_revision"],
+        stale=bool(row["stale"]),
+    )
 
 
 def open_project_storage(path: str | Path) -> Storage:

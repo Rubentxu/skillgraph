@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-05",
-  "revision": "f4618b2bf6da1340b170860e92bd6278bc0c182a",
-  "timestamp": "2026-09-23T08:49:51Z",
+  "revision": "f62a8ad3e6843495a247be17dfb8669242414913",
+  "timestamp": "2026-09-23T08:57:38Z",
   "scenario": "Dado un nodo con ContextRecipe, cuando se compila su handoff, contiene entradas obligatorias, decisiones aplicables y conocimiento vigente.",
   "expected": "Handoff contiene obligatory selectors resueltos; NO incluye recursos fuera del ambito; NO requiere historial conversacional.",
   "observed": "No implementado. H3 pendiente. ContextRecipe + ContextController son slice 5.",

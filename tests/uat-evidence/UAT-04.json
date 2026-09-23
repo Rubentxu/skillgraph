@@ -1,7 +1,7 @@
 {
   "uat_id": "UAT-04",
-  "revision": "f4618b2bf6da1340b170860e92bd6278bc0c182a",
-  "timestamp": "2026-09-23T08:49:51Z",
+  "revision": "f62a8ad3e6843495a247be17dfb8669242414913",
+  "timestamp": "2026-09-23T08:57:38Z",
   "scenario": "Dado un workflow con una decision (A) y una accion (B), cuando el agente simulado devuelve ok, entonces el motor activa unicamente la transicion declarada y registra su resultado.",
   "expected": "run COMPLETED; a SUCCEEDED outcome=ok; b SUCCEEDED outcome=ok; current_node=NULL (terminal)",
   "observed": "execs=[('a', 'SUCCEEDED', 'ok'), ('b', 'SUCCEEDED', 'ok')]; run=('COMPLETED', None)",
@@ -9,24 +9,24 @@
     {
       "cmd": "init",
       "returncode": "0",
-      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat04-009kz9q_/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat04-009kz9q_/data\n",
+      "stdout": "Catálogo inicializado en: /var/home/rubentxu/.jcode/scratch/sg-uat04-j62anyn8/data/catalog.sqlite\nRaíz de datos: /var/home/rubentxu/.jcode/scratch/sg-uat04-j62anyn8/data\n",
       "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat04-009kz9q_/data/tenants/default/projects/demo/project.sqlite\n",
+      "stdout": "Proyecto 'demo' creado en: /var/home/rubentxu/.jcode/scratch/sg-uat04-j62anyn8/data/tenants/default/projects/demo/project.sqlite\n",
       "stderr": ""
     },
     {
-      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat04-009kz9q_/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat04-009kz9q_/plan.md",
+      "cmd": "run --fixtures-root /home/rubentxu/.jcode/scratch/sg-uat04-j62anyn8/fixtures demo /home/rubentxu/.jcode/scratch/sg-uat04-j62anyn8/plan.md",
       "returncode": "0",
-      "stdout": "Run: run-2570a33d-b05e-41bc-ba92-d4b08940c7c7\nEstado: COMPLETED\nNodos ejecutados: a, b\nEventos emitidos: 12\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat04-009kz9q_/fixtures\n",
+      "stdout": "Run: run-873950c2-33e1-4c1a-b8e2-b3f618e4106e\nEstado: COMPLETED\nNodos ejecutados: a, b\nEventos emitidos: 12\nFixtures de agente: /home/rubentxu/.jcode/scratch/sg-uat04-j62anyn8/fixtures\n",
       "stderr": ""
     }
   ],
   "artifacts": [
-    "/home/rubentxu/.jcode/scratch/sg-uat04-009kz9q_"
+    "/home/rubentxu/.jcode/scratch/sg-uat04-j62anyn8"
   ],
   "status": "PASS",
   "notes": "RunController ejecuta UN nodo por reconcile_run. Outcome no declarado no avanza estado."

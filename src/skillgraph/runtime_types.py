@@ -33,6 +33,45 @@ RunState = Literal["CREATED", "ACTIVE", "WAITING", "COMPLETED", "FAILED", "CANCE
 NodeState = Literal["READY", "RUNNING", "WAITING", "SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"]
 """Ciclo de vida de una instancia de nodo (blueprint §2)."""
 
+# --- H3 Slice 1: tipos de conocimiento -------------------------------------
+
+SourceKind = Literal["git_commit", "git_tree", "local_file", "external_doc"]
+"""Tipo de fuente de la que se extrae evidencia.
+
+- `git_commit`: snapshot inmutable de un commit.
+- `git_tree`: snapshot de un tree (directorio) en un commit.
+- `local_file`: archivo del workspace NO bajo git (provisional).
+- `external_doc`: documento externo (URL, PDF, etc.).
+"""
+
+FreshnessState = Literal["fresh", "stale", "archived"]
+"""Estado de actualidad de una Source.
+
+`fresh` = el contenido coincide con el esperado.
+`stale` = el contenido cambio (su hash difiere del registrado).
+`archived` = retirada del catalogo activo.
+"""
+
+ClaimPredicate = Literal[
+    "line_count",
+    "function_count",
+    "imports_module",
+    "defines_symbol",
+    "test_passes",
+    "file_exists",
+    "spec_revision",
+]
+"""Predicados extraibles en H3 (extensibles en H5 con Domain Packs)."""
+
+FindingResult = Literal["pass", "fail", "inconclusive"]
+"""Resultado de aplicar una regla a una entidad."""
+
+TraceKind = Literal["SoftwareExecutionSlice"]
+"""Tipo de OutcomeTrace. H3 cubre solo `SoftwareExecutionSlice`."""
+
+RuleRef = Literal["max_lines_per_function", "max_complexity", "naming_convention"]
+"""Reglas de software disponibles en H3."""
+
 # --- NewType: evita confusion entre strings ------------------------------
 # Un NodeName NO es un Outcome, aunque ambos sean str. Los NewType
 # desaparecen en runtime (no afectan performance) pero hacen que el
@@ -59,6 +98,27 @@ TERMINAL_RUN_STATES: Final[frozenset[str]] = frozenset({"COMPLETED", "FAILED", "
 TERMINAL_NODE_STATES: Final[frozenset[str]] = frozenset(
     {"SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"}
 )
+
+#: Conjunto canonico de kinds de fuente.
+SOURCE_KINDS: Final[frozenset[str]] = frozenset(
+    {"git_commit", "git_tree", "local_file", "external_doc"}
+)
+
+#: Conjunto canonico de predicados de Claim (H3).
+CLAIM_PREDICATES: Final[frozenset[str]] = frozenset(
+    {
+        "line_count",
+        "function_count",
+        "imports_module",
+        "defines_symbol",
+        "test_passes",
+        "file_exists",
+        "spec_revision",
+    }
+)
+
+#: Conjunto canonico de resultados de Finding.
+FINDING_RESULTS: Final[frozenset[str]] = frozenset({"pass", "fail", "inconclusive"})
 
 
 def is_terminal_run_state(state: str) -> bool:

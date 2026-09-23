@@ -65,3 +65,30 @@ class MaxIterationsExceeded(SkillGraphError):
     """El bucle de reconciliacion agoto el presupuesto de iteraciones."""
 
     code = "sg_max_iterations"
+
+
+# --- H3 Slice 1: errores del modelo de conocimiento -----------------------
+
+
+class InvalidSourceIDError(ValidationError):
+    """Un SourceID no cumple el formato esperado (vacio o no normalizado)."""
+
+    code = "sg_invalid_source_id"
+
+
+class InvalidEntityIDError(ValidationError):
+    """Un EntityID no cumple el formato `kind:key`."""
+
+    code = "sg_invalid_entity_id"
+
+
+class InvalidSourceError(ValidationError):
+    """Una instancia de Source no cumple sus invariantes (e.g. git_* sin SHA)."""
+
+    code = "sg_invalid_source"
+
+
+class UnknownClaimPredicateError(ValidationError):
+    """El predicado de un Claim no esta registrado en CLAIM_PREDICATES."""
+
+    code = "sg_unknown_predicate"
