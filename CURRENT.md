@@ -368,3 +368,19 @@ Mismas opciones que tras v0.3.0:
 2. H6 o H7 (necesita spec operador o auto-propón).
 3. Audit transversal (UAT-MATRIX + ARCHITECTURE.md).
 4. cli.py stewardship (debatible).
+
+## RECTIFICACIÓN DE ALCANCE (2026-09-23, post-auditoría)
+
+Auditoría independiente: v0.6.0 certifica H0-H5 completos y H6/H7
+como **bibliotecas**, no como recorridos de usuario. Ver
+`external/blueprint-v1/adr/ADR-0013-divergencia-h7-y-rectificacion-v060.md`
+y su anexo de trazado.
+
+- H6 · Multipropósito: **parcial** (pack_loader sin CLI ni caller).
+- H7 · Release candidate: **pendiente con alcance original**;
+  el trabajo ejecutado fue promoción entre bases.
+- H8 (nuevo): integración y certificación pública (CLI + UAT por
+  interfaz pública + interrupciones con failpoints).
+- H9 (nuevo): endurecimiento (el H7 original).
+
+Tag v0.6.0 y cierre COMPLETED se conservan como hechos históricos.
