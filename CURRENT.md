@@ -785,3 +785,25 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
 - **Próximo paso**: módulos <90% restantes: `resources/registry.py`
   93%, `resources/workflow.py` 93%, `knowledge/context_controller.py`
   82% (SQL directo, decisión material).
+
+## UPDATE 2026-09-23 21:59 — H9-Coverage-6 cerrado
+
+- **Slice**: cobertura de `src/skillgraph/resources/registry.py`
+  del 93% al 95% con 3 tests focales. Sin tocar código de
+  producción.
+- **Ramas cubiertas**:
+  - `_validate_decision`: outcomes con `name` no-string → `ValidationError`.
+  - `_validate_action`: transitions con clave no-string → `ValidationError`.
+  - `_validate_domain_pack`: capabilities no-lista → `ValidationError`.
+- **Hallazgo**: stmt 79 (`brick_type.api_version != brick.api_version`)
+  es **dead code por construcción** — el dict lookup usa
+  `brick.api_version` como parte de la key, así que el `BrickType`
+  recuperado SIEMPRE tiene el mismo `api_version`. Documentado
+  en spec; no testeable sin mutar `_types` directamente (fragilidad).
+- **Resultado**: 586/586 tests verde (`scripts/ci.sh` 136s).
+  `ruff check` All checks passed.
+- **Spec**: `specs/h9-coverage-registry.md`.
+- **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos.
+- **Próximo paso**: módulos <90% restantes: `resources/workflow.py`
+  93%, `knowledge/context_controller.py` 82% (SQL directo, decisión
+  material).

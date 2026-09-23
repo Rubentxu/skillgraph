@@ -2188,3 +2188,36 @@ tenant/project).
 - `scripts/ci.sh`: **583/583 verde en 104s**.
 - `ruff check src tests`: All checks passed (1 fix I001 auto-aplicado).
 
+
+### H9-Coverage-6 — cobertura `resources/registry.py` 93% → 95% (2026-09-23 21:59)
+
+**Slice**: 3 tests focales para cubrir las ramas no ejercitadas
+del módulo `resources/registry.py` (Etapa 0/S0, registro de tipos).
+
+**Spec**: `specs/h9-coverage-registry.md`.
+
+**Tests añadidos** (`tests/test_h9_coverage_registry.py`,
+93 líneas, 3 tests):
+
+- `_validate_decision`: outcomes con `{"name": 123}` → ValidationError.
+- `_validate_action`: transitions con clave entera → ValidationError.
+- `_validate_domain_pack`: capabilities como string → ValidationError.
+
+**Hallazgo de dead code**:
+
+`brick_type.api_version != brick.api_version` en `validate()`
+(linea 79) es **lógica muerta por construcción**. El dict lookup
+de `validate()` usa `key = (brick.api_version, brick.kind)`, así
+que el `BrickType` recuperado en linea 76 SIEMPRE tiene el mismo
+`api_version`. La rama nunca se ejecuta sin alterar `_types`
+directamente, lo que sería fragilidad. Se documenta en el spec
+como defensive branch no testeable.
+
+**Verificación**:
+
+- `pytest tests/test_h9_coverage_registry.py`: 3/3 verde en 0.05s.
+- `pytest --cov=skillgraph.resources.registry` (suite completa):
+  72 stmts, 1 miss, 32 br, 4 brpart → **95%** (objetivo ≥95%).
+- `scripts/ci.sh`: **586/586 verde en 136s**.
+- `ruff check src tests`: All checks passed.
+

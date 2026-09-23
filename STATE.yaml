@@ -212,9 +212,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 583
-  passed: 583
-  duration_s: 104
+  total: 586
+  passed: 586
+  duration_s: 136
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -234,6 +234,7 @@ tests:
   h9_coverage3_delta: "+8 tests cobertura skill_importer.py 89% -> 98%: _classify cubre yaml_config (.yaml/.yml, 2) + plain_text por mimetype text/* (1) + unknown cuando mimetypes no detecta (1) + _read_text_safely UnicodeDecodeError returns None (1) + analyze_skill root.is_file() (1) + analyze_skill kind=unknown produce ambiguous entry (1) + register_imported_skill locator_extra merge (1). Smoke empirico revelo que mimetypes.guess_type('.xyz') devuelve 'chemical/x-xyz' en Linux (no None), asi que se usa '.foobar' para forzar la rama unknown. Stmt 134 (mimetype text/* con extension fuera de sets) y brpart 252->205 restantes. Spec: specs/h9-coverage-skill-importer.md."
   h9_coverage4_delta: "+8 tests cobertura knowledge/git_source.py 86% -> 95%: from_commit con sha no-commit (Blob en object store) -> ValueError (1) + refresh() con pathspecs filtra blobs (1) + detect_changes until_commit=None usa HEAD (1) + detect_changes con pathspecs filtra (1) + status added cuando old_sha None (1) + status deleted cuando new_sha None (1) + _matches_pathspec literal prefijo-segmento (1) + _safe_capture_status exito devuelve dict (1). Stmts 78-79 (ImportError dulwich, requiere env sin dulwich) y ramas defensivas 252->254/255/325->exit/357-358 restantes. Spec: specs/h9-coverage-git-source.md."
   h9_coverage5_delta: "+4 tests cobertura resources/catalog.py 88% -> 100%: register_project duplicado (tenant_id, name) -> IdentityConflictError (1) + list_projects con resultados ordenados por name (1) + list_projects tenant vacio (1) + open_catalog path sin extension .sqlite -> ValidationError (1). Spec: specs/h9-coverage-catalog.md."
+  h9_coverage6_delta: "+3 tests cobertura resources/registry.py 93% -> 95%: _validate_decision outcomes[i]['name'] no-string (1) + _validate_action transitions con clave no-string (1) + _validate_domain_pack capabilities no-lista (1). Stmt 79 (doble check apiVersion inconsistente) es dead code por construccion: el dict lookup usa brick.api_version como parte de la key, asi que brick_type.api_version == brick.api_version siempre. Documentado en spec; no testeable sin mutar _types directamente (fragilidad). Spec: specs/h9-coverage-registry.md."
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -288,6 +289,7 @@ tests:
     - tests/test_h9_coverage_skill_importer.py: 8   # H9-Coverage-3: cobertura skill_importer.py (89%->98%)
     - tests/test_h9_coverage_git_source.py: 8   # H9-Coverage-4: cobertura knowledge/git_source.py (86%->95%)
     - tests/test_h9_coverage_catalog.py: 4   # H9-Coverage-5: cobertura resources/catalog.py (88%->100%)
+    - tests/test_h9_coverage_registry.py: 3   # H9-Coverage-6: cobertura resources/registry.py (93%->95%)
   coverage_snapshot_2026-09-23:
     # Modulos con cobertura real (medida con `pytest --cov=skillgraph`).
     # Snapshot re-medido el 2026-09-23 21:42 post-H9-Coverage-3.
@@ -327,7 +329,7 @@ tests:
     resources/catalog.py: 100%
     resources/parser.py: 100%
     resources/plan_loader.py: 100%
-    resources/registry.py: 93%
+    resources/registry.py: 95%
     resources/workflow.py: 93%
     runtime/agent.py: 97%
     runtime/engine.py: 100%
@@ -336,15 +338,16 @@ tests:
     __main__.py: 0%   # entry-point puro de CLI, no testeable con pytest-cov
     cli/runner.py: 55%   # cobertura-por-exit-code; subprocess tests + in-process + UAT scripts
   nota_cobertura: >
-    Cobertura RE-MEDIDA con `pytest --cov=skillgraph` el 2026-09-23 21:49
-    (post-H9-Coverage-5 = en este commit). Cifras validadas contra
-    `tests/uat_audit.py` con la suite completa (583 tests verde en 104s).
+    Cobertura RE-MEDIDA con `pytest --cov=skillgraph` el 2026-09-23 21:59
+    (post-H9-Coverage-6 = en este commit). Cifras validadas contra
+    `tests/uat_audit.py` con la suite completa (586 tests verde en 136s).
     Modulos criticos del nucleo (errors/recipe/runtime/agent/handoff/dsl/
     runcontroller/storage) al 100%. Modulos de dominio:
     pack_loader.py 97% (+10 H9-Coverage-2), skill_importer.py 98%
     (+8 H9-Coverage-3), graph_expansion.py 98% (+17 H9-Coverage-1),
     knowledge/git_source.py 95% (+8 H9-Coverage-4),
-    resources/catalog.py 100% (+4 H9-Coverage-5).
+    resources/catalog.py 100% (+4 H9-Coverage-5),
+    resources/registry.py 95% (+3 H9-Coverage-6).
     Modulos con SQL directo en `_conn.execute` (knowledge/context_controller
     82%) quedan como deuda tecnica rastreada: requiere refactor a
     Storage API publica.
