@@ -792,3 +792,50 @@ como limitaciones vigentes en STATE.yaml.
 - 7 commits en este turno (sesion H4 Expansion controlada).
 - Próximo: esperar decisión del operador sobre H4 slice-3 (aprobación
   del spec) o salto a H6/H7.
+
+## 2026-09-23 — H5 audit penal + correcciones documentales H4
+
+### H5 audit penal
+
+specs/h5-audit-penal.md (141 LoC) cruza H5 skill_import contra
+blueprint literal: HITOS.md §H5 (5 entregables), UAT.md UAT-11/14
+(textos literales), decision D5 documentada.
+
+Resultado:
+- 5 entregables HITOS.md: 3 cubiertos (Importacion, Paquete
+  encapsulado, Informe asimilacion), 1 parcial (Registro
+  capacidades: extrae pero no valida), 1 NO (Comandos dinamicos).
+- UAT-11: PASS verificado (8 tests + uat_audit.py::uat_11).
+- UAT-14: PASS verificado (8 tests + uat_audit.py::uat_14).
+- D5 "conserva fuente original" = referencia, NO copia.
+- 5 limitaciones vigentes documentadas.
+
+Conclusion: H5 HONESTAMENTE CERRADO EN SU ALCANCE DECLARADO.
+
+### Auto-correcciones documentales detectadas en este turno
+
+Detectadas durante la escritura del audit H5:
+
+1. Mi audit H5 decia "no hay test E2E CLI de UAT-14" cuando SI
+   lo hay en `tests/uat_audit.py::uat_14()` (línea 1250). El test
+   NO está en `tests/test_cli_uat.py` (suite pytest) sino en el
+   script de audit separado. Corregido.
+
+2. El spec slice-1 decia "6 invariantes I1..I6" pero el
+   blueprint §6 tiene 7 invariantes. El codigo SI usa la
+   numeracion del blueprint correctamente; la discrepancia era
+   solo documental. Corregido en commit 2d7a658.
+
+3. La 7ª invariante blueprint ("no promover cambios locales a
+   definiciones compartidas") es exactamente lo que slice-3
+   spec cubre con policy engine P4 forbidden_ops. Confirmacion
+   cruzada entre audit penal y spec slice-3.
+
+### Estado final
+
+- HEAD: 2d7a658 (mas PENDIENTE con este commit).
+- 3 audit penales ahora publicados: h3 (155 LoC) + h4 (226 LoC)
+  + h5 (141 LoC) = 522 LoC de audit honest acumulado.
+- 14/16 UAT PASS, 0 FAIL, 2 BLOCKED honestos (H6, H7).
+- Sin trabajo desbloqueado de mayor ROI sin decision del
+  operador.

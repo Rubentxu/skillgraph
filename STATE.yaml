@@ -117,6 +117,11 @@ workstreams:
     status: completed
     commit: "7233fac"
     nota: "specs/h4-audit-penal.md (226 LoC). H4 honestamente cerrado en su alcance declarado. 5 limitaciones vigentes documentadas. Slice-3 spec cubre los gaps reales."
+  - id: h5-audit-penal-vs-blueprint
+    items: [audit-hitos, audit-uat-11, audit-uat-14, audit-decision-d5]
+    status: completed
+    commit: "PENDIENTE"
+    nota: "specs/h5-audit-penal.md (141 LoC). H5 honestamente cerrado en su alcance declarado. 5 limitaciones vigentes documentadas. 3/5 entregables HITOS.md cubiertos, 1 parcial, 1 NO."
   - id: deuda-storage-diagnostico
     items: [storage-coverage-90-real-branches, gitignore-coverage]
     status: completed
@@ -144,6 +149,7 @@ deliverables:
   - "specs/h4-slice-1.md: H4 Expansion controlada slice-1 library (15 tests + 86% coverage)"
   - "specs/h4-slice-3.md: H4 Expansion controlada slice-3 spec DRAFT (storage persistente + EVALUATE + policy engine P1..P5)"
   - "specs/h4-audit-penal.md: H4 slices 1+2 vs blueprint literal (226 LoC)"
+  - "specs/h5-audit-penal.md: H5 skill_import vs blueprint literal (141 LoC, UAT-11/14)"
   - "CURRENT.md, STATE.yaml, SESSION-JOURNAL.md"
   - "AGENTS.md cerrado con 11 secciones (incluida §11 Haskell-inspired)"
   - "uv.lock reproducible"
