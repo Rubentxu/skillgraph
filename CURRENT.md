@@ -564,6 +564,36 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
   observable. Las pruebas T1..T6 de caracterización siguen verdes
   sin tocar nada.
 
+## UPDATE 2026-09-23 19:42 — H9-BSlice3 cerrado completo (S8+S9)
+
+- **Opcion 1 aplicada** (consigna del operador): refactor del
+  constructor + actualizar 41 callsites. El RunController
+  deja de recibir `conn` por parametro; el constructor pasa a
+  ser `RunController(storage, adapter)`.
+- **Storage.conn** es la nueva API publica: property que
+  devuelve `self._conn` por identidad (no un wrapper), para
+  que las mutaciones de Storage sean visibles de inmediato
+  desde el EventLog que el RunController construye.
+- **`import sqlite3` quitado del runcontroller.py** (ya no
+  se referencia el tipo).
+- **+6 tests** (`test_h9_storage_run_controller_no_conn.py`):
+  2 Storage.conn (returns/is_same_as_underlying),
+  2 firma sin conn (rejects_conn_keyword/signature),
+  1 end-to-end (verifica que EventLog comparte conexion),
+  1 introspeccion (`__init__` sin 'self._conn' ni
+  'import sqlite3').
+- **Inventario original (10 SQL sites del RunController)**:
+  **cerrado completo**. Storage encapsula las 7 mutaciones
+  + 3 lecturas; RunController queda como shim trivial en
+  cada caso y orquesta los eventos.
+- **524/524 verde** (`scripts/ci.sh` ~103s).
+- **Grieta de no-atomicidad Estado↔Eventos**: se mantiene
+  por construccion (decision del 2026-09-23 18:24). Sigue
+  abierta como punto de recuperacion futuro si surge
+  demanda real (requiere operaciones transaccionales de
+  Storage que coordinen `INSERT/UPDATE workflow_runs|node_executions`
+  con `INSERT runtime_events` en una sola transaccion).
+
 ## UPDATE 2026-09-23 19:14 — H9-BSlice3 S1+S3+S5+S6+S7 (cuatro slices) cerrados
 
 - **S6 cerrado**: `Storage.complete_node_execution` +

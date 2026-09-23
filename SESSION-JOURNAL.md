@@ -1890,3 +1890,58 @@ coste bajo. (1), (3), (4) mantienen su prioridad documentada.
 - `ruff format+check`: All checks passed.
 - Working tree limpio (3 commits atomicos + docs(state)).
 
+
+---
+
+## 2026-09-23 19:42 — H9-BSlice3 cerrado completo: S8+S9
+
+Opcion 1 aplicada: refactor del constructor + actualizar 41
+callsites. RunController(storage, adapter) ya no toma
+sqlite3.Connection; lo obtiene via Storage.conn (API publica
+nueva, no un wrapper: misma identidad para preservar sharing
+con EventLog).
+
+### Inventario final (10 SQL sites del RunController)
+
+| Site | Status |
+|---|---|
+| S1 (create_run INSERT workflow_runs) | CERRADO en S1 |
+| S2 (lecturas iniciales via SELECT) | CERRADO en S1-reads |
+| S3 (UPDATE workflow_runs state) | CERRADO en S3 |
+| S4 (UPDATE node_executions recover) | CERRADO en S4 (atomicidad mejorada) |
+| S5 (INSERT node_executions RUNNING) | CERRADO en S5 |
+| S6 (UPDATE node_executions SUCCEEDED) | CERRADO en S6 |
+| S7 (UPDATE node_executions FAILED) | CERRADO en S7 |
+| S8 (parametro conn= en __init__) | CERRADO en S8 |
+| S9 (self._conn sin uso) | CERRADO en S9 |
+
+### Cambios
+
+- **Storage.conn**: property publica, devuelve `self._conn`
+  por identidad. Comentario en docstring explica que es la
+  misma identidad para que mutaciones de Storage se vean
+  desde EventLog.
+- **RunController.__init__**: `RunController(storage, adapter)`.
+  `EventLog(storage.conn)` es lo unico que usa la conexion.
+- **import sqlite3** quitado de runcontroller.py (ya no se
+  referencia).
+- **41 callsites actualizados**: 1 CLI + 40 tests. Cada uno
+  perdia `conn=storage._conn` o `conn=conn`.
+
+### Patron consistente en todos los slices S1-S9
+
+- Storage encapsula la mutacion atomica.
+- RunController queda como shim trivial o desaparece el parametro.
+- Tests: introspeccion + contrato observable + red de seguridad
+  por regex word-boundary.
+- Grieta de no-atomicidad Estado<->Eventos se mantiene por
+  construccion (decisión del 2026-09-23 18:24) y queda
+  documentada para una iteracion futura con semantica
+  transaccional.
+
+### Validacion al cierre del round H9-BSlice3
+
+- `scripts/ci.sh` completo: **524/524 verde en 103s**.
+- `ruff format+check`: All checks passed.
+- Working tree limpio (1 commit atomico + docs(state)).
+

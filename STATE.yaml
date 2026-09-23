@@ -212,9 +212,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 518
-  passed: 518
-  duration_s: 106
+  total: 524
+  passed: 524
+  duration_s: 103
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -227,6 +227,7 @@ tests:
   h9_bslice3_s6_complete_node_delta: "+6 tests del API Storage.complete_node_execution: 5 de contrato observable (incluido result_json passed-through verbatim que blinda contra serializacion accidental) + 1 de introspeccion no-regresion."
   h9_bslice3_s7_mark_failed_delta: "+6 tests del API Storage.mark_node_failed: 5 de contrato observable (incluido error passed-through verbatim con newlines/unicode) + 1 de introspeccion no-regresion (regex UPDATE node_executions ausente de _mark_node_failed)."
   h9_bslice3_s1_create_run_delta: "+7 tests del API Storage.create_run: 6 de contrato observable (incluido plan_json passed-through verbatim + works_through_runcontroller verifica evento RunCreated SI se emite) + 1 de introspeccion no-regresion."
+  h9_bslice3_s8s9_no_conn_delta: "+6 tests del cierre de RunController sin conn: 2 Storage.conn (returns/is_same_as_underlying) + 2 firma sin conn (rejects_conn_keyword/signature_has_only_storage_and_adapter) + 1 camino end-to-end (create_run_and_reconcile_via_storage_conn verifica que EventLog comparte conexion con Storage) + 1 introspeccion no-regresion (__init__ sin 'self._conn' ni 'import sqlite3')."
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -274,6 +275,7 @@ tests:
     - tests/test_h9_storage_complete_node_execution.py: 6   # H9-BSlice3-S6: complete_node_execution
     - tests/test_h9_storage_mark_node_failed.py: 6   # H9-BSlice3-S7: mark_node_failed
     - tests/test_h9_storage_create_run.py: 7   # H9-BSlice3-S1(create_run): create_run
+    - tests/test_h9_storage_run_controller_no_conn.py: 6   # H9-BSlice3-S8+S9: Storage.conn + RunController sin conn
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -349,7 +351,7 @@ nota_honesta_revision: >
 
 deuda_tecnica_residual:
   - "H9-BSlice3-S4 cerrado (recuperacion sin evento): API Storage.recover_interrupted_node_executions(int) que ejecuta UNA sola UPDATE masiva en lugar del bucle que abria una tx por fila en el original. RunController._recover_interrupted queda como shim trivial. Escritura sin evento (no toca atomicidad de S3/S5/S6/S7). +8 tests (6 contrato observable + 1 atomicidad interna verificada con MagicMock sobre Storage._conn + 1 introspeccion no-regresion). 487/487 verde. SIN release (refactor sin bump)."
-  - "H9-BSlice3 cerrado parcialmente (S1-S7): los 7 SQL sites que mezclaban estado con eventos (S1 INSERT workflow_runs, S3 UPDATE workflow_runs state, S5 INSERT node_executions RUNNING, S6 UPDATE node_executions SUCCEEDED, S7 UPDATE node_executions FAILED) ya no viven en el RunController. Tras S5+S6+S7 el _execute_one del RunController ya no contiene 'INSERT INTO node_executions' ni 'SET state = SUCCEEDED'; el _mark_node_failed ya no contiene 'UPDATE node_executions'. Tras S1 el create_run ya no contiene 'INSERT INTO workflow_runs'. Storage encapsula las 7 mutaciones; RunController orquesta eventos con la grieta de no-atomicidad Estado<->Eventos preservada por construccion (decision del 2026-09-23 18:24). +31 tests (S3=+7, S5=+5, S6=+6, S7=+6, S1(create_run)=+7). 518/518 verde en 106s. SIN release (refactor sin bump). Quedan S8 (eliminar parametro conn= de RunController.__init__) y S9 (eliminar self._conn) como siguiente paso si se confirma decision arquitectonica."
+  - "H9-BSlice3 cerrado completo (S1-S9): los 10 SQL sites del RunController identificados en la caracterizacion inicial estan cerrados. Storage encapsula las 7 mutaciones (create_run, transition_run_state, recover_interrupted, start_node_execution, complete_node_execution, mark_node_failed, y las 3 lecturas puras en S1-reads); el RunController queda como shim trivial en cada caso y orquesta los eventos con la grieta de no-atomicidad Estado<->Eventos preservada por construccion (decision del 2026-09-23 18:24). El constructor RunController.__init__ pasa de 3 params (storage, adapter, conn) a 2 (storage, adapter): Storage.conn es la nueva API publica que mantiene la identidad (no un wrapper) para que las mutaciones de Storage sean visibles desde EventLog. 41 callsites actualizados (1 CLI + 40 tests). +37 tests en este round (S3=+7, S5=+5, S6=+6, S7=+6, S1-create_run=+7, S8+S9=+6). 524/524 verde en 103s. SIN release (refactor sin bump). Grieta de no-atomicidad sigue abierta como punto de recuperacion futuro: requiere operaciones transaccionales de Storage que coordinen INSERT/UPDATE workflow_runs|node_executions con INSERT runtime_events en una sola transaccion."
   - "H9-BSlice3-S1 cerrado: 3 lecturas puras migradas de SQL directo en RunController a APIs publicas de Storage (load_run, list_node_executions, list_executed_node_names). RunController sigue dependiendo de sqlite3.Connection para S3..S7 (escrituras mixtas con EventLog): siguen acopladas, pero el siguiente slice abordara storage.create_run_atomic + storage.start_node_execution_atomic que requieren decision arquitectonica sobre donde vive la transaccion. RunController NO se ha reducido mas alla de las lecturas en S1. +12 tests (9 API + 3 introspeccion no-regresion). 479/479 verde. SIN release (refactor sin bump)."
   - "H9-BSlice3 PARTE 1 cerrado (S0 caracterizacion): documento docs/architecture/h9-bslice3-runcontroller-storage.md con inventario de las 10 SQL sites (S1-S9) y 6 tests T1-T6 que documentan el comportamiento observable actual. Grieta de no-atomicidad confirmada entre workflow_runs (RunController) y runtime_events (EventLog): el INSERT se commitea antes de que el append del evento pueda lanzar IdempotencyError. NO se introduce fix: el refactor de verdad necesitara operaciones transaccionales de Storage (siguientes slices de H9-BSlice3), y esos tests serviran de red de seguridad para detectar regresiones."
   - "H9-InProcess-3 cerrado: cobertura in-process para knowledge stale (3 escenarios), knowledge invalidate (2 escenarios), brick register (3 escenarios) + 3 acceptance path real (subprocess) sobre los mismos comandos. +11 tests. Asunciones defectuosas corregidas tras smoke empirico: (a) stale claim no se siembra directo con freshness='stale', necesita invalidate_from_source previo; (b) knowledge invalidate con source ghost lanza UnknownSourceError cuando se invoca el cmd_ directo (sin captura), pero el wrapper CLI main() traduce correctamente a EXIT_DOMAIN (10) y stderr formateado. NO requiere fix: contrato externo cumple spec. El test in-process documenta la ruta directa; el test subprocess documenta el contrato publico. Cobertura in-process CLI: ampliada a 7 comandos (4 InProcess-2 + 3 InProcess-3)."
@@ -357,6 +359,7 @@ deuda_tecnica_residual:
   - "H9-InProcess-2 cerrado (commit 7a67bcd): cobertura in-process para promotion submit (4 escenarios), promotion reconcile (2 escenarios nominales), pack load (3 escenarios), expansion show (3 escenarios). +12 tests. Limitacion 'cobertura in-process del CLI' CERRADA para los 4 comandos mas criticos de H8."
   - "H9-BSlice1 cerrado (commit fe6b020): API publica Storage.list_promotions(status=None); cmd_promotion_list ya no accede a storage._conn. +15 tests (10 storage + 5 in-process CLI). Limitacion 'sin API Storage listar promotions' CERRADA."
   - "storage._conn restante: linea 1315 de cmd_run, pasa conn al RunController. Cambio de interfaz mayor (contrato RunController.storage_input). NO tocado en H9-BSlice2 por scope. Candidato para H9-BSlice3 si surge demanda."
+  - "storage._conn en cmd_run y RunController: CERRADO en H9-BSlice3-S8+S9. RunController ya no recibe conn; CLI runner (cmd_run, linea 1315) ya no pasa conn. Storage.conn es la nueva API publica (property que devuelve self._conn por identidad)."
   - "_source_to_payload y _entity_to_payload ahora filtran por project_id (antes solo source_id+tenant_id): mejora de aislamiento entre proyectos (cumple blueprint 09), pero tambien un cambio de comportamiento - documentado en el commit."
   - "Cobertura in-process del CLI: TODOS los comandos criticos del roadmap cerrados (promotion list/submit/reconcile, pack load, expansion show). Pendiente menor: brick register, run, knowledge compile/trace (NO criticos; quedan cubiertos por subprocess E2E y unit tests)."
   - "Otras llamadas storage._conn en runner: lineas 283 (init), 998 y 1021 (cmd_expansion_show), 1302 (otro hook). H9-BSlice2 si surge demanda real."
