@@ -673,8 +673,7 @@ class DefaultPolicyEngine:
         max_ops = ctx.settings.max_ops_per_proposal
         if len(ctx.proposal.operations) > max_ops:
             violations.append(
-                f"P1: {len(ctx.proposal.operations)} ops > "
-                f"max_ops_per_proposal={max_ops}"
+                f"P1: {len(ctx.proposal.operations)} ops > max_ops_per_proposal={max_ops}"
             )
 
         # P2: concurrent proposals on same attachment_point.
@@ -692,17 +691,14 @@ class DefaultPolicyEngine:
         allowed = ctx.settings.allowed_scopes
         if allowed and ctx.proposal.scope not in allowed:
             violations.append(
-                f"P3: scope={ctx.proposal.scope!r} not in "
-                f"allowed_scopes={list(allowed)}"
+                f"P3: scope={ctx.proposal.scope!r} not in allowed_scopes={list(allowed)}"
             )
 
         # P4: blacklist de operations.
         forbidden = ctx.settings.forbidden_ops
         for op in ctx.proposal.operations:
             if type(op).__name__ in forbidden:
-                violations.append(
-                    f"P4: op={type(op).__name__} in forbidden_ops={list(forbidden)}"
-                )
+                violations.append(f"P4: op={type(op).__name__} in forbidden_ops={list(forbidden)}")
 
         # P5: budget cap (nodes proyectados despues de apply).
         current_node_count = len(ctx.plan.nodes)
@@ -711,8 +707,7 @@ class DefaultPolicyEngine:
         max_nodes = ctx.settings.max_nodes_per_project
         if projected > max_nodes:
             violations.append(
-                f"P5: projected_nodes={projected} > "
-                f"max_nodes_per_project={max_nodes}"
+                f"P5: projected_nodes={projected} > max_nodes_per_project={max_nodes}"
             )
 
         return PolicyDecision(

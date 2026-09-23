@@ -1052,3 +1052,55 @@ Justificacion explicita en deuda_tecnica_residual.
 - 2 caminos restantes: H6 (UAT-12 BLOCKED) o
   H7 (UAT-13 BLOCKED). Ambos sin spec previo; seria
   trabajo de diseno + implementacion.
+
+## 2026-09-23 — Parser coverage stewardship (PENDIENTE COMMIT)
+
+Operador insiste en cerrar ciclos sin pausas artificiales.
+Pausa anterior era honesta pero había stewardship
+desbloqueado: subir cobertura parser.py de 77% a 95%+.
+
+Re-medición honesta:
+- Mi cálculo inicial del 19% era erróneo: usé
+  `pytest --cov=skillgraph.parser tests/test_dsl.py` que
+  solo carga el módulo dsl sin tocar parser. La cobertura
+  REAL con la suite completa es 77%.
+- 9 missing lines reportadas: 49-50 (YAML inválido),
+  52 (YAML no-dict), 74 (input no-string), 85 (apiVersion
+  no-string), 87 (kind no-string), 89 (metadata no-dict),
+  91 (spec no-dict), 98 (namespace no-string).
+
+Decisión inteligente: tests focalizados SOLO en esas
+ramas de error, sin duplicar happy paths. Testing acotado
+(no suite completa hasta final).
+
+### Implementación
+
+- tests/test_parser.py (211 LoC, 12 tests):
+  * T1 _parse_yaml: yaml invalid syntax, top-level list,
+    top-level scalar (3 tests).
+  * T2 input validation: int, bytes (2 tests).
+  * T3 missing fields: apiVersion/kind missing o no-string,
+    metadata/spec no-dict, namespace no-string (7 tests).
+- 0 LoC de producción modificado.
+- Cero duplicación con test_s0_brick_minimo.py (happy paths).
+
+### Verificación
+
+- Tests nuevos: 12 passed in 0.05s.
+- Coverage parser.py: 77% -> 100% (52/52 statements, 18/18 branches).
+- Suite completa: 327 passed in 55s (315 -> 327, delta +12).
+- 0 regresión. ruff format+check limpios.
+
+ruff aplicó cambios cosméticos en graph_expansion.py
+(lineas fusionadas) y test_h4_expansion_slice3.py — sin
+impacto en comportamiento. Mensajes string iguales.
+
+### Cierre de la deuda <80%
+
+parser.py era el ÚNICO modulo del parser critico con
+cobertura <80%. Ahora 100%. Deuda residual:
+- plan_loader.py 69% (scope mayor: 23 missing lines;
+  requiere fixtures de plans complejos. Defer.)
+- recipe.py 73% (similar; defer.)
+
+Ambos son mejorables pero NO deuda crítica funcional.

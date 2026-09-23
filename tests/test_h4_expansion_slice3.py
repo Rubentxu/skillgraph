@@ -22,7 +22,6 @@ import pytest
 from skillgraph.graph_expansion import (
     AddNode,
     Authorization,
-    DefaultPolicyEngine,
     EvaluationResult,
     GraphExpansionProposal,
     PolicyContext,
@@ -32,7 +31,6 @@ from skillgraph.graph_expansion import (
     propose,
 )
 from skillgraph.workflow import WorkflowNode, WorkflowPlan
-
 
 # ---------------------------------------------------------------------------
 # Fixtures (minimalistas; NO duplica las de test_h4_expansion.py)
@@ -139,9 +137,7 @@ def test_p1_rejects_proposal_with_too_many_operations(
 ) -> None:
     """P1: proposal con mas operaciones que max_ops_per_proposal."""
     settings = PolicySettings(max_ops_per_proposal=0)
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is False
     assert any("P1:" in r for r in result.policy_decision.violated_rules)
     assert "max_ops_per_proposal=0" in result.policy_decision.reason
@@ -154,9 +150,7 @@ def test_p1_accepts_proposal_within_limit(
 ) -> None:
     """P1: proposal con 1 op y max_ops=1 debe pasar."""
     settings = PolicySettings(max_ops_per_proposal=1)
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is True
 
 
@@ -185,7 +179,9 @@ def test_p2_rejects_concurrent_proposal_same_attachment(
         author="tester2",
     )
     result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry,
+        valid_proposal,
+        base_plan,
+        registry,
         concurrent_proposals=(concurrent,),
     )
     assert result.accepted is False
@@ -214,7 +210,9 @@ def test_p2_accepts_concurrent_proposal_different_attachment(
         author="tester2",
     )
     result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry,
+        valid_proposal,
+        base_plan,
+        registry,
         concurrent_proposals=(concurrent,),
     )
     assert result.accepted is True
@@ -232,9 +230,7 @@ def test_p3_rejects_scope_not_in_allowed(
 ) -> None:
     """P3: scope NODE no permitido si allowed_scopes=('TRANSITION',)."""
     settings = PolicySettings(allowed_scopes=("TRANSITION",))
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is False
     assert any("P3:" in r for r in result.policy_decision.violated_rules)
 
@@ -246,9 +242,7 @@ def test_p3_accepts_when_allowed_scopes_empty(
 ) -> None:
     """P3: vacio = todos los scopes permitidos (default conservador)."""
     settings = PolicySettings(allowed_scopes=())
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is True
 
 
@@ -264,9 +258,7 @@ def test_p4_rejects_forbidden_op(
 ) -> None:
     """P4: AddNode bloqueado si forbidden_ops=('AddNode',)."""
     settings = PolicySettings(forbidden_ops=("AddNode",))
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is False
     assert any("P4:" in r for r in result.policy_decision.violated_rules)
     assert "AddNode" in result.policy_decision.reason
@@ -279,9 +271,7 @@ def test_p4_default_empty_forbidden_accepts(
 ) -> None:
     """P4: defaults (forbidden_ops vacio) acepta cualquier op valida."""
     settings = PolicySettings(forbidden_ops=())
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is True
 
 
@@ -297,9 +287,7 @@ def test_p5_rejects_when_projected_exceeds_budget(
 ) -> None:
     """P5: 2 nodos actuales + 1 AddNode proyectado = 3 > max_nodes=2."""
     settings = PolicySettings(max_nodes_per_project=2)
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is False
     assert any("P5:" in r for r in result.policy_decision.violated_rules)
     assert "projected_nodes=3" in result.policy_decision.reason
@@ -312,9 +300,7 @@ def test_p5_accepts_when_within_budget(
 ) -> None:
     """P5: 3 proyectados <= max_nodes=3."""
     settings = PolicySettings(max_nodes_per_project=3)
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is True
 
 
@@ -333,9 +319,7 @@ def test_multiple_violations_combined_in_reason(
         max_ops_per_proposal=0,
         forbidden_ops=("AddNode",),
     )
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, settings=settings
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, settings=settings)
     assert result.accepted is False
     assert len(result.policy_decision.violated_rules) == 2
     assert "P1:" in result.policy_decision.reason
@@ -367,9 +351,7 @@ def test_custom_engine_protocol_compatibility(
     al default via parametro `engine=`.
     """
     engine: PolicyEngine = _AlwaysRejectEngine()
-    result = evaluate_proposal_valid(
-        valid_proposal, base_plan, registry, engine=engine
-    )
+    result = evaluate_proposal_valid(valid_proposal, base_plan, registry, engine=engine)
     assert result.accepted is False
     assert result.evaluated_by == "_AlwaysRejectEngine"
     assert "always reject" in result.policy_decision.reason
@@ -383,14 +365,14 @@ def test_custom_engine_protocol_compatibility(
 def test_default_policy_settings_are_conservative() -> None:
     """Defaults deben ser tales que propuestas slice-1 validas pasen."""
     s = PolicySettings()
-    assert s.max_ops_per_proposal >= 1   # 1 op por propuesta es normal
+    assert s.max_ops_per_proposal >= 1  # 1 op por propuesta es normal
     assert s.max_nodes_per_project > 0
-    assert s.allowed_scopes == ()        # vacio = todos
-    assert s.forbidden_ops == ()         # vacio = ninguno
+    assert s.allowed_scopes == ()  # vacio = todos
+    assert s.forbidden_ops == ()  # vacio = ninguno
 
 
 def test_policy_settings_is_immutable() -> None:
     """PolicySettings es frozen: no se puede mutar."""
     s = PolicySettings()
     with pytest.raises((AttributeError, Exception)):
-        s.max_ops_per_proposal = 999   # type: ignore[misc]
+        s.max_ops_per_proposal = 999  # type: ignore[misc]

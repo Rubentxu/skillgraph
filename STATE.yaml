@@ -136,6 +136,11 @@ workstreams:
     status: completed
     commits: ["3b307f3"]
     nota: "Policy engine (P1..P5) + EVALUATE stage + CLI extendido (list/show/archive). Scope reducido vs spec original: SIN migration SQLite (JSON files funcionan; defer a slice-4). Defaults conservadores: NO rechaza propuestas slice-1 validas (test no-regression). 24 tests nuevos (15 library + 9 E2E subprocess). Pipeline gating de auto_signed via evaluation_result DEFERIDO a slice-4 (decision explicita: integrar el gate rompe UAT-08 actual hasta propagar evaluation_result por todos lados; scope creep)."
+  - id: parser-coverage-stewardship
+    items: [test-parser-py-12-tests-ramas-error]
+    status: completed
+    commits: []   # pendiente commit en este turno
+    nota: "Stewardship: parser.py 77% -> 100% cobertura. 12 tests focalizados en ramas de error (YAML invalido, no-dict, input no-string, campos faltantes/no-string). NO duplica happy paths ya cubiertos por test_s0_brick_minimo.py. 0 LoC produccion modificado. Cierre de la unica rama de cobertura <80% en modulos de parser critico."
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
     status: completed
@@ -169,9 +174,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 315
-  passed: 315
-  duration_s: 53
+  total: 327
+  passed: 327
+  duration_s: 55
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -200,6 +205,7 @@ tests:
     - tests/test_h4_expansion_cli_slice3.py: 9   # E2E list/show/archive
     - tests/test_uat_audit.py: 5    # wrappers pytest para UAT-05/10/11/15/16
     - tests/test_uat_blocked.py: 2   # honest blockers UAT-12/13
+    - tests/test_parser.py: 12   # ramas de error parser Markdown+YAML (coverage 77% -> 100%)
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -219,7 +225,7 @@ tests:
     graph_expansion.py: 86%
     context_controller.py: 81%
     paths.py: 81%   # ANTES 59%. Refactor + test_paths.py cubrio XDG y helpers.
-    parser.py: 77%
+    parser.py: 100%  # ANTES 77%. Tests focalizados en 12 ramas de error (test_parser.py, 12 tests).
     recipe.py: 73%
     plan_loader.py: 69%
     __main__.py: 0%  # entry-point puro de CLI, no testeable con pytest-cov
@@ -257,9 +263,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 13:57
-  resultado: "315 passed in 196s (pytest --tb=short)"
-  working_tree: clean (despues de commit 3b307f3)
+  ultima_ejecucion_local: 2026-09-23 14:11
+  resultado: "327 passed in 55s (pytest --tb=short)"
+  working_tree: pending-commit (parser coverage + state sync)
 
 open_questions: []
 nota_honesta_revision: >
@@ -287,10 +293,10 @@ deuda_tecnica_residual:
   - "Duplicacion catalog.py/storage.py: defensa en profundidad intencional. No unificar sin diseno."
   - "paths.py 81%: rama nt (LOCALAPPDATA/USERPROFILE) no ejercitable en CI Linux. Documentada en docstring como limitacion aceptada. Cobertura +22pts en este turno."
   - "registry.py 88% validado: mismas cifras; no es dato heredado falso."
-  - "plan_loader.py 69%, parser.py 77%, recipe.py 73%: modulos con minimo de cobertura util pero mejorables. NO son deuda critica funcional."
+  - "plan_loader.py 69%, recipe.py 73%: modulos con minimo de cobertura util pero mejorables. parser.py 100% (cerrado en este turno). NO son deuda critica funcional."
   - "SourceKind Literal validado en runtime: nuevo __post_init__ valida kind contra typing.get_args. Cierra bug silencioso donde from __future__ import annotations desactiva Literal-check en runtime."
   - "H5 'conservar material original' DECIDIDO (specs/h5-source-conservation-decision.md): referencia (path+content_hash), NO duplicar bytes. Justificado por blueprint §10 §5-6."
 
 blockers: []
 
-next_action: "Sesion H4 Expansion controlada slice-1+2+3 cerrada: 16 commits (6f93eb2..7c3f3f4 + slice-3 pendiente), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 7 tests gap closure (UAT-05/10/11/15/16 wrappers + UAT-12/13 blockers), 24 tests slice-3 (15 policy engine library + 9 E2E list/show/archive). H4 Expansion cerrada en 45 tests (36 library + 9 E2E subprocess). Cobertura UAT en CI: 16/16. 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12), (c) H7 promocion (UAT-13)."
+next_action: "Sesion H4 Expansion slice-1+2+3 + Parser coverage cerrada: 17 commits (6f93eb2..3741f30 + parser pendiente), 3 audit penales (H3+H4+H5 = 522 LoC), 1 spec gap cobertura UAT (127 LoC), 7 tests gap closure, 24 tests slice-3 (15 library + 9 E2E), 12 tests parser coverage stewardship (77% -> 100%). 327 tests verde (315 -> 327, delta +12). parser.py 100% cobertura (de <80% a 100%). 14/16 UAT PASS. 2 caminos esperando decision material del operador: H6 multiprosito (UAT-12), H7 promocion (UAT-13). Próximo stewardship candidate: plan_loader.py 48% cobertura (scope mayor, requiere análisis previo)."
