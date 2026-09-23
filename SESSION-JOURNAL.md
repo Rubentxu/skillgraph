@@ -129,3 +129,71 @@ FakeAgentAdapter). El siguiente paso es el diseño de Etapa 2.
 Etapa 2 (ejecución recuperable): diseño del primer vertical slice
 (decision → action → result con FakeAgentAdapter). Mantener la
 disciplina de vertical slices y TDD focalizado; no saltar a Etapa 3.
+
+## 2026-09-23 — Sesión 3: Etapa 2 vertical slice completo
+
+### Resumen
+
+- **Modo AUTO continuo** desde el último cierre del usuario.
+- 4 commits de feature + este commit de docs. 127 tests verdes.
+- Vertical slice de Etapa 2 cerrado: 5 piezas nuevas, UAT-04, UAT-06
+  y UAT-07 del blueprint cumplidas con tests de extremo a extremo.
+
+### Commits nuevos
+
+6. `92929a9` feat(e2-s1): runtime append-only + EventLog con idempotencia por UNIQUE
+7. `64bc05d` feat(e2-s2): Handoff materializado con serializacion estable y SHA-256
+8. `92a5174` feat(e2-s3): AgentAdapter + FakeAgentAdapter + RecordingAdapter
+9. `e763102` feat(e2-s4+s5): WorkflowPlan + RunController + ejecucion recuperable
+10. (este commit) docs: cierre del vertical slice de Etapa 2
+
+### Decisiones tomadas durante AUTO
+
+- Etapa 2 se cierra por vertical slice: NO se hace multipropósito.
+- Storage crece con tablas `workflow_runs + node_executions` y migra
+  idempotentemente en `_migrate()`. NO se introduce un nuevo Storage
+  ni un orquestador paralelo: se reutiliza la conexión SQLite existente.
+- Handoff NO consulta Storage ni RunController: solo recibe su
+  dataclass frozen + serializa JSON estable → SHA-256 → context_hash.
+  Asi el Adapter puede cachear handoffs sin acoplarse.
+- RunController ejecuta UN nodo por `reconcile_run` (no toda la chain):
+  la logica del blueprint dice "una pasada del bucle es determinista
+  y reversible". El CLI/scheduler externo llama de nuevo para avanzar.
+- FakeAgentAdapter busca fixtures en 3 paths (node_id, project+name,
+  namespace+name). Si no encuentra → NotFoundError. El Adapter NO
+  improvisa resultados.
+- Reciclado de errores: `IdempotencyError` (UNIQUE event_id),
+  `NotFoundError` (fixture/run ausente).
+
+### Bugs cazados durante AUTO
+
+- Sub-datos de Handoff (`HandoffIdentity`, `HandoffBehavior`,
+  `HandoffKnowledge`, `HandoffExecution`) tenian `validate()` que NO
+  se llamaba automaticamente; un sub-dato invalido podia existir
+  suelto. Movido a `__post_init__` para atomicidad.
+- `multiedit` no aplicó un edit (whitespace mismatch); aplicado
+  manualmente.
+- Un test dependia de un fixture de otra clase; replicado como
+  fixture local.
+
+### Cierre honesto del vertical slice
+
+- RuntimeEvent + EventLog: idempotente por UNIQUE(event_id), 19 tests.
+- Handoff: 4 sub-datos frozen + SHA-256 estable, 23 tests.
+- AgentAdapter + Fake + Recording: 16 tests.
+- WorkflowPlan: DAG declarativo con successors(), 19 tests.
+- RunController: create_run + reconcile_run con UAT-04/06/07, 10 tests.
+
+### Cierre honesto de capacidad H2
+
+- **H2 NO cerrado** todavia: falta el subcomando CLI `run` y la
+  fixture end-to-end por CLI (lo que ejercita RunController desde
+  el usuario real, no solo desde tests Python). El proximo commit
+  cierra eso.
+
+### Siguiente paso
+
+- **Ahora**: subcomando CLI `run` que toma un `WorkflowPlan.md` y
+  reconcilia hasta terminal. Esto cierra H2 honestamente.
+- **Después**: Etapa 3 (ContextController + KnowledgeController +
+  Claim/Evidence con invalidacion). Diseno via blueprint §7+§8.

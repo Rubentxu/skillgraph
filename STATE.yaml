@@ -16,10 +16,10 @@ goal:
   adr_index: external/blueprint-v1/adr/
 
 roadmap:
-  current_stage: 1
+  current_stage: 2
   current_spike: null
-  next_milestone_gate: H2
-  current_workitem: cierre-b4-documents
+  next_milestone_gate: H3
+  current_workitem: cli-run-subcommand + docs-etapa2-cierre
 
 python:
   minimum: "3.11"
@@ -68,9 +68,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 40
-  passed: 40
-  duration_s: 11.7
+  total: 127
+  passed: 127
+  duration_s: 13.83
   coverage:
     registry.py: 88%
     storage.py: 90%
@@ -78,6 +78,11 @@ tests:
     parser.py: 77%
     bricks.py: 91%
     errors.py: 100%
+    runtime.py: 100%
+    handoff.py: 100%
+    agent.py: 100%
+    workflow.py: 100%
+    runcontroller.py: 96%
     cli.py: 41%   # paths de error no ejercitados explicitamente
     paths.py: 59% # helpers de OS-especficos no cubiertos en CI
 
@@ -86,7 +91,9 @@ uat:
     UAT-01: PASS  # no contamination
     UAT-02: PASS  # project isolation
     UAT-03: PASS  # brick declarative
-  evidence: tests/test_cli_uat.py (10 tests subprocess)
+    UAT-04: PASS  # ejecucion determinista (RunController + RecordingAdapter)
+    UAT-06: PASS  # recuperacion (RUNNING sin finished_at vuelve a READY)
+    UAT-07: PASS  # idempotencia (UNIQUE sobre event_id)
 
 open_questions:
   - "Etapa 2: ¿qué escenario end-to-end concreto atacamos primero? candidatos: 'decidir entre 2 alternativas' o 'caracterizar un símbolo software'."

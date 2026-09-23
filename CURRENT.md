@@ -1,7 +1,7 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 09:00 (Europe/Madrid).
-> Revisión: `0433b63 test(registry): cerrar ramas de validacion + properties en relations`.
+> Última verificación: 2026-09-23 09:15 (Europe/Madrid).
+> Revisión: `e763102 feat(e2-s4+s5): WorkflowPlan + RunController + ejecucion recuperable`.
 
 ## Goal
 
@@ -12,9 +12,9 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 ## Hito y trabajo activo
 
 - Hito: **H0** (Blueprint validado) + **H1** (Recursos persistentes) **cerrados**.
-- Trabajo activo: **continuación del roadmap** (Etapa 2 — ejecución recuperable).
-- Siguiente desbloqueado: **b3** (SDDK, bloqueado por bug externo) →
-  **`spec → tasks → apply`** del primer WorkItem de Etapa 2.
+- Vertical slice Etapa 2 **completo** (127 tests verdes, 9 commits).
+- Trabajo activo: **subcomando CLI `run` + fixtures end-to-end + cierre del ciclo en docs**.
+- Siguiente desbloqueado: **Etapa 3** (control-flow dinámico: ContextController + KnowledgeController + Discovery).
 
 ## Último estado comprobado
 
@@ -48,14 +48,10 @@ Source of truth: `external/blueprint-v1/plan/ROADMAP.md`, `external/blueprint-v1
 
 ## Próxima acción concreta
 
-1. Cerrar ciclo de bootstrap con `STATE.yaml`/`SESSION-JOURNAL.md`
-   actualizados.
-2. **Siguiente WorkItem (Etapa 2)**: diseño del primer vertical slice
-   de ejecución determinista — `RunController` + `FakeAgentAdapter` +
-   handoff mínimo (subgrafo de 2-3 nodos: decisión → acción → result).
-3. Documentar el WorkItem y delegar a través del workflow SDDK cuando
-   el bug de adopción esté resuelto. Si no se resuelve, ejecutar
-   directamente con TDD focalizado como en S0/S1/Etapa1.
+1. ~~Cerrar ciclo de bootstrap con `STATE.yaml`/`SESSION-JOURNAL.md` actualizados.~~ Hecho (commit `7f7e4d9`).
+2. ~~Diseñar Etapa 2: ejecutar el primer vertical slice.~~ Hecho (commits `92929a9`, `64bc05d`, `92a5174`, `e763102`).
+3. **Subcomando CLI `run`** + **fixture end-to-end CLI** que ejercite el RunController desde la CLI (cierre H2 por la via UAT).
+4. **Etapa 3** (siguiente): ContextController (receta de handoff con obligatorias + opcionales) y KnowledgeController (Claims/Evidence con invalidación). Diseno: leer `external/blueprint-v1/docs/07-contexto-y-handoff.md` y `08-conocimiento.md`, escribir spec corto y descomponer en 3-5 slices.
 
 ## Valoración Rust (decisión operador 2026-09-23)
 
