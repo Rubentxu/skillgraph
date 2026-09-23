@@ -28,10 +28,8 @@ import sqlite3
 import subprocess
 import sys
 import uuid
+from itertools import pairwise
 from pathlib import Path
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -60,9 +58,7 @@ def _init_project(tmp_path: Path, project: str = "demo") -> Path:
     """Crea data_root + proyecto. Devuelve el data_root."""
     data_root = tmp_path / "sg-data"
     assert _run_cli("init", cwd=tmp_path, data_root=data_root).returncode == 0
-    r = _run_cli(
-        "project", "create", project, cwd=tmp_path, data_root=data_root
-    )
+    r = _run_cli("project", "create", project, cwd=tmp_path, data_root=data_root)
     assert r.returncode == 0, r.stderr
     return data_root
 
@@ -82,7 +78,7 @@ def _write_plan(path: Path, *, initial: str, names: list[str]) -> None:
         f"""  - source: {a}
     outcome: ok
     target: {b}"""
-        for a, b in zip(names, names[1:])
+        for a, b in pairwise(names)
     )
     body = f"""---
 apiVersion: skillgraph.dev/v1alpha1
@@ -110,9 +106,7 @@ def _write_fixture(fixtures_root: Path, *, name: str, outcome: str = "ok") -> No
     p = fixtures_root / "default" / "demo" / f"{name}.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
-        json.dumps(
-            {"outcome": outcome, "result": {"step": name}, "evidence_ref": f"ev-{name}"}
-        ),
+        json.dumps({"outcome": outcome, "result": {"step": name}, "evidence_ref": f"ev-{name}"}),
         encoding="utf-8",
     )
 
@@ -129,9 +123,7 @@ def _open_project_db(path: Path) -> sqlite3.Connection:
 
 
 def _latest_run_id(db: sqlite3.Connection) -> str:
-    row = db.execute(
-        "SELECT run_id FROM workflow_runs ORDER BY created_at DESC LIMIT 1"
-    ).fetchone()
+    row = db.execute("SELECT run_id FROM workflow_runs ORDER BY created_at DESC LIMIT 1").fetchone()
     assert row is not None, "no hay runs registrados"
     return row["run_id"]
 
@@ -142,9 +134,7 @@ def _latest_run_id(db: sqlite3.Connection) -> str:
 
 
 class TestUAT04ExecutionDeterministicViaCli:
-    def test_linear_workflow_completes_via_cli(
-        self, tmp_path: Path
-    ) -> None:
+    def test_linear_workflow_completes_via_cli(self, tmp_path: Path) -> None:
         """Tres nodos lineales -> run COMPLETED, 17 eventos (UAT-04)."""
         data_root = _init_project(tmp_path)
         fixtures_root = tmp_path / "fixtures"
@@ -192,9 +182,7 @@ class TestUAT04ExecutionDeterministicViaCli:
         finally:
             db.close()
 
-    def test_outcome_not_declared_marks_run_failed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_outcome_not_declared_marks_run_failed(self, tmp_path: Path) -> None:
         """Fixture devuelve outcome no declarado -> Run FAILED, exit=20.
 
         El plan declara la transicion `collect -ok-> transform`. La
@@ -351,9 +339,7 @@ def _seed_active_run(
 
 
 class TestUAT06RecoveryViaCli:
-    def test_recovery_resumes_active_run_after_crash(
-        self, tmp_path: Path
-    ) -> None:
+    def test_recovery_resumes_active_run_after_crash(self, tmp_path: Path) -> None:
         """UAT-06: tras un crash, el siguiente `run` del CLI continua
         desde el nodo colgado sin duplicar eventos ya confirmados.
 
@@ -422,23 +408,16 @@ class TestUAT06RecoveryViaCli:
             states = [
                 r["state"]
                 for r in db.execute(
-                    "SELECT state FROM node_executions WHERE run_id = ? "
-                    "ORDER BY started_at",
+                    "SELECT state FROM node_executions WHERE run_id = ? ORDER BY started_at",
                     (run_id,),
                 ).fetchall()
             ]
-            assert "READY" in states, (
-                f"recovery no promovio el RUNNING colgado a READY: {states}"
-            )
-            assert states.count("SUCCEEDED") == 2, (
-                f"recovery no completo ambos nodos: {states}"
-            )
+            assert "READY" in states, f"recovery no promovio el RUNNING colgado a READY: {states}"
+            assert states.count("SUCCEEDED") == 2, f"recovery no completo ambos nodos: {states}"
         finally:
             db.close()
 
-    def test_repeated_run_on_completed_does_not_duplicate(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repeated_run_on_completed_does_not_duplicate(self, tmp_path: Path) -> None:
         """Idempotencia estricta: ejecutar `run` sobre un run ya
         COMPLETED NO re-emite eventos ni re-ejecuta nodos.
         """
@@ -497,12 +476,8 @@ class TestUAT06RecoveryViaCli:
                 "SELECT COUNT(*) AS c FROM node_executions WHERE run_id = ? AND state = 'SUCCEEDED'",
                 (run_id,),
             ).fetchone()["c"]
-            assert n2 == n1, (
-                f"segundo run duplico eventos: antes={n1} despues={n2}"
-            )
-            assert succ2 == succ1, (
-                f"segundo run re-ejecuto nodos: antes={succ1} despues={succ2}"
-            )
+            assert n2 == n1, f"segundo run duplico eventos: antes={n1} despues={n2}"
+            assert succ2 == succ1, f"segundo run re-ejecuto nodos: antes={succ1} despues={succ2}"
         finally:
             db.close()
 
@@ -513,9 +488,7 @@ class TestUAT06RecoveryViaCli:
 
 
 class TestUAT07IdempotencyViaCli:
-    def test_repeated_run_does_not_duplicate_events(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repeated_run_does_not_duplicate_events(self, tmp_path: Path) -> None:
         """UAT-07 via CLI: ejecutar `run` dos veces NO duplica eventos.
 
         El primer run completa el workflow; el segundo run encuentra el
@@ -569,8 +542,6 @@ class TestUAT07IdempotencyViaCli:
                 "SELECT COUNT(*) AS c FROM runtime_events WHERE run_id = ?",
                 (run_id,),
             ).fetchone()["c"]
-            assert n2 == n1, (
-                f"segundo run duplico eventos: antes={n1} despues={n2}"
-            )
+            assert n2 == n1, f"segundo run duplico eventos: antes={n1} despues={n2}"
         finally:
             db.close()
