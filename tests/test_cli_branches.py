@@ -317,3 +317,134 @@ class TestCliHelpAndVersion:
         # Todos los subcomandos aparecen en el help.
         for cmd in ("init", "project", "brick", "run"):
             assert cmd in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Knowledge CLI (H3 Slice 5)
+# ---------------------------------------------------------------------------
+
+
+def _seed_knowledge(data_root: Path, *, source_id: str = "local:src/foo.py") -> None:
+    """Carga un Source + Entity + Claim en el knowledge del proyecto demo.
+
+    Lo hace invocando un python -c que usa el controller real; asi los
+    tests E2E pueden partir de un estado conocido.
+    """
+    code = (
+        "from pathlib import Path;"
+        "from skillgraph.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;"
+        "from skillgraph.storage import Storage;"
+        "from skillgraph.knowledge_controller import KnowledgeController;"
+        "from skillgraph.knowledge import Claim, Entity, Source;"
+        f"data_root = resolve_data_root(Path({str(data_root)!r}));"
+        "db = project_db_path(data_root, 'demo', DEFAULT_TENANT);"
+        "s = Storage(db);"
+        "ctl = KnowledgeController(storage=s, tenant_id=DEFAULT_TENANT, project_id='demo');"
+        f"ctl.register_source(source=Source(source_id={source_id!r}, kind='local_file', content_hash='h', locator={{'path': 'src/foo.py'}}, git_commit_sha=None, git_tree_sha=None, working_tree_status=None, checked_at='2026-01-01T00:00:00Z', freshness='fresh'));"
+        "ctl.upsert_entity(entity=Entity(entity_id='file:src/foo.py', kind='file', stable_key='src/foo.py'));"
+        "ctl.record_claim(claim=Claim(claim_id='c1', subject_entity_id='file:src/foo.py', predicate='line_count', object_literal=42, source_id='local:src/foo.py', extraction_method='manual', extractor_version='skillgraph-rules/0.1.0', checked_at_revision='rev1'));"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"seed fallo: stderr={result.stderr!r} stdout={result.stdout!r}")
+
+
+class TestCliKnowledgeExitOk:
+    def test_knowledge_stale_subprocess(self, tmp_path: Path) -> None:
+        """`knowledge stale demo` -> exit=0 (sin stale)."""
+        data_root = _init_project(tmp_path)
+        _seed_knowledge(data_root)
+        result = _run_cli(
+            "knowledge",
+            "stale",
+            "demo",
+            cwd=tmp_path,
+            data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "stale claims" in result.stdout
+
+    def test_knowledge_invalidate_subprocess(self, tmp_path: Path) -> None:
+        """`knowledge invalidate` -> exit=0 y reporta 1 claim invalidado."""
+        data_root = _init_project(tmp_path)
+        _seed_knowledge(data_root)
+        result = _run_cli(
+            "knowledge",
+            "invalidate",
+            "demo",
+            "--source",
+            "local:src/foo.py",
+            cwd=tmp_path,
+            data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "invalidated 1" in result.stdout
+
+    def test_knowledge_compile_subprocess_succeeds(self, tmp_path: Path) -> None:
+        """`knowledge compile --strict` exit=0 cuando hay knowledge y no stale."""
+        data_root = _init_project(tmp_path)
+        _seed_knowledge(data_root)
+        result = _run_cli(
+            "knowledge",
+            "compile",
+            "demo",
+            "local:src/foo.py",
+            "--strict",
+            cwd=tmp_path,
+            data_root=data_root,
+        )
+        assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
+        assert "context_hash" in result.stdout
+
+    def test_knowledge_compile_strict_rejects_subprocess(self, tmp_path: Path) -> None:
+        """strict + source invalidated -> exit=10 (DOMAIN error)."""
+        data_root = _init_project(tmp_path)
+        _seed_knowledge(data_root)
+        # invalidamos primero para tener stale.
+        _run_cli(
+            "knowledge",
+            "invalidate",
+            "demo",
+            "--source",
+            "local:src/foo.py",
+            cwd=tmp_path,
+            data_root=data_root,
+        )
+        result = _run_cli(
+            "knowledge",
+            "compile",
+            "demo",
+            "local:src/foo.py",
+            "--strict",
+            cwd=tmp_path,
+            data_root=data_root,
+        )
+        assert result.returncode == 10, result.stdout
+        assert "stale" in result.stderr.lower()
+
+    def test_knowledge_trace_subprocess(self, tmp_path: Path) -> None:
+        """`knowledge trace` exit=0 y devuelve JSON con trace_id."""
+        data_root = _init_project(tmp_path)
+        _seed_knowledge(data_root)
+        result = _run_cli(
+            "knowledge",
+            "trace",
+            "demo",
+            "--run",
+            "run-cli-trace",
+            cwd=tmp_path,
+            data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        # El output es JSON con trace_id.
+        out = result.stdout
+        import json as _json
+
+        parsed = _json.loads(out)
+        assert "trace_id" in parsed
+        assert parsed["kind"] == "SoftwareExecutionSlice"

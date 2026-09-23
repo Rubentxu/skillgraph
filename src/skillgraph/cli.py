@@ -232,6 +232,145 @@ def _find_active_run_id(storage: Storage, *, tenant_id: str, project_id: str) ->
 
 
 # ---------------------------------------------------------------------------
+# Comandos knowledge (H3 Slice 5)
+# ---------------------------------------------------------------------------
+
+
+def _open_known_project(args: argparse.Namespace, project: str) -> tuple[str, str, Storage]:
+    """Wrapper que valida que el proyecto existe antes de continuar."""
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    p, err = resolver.lookup(project)
+    if err is not None:
+        return "", "", _DummyStorage()
+    return p["tenant_id"], project, Storage(Path(p["db_path"]))
+
+
+def cmd_knowledge_stale(args: argparse.Namespace) -> int:
+    """Lista Claims stale del proyecto."""
+    from skillgraph.knowledge_controller import KnowledgeController
+
+    tenant_id, project_id, storage = _open_known_project(args, args.project)
+    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    stale = ctl.list_stale_claims()
+    print(f"stale claims ({len(stale)}):")
+    for c in stale:
+        print(f"  - {c.claim_id}  {c.predicate}={c.object_literal} stale=true")
+    return EXIT_OK
+
+
+def cmd_knowledge_invalidate(args: argparse.Namespace) -> int:
+    """Invalida Claims dependientes de un source."""
+    from skillgraph.knowledge_controller import KnowledgeController
+
+    tenant_id, project_id, storage = _open_known_project(args, args.project)
+    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    invalidated = ctl.invalidate_from_source(
+        source_id=args.source,
+        max_hops=args.max_hops,
+    )
+    print(f"invalidated {len(invalidated)} claim(s) from source={args.source}")
+    for cid in invalidated:
+        print(f"  - {cid}")
+    return EXIT_OK
+
+
+def cmd_knowledge_refresh(args: argparse.Namespace) -> int:
+    """Re-valida Claims contra nueva revision."""
+    from skillgraph.knowledge_controller import KnowledgeController
+
+    tenant_id, project_id, storage = _open_known_project(args, args.project)
+    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    reactivated = ctl.refresh_source(
+        source_id=args.source,
+        new_revision=args.revision,
+    )
+    print(f"reactivated {len(reactivated)} claim(s)")
+    for cid in reactivated:
+        print(f"  - {cid}")
+    return EXIT_OK
+
+
+def cmd_knowledge_compile(args: argparse.Namespace) -> int:
+    """Compila un handoff desde una receta inline."""
+    import json
+
+    from skillgraph.context_controller import ContextController
+    from skillgraph.knowledge_controller import KnowledgeController
+    from skillgraph.recipe import ContextRecipe
+
+    tenant_id, project_id, storage = _open_known_project(args, args.project)
+    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    recipe_raw = (
+        json.loads(args.recipe)
+        if args.recipe.startswith("{")
+        else {
+            "obligatory": [{"kind": "source", "value": args.recipe}],
+            "freshness_policy": "strict" if args.strict else "best_effort",
+            "token_budget": args.token_budget,
+            "overflow_strategy": args.overflow,
+        }
+    )
+    recipe = ContextRecipe.from_dict(recipe_ref=args.recipe, raw=recipe_raw)
+    ctx = ContextController(knowledge=ctl)
+    try:
+        handoff = ctx.compile_handoff(
+            recipe=recipe,
+            run_id=args.run or "cli-run",
+            node_execution_id=args.node or "cli-node",
+            source_revision=args.revision or "HEAD",
+        )
+    except SkillGraphError as exc:
+        print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+        if exc.code in {"sg_stale_knowledge_error"}:
+            return EXIT_DOMAIN
+        if exc.code in {"sg_missing_obligatory", "sg_token_budget_exceeded"}:
+            return EXIT_DOMAIN
+        return EXIT_DOMAIN
+    print(json.dumps(handoff.to_dict(), indent=2, ensure_ascii=False))
+    print(f"--- context_hash: {handoff.context_hash}")
+    return EXIT_OK
+
+
+def cmd_knowledge_trace(args: argparse.Namespace) -> int:
+    """Extrae un OutcomeTrace desde un run."""
+    import json
+
+    from skillgraph.context_controller import OutcomeTracer
+    from skillgraph.knowledge_controller import KnowledgeController
+
+    tenant_id, project_id, storage = _open_known_project(args, args.project)
+    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    trace = OutcomeTracer.from_run(
+        knowledge=ctl,
+        run_id=args.run,
+        trace_name=args.name or f"trace-{args.run}",
+    )
+    print(
+        json.dumps(
+            {
+                "trace_id": trace.trace_id,
+                "kind": trace.kind,
+                "name": trace.name,
+                "project_id": trace.project_id,
+                "created_at": trace.created_at,
+                "claim_refs": list(trace.claim_refs),
+                "evidence_refs": list(trace.evidence_refs),
+            },
+            indent=2,
+        )
+    )
+    return EXIT_OK
+
+
+class _DummyStorage:
+    """Placeholder cuando el proyecto no existe; evita imports fragiles."""
+
+    def __getattr__(self, name: str) -> object:
+        msg = "proyecto no encontrado"
+        raise FileNotFoundError(msg)
+
+
+# ---------------------------------------------------------------------------
 # Parser principal
 # ---------------------------------------------------------------------------
 
@@ -295,6 +434,53 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximo de pasadas de reconcile_run (default: 50).",
     )
 
+    # ----- knowledge subcommand (H3 Slice 5) -----
+    kn = sub.add_parser(
+        "knowledge",
+        help="Gestion del subsistema de conocimiento (H3).",
+    )
+    kn_sub = kn.add_subparsers(dest="knowledge_command", required=True)
+
+    ks = kn_sub.add_parser("stale", help="Lista Claims stale.")
+    ks.add_argument("project", help="Proyecto destino.")
+
+    ki = kn_sub.add_parser("invalidate", help="Invalida Claims desde un source.")
+    ki.add_argument("project", help="Proyecto destino.")
+    ki.add_argument("--source", required=True, help="source_id a invalidar.")
+    ki.add_argument("--max-hops", type=int, default=2, help="Cap de hops (default 2).")
+
+    kr = kn_sub.add_parser("refresh", help="Refresca Claims de un source.")
+    kr.add_argument("project", help="Proyecto destino.")
+    kr.add_argument("--source", required=True, help="source_id a refrescar.")
+    kr.add_argument(
+        "--revision",
+        required=True,
+        help="Nueva revision que re-valida los Claims stale.",
+    )
+
+    kc = kn_sub.add_parser("compile", help="Compila un handoff.")
+    kc.add_argument("project", help="Proyecto destino.")
+    kc.add_argument(
+        "recipe",
+        help='source_id o JSON literal "{"..."} con la receta completa.',
+    )
+    kc.add_argument("--strict", action="store_true", help="Aplica strict freshness.")
+    kc.add_argument("--token-budget", type=int, default=8000, help="Chars maximos.")
+    kc.add_argument(
+        "--overflow",
+        default="drop_optional",
+        choices=["drop_optional", "fail", "truncate_finding"],
+        help="Que hacer si overflow (default drop_optional).",
+    )
+    kc.add_argument("--run", default=None, help="run_id del handoff.")
+    kc.add_argument("--node", default=None, help="node_execution_id.")
+    kc.add_argument("--revision", default=None, help="source_revision del handoff.")
+
+    kt = kn_sub.add_parser("trace", help="Extrae un OutcomeTrace desde run.")
+    kt.add_argument("project", help="Proyecto destino.")
+    kt.add_argument("--run", required=True, help="run_id del que extraer trace.")
+    kt.add_argument("--name", default=None, help="Nombre del trace (opcional).")
+
     return p
 
 
@@ -325,12 +511,32 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_brick_register(args)
         if args.command == "run":
             return cmd_run(args)
+        if args.command == "knowledge":
+            return _route_knowledge(args)
     except SkillGraphError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
         return EXIT_DOMAIN
 
     parser.print_help()
     return EXIT_USAGE
+
+
+def _route_knowledge(args: argparse.Namespace) -> int:
+    """Enruta subcommand `knowledge` al handler correspondiente."""
+    sub = args.knowledge_command
+    if sub == "stale":
+        return cmd_knowledge_stale(args)
+    if sub == "invalidate":
+        return cmd_knowledge_invalidate(args)
+    if sub == "refresh":
+        return cmd_knowledge_refresh(args)
+    if sub == "compile":
+        return cmd_knowledge_compile(args)
+    if sub == "trace":
+        return cmd_knowledge_trace(args)
+    parser_local = _build_parser()
+    parser_local.parse_args(["knowledge", "--help"])
+    return EXIT_USAGE  # unreachable
 
 
 def cmd_brick_register(args: argparse.Namespace) -> int:

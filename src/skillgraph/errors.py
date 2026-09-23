@@ -184,3 +184,36 @@ class HopLimitExceededWarning(SkillGraphWarning):
     """
 
     code = "sg_hop_limit_exceeded"
+
+
+class StaleKnowledgeError(SkillGraphError):
+    """`compile_handoff` fallo porque habia Claims stale y policy=strict.
+
+    NO aborta llamadas menos estrictas: el caller elige strict/best_effort
+    en la receta.
+    """
+
+    code = "sg_stale_knowledge_error"
+
+
+class MissingObligatoryError(SkillGraphError):
+    """`compile_handoff` fallo porque un selector obligario no resolvio.
+
+    El error message incluye el selector que fallo.
+    """
+
+    code = "sg_missing_obligatory"
+
+
+class TokenBudgetExceededError(SkillGraphError):
+    """`compile_handoff` fallo porque el conocimiento obligatorio no cabe
+    en `token_budget` (con `overflow_strategy=fail`).
+    """
+
+    code = "sg_token_budget_exceeded"
+
+
+class RecipeNotFoundError(SkillGraphError):
+    """`recipe_ref` no corresponde a una receta registrada o cargable."""
+
+    code = "sg_recipe_not_found"
