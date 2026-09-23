@@ -766,3 +766,22 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
   `knowledge/context_controller.py` 82% (SQL directo).
 - **Nota externa**: operador confirma que `.pipeline.kts` y
   `.tool-versions` son CI local suyo (no tocar/borrar).
+
+## UPDATE 2026-09-23 21:49 — H9-Coverage-5 cerrado
+
+- **Slice**: cobertura de `src/skillgraph/resources/catalog.py`
+  del 88% al **100%** con 4 tests focales. Sin tocar código
+  de producción.
+- **Ramas cubiertas**:
+  - `register_project`: duplicado `(tenant_id, name)` → `IdentityConflictError`.
+  - `list_projects`: con resultados (ordenados por `name`);
+    con tenant sin proyectos → `[]`.
+  - `open_catalog`: path que NO termina en `.sqlite` → `ValidationError`.
+- **Resultado**: 583/583 tests verde (`scripts/ci.sh` 104s).
+  `ruff check` All checks passed.
+- **Cobertura post-slice**: 100% (superó objetivo ≥95%).
+- **Spec**: `specs/h9-coverage-catalog.md`.
+- **Punto material abierto**: grieta de no-atomicidad Estado↔Eventos.
+- **Próximo paso**: módulos <90% restantes: `resources/registry.py`
+  93%, `resources/workflow.py` 93%, `knowledge/context_controller.py`
+  82% (SQL directo, decisión material).

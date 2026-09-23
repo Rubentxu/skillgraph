@@ -2161,3 +2161,30 @@ con dulwich).
 `.tool-versions`, `ci/` son CI local del operador — no tocar ni
 borrar. Confirmado en working tree tras esta nota.
 
+
+### H9-Coverage-5 — cobertura `resources/catalog.py` 88% → 100% (2026-09-23 21:49)
+
+**Slice**: 4 tests focales para cubrir las ramas no ejercitadas
+del módulo `resources/catalog.py` (Etapa 1, catálogo de identidad
+tenant/project).
+
+**Spec**: `specs/h9-coverage-catalog.md`.
+
+**Tests añadidos** (`tests/test_h9_coverage_catalog.py`,
+117 líneas, 4 tests):
+
+- `register_project`: duplicado `(tenant_id, name)` → `IdentityConflictError`.
+- `list_projects`: con 3 proyectos (insertados en orden NO
+  alfabético) → verificación del `ORDER BY name` + contenido
+  preservado.
+- `list_projects`: tenant sin proyectos → `[]`.
+- `open_catalog`: path `catalog.db` (sin `.sqlite`) → `ValidationError`.
+
+**Verificación**:
+
+- `pytest tests/test_h9_coverage_catalog.py`: 4/4 verde en 0.36s.
+- `pytest --cov=skillgraph.resources.catalog`:
+  46 stmts, 0 miss, 6 br, 0 brpart → **100%** (objetivo ≥95%).
+- `scripts/ci.sh`: **583/583 verde en 104s**.
+- `ruff check src tests`: All checks passed (1 fix I001 auto-aplicado).
+
