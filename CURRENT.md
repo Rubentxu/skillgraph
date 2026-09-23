@@ -494,3 +494,40 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
   2. Cobertura in-process residual (`knowledge compile/trace/refresh`).
   3. H9-A concurrencia real (ADR material).
   4. Cierre de iniciativa si la deuda esta documentada y aceptada.
+
+## UPDATE 2026-09-23 18:09 — H9-BSlice3 (PARTE 1 caracterización) cerrado
+
+- **Slice**: caracterización del refactor `RunController ↔ Storage`
+  que ha quedado **sin refactor de código**, como pedía la consigna.
+- **Entregables**:
+  - `docs/architecture/h9-bslice3-runcontroller-storage.md` (196 LoC):
+    inventario de las 10 SQL sites del RunController (S1..S9),
+    clasificación por atomicidad, mapeo contra APIs existentes en
+    Storage (no existen casi todas), definición de la regla de
+    atomicidad para los futuros slices, criterios de cierre del
+    refactor completo, y un roadmap tentativo S0..S9 no comprometido.
+  - `tests/test_h9_runcontroller_characterization.py` (6 tests T1..T6):
+    red de seguridad de no-regresión. Cada test verifica UNA
+    invariante observable HOY. T1/T2 son específicamente la grieta
+    de no-atomicidad documentada (que el refactor posterior
+    cerrará como efecto colateral deseable).
+- **Descubrimiento durante la caracterización (corregí asunción)**:
+  mi primera versión de T3 asumía que `_recover_interrupted` solo
+  recuperaba UN nodo RUNNING. Smoke empírico mostró que recupera
+  TODOS los RUNNING del run, sin discriminar. Re-escribí T3 para
+  documentar el comportamiento real.
+- **467/467 verde en `scripts/ci.sh`** (~103s).
+- **Limitación conocida (NO tocada)**: `RunController` sigue
+  accediendo a `self._conn.execute(...)`. Su cierre depende de:
+  - Añadir operaciones transaccionales a `Storage`
+    (`Storage.create_run_atomic`, `Storage.start_node_execution_atomic`,
+    `Storage.complete_node_execution_atomic`, etc.).
+  - Migrar `RunController` a esas APIs.
+  - Eliminar `conn` de su `__init__`.
+  Esto son 4-6 slices adicionales (no comprometidos).
+- **Siguiente opciones** (cada una pide consigna si tiene ADR material):
+  1. H9-BSlice3 PARTE 2: añadir `Storage.list_node_executions` y
+     `Storage.list_executed_node_names` (lecturas, sin atomicidad).
+  2. H9-InProcess-4: cobertura in-process del CLI restante
+     (`knowledge compile/trace/refresh`, `run`).
+  3. Cerrar iniciativa con la deuda documentada.

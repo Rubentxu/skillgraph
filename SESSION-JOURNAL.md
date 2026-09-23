@@ -1672,3 +1672,53 @@ coste bajo. (1), (3), (4) mantienen su prioridad documentada.
 | `cmd_brick_register` valido -> rc=0 + persist | `test_brick_register_valid_persists` | PASS |
 | `ruff format` | `ruff format tests/test_h9_cli_inproc_knowledge_brick.py` | All checks passed |
 | `scripts/ci.sh` | `bash scripts/ci.sh` | `=== ci: OK ===`, 461 passed in ~85s |
+
+---
+
+## UPDATE 2026-09-23 18:09 — H9-BSlice3 PARTE 1: caracterización cerrada
+
+- **Slice**: caracterización del refactor `RunController ↔ Storage`.
+  SIN refactor de código (la consigna explícita decía
+  "caracterización, sin refactor").
+- **Entregables**:
+  - `docs/architecture/h9-bslice3-runcontroller-storage.md` (196 LoC):
+    inventario 10 SQL sites (S1..S9), clasificación por atomicidad,
+    cruce contra APIs existentes en Storage (¡ninguna cubre el ciclo
+    de vida de un Run!), regla "una operación transaccional por
+    state-change + event", criterios de cierre del refactor completo,
+    roadmap tentativo S0..S9 con tareas pendientes pero NO
+    comprometidas.
+  - `tests/test_h9_runcontroller_characterization.py` (6 tests T1..T6):
+    cada uno documenta UNA invariante observable. T1/T2 cubren la
+    grieta de no-atomicidad entre RunController y EventLog.
+- **Asunción defectuosa corregida tras smoke empírico**:
+  mi T3 inicial asumía que `_recover_interrupted` solo recuperaba
+  UN nodo RUNNING y dejaba el otro intacto. Smoke real mostró que
+  recupera **TODOS** los RUNNING del run. Re-escribí el test para
+  documentar el comportamiento real y añadí nota explícita en
+  docstring: "Esto es importante documentarlo: si un día se quisiese
+  preservar alguno sería un cambio de comportamiento."
+- **Decisiones bajo criterio propio, no en consigna explícita**:
+  - Numeración estable `S#` y `T#` para futuras referencias cruzadas.
+  - Documento markdown en `docs/architecture/` (carpeta recién creada,
+    antes vacía). NO usé `external/blueprint-v1/` porque eso es
+    fuente de verdad cerrada (no contradecir sin ADR).
+  - 6 tests en lugar de 10 (uno por SQL site) porque algunos son
+    duplicados por categorías (lecturas / recuperación bulk).
+- **Limitaciones confirmadas** (no cerradas):
+  - `RunController` sigue accediendo a `self._conn` en 10 sitios.
+  - `cmd_run` sigue accediendo a `storage._conn` para pasarlo al
+    RunController (la grieta externa que el slice 3 estaba
+    intentando tapar, ahora entendida como secundaria).
+  - El cierre de verdad requiere ~4-6 slices adicionales con
+    consenso sobre la API transaccional de `Storage`.
+- **Mapa requisito -> check**:
+| Requisito | Check | Resultado |
+|---|---|---|
+| Inventario 10 SQL sites documentado | `docs/architecture/h9-bslice3-*.md` §2 | 9 sites numeradas (la 10ª queda fuera de scope RunController) |
+| APIs equivalentes en Storage mapeadas | §3 | 9/9 "no existe" |
+| Regla de atomicidad explícita | §4 | OK |
+| Tests T1-T6 en verde | `pytest tests/test_h9_runcontroller_characterization.py -v` | 6/6 PASS |
+| Sin refactor de producción | git diff src/ | confirmado (solo docs + tests nuevos) |
+| ruff check + format | `ruff check src tests && ruff format --check src tests` | All checks passed |
+| `scripts/ci.sh` | `bash scripts/ci.sh` | 467 passed in ~103s, OK |
