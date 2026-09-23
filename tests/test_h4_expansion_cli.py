@@ -23,6 +23,7 @@ Reglas:
 - Subprocess sobre la CLI instalada por uv (mismo patron que
   test_cli_branches.py).
 - Aislamiento total por test (data_root en tmp_path).
+- revision de evidencia = git rev-parse HEAD real (no literal).
 """
 
 from __future__ import annotations
@@ -100,6 +101,21 @@ spec:
         data_root=data_root,
     ).returncode
     assert rc == 0, f"brick register fallo: {rc}"
+
+
+def _git_rev_head() -> str:
+    """SHA real de HEAD para evidencia UAT (no literal 'HEAD').
+
+    Replica el patron de tests/uat_audit.py::_git_rev pero sin importar
+    ese modulo (su REPO_ROOT esta hardcodeado al path absoluto de este
+    checkout y arrastraria side-effects no deseados en import-time).
+    """
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
 
 
 def _write_seed_plan(
@@ -253,7 +269,7 @@ def _emit_uat_08_evidence(
 
     evidence = {
         "uat_id": "UAT-08",
-        "revision": "HEAD",
+        "revision": _git_rev_head(),
         "timestamp": "2026-09-23T11:00:00Z",
         "scenario": (
             "Dada una problematica no contemplada, cuando se propone un "
@@ -334,7 +350,7 @@ def _emit_uat_09_evidence(
     # (cambia entre ejecuciones y no es parte de la evidencia legal).
     evidence = {
         "uat_id": "UAT-09",
-        "revision": "HEAD",
+        "revision": _git_rev_head(),
         "timestamp": "2026-09-23T11:00:00Z",
         "scenario": (
             "Dada una propuesta que solicita nuevas capacidades, cuando no "
