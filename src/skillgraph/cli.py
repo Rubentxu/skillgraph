@@ -192,6 +192,25 @@ def _build_parser() -> argparse.ArgumentParser:
         help="(reservado) override de kind para tests avanzados.",
     )
 
+    rp = sub.add_parser(
+        "run",
+        help="Crea un Run desde un WorkflowPlan.md y reconcilia hasta terminal.",
+    )
+    rp.add_argument("project", help="Proyecto destino (debe existir).")
+    rp.add_argument("plan", type=Path, help="Ruta al WorkflowPlan.md.")
+    rp.add_argument(
+        "--fixtures-root",
+        type=Path,
+        default=None,
+        help="Raíz de fixtures de agentes (default: <data-root>/agents).",
+    )
+    rp.add_argument(
+        "--max-iterations",
+        type=int,
+        default=50,
+        help="Maximo de pasadas de reconcile_run (default: 50).",
+    )
+
     return p
 
 
@@ -220,6 +239,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_project_inspect(args)
         if args.command == "brick":
             return cmd_brick_register(args)
+        if args.command == "run":
+            return cmd_run(args)
     except SkillGraphError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
         return 10
@@ -269,6 +290,104 @@ def cmd_brick_register(args: argparse.Namespace) -> int:
     print(f"Brick registrado: {brick.kind}/{brick.identity.namespace}/{brick.identity.name}")
     print(f"UID: {uid}")
     return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """Crea un Run desde un WorkflowPlan.md y reconcilia hasta terminal.
+
+    Cierra H2 por la via UAT: el usuario real ejecuta el CLI.
+    """
+    from skillgraph.agent import FakeAgentAdapter
+    from skillgraph.paths import agents_root
+    from skillgraph.plan_loader import load_plan_file
+    from skillgraph.runcontroller import RunController
+
+    root = resolve_data_root(args.data_root)
+    cat = open_catalog(catalog_path(root))
+    try:
+        project = cat.get_project(tenant_id=DEFAULT_TENANT, name=args.project)
+        if project is None:
+            print(
+                f"ERROR: proyecto {args.project!r} no existe",
+                file=sys.stderr,
+            )
+            return 4
+        if not args.plan.is_file():
+            print(
+                f"ERROR: plan no encontrado: {args.plan}",
+                file=sys.stderr,
+            )
+            return 6
+        try:
+            plan = load_plan_file(args.plan)
+        except ParseError as exc:
+            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+            return 11
+        db_path = Path(project["db_path"])
+        if not db_path.exists():
+            print(
+                f"ERROR: base de datos ausente: {db_path}",
+                file=sys.stderr,
+            )
+            return 5
+        fixtures_root = args.fixtures_root or agents_root(root)
+        fixtures_root.mkdir(parents=True, exist_ok=True)
+        adapter = FakeAgentAdapter(fixtures_root)
+        storage = Storage(db_path)
+        try:
+            ctl = RunController(
+                storage=storage,
+                adapter=adapter,
+                conn=storage._conn,  # type: ignore[attr-defined]
+            )
+            run_id = ctl.create_run(
+                tenant_id=project["tenant_id"],
+                project_id=project["name"],
+                plan=plan,
+            )
+            snap = ctl.reconcile_run(
+                tenant_id=project["tenant_id"],
+                project_id=project["name"],
+                run_id=run_id,
+            )
+            # Loop hasta terminal (current_node agotado).
+            iterations = 0
+            while (
+                snap.state not in {"COMPLETED", "FAILED", "CANCELLED"}
+                and iterations < args.max_iterations
+            ):
+                iterations += 1
+                snap = ctl.reconcile_run(
+                    tenant_id=project["tenant_id"],
+                    project_id=project["name"],
+                    run_id=run_id,
+                )
+            if (
+                snap.state not in {"COMPLETED", "FAILED", "CANCELLED"}
+                and iterations >= args.max_iterations
+            ):
+                print(
+                    f"WARN: max-iterations alcanzado ({args.max_iterations}); "
+                    f"estado={snap.state} current={snap.current_node}",
+                    file=sys.stderr,
+                )
+        finally:
+            storage.close()
+    finally:
+        cat.close()
+
+    print(f"Run: {run_id}")
+    print(f"Estado: {snap.state}")
+    print(f"Nodos ejecutados: {', '.join(snap.executed_nodes) or '(ninguno)'}")
+    print(f"Eventos emitidos: {snap.events_emitted}")
+    print(f"Fixtures de agente: {fixtures_root}")
+    # Devolvemos codigos distintos segun estado para que el shell
+    # pueda ramificar sin parsear la salida.
+    if snap.state == "COMPLETED":
+        return 0
+    if snap.state == "FAILED":
+        return 20
+    return 21
 
 
 if __name__ == "__main__":

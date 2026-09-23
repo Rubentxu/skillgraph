@@ -25,6 +25,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from skillgraph.errors import ValidationError
+from skillgraph.runtime_types import NODE_KINDS, NodeKind
+
 
 @dataclass(frozen=True, slots=True)
 class HandoffIdentity:
@@ -59,16 +62,14 @@ class HandoffIdentity:
 class HandoffBehavior:
     """Que brick se ejecuta y bajo que revision."""
 
-    definition_kind: str
+    definition_kind: NodeKind
     definition_name: str
     definition_namespace: str
     definition_revision: int
     api_version: str
 
     def __post_init__(self) -> None:
-        from skillgraph.errors import ValidationError
-
-        if self.definition_kind not in {"DecisionNode", "ActionNode"}:
+        if self.definition_kind not in NODE_KINDS:
             raise ValidationError(f"definition_kind invalido: {self.definition_kind!r}")
         if not self.definition_name:
             raise ValidationError("definition_name vacio")

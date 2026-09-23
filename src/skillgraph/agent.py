@@ -28,15 +28,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from skillgraph.errors import NotFoundError, ValidationError
+from skillgraph.errors import NotFoundError, OutcomeInvalidError, ValidationError
 from skillgraph.handoff import Handoff
+from skillgraph.runtime_types import OutcomeLabel
 
 
 @dataclass(frozen=True, slots=True)
 class AgentResult:
     """Lo que un Adapter devuelve tras ejecutar un nodo."""
 
-    outcome: str
+    outcome: OutcomeLabel
     """Etiqueta declarativa: para DecisionNode, una opcion del outcome
     declarado; para ActionNode, una transicion declarada."""
 
@@ -57,12 +58,14 @@ class AgentResult:
             raise ValidationError("falta `outcome` (str) en resultado del agente")
         if "result" not in payload or not isinstance(payload["result"], dict):
             raise ValidationError("falta `result` (dict) en resultado del agente")
-        outcome = payload["outcome"]
+        outcome_raw = payload["outcome"]
+        if not outcome_raw:
+            raise OutcomeInvalidError("outcome vacio en fixture")
         result = payload["result"]
         evidence_ref = payload.get("evidence_ref")
         if evidence_ref is not None and not isinstance(evidence_ref, str):
             raise ValidationError("evidence_ref debe ser str o ausente")
-        return AgentResult(outcome=outcome, result=result, evidence_ref=evidence_ref)
+        return AgentResult(outcome=outcome_raw, result=result, evidence_ref=evidence_ref)
 
 
 class AgentAdapter(Protocol):

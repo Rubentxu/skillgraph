@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from skillgraph.errors import ValidationError
+from skillgraph.runtime_types import NODE_KINDS, NodeKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +28,7 @@ class WorkflowNode:
     name: str
     """Identificador local dentro del plan (unico)."""
 
-    kind: str
+    kind: NodeKind
     """DecisionNode o ActionNode."""
 
     namespace: str
@@ -40,7 +41,7 @@ class WorkflowNode:
     def __post_init__(self) -> None:
         if not self.name:
             raise ValidationError("WorkflowNode.name vacio")
-        if self.kind not in {"DecisionNode", "ActionNode"}:
+        if self.kind not in NODE_KINDS:
             raise ValidationError(f"WorkflowNode.kind invalido: {self.kind!r}")
         if not self.namespace:
             raise ValidationError("WorkflowNode.namespace vacio")
@@ -76,8 +77,8 @@ class WorkflowPlan:
     """Grafo de control de flujo ejecutable."""
 
     nodes: tuple[WorkflowNode, ...]
+    initial: str
     transitions: tuple[WorkflowTransition, ...] = ()
-    initial: str = ""
 
     def __post_init__(self) -> None:
         names = {n.name for n in self.nodes}
