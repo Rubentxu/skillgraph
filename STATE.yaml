@@ -120,7 +120,7 @@ workstreams:
   - id: h5-audit-penal-vs-blueprint
     items: [audit-hitos, audit-uat-11, audit-uat-14, audit-decision-d5]
     status: completed
-    commit: "PENDIENTE"
+    commit: "92d70e2"
     nota: "specs/h5-audit-penal.md (141 LoC). H5 honestamente cerrado en su alcance declarado. 5 limitaciones vigentes documentadas. 3/5 entregables HITOS.md cubiertos, 1 parcial, 1 NO."
   - id: deuda-storage-diagnostico
     items: [storage-coverage-90-real-branches, gitignore-coverage]
