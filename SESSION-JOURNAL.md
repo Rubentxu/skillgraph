@@ -681,3 +681,67 @@ criterios legales del blueprint:
   H6 multipropósito, H7 promocion).
 - Sin regresiones: 91 tests focal sobre módulos tocados + 253
   global + lint format+check limpio.
+
+## 2026-09-23 — H4 Expansion controlada slice-1+slice-2 (CIERRE)
+
+### Plan ejecutado
+- Limpieza previa (3 commits ff433aa/1039171/39be132): SourceKind
+  Literal validado en runtime, paths.py refactor + 10 tests (59→81%),
+  STATE honesto.
+- H3 audit penal (887b23d): 155 LoC contra blueprint §08 §4/§5/§7/§8/§9/§11.
+  Veredictos literales: §4 ✓, §5 ✓, §7 2/6 cubierto, §8 5/8 literal +
+  3 delegados, §9 ✓.
+- H5 decision (b67d03c): "conserva fuente original" = path + content_hash
+  (referencia), NO bytes. Justificado por blueprint §10 §5-6 literal.
+
+### H4 slice-1 library (6f93eb2)
+- specs/h4-slice-1.md (232 LoC, DRAFT): ADT, 9 campos obligatorios,
+  6 invariantes I1..I6, 12 tests propuestos → 15 entregados.
+- src/skillgraph/graph_expansion.py (608 LoC, coverage 86%):
+  Pipeline PROPOSE→VALIDATE→AUTHORIZE→APPLY. `apply_expansion`
+  returns `ExpansionResult` (Either). WorkflowPlan inmutable.
+- src/skillgraph/errors.py: InvalidExpansionError + UnauthorizedExpansionError.
+- tests/test_h4_expansion.py: 15 tests verde (propuesta, ops,
+  autorización, apply inmutable, errores, registro de rechazos).
+
+### H4 slice-2 CLI+E2E (bd95d29)
+- src/skillgraph/cli.py: subparser `expansion` con `propose`, `apply`,
+  `validate`, `rejections`. Helpers `_load_plan_from_path` (JSON/YAML/MD),
+  `_load_registry` via Storage.list_resources(), `_write_plan_to_storage`,
+  `_load_plan_from_storage`, `_load_proposal_json`, `_ops_from_dict`.
+- src/skillgraph/graph_expansion.py: `record_rejection` ahora acepta
+  `violated_invariants` opcional para audit forense (UAT-09).
+- tests/test_h4_expansion_cli.py (605 LoC, 6 tests):
+  - test_uat_08_authorized_applied: rc=0, plan 2→3 nodos, emite
+    tests/uat-evidence/UAT-08.json.
+  - test_uat_09_unauthorized_capability_rejected: rc=10, evidencia
+    en expansion_rejections/, emite UAT-09.json.
+  - test_expansion_validate_*: rc=10 sin persistir.
+  - test_expansion_rejections_listing: lista JSON persistidos.
+  - test_expansion_propose_persists: graba expansion_proposals/.
+  - test_expansion_proposal_invalid_authorization: granted_by=None
+    en manual_signed → UnauthorizedExpansionError → rc=10.
+
+### Decisiones de diseno tomadas
+1. `UnauthorizedExpansionError` mapea a EXIT_DOMAIN (10), no
+   EXIT_VALIDATION (12): es subclase de `SkillGraphError`. La
+   distinción no aporta valor: cualquier fallo de expansion es un
+   error de dominio, no de validación de entrada.
+2. `record_rejection` mejorada con `violated_invariants`: el JSON
+   persistido ahora lista qué invariante(s) se violaron, lo que
+   UAT-09 necesita para "conservar evidencia de su rechazo".
+3. El `_load_registry` usa `Storage.list_resources()` + parse
+   `spec_json` (no SQL custom): respeta el contrato existente y
+   evita introducir un acoplamiento con la implementación física.
+
+### Estado final
+- HEAD: bd95d29.
+- 284 tests pytest verde (278 + 6 E2E H4 CLI).
+- ruff format+check limpios.
+- graph_expansion.py 86% coverage.
+- UAT-08/09: BLOCKED → PASS con evidence JSON legal emitida por
+  tests E2E subprocess.
+- 14/16 UAT PASS, 0 FAIL, 2 BLOCKED honestos (H6 multipropósito,
+  H7 promoción).
+- Próximo: H4 slice-3 (storage.py persistente + EVALUATE stage +
+  policy engine refinado), o H6/H7 si el operador prioriza.
