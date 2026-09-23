@@ -139,7 +139,7 @@ workstreams:
   - id: parser-coverage-stewardship
     items: [test-parser-py-12-tests-ramas-error]
     status: completed
-    commits: []   # pendiente commit en este turno
+    commits: ["0e96495"]
     nota: "Stewardship: parser.py 77% -> 100% cobertura. 12 tests focalizados en ramas de error (YAML invalido, no-dict, input no-string, campos faltantes/no-string). NO duplica happy paths ya cubiertos por test_s0_brick_minimo.py. 0 LoC produccion modificado. Cierre de la unica rama de cobertura <80% en modulos de parser critico."
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
@@ -265,7 +265,7 @@ ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
   ultima_ejecucion_local: 2026-09-23 14:11
   resultado: "327 passed in 55s (pytest --tb=short)"
-  working_tree: pending-commit (parser coverage + state sync)
+  working_tree: clean (despues de commit 0e96495)
 
 open_questions: []
 nota_honesta_revision: >
