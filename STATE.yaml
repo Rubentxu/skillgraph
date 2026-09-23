@@ -14,20 +14,22 @@ goal:
   source_of_truth: external/blueprint-v1/plan/ROADMAP.md
   principles_source: external/blueprint-v1/README.md
   adr_index: external/blueprint-v1/adr/
-  status: in_progress
-  closed_at: ~
-  closed_after_tag: ~
+  status: COMPLETED
+  closed_at: 2026-09-23
+  closed_after_tag: v0.6.0
   closed_rationale_at_v050: "Cierre tras 4 releases verificadas (v0.3.0/v0.4.0/v0.4.1/v0.5.0). 373/373 tests verde. 14/16 UAT PASS, 2 BLOCKED honestos (H6/H7 sin spec operador). Footgun crítico cerrado. Cobertura de módulos críticos al 100%. Sin deuda técnica testeable abierta. Detalles en .next-decision.md (sección 'Por qué está cerrado')."
   reopened_for_v060: true
   reopened_reason: "Operador comando 'todo esta en el roadmap, siguelo aplicando criterio' -> autoriza ejecutar H6 (UAT-12) y H7 (UAT-13) con criterio propio. Iniciativa reabierta en estado in_progress, no COMPLETED."
+  closed_at_v060: "2026-09-23 tras tag v0.6.0"
+  closure_rationale: "Cierre DEFINITIVO tras 5 releases (v0.3.0 / v0.4.0 / v0.4.1 / v0.5.0 / v0.6.0). 405/405 tests pytest verde. 16/16 UAT PASS, 0 FAIL, 0 BLOCKED. TODOS los hitos del blueprint cerrados (H0..H7). 32 tests nuevos (12 H6 + 16 H7 + 4 gap-test inversion). CHANGELOG.md actualizado, STATE/CURRENT/JOURNAL sincronizados. Sin deuda testeable abierta. Initiative COMPLETED. El checkpoint durable permite reanudar en cualquier sesion futura sin perdida de contexto."
 
 roadmap:
   current_stage: 5
   current_spike: null
-  current_hito: H7-promocion-cerrado
-  next_milestone_gate: cierre-iniciativa-v0.6.0
-  current_workitem: feat-uat-pass-h6-h7  # ci gates verdes, evidencia real
-  next_workitem: "release v0.6.0 (MINOR: feat H6 + feat H7) → CHANGELOG + tag"
+  current_hito: H7-promocion-cerrado  # tagged en v0.6.0
+  next_milestone_gate: ~  # sin gates pendientes; initiative COMPLETED
+  current_workitem: ~  # sin trabajo activo
+  next_workitem: ~  # initiative cerrada; ver .next-decision.md para trabajos fuera de scope
 
 python:
   minimum: "3.11"
@@ -337,11 +339,11 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "release v0.6.0 (MINOR por feat H6 + feat H7) + CHANGELOG entry + tag. Tras 5 releases (v0.3.0/v0.4.0/v0.4.1/v0.5.0/v0.6.0), 16/16 UAT PASS, 405/405 tests verde, blueprint v1 COMPLETO al 100% segun contrato. Sin deuda testeable abierta. Initiative elegible para cierre COMPLETED."
+next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). 5 releases (v0.3.0/v0.4.0/v0.4.1/v0.5.0/v0.6.0), 16/16 UAT PASS, 405/405 tests, blueprint v1 COMPLETO al 100% segun contrato. Sin deuda testeable abierta. Ver .next-decision.md para posibles trabajos futuros FUERA de esta iniciativa."
 
 
 release:
-  tag: v0.6.0-pending  # NO tagged yet; pendiente CHANGELOG + tag tras H6+H7
+  tag: v0.6.0
   fecha: 2026-09-23
   semver_bump: MINOR
   rationale: "0 breaking + 2 feat + 0 fix desde v0.5.0 (regla 4 SEMVER). feat(h6) pack_loader declarativo + Domain Pack narrativo cierra UAT-12. feat(h7) promotion.py + outbox en storage.py con reconciliacion idempotente cierra UAT-13. Sin cambios en API publica existente (storage.py solo EXTENSION: tabla promotion_outbox + 6 metodos; registry/bricks/parser 0 LoC)."
