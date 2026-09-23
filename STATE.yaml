@@ -212,10 +212,11 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 425
-  passed: 425
-  duration_s: 80
+  total: 437
+  passed: 437
+  duration_s: 83
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
+  h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -250,8 +251,9 @@ tests:
     - tests/test_h6_multiproposito.py: 12
     - tests/test_h7_promocion.py: 16
     - tests/test_h8_public_paths.py: 5
-    - tests/test_h9_storage_promo_list.py: 10   # H9-BSlice1: API publica Storage.list_promotions
-    - tests/test_h9_cli_promo_list_inproc.py: 5   # H9-BSlice1: cobertura in-process CLI runner
+    - tests/test_h9_storage_promo_list.py: 10
+    - tests/test_h9_cli_promo_list_inproc.py: 5
+    - tests/test_h9_cli_inproc_promo_pack.py: 12   # H9-InProcess-2: submit/reconcile/pack/show
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -326,9 +328,11 @@ nota_honesta_revision: >
   CI pasa de 9/16 (manuales) a 16/16 (todos con test pytest vivo).
 
 deuda_tecnica_residual:
+  - "H9-InProcess-2 cerrado (commit 7a67bcd): cobertura in-process para promotion submit (4 escenarios), promotion reconcile (2 escenarios nominales), pack load (3 escenarios), expansion show (3 escenarios). +12 tests. Limitacion 'cobertura in-process del CLI' CERRADA para los 4 comandos mas criticos de H8."
   - "H9-BSlice1 cerrado (commit fe6b020): API publica Storage.list_promotions(status=None); cmd_promotion_list ya no accede a storage._conn. +15 tests (10 storage + 5 in-process CLI). Limitacion 'sin API Storage listar promotions' CERRADA."
-  - "Limitacion 'cobertura in-process del CLI' parcialmente cerrada: cubre sg promotion list. Pendiente extender a pack load, promotion submit, promotion reconcile, expansion show."
+  - "Cobertura in-process del CLI: TODOS los comandos criticos del roadmap cerrados (promotion list/submit/reconcile, pack load, expansion show). Pendiente menor: brick register, run, knowledge compile/trace (NO criticos; quedan cubiertos por subprocess E2E y unit tests)."
   - "Otras llamadas storage._conn en runner: lineas 283 (init), 998 y 1021 (cmd_expansion_show), 1302 (otro hook). H9-BSlice2 si surge demanda real."
+  - "Pack load NO es idempotente: segunda carga devuelve EXIT_VALIDATION (12) por diseno (resource_kind=DomainPack colisiona con el hash persistido). Documentado en test dedicado."
   - "H4 slice-3 SCOPE REDUCIDO (no full spec): SIN migration SQLite (JSON files planos funcionan, riesgo alto; defer slice-4 con demanda real). Pipeline gating de auto_signed via evaluation_result DEFERIDO a slice-4 (decision explicita documentada en h4-slice-3-policy-engine workstream)."
   - "H6 multiprosito (Character/StoryArc): UAT-12 PASS. pack_loader.py declarativo + fixture narrative-core.md. 0 LoC modificados en nucleo (registry/bricks/parser)."
   - "H7 promocion entre bases: UAT-13 PASS. promotion.py + outbox en storage.py. Caso de interrupcion (IN_PROGRESS dejado por crash) cubierto por test_reconcile_after_interruption_completes_pending."
