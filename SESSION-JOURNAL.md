@@ -1151,3 +1151,73 @@ Deuda residual actualizada:
 - parser.py: 100% (cerrado turno previo).
 - plan_loader.py: 100% (cerrado este turno).
 - recipe.py: 73% (defer; scope similar pero menos crítico).
+
+## 2026-09-23 14:25 — Stewardship receta: recipe.py 73% → 100%
+
+### Contexto
+
+Tercer (y último) módulo crítico con cobertura <80% testeable.
+Stewardships previos en esta sesión: parser.py (77%→100%, commit
+`0e96495`), plan_loader.py (48%→100%, commit `b6ca7e1`).
+
+### Caracterización
+
+- `src/skillgraph/runtime/recipe.py` (no confundir con H4
+  `graph_expansion.py`).
+- Modelo: `ObligatorySelector` (frozen, slots) + `ContextRecipe`
+  (frozen, slots, complex validation) + `from_dict` factory.
+- Ramas no cubiertas: `__post_init__` de ambos dataclasses +
+  `from_dict` validaciones de forma (raw no-dict, lists/dicts
+  esperados, tipos no-string).
+- `ObligatorySelector.__post_init__` valida `kind` contra Literal
+  permitidos y `value` no-vacío.
+- `ContextRecipe.__post_init__` valida `recipe_ref` (formato
+  `^recipe:[\w\-]+$`), `freshness` (≥0.0), `token_budget`
+  (≥1), `overflow_policy` (Literal), `revision` (no-vacío).
+
+### Implementación
+
+`tests/test_recipe.py` (nuevo, 22 tests, ~190 LoC):
+- T1: `ObligatorySelector` happy (entity/relation/path) +
+  kind inválido + value vacío.
+- T2: `ContextRecipe.__post_init__` con cada campo inválido
+  aislado (recipe_ref mal formado, freshness negativa,
+  token_budget 0, overflow_policy no Literal, revision
+  vacía).
+- T3: `from_dict` con raw no-dict, obligatory/optional no-list,
+  selector entry no-dict, kind/value/label no-str,
+  relation_selectors no-list-of-str, relation_selectors
+  con entry no-str.
+
+### Verificación
+
+- ruff check: 5 fixes I001 (imports orden) + 1 fix RUF043
+  (`r"selector.value vacio"` en línea 41).
+- 22 tests verde en 0.07s.
+- `recipe.py`: 100% cobertura (medido en isolation con
+  `--cov=src/skillgraph/runtime/recipe.py`).
+- Suite completa: 362 passed in 282s (340 → 362, delta +22).
+- 0 regresión. ruff format+check limpios.
+
+### Cifras reales
+
+- `src/skillgraph/runtime/recipe.py`: 0 LoC modificado.
+- `tests/test_recipe.py`: nuevo, 22 tests.
+- Cierre del TERCER módulo crítico con cobertura <80%.
+- TOTAL 3/3 stewardship cerrados en esta sesión (parser +
+  plan_loader + recipe, todos al 100% con tests focalizados).
+
+### Decisión honesta
+
+Sin más stewardship de cobertura de valor real: módulos restantes
+≥81% en ramas testeables (agents 89%, reconciler 89%, dispatcher
+88%, context_controller 81%, paths 81%). El proyecto no tiene
+ramas de cobertura <80% en módulos de producción testeables.
+
+Próximas opciones genuinas (requieren decisión del operador):
+1. Cerrar iniciativa (no quedan gaps materiales, 14/16 UAT PASS,
+   2 BLOCKED honestos por falta de spec del operador para H6/H7).
+2. H6 multipropósito (Character/StoryArc, UAT-12).
+3. H7 promoción entre bases (UAT-13).
+4. Audit transversal final (UAT-MATRIX, ARCHITECTURE.md,
+   roadmap sync).
