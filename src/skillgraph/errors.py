@@ -92,3 +92,43 @@ class UnknownClaimPredicateError(ValidationError):
     """El predicado de un Claim no esta registrado en CLAIM_PREDICATES."""
 
     code = "sg_unknown_predicate"
+
+
+class SkillGraphWarning(UserWarning):
+    """Raíz de los warnings no fatales de SkillGraph.
+
+    NO rompe el flujo: el caller decide que hacer (log, abortar, continuar).
+    Vive como `UserWarning` para que `warnings.warn()` la trate como warning
+    estandar de Python (visible con `-W error::UserWarning` si se quiere
+    estricto).
+    """
+
+    code: str = "sg_warning"
+
+
+class UnknownSourceError(SkillGraphError):
+    """Una Source solicitada por ID no existe."""
+
+    code = "sg_unknown_source"
+
+
+class UnknownEntityError(SkillGraphError):
+    """Una Entity solicitada por ID no existe."""
+
+    code = "sg_unknown_entity"
+
+
+class UnknownClaimError(SkillGraphError):
+    """Un Claim solicitado por ID no existe."""
+
+    code = "sg_unknown_claim"
+
+
+class StaleKnowledgeWarning(SkillGraphWarning):
+    """Una operacion se completo pero el conocimiento involucrado esta stale.
+
+    NO aborta: el controller ya registro los datos. El caller decide
+    si abortar (`-W error::StaleKnowledgeWarning`) o continuar.
+    """
+
+    code = "sg_stale_knowledge"
