@@ -313,19 +313,19 @@ deuda_tecnica_residual:
   - "registry.py 88% validado: mismas cifras; no es dato heredado falso."
   - "recipe.py 100% en este turno (era 73%): 22 tests focalizados en __post_init__ de ObligatorySelector/ContextRecipe y validacion from_dict. 0 LoC produccion modificado. TERCER modulo critico con cobertura <80% cerrado en este turno (junto a parser y plan_loader). Sin mas modulos de produccion testeables <80% en el proyecto."
   - "SourceKind Literal validado en runtime: nuevo __post_init__ valida kind contra typing.get_args. Cierra bug silencioso donde from __future__ import annotations desactiva Literal-check en runtime."
-  - "tests/uat_audit.py: REPO_ROOT hardcodeado al path absoluto del checkout (/var/mnt/DiscoChino2-fast/...). Rompe portabilidad: tests fallan en cualquier otro checkout. Detectado en fix(tests) 7b81df7 (se opto por no importar uat_audit.py para evitar arrastrar el REPO_ROOT). Fix real: derive REPO_ROOT de Path(__file__).parent.parent. Fuera de scope de esta sesion; anotado como deuda."
+  - "tests/uat_audit.py REPO_ROOT: RESUELTO en v0.4.1 (commit edb19b0). Ahora se deriva de Path(__file__).parent.parent. Modulo portable a cualquier checkout."
   - "H5 'conservar material original' DECIDIDO (specs/h5-source-conservation-decision.md): referencia (path+content_hash), NO duplicar bytes. Justificado por blueprint §10 §5-6."
 
 blockers: []
 
-next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader + Recipe coverage stewardship + v0.4.0 APPLIED marker cerrada. 23 commits. 2 releases taggeadas (v0.3.0 y v0.4.0). 368 tests verde. Cobertura: parser 100%, plan_loader 100%, recipe 100%. 14/16 UAT PASS. Bugfix funcional: gap declarado en specs/h4-slice-3.md limitacion 3 cerrado con APPLIED marker. 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12, Character/StoryArc, sin spec), (c) H7 promocion entre bases (UAT-13, sin spec). Sin mas stewardship de cobertura de valor real. Decisiones posibles: 1) cerrar iniciativa (releases emitidas, criterios verificados, sin gaps materiales de cobertura), 2) ejecutar H6 o H7 (necesita spec operador o consigna auto-propón), 3) audit transversal final (UAT-MATRIX + ARCHITECTURE.md sync), 4) cli.py stewardship (cubrir in-process gaps, debatable)."
+next_action: "Sesion H4 Expansion slice-1+2+3 + Parser + PlanLoader + Recipe coverage stewardship + v0.4.0 APPLIED marker + v0.4.1 portability fixes cerrada. 3 releases taggeadas (v0.3.0, v0.4.0, v0.4.1). 368 tests verde. Cobertura: parser 100%, plan_loader 100%, recipe 100%. 14/16 UAT PASS. 2 caminos esperando decision material del operador: (b) H6 multiprosito (UAT-12, Character/StoryArc, sin spec), (c) H7 promocion entre bases (UAT-13, sin spec). Sin mas stewardship de cobertura de valor real. Deuda nueva detectada en sesion: tests/uat_audit.py main() destructivo por defecto (anotada en CHANGELOG v0.4.1; arreglar en v0.4.2 o v0.5.0 si surge). Decisiones posibles: 1) cerrar iniciativa (3 releases emitidas, criterios verificados, sin gaps materiales de cobertura), 2) ejecutar H6 o H7 (necesita spec operador o consigna auto-propón), 3) audit transversal final (UAT-MATRIX + ARCHITECTURE.md sync), 4) cli.py stewardship (cubrir in-process gaps, debatable), 5) arreglar main() destructivo de uat_audit.py (deuda anotada, bajo riesgo)."
 
 
 release:
-  tag: v0.4.0
+  tag: v0.4.1
   fecha: 2026-09-23
-  semver_bump: MINOR
-  rationale: "0 breaking + 18 feat commits + 3 fix. feat(h4-slice-3) APPLIED marker + show.stage field cierra gap declarado en specs/h4-slice-3.md limitacion 3."
+  semver_bump: PATCH
+  rationale: "0 breaking + 0 feat + 2 fix commits (regla 4 SEMVER). Fixes de portabilidad/trazabilidad del modulo tests/uat_audit.py: SHA real en evidencia (7b81df7) y REPO_ROOT portable desde __file__ (edb19b0). Sin cambios de comportamiento observable ni en API publica."
   releases:
     - tag: v0.3.0
       fecha: 2026-09-23
@@ -335,6 +335,10 @@ release:
       fecha: 2026-09-23
       sha: "1f1ec2f2ca009b0565e28f3155a8f751752e48d9"
       nota: "APPLIED marker + show.stage field"
+    - tag: v0.4.1
+      fecha: 2026-09-23
+      sha: "2262ac47759de0c5ca8ae215e3a73f84936d142a"
+      nota: "portability fixes (REPO_ROOT hardcode + UAT SHA literal)"
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
@@ -344,16 +348,18 @@ release:
     - H5_Adopcion_de_skills
     - h4_slice_3_applied_marker    # v0.4.0
     - h4_slice_3_show_stage_field  # v0.4.0
+    - uat_evidence_sha_real        # v0.4.1 (7b81df7)
+    - uat_audit_portable            # v0.4.1 (edb19b0)
   uat_al_release:
     PASS: 14
     BLOCKED: 2   # UAT-12 H6, UAT-13 H7 (sin spec operador)
     FAIL: 0
   evidencia:
     CHANGELOG: CHANGELOG.md
-    tag_sha: "v0.4.0 -> 1f1ec2f2ca009b0565e28f3155a8f751752e48d9"
-    tests_pytest: "368 passed in 90.39s (362 -> 368, delta +6 focales)"
+    tag_sha: "v0.4.1 -> 2262ac47759de0c5ca8ae215e3a73f84936d142a"
+    tests_pytest: "368 passed in 63.34s (sin delta vs v0.4.0)"
     scripts_ci: OK
     ruff: "format+check limpios"
-    e2e_real: "expansion apply good rc=0, apply bad rc=10, list --stage APPLIED funciona, show incluye stage, archive promueve a ARCHIVED"
+    e2e_real: "expansion apply good rc=0, apply bad rc=10, list --stage APPLIED funciona, show incluye stage (validado en v0.4.0 y revalidado en v0.4.1 contra SHA edb19b0)"
   push: false   # sin remote; orden operador
 
