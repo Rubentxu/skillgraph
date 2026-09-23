@@ -178,23 +178,15 @@ class RunController:
 
         Devuelve el `run_id`. Emite un evento `RunCreated`.
         """
-        run_id = new_run_id()
-        with self._conn:
-            self._conn.execute(
-                """
-                INSERT INTO workflow_runs
-                    (run_id, tenant_id, project_id, state, plan_json,
-                     current_node)
-                VALUES (?, ?, ?, 'CREATED', ?, ?)
-                """,
-                (
-                    run_id,
-                    tenant_id,
-                    project_id,
-                    plan_to_json(plan),
-                    plan.initial,
-                ),
-            )
+        # H9-BSlice3-S1: delega el INSERT en `Storage.create_run`
+        # (que es donde vive la generacion de run_id). La emision
+        # del evento `run_created` sigue siendo del RunController.
+        run_id = self._storage.create_run(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            plan_json=plan_to_json(plan),
+            initial_node=plan.initial,
+        )
         self._events.append(
             EventBuilder(
                 tenant_id=tenant_id,

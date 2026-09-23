@@ -1290,6 +1290,51 @@ class Storage:
                 (error, node_execution_id),
             )
 
+    def create_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        plan_json: str,
+        initial_node: str,
+    ) -> str:
+        """Crea un Run en estado ``CREATED`` y devuelve su ``run_id``.
+
+        Sustituye al INSERT directo del ``RunController.create_run``.
+        El ``run_id`` se genera aqui (Storage es la unica pieza que
+        sabe de IDs). El plan se persiste como JSON ya serializado
+        (responsabilidad del caller preservar el ``sort_keys=True``).
+
+        No emite eventos. La coordinacion con
+        ``EventLog.append(events.run_created(...))`` sigue siendo del
+        llamador.
+        """
+        # Import lazy para evitar ciclo runtime<->platform: la
+        # funcion generadora de IDs vive en runtime.runcontroller
+        # (Etapa 0), pero este modulo (Storage) no debe importarlo en
+        # top-level. El coste de un import por llamada es nulo
+        # (importlib lo cachea) frente al riesgo de un ciclo.
+        from skillgraph.runtime.runcontroller import new_run_id
+
+        run_id = new_run_id()
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO workflow_runs
+                    (run_id, tenant_id, project_id, state, plan_json,
+                     current_node)
+                VALUES (?, ?, ?, 'CREATED', ?, ?)
+                """,
+                (
+                    run_id,
+                    tenant_id,
+                    project_id,
+                    plan_json,
+                    initial_node,
+                ),
+            )
+        return run_id
+
     def list_promotions(
         self,
         status: str | None = None,
