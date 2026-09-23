@@ -19,9 +19,9 @@ roadmap:
   current_stage: 3
   current_spike: null
   current_hito: H3-cerrado
-  next_milestone_gate: H4-draft
-  current_workitem: h3-cerrado (slices 1-5)
-  next_workitem: H4 diseno (DecisionNode / workflows ciclicos / _calculate_frontier fix)
+  next_milestone_gate: H4-diseno
+  current_workitem: h3-auditoria-penal-vs-UAT
+  next_workitem: H4 Expansion controlada (GraphExpansion/GraphPatch) o H6 multipropósito (Character/StoryArc)
 
 python:
   minimum: "3.11"
@@ -131,9 +131,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 238
-  passed: 238
-  duration_s: 94.50
+  total: 263
+  passed: 263
+  duration_s: 118
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -148,31 +148,50 @@ tests:
     - tests/test_runcontroller.py: 10
     - tests/test_dsl.py: 18
     - tests/test_git_source.py: 8
+    - tests/test_knowledge_storage.py: 17
+    - tests/test_knowledge_controller.py: 17
     - tests/test_knowledge_invalidation.py: 10
     - tests/test_context_controller.py: 13
+    - tests/test_skill_importer.py: 8
+    - tests/test_h4_cycles_and_decision.py: 7
+    - tests/test_paths.py: 10
     - tests/test_reconcile_one_node.py: 4
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
-    handoff.py: 100%
-    agent.py: 100%
-    workflow.py: 100%
-    runtime_types.py: 100%
-    dsl.py: ~98%
-    runcontroller.py: 96%
-    bricks.py: 91%
-    storage.py: 90%   # "replace" no-op branch
+    runtime_types.py: 97%
+    agent.py: 97%
+    dsl.py: 97%
+    handoff.py: 95%
+    runcontroller.py: 94%
+    storage.py: 94%
+    knowledge.py: 96%
+    knowledge_controller.py: 92%
     catalog.py: 88%
+    knowledge_invalidator.py: 88%
     registry.py: 88%
+    bricks.py: 91%
+    skill_importer.py: 89%
+    git_source.py: 86%
+    context_controller.py: 81%
+    paths.py: 81%   # ANTES 59%. Refactor + test_paths.py cubrio XDG y helpers.
     parser.py: 77%
-    plan_loader.py: ~80%
-    paths.py: 59%     # Windows LOCALAPPDATA
-    cli.py: cobertura-por-exit-code; no pytest-cov util porque CLI es subprocess (8 tests subprocess + 1 in-process + 10 CLI previos)
+    recipe.py: 73%
+    plan_loader.py: 69%
+    __main__.py: 0%  # entry-point puro de CLI, no testeable con pytest-cov
+    cli.py: cobertura-por-exit-code; subprocess tests + in-process + UAT scripts
+  nota_cobertura: >
+    Cobertura RE-MEDIDA con pytest --cov=skillgraph el 2026-09-23
+    (post-commits ff433aa + 1039171). Cifras validan: paths.py ya no es
+    59% sino 81% (refactor + 10 tests nuevos). registry.py sigue en 88%
+    (validado, no heredado). Modulos nuevos en esta iniciativa:
+    skill_importer.py 89% (8 tests), knowledge.py 96% (growing).
 
 uat:
   audit_script: tests/uat_audit.py
   evidence_dir: tests/uat-evidence/
-  audit_revision: "b7b2d5e (post-dedup runcontroller)"
+  audit_revision: "1039171 (post-paths-81%+source-validation)"
+  last_full_audit_run: "2026-09-23"
   status:
     UAT-01: PASS   # proyecto sin contaminacion
     UAT-02: PASS   # aislamiento proyectos
@@ -194,24 +213,33 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 11:24
-  resultado: "234 passed in 91.26s"
-  working_tree: dirty (post-slice-5, antes de commit docs)
+  ultima_ejecucion_local: 2026-09-23 12:38
+  resultado: "263 passed in 118.43s"
+  working_tree: clean (despues de commits ff433aa + 1039171)
 
-open_questions: []  # H3 cerrado; D2/D3/D4 firmadas y aplicadas.
+open_questions: []
+nota_honesta_revision: >
+  Tras la ultima pasada (10 tests nuevos en test_paths.py + fix de
+  SourceKind) el working tree esta en estado committed. Cobertura
+  re-medida con pytest --cov=skillgraph; cifras en coverage_snapshot.
+  No se ha inflando UAT count: 12/16 PASS, 4 BLOCKED honestos.
+  Datos heredados del STATE.yaml previos (paths.py 59%, registry.py 88%)
+  quedaron validados o actualizados con evidencia empirica.
 
 deuda_tecnica_residual:
   - "H4 Expansion controlada (GraphExpansion/GraphPatch/policy engine): UAT-08/09 BLOCKED. NO implementado."
   - "H6 multipropósito (Character/StoryArc): UAT-12 BLOCKED. NO implementado."
   - "H7 promocion entre bases: UAT-13 BLOCKED. NO implementado."
-  - "UAT-16 ahora PASS: handoff_json persiste en node_executions. Pero NO hay API CLI para inspeccionar ejecuciones antiguas tras cambio de revision (consulta directa al storage). Mejora futura: comando 'sg run inspect <run_id> --node <name>'."
-  - "UAT-11 H5 skill_import implementado: scripts Python NUNCA se ejecutan. Capacidades extraidas son SENALES heuristicas (headers Markdown), NO decisiones verificadas. Limitacion: capacidades no se interpretan (sin Adapter real); quedan como headers literales en el informe."
-  - "Workflows ciclicos con self-loop sin max_visits: quedan ACTIVE infinitamente (limite viene del caller --max-iterations)."
+  - "UAT-16 ahora PASS: handoff_json persiste en node_executions. Pero NO hay API CLI para inspeccionar ejecuciones antiguas tras cambio de revision. Mejora futura: 'sg run inspect <run_id> --node <name>'."
+  - "UAT-11 H5 skill_import: scripts Python NUNCA se ejecutan. Capacidades extraidas son SENALES heuristicas (headers Markdown), NO decisiones verificadas."
+  - "Workflows ciclicos con self-loop sin max_visits: limite viene del caller --max-iterations."
   - "Token budget aproximado (chars, no tokens reales): tiktoken solo si H4+ exige Adapter real."
   - "Duplicacion catalog.py/storage.py: defensa en profundidad intencional. No unificar sin diseno."
-  - "paths.py 59%: rama Windows LOCALAPPDATA no ejecutada en CI Linux. Aceptable mientras CI corra en Linux."
-  - "registry.py 88%: validaciones con tipos no-objeto. Cubierto via brick CLI."
+  - "paths.py 81%: rama nt (LOCALAPPDATA/USERPROFILE) no ejercitable en CI Linux. Documentada en docstring como limitacion aceptada. Cobertura +22pts en este turno."
+  - "registry.py 88% validado: mismas cifras; no es dato heredado falso."
+  - "plan_loader.py 69%, parser.py 77%, recipe.py 73%: modulos con minimo de cobertura util pero mejorables. NO son deuda critica funcional."
+  - "SourceKind Literal validado en runtime: nuevo __post_init__ valida kind contra typing.get_args. Cierra bug silencioso donde from __future__ import annotations desactiva Literal-check en runtime."
 
 blockers: []
 
-next_action: "12/16 UAT PASS, 0 FAIL, 4 BLOCKED honestos (H4 Expansion controlada, H6 multipropósito, H7 promocion). Siguiente: H4 Expansion controlada o H6 multipropósito. Operador decide."
+next_action: "Auditar H3 slices 1-5 contra UAT.md criterios legales exactos (penal total) y cerrar honestamente."
