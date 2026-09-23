@@ -35,7 +35,7 @@ Most agent frameworks conflate **describing** a capability with **executing** it
 
 ### Current state
 
-**Blueprint v1 is 100% complete.** The roadmap spanned 8 milestones (H0..H7) and 16 acceptance tests; all of them now have an implementation and verified evidence.
+**Blueprint v1 is complete, including the public CLI integration (H8).** The roadmap now spans 10 milestones (H0..H6, H8, H9 — see `specs/adr/ADR-0013-divergencia-h7-y-rectificacion-v060.md` for the renumbering) and 16 acceptance tests; all of them have an implementation and verified evidence.
 
 | Component | State | Evidence |
 |---|---|---|
@@ -45,7 +45,8 @@ Most agent frameworks conflate **describing** a capability with **executing** it
 | Controlled expansion (H4, slices 1+2+3) | ✅ Closed | `tests/test_h4*` |
 | Skill import (H5) | ✅ Closed | `tests/test_skill_importer.py` |
 | Multipurpose: Domain Packs (H6) | ✅ Closed | `tests/test_h6_multiproposito.py` |
-| Cross-base promotion (H7) | ✅ Closed | `tests/test_h7_promocion.py` |
+| Cross-base promotion (H7→H9, library) | ✅ Closed | `tests/test_h7_promocion.py` |
+| **Public CLI integration (H8)**: `sg pack load`, `sg promotion submit/list/reconcile` with crash failpoints | ✅ Closed | `tests/test_h8_public_paths.py`, `tests/uat-evidence/UAT-12.json`, `tests/uat-evidence/UAT-13.json` |
 | **16/16 UATs** | **✅ PASS** | `tests/uat-evidence/*.json` |
 
 ### Installation
@@ -94,9 +95,9 @@ Internally, the codebase mirrors Haskell-style functional patterns (ADTs, immuta
 
 These are documented honestly in `CHANGELOG.md`:
 
-- **CLI hooks for H6/H7** (Domain Pack loading, promotion submit/list/reconcile). The Python API works; the CLI surface is a deferrable polish.
-- **Stress tests** (kill -9, real concurrency). The current E2E suite is *representative*, not *acceptance-aligned*.
+- **Stress tests** (kill -9, real concurrency). The current E2E suite is *representative*, not *acceptance-aligned*. Promotion crash-recovery is covered by an injected failpoint (`SKILLGRAPH_FAILPOINT_PROMOTION`), not by real concurrency.
 - **CLI 1st-person coverage** (in-process). E2E subprocess tests cover critical paths but aren't counted by pytest-cov.
+- **No public Storage API to list all promotions** — `sg promotion list` reads `promotion_outbox` via direct SQL (read-only in the CLI layer).
 
 ### Documentation
 
@@ -141,7 +142,7 @@ La mayoría de frameworks de agentes confunden **describir** una capacidad con *
 
 ### Estado actual
 
-**El blueprint v1 está 100% completo.** El roadmap cubrió 8 hitos (H0..H7) y 16 acceptance tests; todos tienen implementación y evidencia verificada.
+**El blueprint v1 está completo, incluida la integración pública por CLI (H8).** El roadmap cubre ahora 10 hitos (H0..H6, H8, H9 — ver `specs/adr/ADR-0013-divergencia-h7-y-rectificacion-v060.md` para la renumeración) y 16 acceptance tests; todos tienen implementación y evidencia verificada.
 
 | Componente | Estado | Evidencia |
 |---|---|---|
@@ -151,7 +152,8 @@ La mayoría de frameworks de agentes confunden **describir** una capacidad con *
 | Expansión controlada (H4, slices 1+2+3) | ✅ Cerrado | `tests/test_h4*` |
 | Importación de skills (H5) | ✅ Cerrado | `tests/test_skill_importer.py` |
 | Multipropósito: Domain Packs (H6) | ✅ Cerrado | `tests/test_h6_multiproposito.py` |
-| Promoción entre bases (H7) | ✅ Cerrado | `tests/test_h7_promocion.py` |
+| Promoción entre bases (H7→H9, biblioteca) | ✅ Cerrado | `tests/test_h7_promocion.py` |
+| **Integración pública CLI (H8)**: `sg pack load`, `sg promotion submit/list/reconcile` con failpoints de crash | ✅ Cerrado | `tests/test_h8_public_paths.py`, `tests/uat-evidence/UAT-12.json`, `tests/uat-evidence/UAT-13.json` |
 | **16/16 UATs** | **✅ PASS** | `tests/uat-evidence/*.json` |
 
 ### Instalación
@@ -200,9 +202,9 @@ Internamente, el código sigue patrones funcionales estilo Haskell (ADTs, inmuta
 
 Documentado honestamente en `CHANGELOG.md`:
 
-- **CLI hooks para H6/H7** (carga de Domain Packs, submit/list/reconcile de promoción). La API Python funciona; exponerla al CLI es un pulido diferible.
-- **Tests de stress** (kill -9, concurrencia real). La suite E2E actual es *representative*, no *acceptance-aligned*.
+- **Tests de stress** (kill -9, concurrencia real). La suite E2E actual es *representative*, no *acceptance-aligned*. La recuperación ante crash de promoción está cubierta por un failpoint inyectado (`SKILLGRAPH_FAILPOINT_PROMOTION`), no por concurrencia real.
 - **Cobertura 1st-person del CLI** (in-process). Los tests E2E subprocess cubren los caminos críticos pero no cuentan en pytest-cov.
+- **Sin API pública de Storage para listar todas las promociones** — `sg promotion list` lee `promotion_outbox` por SQL directo (solo lectura, en la capa CLI).
 
 ### Documentación
 
