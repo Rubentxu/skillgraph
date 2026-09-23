@@ -212,11 +212,12 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 437
-  passed: 437
-  duration_s: 83
+  total: 450
+  passed: 450
+  duration_s: 116
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
+  h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -253,7 +254,8 @@ tests:
     - tests/test_h8_public_paths.py: 5
     - tests/test_h9_storage_promo_list.py: 10
     - tests/test_h9_cli_promo_list_inproc.py: 5
-    - tests/test_h9_cli_inproc_promo_pack.py: 12   # H9-InProcess-2: submit/reconcile/pack/show
+    - tests/test_h9_cli_inproc_promo_pack.py: 12
+    - tests/test_h9_storage_find_active_run.py: 13   # H9-BSlice2: find_active_run + invariantes
   coverage_snapshot_2026-09-23:
     errors.py: 100%
     runtime.py: 100%
@@ -328,8 +330,11 @@ nota_honesta_revision: >
   CI pasa de 9/16 (manuales) a 16/16 (todos con test pytest vivo).
 
 deuda_tecnica_residual:
+  - "H9-BSlice2 cerrado (commits 54d9015 + 3fe5940): API publica Storage.find_active_run(tenant_id, project_id); el runner delega en metodos public Storage en 3 helpers antes con SQL directo. +13 tests (10 API + 3 invariantes sobre acceso a storage._conn en helpers). Limitacion storage._conn en runner CERRADA para los 3 helpers de dominio (queda 1 sitio en cmd_run para RunController, scope aparte)."
   - "H9-InProcess-2 cerrado (commit 7a67bcd): cobertura in-process para promotion submit (4 escenarios), promotion reconcile (2 escenarios nominales), pack load (3 escenarios), expansion show (3 escenarios). +12 tests. Limitacion 'cobertura in-process del CLI' CERRADA para los 4 comandos mas criticos de H8."
   - "H9-BSlice1 cerrado (commit fe6b020): API publica Storage.list_promotions(status=None); cmd_promotion_list ya no accede a storage._conn. +15 tests (10 storage + 5 in-process CLI). Limitacion 'sin API Storage listar promotions' CERRADA."
+  - "storage._conn restante: linea 1315 de cmd_run, pasa conn al RunController. Cambio de interfaz mayor (contrato RunController.storage_input). NO tocado en H9-BSlice2 por scope. Candidato para H9-BSlice3 si surge demanda."
+  - "_source_to_payload y _entity_to_payload ahora filtran por project_id (antes solo source_id+tenant_id): mejora de aislamiento entre proyectos (cumple blueprint 09), pero tambien un cambio de comportamiento - documentado en el commit."
   - "Cobertura in-process del CLI: TODOS los comandos criticos del roadmap cerrados (promotion list/submit/reconcile, pack load, expansion show). Pendiente menor: brick register, run, knowledge compile/trace (NO criticos; quedan cubiertos por subprocess E2E y unit tests)."
   - "Otras llamadas storage._conn en runner: lineas 283 (init), 998 y 1021 (cmd_expansion_show), 1302 (otro hook). H9-BSlice2 si surge demanda real."
   - "Pack load NO es idempotente: segunda carga devuelve EXIT_VALIDATION (12) por diseno (resource_kind=DomainPack colisiona con el hash persistido). Documentado en test dedicado."
