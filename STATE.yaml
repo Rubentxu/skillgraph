@@ -313,6 +313,7 @@ deuda_tecnica_residual:
   - "registry.py 88% validado: mismas cifras; no es dato heredado falso."
   - "recipe.py 100% en este turno (era 73%): 22 tests focalizados en __post_init__ de ObligatorySelector/ContextRecipe y validacion from_dict. 0 LoC produccion modificado. TERCER modulo critico con cobertura <80% cerrado en este turno (junto a parser y plan_loader). Sin mas modulos de produccion testeables <80% en el proyecto."
   - "SourceKind Literal validado en runtime: nuevo __post_init__ valida kind contra typing.get_args. Cierra bug silencioso donde from __future__ import annotations desactiva Literal-check en runtime."
+  - "tests/uat_audit.py: REPO_ROOT hardcodeado al path absoluto del checkout (/var/mnt/DiscoChino2-fast/...). Rompe portabilidad: tests fallan en cualquier otro checkout. Detectado en fix(tests) 7b81df7 (se opto por no importar uat_audit.py para evitar arrastrar el REPO_ROOT). Fix real: derive REPO_ROOT de Path(__file__).parent.parent. Fuera de scope de esta sesion; anotado como deuda."
   - "H5 'conservar material original' DECIDIDO (specs/h5-source-conservation-decision.md): referencia (path+content_hash), NO duplicar bytes. Justificado por blueprint §10 §5-6."
 
 blockers: []
