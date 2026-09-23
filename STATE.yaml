@@ -292,6 +292,7 @@ tests:
     - tests/test_h9_coverage_registry.py: 3   # H9-Coverage-6: cobertura resources/registry.py (93%->95%)
     - tests/test_h9_coverage_workflow.py: 8   # H9-Coverage-7: cobertura resources/workflow.py (93%->100%)
     - tests/test_h9_coverage_runcontroller.py: 3   # H9-Coverage-8: cobertura runtime/runcontroller.py (94%->96%)
+    - tests/test_h9_coverage_knowledge_controller.py: 5   # H9-Coverage-9: cobertura knowledge/knowledge_controller.py (93%->96%)
   coverage_snapshot_2026-09-23:
     # Modulos con cobertura real (medida con `pytest --cov=skillgraph`).
     # Snapshot re-medido el 2026-09-23 21:42 post-H9-Coverage-3.
@@ -351,7 +352,8 @@ tests:
     resources/catalog.py 100% (+4 H9-Coverage-5),
     resources/registry.py 95% (+3 H9-Coverage-6),
     resources/workflow.py 100% (+8 H9-Coverage-7),
-    runtime/runcontroller.py 96% (+3 H9-Coverage-8).
+    runtime/runcontroller.py 96% (+3 H9-Coverage-8),
+    knowledge/knowledge_controller.py 96% (+5 H9-Coverage-9).
     Modulos con SQL directo en `_conn.execute` (knowledge/context_controller
     82%) quedan como deuda tecnica rastreada: requiere refactor a
     Storage API publica.
