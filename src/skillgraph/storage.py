@@ -239,6 +239,34 @@ CREATE TABLE IF NOT EXISTS outcome_trace_links (
     position      INTEGER NOT NULL,
     PRIMARY KEY (trace_id, link_kind, link_id)
 );
+
+-- ============================================================
+-- H7 release candidate (UAT-13): outbox de promocion entre bases.
+-- Tabla nueva; no se modifica ninguna tabla existente.
+-- ============================================================
+-- Una propuesta de promocion es un mensaje de outbox persistente
+-- que se aplica idempotentemente del lado destino. Si el proceso
+-- se interrumpe entre el INSERT origen y el apply destino, la
+-- reconciliacion (status=PENDING) lo completa sin duplicar
+-- (idempotency_key = source_project + knowledge_ref).
+
+CREATE TABLE IF NOT EXISTS promotion_outbox (
+    proposal_id     TEXT PRIMARY KEY,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    tenant_id       TEXT NOT NULL,
+    source_project  TEXT NOT NULL,
+    target_catalog  TEXT NOT NULL,
+    knowledge_ref   TEXT NOT NULL,
+    payload_json    TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'PENDING'
+                    CHECK (status IN ('PENDING', 'IN_PROGRESS', 'PUBLISHED', 'FAILED')),
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    published_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_promotion_outbox_status
+    ON promotion_outbox(status);
 """
 
 
@@ -878,6 +906,124 @@ class Storage:
             params.append(event_kind)
         q += " ORDER BY sequence ASC"
         return self._conn.execute(q, params).fetchall()
+
+    # ----- H7 promocion entre bases (UAT-13) -----
+
+    def register_promotion(
+        self,
+        *,
+        proposal_id: str,
+        idempotency_key: str,
+        tenant_id: str,
+        source_project: str,
+        target_catalog: str,
+        knowledge_ref: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Inserta una propuesta de promocion en el outbox (status=PENDING).
+
+        Si `idempotency_key` ya existe, lanza `IdentityConflictError`
+        (la promocion ya fue registrada; no se duplica).
+        """
+        import json as _json
+
+        with self._tx() as cur:
+            existing = cur.execute(
+                "SELECT proposal_id FROM promotion_outbox WHERE idempotency_key = ?",
+                (idempotency_key,),
+            ).fetchone()
+            if existing is not None:
+                raise IdentityConflictError(
+                    f"Promocion duplicada: idempotency_key={idempotency_key!r} "
+                    f"ya registrada como proposal_id={existing['proposal_id']!r}"
+                )
+            cur.execute(
+                """
+                INSERT INTO promotion_outbox
+                    (proposal_id, idempotency_key, tenant_id, source_project,
+                     target_catalog, knowledge_ref, payload_json, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                """,
+                (
+                    proposal_id,
+                    idempotency_key,
+                    tenant_id,
+                    source_project,
+                    target_catalog,
+                    knowledge_ref,
+                    _json.dumps(payload, sort_keys=True),
+                ),
+            )
+
+    def get_promotion(self, proposal_id: str) -> dict[str, Any] | None:
+        """Devuelve la propuesta por id, o None si no existe."""
+        import json as _json
+
+        row = self._conn.execute(
+            "SELECT * FROM promotion_outbox WHERE proposal_id = ?",
+            (proposal_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["payload"] = _json.loads(d.pop("payload_json"))
+        return d
+
+    def list_pending_promotions(self) -> list[dict[str, Any]]:
+        """Lista propuestas con status IN ('PENDING', 'IN_PROGRESS') para reconciliacion."""
+        import json as _json
+
+        rows = self._conn.execute(
+            """
+            SELECT * FROM promotion_outbox
+            WHERE status IN ('PENDING', 'IN_PROGRESS')
+            ORDER BY created_at ASC
+            """
+        ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["payload"] = _json.loads(d.pop("payload_json"))
+            result.append(d)
+        return result
+
+    def mark_promotion_in_progress(self, proposal_id: str) -> bool:
+        """Pasa de PENDING a IN_PROGRESS. Devuelve True si transiciono."""
+        cur = self._conn.execute(
+            """
+            UPDATE promotion_outbox
+            SET status = 'IN_PROGRESS', attempts = attempts + 1,
+                updated_at = datetime('now')
+            WHERE proposal_id = ? AND status = 'PENDING'
+            """,
+            (proposal_id,),
+        )
+        return cur.rowcount > 0
+
+    def mark_promotion_published(self, proposal_id: str) -> bool:
+        """Pasa de IN_PROGRESS a PUBLISHED. Devuelve True si transiciono."""
+        cur = self._conn.execute(
+            """
+            UPDATE promotion_outbox
+            SET status = 'PUBLISHED', updated_at = datetime('now'),
+                published_at = datetime('now')
+            WHERE proposal_id = ? AND status = 'IN_PROGRESS'
+            """,
+            (proposal_id,),
+        )
+        return cur.rowcount > 0
+
+    def mark_promotion_failed(self, proposal_id: str) -> bool:
+        """Marca FAILED para inspeccion manual."""
+        cur = self._conn.execute(
+            """
+            UPDATE promotion_outbox
+            SET status = 'FAILED', updated_at = datetime('now')
+            WHERE proposal_id = ? AND status IN ('PENDING', 'IN_PROGRESS')
+            """,
+            (proposal_id,),
+        )
+        return cur.rowcount > 0
 
 
 # --- Helpers de conversion row -> ADT -------------------------------------
