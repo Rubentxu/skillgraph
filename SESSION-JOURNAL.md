@@ -359,3 +359,61 @@ disciplina de vertical slices y TDD focalizado; no saltar a Etapa 3.
   antes de codificar Slice 1.
 - **Después**: H4+ DecisionNode (workflows cíclicos). Fuera de H3.
 
+## 2026-09-23 — Sesión 6: hygiene + D1 spike + Slice 1 sub-spec
+
+### Resumen
+
+- **Modo AUTO continuo** desde la sesión 5.
+- 4 commits nuevos: formato obsoleto en cli.py, gitignore de
+  coverage, sub-spec Slice 1 detallado, STATE sincronizado.
+- **161 tests verde** (sin cambios — trabajo de diseño y hygiene).
+- TODO/STATE/CURRENT auditados y reconciliados.
+
+### Commits nuevos
+
+24. `c9350b1` style(cli): aplicar ruff format (HEAD quedaba con formato obsoleto)
+25. `642ee85` chore: anadir .coverage* a .gitignore
+26. `13c1942` spec(h3-s1): sub-spec de Slice 1 (Knowledge ADT + Storage)
+27. `f6432ed` docs(state): sub-spec Slice 1 registrado
+28. (este commit) docs: CURRENT/STATE honestos con realidad 24 commits
+
+### Decisiones tomadas durante AUTO
+
+- **Spike D1 (dulwich vs pygit2)**: tabla comparativa con tiempos
+  reales (5.76 ms vs 103.45 ms), pesos (7 MB vs 17 MB), cross-check
+  de SHAs OK. Decisión cerrada: `dulwich` (pure Python, local-first).
+- **Sub-spec Slice 1**: 457 líneas con 11 secciones, ADT frozen+slots,
+  schema SQL de 7 tablas, 17 tests propuestos, 11 métodos Storage,
+  4 errores nuevos, 3 riesgos identificados (R1-R3). NO se ejecuta
+  antes de firma del spec padre (D2, D3, D4).
+- **Hygiene**: HEAD tenía formato obsoleto en `cli.py` (varias firmas
+  multilínea donde ruff actual quiere una línea). Aplicado + commit
+  separado. `.coverage` añadido a `.gitignore` para evitar acumulación
+  de artefactos de testing local.
+
+### Bugs cazados durante AUTO
+
+- **HEAD no pasaba `ruff format --check`** aunque los tests pasaran.
+  El CI tenía un format gate pero el formato de HEAD era obsoleto.
+  Aplicado formato actual y commit separado. Lección: ejecutar
+  `ruff format` antes de commit, no después.
+- **`git rm --cached` sobre archivo no trackeado**: aunque el comando
+  no falla, deja un `D` fantasma en `git status`. Reseteado y borrado
+  con `rm -f` antes de commit.
+
+### Cierre honesto de capacidad
+
+- **H2 cerrado** (sesión 4): sin cambios.
+- **H3 spec completo** (sesión 5+6):
+  - Spec principal 364 líneas (D1 cerrada, D2/D3/D4 pendientes).
+  - Sub-spec Slice 1 457 líneas, ejecutable tras firma.
+- **24 commits limpios en main**, working tree clean, 161 tests verde.
+- **Deuda consciente H2**: controller NO soporta workflows cíclicos.
+
+### Siguiente paso
+
+- **Ahora**: el spec H3 espera tu firma (D2 brick, D3 sync invalidación,
+  D4 token budget). Mi recomendación por defecto si me das OK global:
+  brick + warning-strict + caracteres. Sin tu firma, no implemento.
+- **Después**: H4+ DecisionNode (workflows cíclicos). Fuera de H3.
+

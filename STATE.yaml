@@ -18,10 +18,10 @@ goal:
 roadmap:
   current_stage: 2
   current_spike: null
-  current_hito: H2
-  current_workitem: h3-spec-borrador (903f252)
-  next_milestone_gate: H3
-  next_workitem: firma-spec-h3 + slice-1 (Knowledge ADT + Storage delta)
+  current_hito: H3-draft
+  next_milestone_gate: H3-firma
+  current_workitem: h3-spec-borrador + h3-slice-1-subspec (903f252, 0e94e16, 13c1942)
+  next_workitem: firma-spec-h3 + slice-1-impl (Knowledge ADT + Storage delta)
 
 python:
   minimum: "3.11"
@@ -81,11 +81,11 @@ workstreams:
   - id: ci-minimo
     items: [scripts-ci-sh]
     status: completed
-    commits: ["4d8e80c"]
+    commits: ["4d8e80c", "c9350b1", "642ee85"]
   - id: deuda-storage-diagnostico
-    items: [storage-coverage-90-real-branches]
+    items: [storage-coverage-90-real-branches, gitignore-coverage]
     status: completed
-    commits: ["ba6ccf2"]
+    commits: ["ba6ccf2", "642ee85"]
   - id: agents-md-section-11
     items: [haskell-inspired-functional-programming]
     status: completed
@@ -152,8 +152,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 10:05
-  resultado: "161 passed in 20.89s"
+  ultima_ejecucion_local: 2026-09-23 10:30
+  resultado: "161 passed in 85.98s"
+  working_tree: clean
 
 open_questions:
   - "H3 D2: ContextRecipe como brick (recomendacion: SI)"
