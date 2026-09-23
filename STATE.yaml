@@ -72,8 +72,9 @@ workstreams:
   - id: spec-h3-borrador
     items: [knowledge-adt, context-controller, knowledge-controller, git-fingerprint, invalidation, outcome-trace]
     status: draft
-    commits: ["903f252", "0e94e16"]
+    commits: ["903f252", "0e94e16", "13c1942"]
     spec: specs/h3-knowledge.md
+    sub_specs: [specs/h3-slice-1.md]
     pending_decisions: [D2-contextrecipe-brick, D3-invalidacion-sync, D4-token-budget]
     closed_decisions:
       D1-git-lib: {choice: dulwich, commit: 0e94e16, evidence: spike /tmp/sg-git-spike}
@@ -99,7 +100,8 @@ deliverables:
   - ".gitattributes con LF + diffs limpios"
   - "mise.toml: python 3.13.15, uv 0.12.17, tasks sync/test/lint/format/cli"
   - "scripts/ci.sh: gate unico ejecutable (ruff format + ruff check + pytest)"
-  - "specs/h3-knowledge.md: spec H3 BORRADOR (NO firmado, 4 decisiones pendientes)"
+  - "specs/h3-knowledge.md: spec H3 BORRADOR (D1 cerrada con spike, D2/D3/D4 pendientes de firma)"
+  - "specs/h3-slice-1.md: sub-spec Slice 1 (Knowledge ADT + Storage delta) con 17 tests propuestos"
   - "CURRENT.md, STATE.yaml, SESSION-JOURNAL.md"
   - "AGENTS.md cerrado con 11 secciones (incluida §11 Haskell-inspired)"
   - "uv.lock reproducible"
