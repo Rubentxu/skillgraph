@@ -72,9 +72,11 @@ workstreams:
   - id: spec-h3-borrador
     items: [knowledge-adt, context-controller, knowledge-controller, git-fingerprint, invalidation, outcome-trace]
     status: draft
-    commits: ["903f252"]
+    commits: ["903f252", "0e94e16"]
     spec: specs/h3-knowledge.md
-    pending_decisions: [D1-git-lib, D2-contextrecipe-brick, D3-invalidacion-sync, D4-token-budget]
+    pending_decisions: [D2-contextrecipe-brick, D3-invalidacion-sync, D4-token-budget]
+    closed_decisions:
+      D1-git-lib: {choice: dulwich, commit: 0e94e16, evidence: spike /tmp/sg-git-spike}
   - id: ci-minimo
     items: [scripts-ci-sh]
     status: completed
@@ -152,7 +154,6 @@ ci:
   resultado: "161 passed in 20.89s"
 
 open_questions:
-  - "H3 D1: pygit2 vs dulwich (recomendacion: dulwich; pendiente spike 1h)"
   - "H3 D2: ContextRecipe como brick (recomendacion: SI)"
   - "H3 D3: sincronizacion de invalidacion con runs ACTIVE (recomendacion: warning + strict opcional)"
   - "H3 D4: semantica del token budget (recomendacion: caracteres aproximados, NO tokens reales)"
@@ -167,4 +168,4 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "Resolver las 4 decisiones del spec H3 (D1 dulwich/pygit2, D2 brick, D3 sync invalidacion, D4 token budget) y firmarlo; luego arrancar Slice 1 (Knowledge ADT + Storage delta)."
+next_action: "Resolver las 3 decisiones restantes del spec H3 (D2 brick, D3 sync invalidacion, D4 token budget) y firmarlo; D1 ya cerrada (dulwich, commit 0e94e16). Tras firma, arrancar Slice 1."
