@@ -491,13 +491,13 @@ class RunController:
                 plan=plan,
             )
         except SkillGraphError as exc:
-            self._mark_node_failed(
+            self._fail_node_with(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 run_id=run_id,
                 node_execution_id=node_execution_id,
                 node_name=node_name,
-                error=f"{type(exc).__name__}: {exc}",
+                exc=exc,
             )
             return False
         context_hash = handoff.context_hash
@@ -531,14 +531,13 @@ class RunController:
         try:
             result = self._adapter.invoke(handoff)
         except Exception as exc:
-            error_msg = f"{type(exc).__name__}: {exc}"
-            self._mark_node_failed(
+            self._fail_node_with(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 run_id=run_id,
                 node_execution_id=node_execution_id,
                 node_name=node_name,
-                error=error_msg,
+                exc=exc,
             )
             return False
 
@@ -680,6 +679,30 @@ class RunController:
             expected_result=node.expected_result,
         )
         return compiled.knowledge
+
+    def _fail_node_with(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        node_execution_id: str,
+        node_name: str,
+        exc: BaseException,
+    ) -> None:
+        """Marca el nodo FAILED con la causa de una excepción, sin re-lanzar.
+
+        Helper local para `_execute_one`: centraliza el formato
+        `"{type(exc).__name__}: {exc}"` y delega en `_mark_node_failed`.
+        """
+        self._mark_node_failed(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            node_name=node_name,
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
     def _mark_node_failed(
         self,
