@@ -2885,3 +2885,22 @@ proyecto (consigna-por-slice) sobre la regla más permisiva del
 system prompt (AUTO mode salta confirmaciones intra-ciclo). En
 futuras sesiones: esperar decisión del operador después de cada
 slice, incluso si AUTO mode permitiría continuar.
+
+### Inventario pre-push para decisión del operador
+
+**2 tags locales no están en remote** (además de v0.7.3):
+
+- `v0.7.0` → `2ae1bca5d82f59ae257ed300d621368268e7d8a4`
+  (commit de regeneración de UAT evidence, no el release original)
+- `v0.7.3` → `6a536acfa0566ae785fa42a9d72f24e13e973877`
+  (release LIMITACION-7)
+
+Si el operador hace `git push origin main --tags`, AMBOS tags se
+publicarán. El operador debe confirmar si quiere publicar v0.7.0
+re-anclado o solo v0.7.3.
+
+**Comandos selectivos disponibles**:
+
+- Push de todo: `git push origin main --tags`
+- Push de un solo tag: `git push origin v0.7.3`
+- Push sin tags: `git push origin main`
