@@ -36,3 +36,5 @@ external/inputs/
 # Audit bundles reproducibles (se reconstruyen via git archive + tar,
 # no necesitan vivir en el repo; ver reports en audits/*.md)
 audits/*-audit-bundle.tar.gz
+.atl/
+.tool-versions
