@@ -3077,3 +3077,34 @@ ciclo ya marca la regla general: refactor interno sin tag.)
 
 Sigo bajo la regla del operador: push del repo SkillGraph requiere
 OK explícito. Esta entrada no se publica remotamente.
+
+## 2026-09-24 21:11 — Refactor interno sin bump (segunda iteración)
+
+### Resumen
+
+- **Refactor `aee5cd5`** (`refactor(runtime)`): extrae
+  `_open_node_execution` y `_finalize_node_success` como helpers
+  privados en `RunController`. `_fail_node_with` ahora retorna `bool`
+  (`False`) para permitir `return self._fail_node_with(...)`.
+- `_execute_one`: 162 → **124 LoC** (colapso de 38 LoC).
+- Cobertura `runcontroller.py`: 95% mantenida.
+- Batería completa: 659 passed. Ruff limpio.
+- **CHANGELOG** entrada consolidada `b7e08ad`.
+
+### Política SEMVER aplicada
+
+Refactor puro (sin cambio de contrato público, sin fix, sin feat).
+Regla "`refactor` → sin bump". No se publica tag. Se consolida en
+el próximo MINOR.
+
+### Estado de la deuda técnica
+
+Cerrada la duplicación del RuntimeController:
+- `reconcile_run`: 122 → 100 LoC (helpers `_transition_run_state_with_event`
+  y `_is_budget_exhausted`).
+- `_execute_one`: 162 → 124 LoC (helpers `_open_node_execution`,
+  `_finalize_node_success`, `_fail_node_with` con `-> bool`).
+- 4 tests unitarios nuevos para `_is_budget_exhausted`.
+- Cobertura de runcontroller.py: 84% → 95%.
+
+Sin push. Regla del operador sigue activa.
