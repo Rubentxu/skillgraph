@@ -22,6 +22,11 @@ goal:
   reopened_reason: "Operador comando 'todo esta en el roadmap, siguelo aplicando criterio' -> autoriza ejecutar H6 (UAT-12) y H7 (UAT-13) con criterio propio. Iniciativa reabierta en estado in_progress, no COMPLETED."
   closed_at_v060: "2026-09-23 tras tag v0.6.0"
   closure_rationale: "Cierre DEFINITIVO tras 5 releases (v0.3.0 / v0.4.0 / v0.4.1 / v0.5.0 / v0.6.0). 405/405 tests pytest verde. 16/16 UAT PASS, 0 FAIL, 0 BLOCKED. TODOS los hitos del blueprint cerrados (H0..H7). 32 tests nuevos (12 H6 + 16 H7 + 4 gap-test inversion). CHANGELOG.md actualizado, STATE/CURRENT/JOURNAL sincronizados. Sin deuda testeable abierta. Initiative COMPLETED. El checkpoint durable permite reanudar en cualquier sesion futura sin perdida de contexto."
+  # Post-bloomberg v0.7.0 (refactor follow-up, no reabre iniciativa):
+  refactor_v070: true
+  refactor_v070_closed_after_tag: v0.7.0   # tag: 6d7e66f
+  refactor_v070_closed_at: 2026-09-24
+  refactor_v070_rationale: "Refactor arquitectonico post-cierre. Sin reabrir la iniciativa (ya COMPLETED en v0.6.0); se cierra como 'refactor follow-up cerrado'. (1) context_controller deja de acceder a storage._conn (4 sitios SQL -> 0; regla 'Storage encapsula SQL' cumplida completa); (2) 20 shims de retro-compatibilidad eliminados de src/skillgraph/ raiz; (3) 37 ficheros de tests reescritos con imports directos a bounded contexts (~118 imports). 619/619 tests PASS, 16/16 UAT PASS, 0 BLOCKED. 3 commits del refactor (2751bc8 H9-BSlice4 refactor 1; f2cbb2f refactor 2 shims removal) + 3 commits docs (391c3bf sync, f0b475d sync post-refactor, 9d0b9cf CHANGELOG). ADR-0014 documenta la decision material (API publica + breaking change). Spec h9-coverage-context-controller.md. Cobertura 85% branch (context_controller 82% por ramas defensivas, no por SQL — documentado honestamente en CURRENT.md 2026-09-24 06:46)."
 
 roadmap:
   current_stage: 5

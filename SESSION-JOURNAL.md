@@ -2644,3 +2644,92 @@ la deuda `context_controller 82% SQL` documentada en STATE.yaml:
 - Spec radicado en `specs/h9-coverage-context-controller.md`.
 - Sin remote `git push` (orden del operador).
 
+## 2026-09-24 06:46 — Tag v0.7.0 emitido y cierre confirmado
+
+### Comando del operador
+
+Modo `aprobación total` (prompt-overlay SDDK): "sigue criterio según
+las recomendaciones". El "siguiente" del informe anterior era
+"Tag v0.7.0 MINOR con CHANGELOG + audit + entrada adicional en JOURNAL".
+Procedí sin más interrupción.
+
+### Pasos ejecutados
+
+1. **`uat_audit` regenerado contra HEAD post-docs-sync** (commit
+   `f0b475d`): 16/16 PASS, 0 FAIL, 0 BLOCKED. UAT-08/09 revision
+   `f2cbb2f` → `f0b475d` automáticamente (el audit ata la
+   evidencia al HEAD).
+
+2. **CHANGELOG.md actualizado** con bloque `[0.7.0] - 2026-09-24`
+   en commit `9d0b9cf`:
+   - Resumen del refactor arquitectónico.
+   - Decisión SemVer documentada: BREAKING pero MINOR (sin
+     importadores externos, impacto real CERO). Honesto.
+   - Sección BREAKING CHANGES listando los 20 mapeos de import.
+   - Refactors (Storage API + 4 SQL directos en context_controller).
+   - Cambios estructurales (20 shims eliminados, ~118 imports
+     reescritos).
+   - Tests (+15 de contrato observable).
+   - Limitaciones honestas (context_controller 82%, no SQL).
+   - Reversibilidad (`git revert` de los 2 commits del refactor).
+
+3. **ci.sh re-corrido contra commit CHANGELOG**: 619/619 PASS
+   en 107s. Doble check.
+
+4. **Tag v0.7.0 emitido** anclado al HEAD actual:
+   - SHA inicial: `f0b475d` (docs-sync post-refactor).
+   - SHA final: `6d7e66f` (post-uat-audit regenerado contra 9d0b9cf).
+   - Movimiento del tag sin push (operación local sin impacto
+     aguas abajo).
+   - Anotación: describe el refactor con sus resultados y el
+     BREAKING CHANGE.
+
+5. **STATE.yaml goal.refactor_v070_*** aniadido: declara el cierre
+   del refactor follow-up **sin reabrir la iniciativa**
+   (que ya quedó COMPLETED en v0.6.0). El refactor v0.7.0
+   es **post-cierre** — la iniciativa ya estaba cerrada
+   y el refactor la mejora sin añadir capacidades que requieran
+   iniciativa nueva.
+
+6. **JOURNAL cierra el bucle con esta entrada**: el goal sigue
+   COMPLETED, el último tag emitido es v0.7.0 (anclado a
+   `6d7e66f`), tests 619/619 verde, UATs 16/16 verde, cobertura
+   85% branch (con `context_controller` 82% documentado
+   honestamente como ramas defensivas, no SQL).
+
+### Estado al cierre definitivo
+
+- HEAD: `6d7e66f`.
+- Tag: `v0.7.0` anclado a `6d7e66f`.
+- Tests: **619/619 PASS** en `bash scripts/ci.sh`.
+- UATs: **16/16 PASS**, 0 FAIL, 0 BLOCKED.
+- Cobertura nucleo: 100% o ≥95% excepto `context_controller` 82%
+  (limitación documentada honestamente, refactor arquitectónico
+  CERRADO — la métrica de cobertura es ortogonal).
+- Working tree: `?? .pipeline.kts`, `?? .tool-versions`,
+  `?? ci/` (CI local del operador, **NO TOCAR**).
+- Sin remote `git push` (orden del operador).
+
+### Bloqueos
+
+- **Ninguno técnico.** Tag emitido, iniciativa COMPLETED,
+  refactor follow-up cerrado. El repo está en estado estable.
+- `SDDK mode = undeclared`: sin adopción; no impide trabajo
+  local, impide delegar fases. L1..L8 del overlay respetadas.
+
+### Estado durable (PUNTO FINAL)
+
+- `CURRENT.md`: UPDATE 2026-09-24 06:46.
+- `STATE.yaml`: tests 604→619; coverage snapshot
+  `2026-09-24_post_refactor_v070` con notas honestas;
+  `refactor_v070_summary` con commits, bounded contexts
+  finales, shims borrados, breaking change y reversibilidad;
+  `goal.refactor_v070_*` con cierre del refactor follow-up.
+- `SESSION-JOURNAL.md`: 2 entradas hoy (refactor cerrado +
+  tag emitido).
+- `CHANGELOG.md`: bloque `[0.7.0] - 2026-09-24`.
+- ADR radicado en `specs/adr/ADR-0014-context-controller-storage-api-y-eliminacion-shims.md`.
+- Spec radicado en `specs/h9-coverage-context-controller.md`.
+- Tag `v0.7.0` anclado a `6d7e66f`.
+- Sin remote `git push` (orden del operador).
+
