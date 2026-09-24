@@ -2957,3 +2957,25 @@ original (`255596a`) usando `git branch <name> <sha>`.
 **Lección**: cuando se ejecute `git branch -d` con fines
 exploratorios, hacerlo SIN `-d` y verificar primero si la rama
 existe, o usar `git branch --list` antes de cualquier borrado.
+
+## 2026-09-24 17:18 — Slice H9-context-in-run cerrado (local); CHANGELOG v0.8.0; deuda CI documentada
+
+### Resumen
+
+- **H9-context-in-run** (`5289402 feat(runtime)`): RunController inyecta
+  contexto del run en Handoff vía resolver opcional `recipe_resolver`
+  (default `None` → preserva comportamiento previo). 6 tests nuevos en
+  `tests/test_h9_context_in_run.py` verde; UAT regenerados (16/16 PASS);
+  CHANGELOG v0.8.0 añadido (MINOR por backward compatibility).
+- **Deuda menor atendida** (`53548e2 chore(ci)`): `ci/run-pipelinek`
+  (lanzador portable para `.pipeline.kts` con estado externo XDG) y
+  `.gitignore` actualizado (`.atl/`, `.tool-versions`).
+- **Estado**: 4 commits sin pushear a `origin/main` + sin tag. Regla del
+  operador "NO push/tag sin autorización" se respeta. A la espera de
+  OK explícito para `git push` y para emitir `v0.8.0`.
+
+### Próximo (sin push pendiente)
+
+- Reproducir `pipelinek run --db .pipelinek/db.sqlite --control-root
+  .pipelinek/control .pipeline.kts` localmente para verificar evidencia.
+- Si pasa, pedir OK al operador para `git push` + `git tag v0.8.0`.
