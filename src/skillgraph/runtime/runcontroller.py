@@ -41,6 +41,8 @@ from skillgraph.runtime.engine import EventBuilder, EventLog
 if TYPE_CHECKING:
     from skillgraph.core.recipe import ContextRecipe
 
+from skillgraph.knowledge.context_controller import ContextController
+from skillgraph.knowledge.knowledge_controller import KnowledgeController
 from skillgraph.runtime.handoff import (
     Handoff,
     HandoffBehavior,
@@ -660,9 +662,6 @@ class RunController:
         recipe = self._recipe_resolver(recipe_ref)
         if recipe is None:
             return HandoffKnowledge(recipe_ref=recipe_ref, included=())
-        from skillgraph.knowledge.context_controller import ContextController
-        from skillgraph.knowledge.knowledge_controller import KnowledgeController
-
         kctl = KnowledgeController(
             storage=self._storage,
             tenant_id=tenant_id,
