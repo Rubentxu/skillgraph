@@ -1,0 +1,185 @@
+=== SkillGraph v0.7.3 — UAT Audit (clon del tag 6a536ac) ===
+Tag SHA:       987be068c7f2b6d17aa6c209489906f94a542568
+Codigo SHA:    6a536acfa0566ae785fa42a9d72f24e13e973877
+Clon origen:   /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph (main, a6bb5ab)
+Ruta clon:     /var/home/rubentxu/.jcode/scratch/skillgraph-v0.7.3-clone
+Python:        Python 3.13.14
+pytest:        pytest 9.1.1
+ruff:          ruff 0.16.8
+Fecha captura: 2026-09-24T12:48+02:00
+
+================================================================
+=== FASE 1: bash scripts/ci.sh (NO se ejecuta — abortaria en gate 1)
+================================================================
+La bateria oficial de CI incluye:
+  - ruff format --check   FALLA en tests/test_h9_limitacion_7_slice1.py (T19)
+  - ruff check            FALLA 1 error SIM117 (T19 nested with)
+  - pytest (gate 3)       Pasaria 637/1-skipped si llegase
+
+Se ejecutan los gates 2-3 por separado para producir evidencia
+independiente del fallo del gate 1. Ver ci-output-v0.7.3.txt.
+
+================================================================
+=== FASE 2: pytest tests/test_uat_audit.py (parametrizados)
+================================================================
+plugins: cov-7.1.0
+collecting ... collected 10 items
+
+tests/test_uat_audit.py::test_uat_wrapper_runs_and_passes[UAT-05-uat_05-PASS] PASSED [ 10%]
+tests/test_uat_audit.py::test_uat_wrapper_runs_and_passes[UAT-10-uat_10-PASS] PASSED [ 20%]
+tests/test_uat_audit.py::test_uat_wrapper_runs_and_passes[UAT-11-uat_11-PASS] PASSED [ 30%]
+tests/test_uat_audit.py::test_uat_wrapper_runs_and_passes[UAT-15-uat_15-PASS] PASSED [ 40%]
+tests/test_uat_audit.py::test_uat_wrapper_runs_and_passes[UAT-16-uat_16-PASS] PASSED [ 50%]
+tests/test_uat_audit.py::test_main_default_is_readonly PASSED            [ 60%]
+tests/test_uat_audit.py::test_main_write_unknown_uat_returns_2 PASSED    [ 70%]
+tests/test_uat_audit.py::test_main_write_stub_without_yes_returns_3 PASSED [ 80%]
+tests/test_uat_audit.py::test_main_dry_run_does_not_write PASSED         [ 90%]
+tests/test_uat_audit.py::test_main_help_exits_zero PASSED                [100%]
+
+============================== 10 passed in 6.35s ==============================
+
+================================================================
+=== FASE 3: pytest tests/test_h4_expansion_cli.py (UAT-08/09 emitters)
+================================================================
+collecting ... collected 6 items
+
+tests/test_h4_expansion_cli.py::test_uat_08_authorized_applied PASSED    [ 16%]
+tests/test_h4_expansion_cli.py::test_uat_09_unauthorized_capability_rejected PASSED [ 33%]
+tests/test_h4_expansion_cli.py::test_expansion_validate_clean PASSED     [ 50%]
+tests/test_h4_expansion_cli.py::test_expansion_rejections_list PASSED    [ 66%]
+tests/test_h4_expansion_cli.py::test_expansion_propose_persists PASSED   [ 83%]
+tests/test_h4_expansion_cli.py::test_expansion_proposal_invalid_authorization PASSED [100%]
+
+============================== 6 passed in 4.64s ===============================
+
+================================================================
+=== FASE 4: pytest tests/test_uat_blocked.py (UAT-12/13 verifiers)
+================================================================
+collecting ... collected 6 items
+
+tests/test_uat_blocked.py::test_uat_12_evidence_passes PASSED            [ 16%]
+tests/test_uat_blocked.py::test_uat_13_evidence_passes PASSED            [ 33%]
+tests/test_uat_blocked.py::test_uat_12_h6_real_tests_pass PASSED         [ 50%]
+tests/test_uat_blocked.py::test_uat_13_h7_real_tests_pass PASSED         [ 66%]
+tests/test_uat_blocked.py::test_h6_pack_loader_module_exists PASSED      [ 83%]
+tests/test_uat_blocked.py::test_h7_promotion_module_exists PASSED        [100%]
+
+============================== 6 passed in 2.84s ===============================
+
+================================================================
+=== FASE 5: python tests/uat_audit.py (modo lectura, NO reejecuta)
+================================================================
+=== Modo lectura (no se ejecuta nada; evidencia persistida) ===
+  UAT-01: PASS (rev=cb7e34822b61, persisted)
+  UAT-02: PASS (rev=cb7e34822b61, persisted)
+  UAT-03: PASS (rev=cb7e34822b61, persisted)
+  UAT-04: PASS (rev=cb7e34822b61, persisted)
+  UAT-05: PASS (rev=cb7e34822b61, persisted)
+  UAT-06: PASS (rev=cb7e34822b61, persisted)
+  UAT-07: PASS (rev=cb7e34822b61, persisted)
+  UAT-08: PASS (rev=6a536acfa056, persisted)
+  UAT-09: PASS (rev=6a536acfa056, persisted)
+  UAT-10: PASS (rev=cb7e34822b61, persisted)
+  UAT-11: PASS (rev=cb7e34822b61, persisted)
+  UAT-12: PASS (rev=d220ec2773d3, persisted)
+  UAT-13: PASS (rev=d220ec2773d3, persisted)
+  UAT-14: PASS (rev=cb7e34822b61, persisted)
+  UAT-15: PASS (rev=cb7e34822b61, persisted)
+  UAT-16: PASS (rev=cb7e34822b61, persisted)
+
+=== Resumen ===
+  OK UAT-01: PASS
+  OK UAT-02: PASS
+  OK UAT-03: PASS
+  OK UAT-04: PASS
+  OK UAT-05: PASS
+  OK UAT-06: PASS
+  OK UAT-07: PASS
+  OK UAT-08: PASS
+  OK UAT-09: PASS
+  OK UAT-10: PASS
+  OK UAT-11: PASS
+  OK UAT-12: PASS
+  OK UAT-13: PASS
+  OK UAT-14: PASS
+  OK UAT-15: PASS
+  OK UAT-16: PASS
+
+PASS=16  FAIL=0  BLOCKED=0
+
+================================================================
+=== FASE 6: estado final de UAT-*.json tras reejecuciones
+================================================================
+Despues de pytest, estado de los 16 UATs en disco:
+  UAT-01: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-02: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-03: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-04: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-05: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-06: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-07: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-08: status=PASS revision=6a536acfa0566ae785fa42a9d72f24e13e973877
+  UAT-09: status=PASS revision=6a536acfa0566ae785fa42a9d72f24e13e973877
+  UAT-10: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-11: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-12: status=PASS revision=d220ec2773d36a6e4529c28afbc300e375f7bc72
+  UAT-13: status=PASS revision=d220ec2773d36a6e4529c28afbc300e375f7bc72
+  UAT-14: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-15: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+  UAT-16: status=PASS revision=cb7e34822b611312c28f8fd9dd96690ddffcccd6
+
+================================================================
+=== Conclusion precisa sobre que acredita v0.7.3
+================================================================
+
+De los 16 UATs:
+
+REEJECUTADOS CONTRA 6a536ac (7/16) — el codigo de cada UAT se
+ejecuto en este clon del tag:
+
+  * UAT-05, UAT-10, UAT-11, UAT-15, UAT-16 (5 UATs)
+    via tests/test_uat_audit.py::test_uat_wrapper_runs_and_passes[*]
+    Cada test invoca uat_NN() de tests/uat_audit.py, que ejecuta
+    el escenario funcional (CLI, knowledge, handoff, etc.).
+    PERO esta invocacion NO escribe tests/uat-evidence/UAT-NN.json
+    (la persistencia solo ocurre via `uat_audit.py --write`).
+    Por tanto, el `revision` queda anclado en el SHA del run
+    original que si uso --write: cb7e34822b61.
+
+  * UAT-08, UAT-09 (2 UATs)
+    via tests/test_h4_expansion_cli.py::{test_uat_08_authorized_applied,
+    test_uat_09_unauthorized_capability_rejected}
+    Estos tests SI escriben UAT-{08,09}.json via helpers
+    _emit_uat_08_evidence / _emit_uat_09_evidence con
+    _git_rev_head() = 6a536ac.
+    Por tanto, UAT-{08,09}.json::revision queda en 6a536ac.
+
+VERIFICADOS COMO ANCLAS (9/16): UAT-01/02/03/04/06/07/12/13/14.
+Sus JSON fueron anclados en commits previos a 6a536ac (tipicamente
+35b6a9b para UAT-08/09 originales, o d220ec27 para UAT-12/13)
+y NO se regeneran en este run.
+- UAT-12/13 son verificadas como anclas PASS por
+  tests/test_uat_blocked.py (leer y assert, sin reescribir).
+- UAT-01/02/03/04/06/07/14 son anclas estables; solo se reportan
+  por uat_audit.py en modo lectura.
+
+----------------------------------------------------------------------------
+Diferencia entre uat_audit.py y pytest:
+
+  uat_audit.py (modo default sin args) SOLO LEE el JSON de disco y
+  reporta su campo status. Es una auditoria de cabeceras.
+  Reporta "PASS=16" cuando los 16 JSON dicen status="PASS".
+
+  pytest tests/test_uat_audit.py + pytest tests/test_h4_expansion_cli.py
+  SI reejecutan el codigo de los UATs (7 de 16 contra este codigo).
+  Es la verdadera re-auditoria funcional.
+
+  tests/test_uat_blocked.py verifica las anclas UAT-12/13 por
+  consistencia (status PASS sin reescribir).
+
+----------------------------------------------------------------------------
+Conclusion en una frase:
+  - uat_audit.py reporta 16/16 cabeceras en estado PASS.
+  - La bateria pytest reejecuta 7 UATs contra el codigo del tag.
+  - Los 9 UATs restantes son anclas estables cuyo estado PASS
+    es fiel al estado del proyecto en commits previos.

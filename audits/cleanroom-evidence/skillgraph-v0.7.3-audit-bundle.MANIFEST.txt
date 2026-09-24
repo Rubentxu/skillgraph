@@ -1,0 +1,140 @@
+SkillGraph v0.7.3 audit bundle — MANIFESTO externo
+====================================================
+
+Fecha del manifiesto: 2026-09-24
+Tag:                  v0.7.3 -> 987be068c7f2b6d17aa6c209489906f94a542568
+Codigo del tag:       6a536acfa0566ae785fa42a9d72f24e13e973877
+Bundle SHA-256:       daee03d6f347238a7771ec467624fdbf828950c6efd037a1593174140c46340e
+Tamano:               10.7 MB (comprimido)
+
+----------------------------------------------------------------------
+Que contiene el bundle
+----------------------------------------------------------------------
+
+El bundle `skillgraph-v0.7.3-audit-bundle.tar.gz` contiene un
+**clon del repositorio en el SHA `6a536ac`** con la siguiente
+estructura:
+
+  skillgraph-v0.7.3-bundle-content/
+  +-- .git/                          (44 archivos; pack embebido)
+  +-- src/, tests/, scripts/, audits/, specs/, external/, ...
+  +-- audits/cleanroom-evidence/
+      +-- ci-output-v0.7.3.txt       (este bundle)
+      +-- uat-audit-v0.7.3.txt       (este bundle)
+      +-- ci-output-v0.7.1.txt       (llevado del clon del release previo)
+      +-- ci-output-v0.7.2.txt       (llevado del clon del release previo)
+      +-- uat-audit-v0.7.1.txt       (llevado del clon del release previo)
+      +-- uat-audit-v0.7.2.txt       (llevado del clon del release previo)
+      +-- skillgraph-v0.7.1-audit-bundle.tar.gz
+      +-- skillgraph-v0.7.2-audit-bundle.tar.gz
+      +-- (otros archivos cleanroom de releases previos)
+  +-- (resto del codigo del proyecto tal como estaba en 6a536ac)
+
+Excluidos del bundle: `.venv/`, `__pycache__/`, `*.pyc`,
+`.pytest_cache/`.
+
+----------------------------------------------------------------------
+Como se reprodujo
+----------------------------------------------------------------------
+
+  1. git clone --no-local $REPO skillgraph-v0.7.3-clone
+     donde $REPO = el worktree principal al momento de captura.
+  2. cd skillgraph-v0.7.3-clone && git checkout 6a536ac
+  3. uv sync  (crea .venv/ con Python 3.13.14 + pytest 9.1.1 + ruff 0.16.8)
+  4. Ejecutar bateria (ver ci-output-v0.7.3.txt y uat-audit-v0.7.3.txt)
+  5. Copiar el clon a skillgraph-v0.7.3-bundle-content/
+  6. Eliminar .venv/, __pycache__/, *.pyc, .pytest_cache/
+  7. tar -czf skillgraph-v0.7.3-audit-bundle.tar.gz
+
+----------------------------------------------------------------------
+Lo que el bundle acredita
+----------------------------------------------------------------------
+
+Del clon del tag `6a536ac`:
+
+  - pytest contra el codigo del tag:
+      637 passed, 1 skipped
+      (1 skipped: tests/test_cli_uat.py:363 -> skip preexistente,
+       blueprint no versionado en el repo)
+  - bash scripts/ci.sh:
+      EXIT 1 (gate 1 falla: ruff format --check)
+      El fallo NO es regresion del fix V4; es un estado heredado
+      del propio archivo tests/test_h9_limitacion_7_slice1.py
+      (T19) que mezcla with pytest.raises y with s._atomic().
+      ruff check reporta ademas 1 error SIM117.
+  - python tests/uat_audit.py (modo lectura):
+      PASS=16 FAIL=0 BLOCKED=0
+  - tests/test_uat_audit.py (5 tests parametrizados):
+      REEJECUTAN el codigo de UAT-05/10/11/15/16 contra 6a536ac.
+      NO escriben UAT-*.json con la nueva revision.
+  - tests/test_h4_expansion_cli.py (test_uat_08/09_*):
+      REEJECUTAN los escenarios UAT-08/09 y SOBREESCRIBEN
+      tests/uat-evidence/UAT-{08,09}.json con revision=6a536ac.
+  - tests/test_uat_blocked.py (UAT-12/13):
+      VERIFICAN que las anclas UAT-12/13 siguen en PASS sin
+      reescribirlas.
+
+De los 16 UATs del proyecto:
+
+  - 7 UATs reejecutados contra el codigo 6a536ac
+    (UAT-05/08/09/10/11/15/16).
+  - 9 UATs anclas estables (UAT-01/02/03/04/06/07/12/13/14),
+    verificados por lectura JSON.
+
+El bundle lleva los UAT-{08,09}.json::revision = 6a536ac
+(reescritos por pytest). Los otros 14 JSONs conservan las
+revisions de anclas previas (cb7e34822b61, d220ec2773d36a6e4529c28afbc300e375f7bc72, 4025a8774f0c57d5bd492d9c082a09c15e3d74d9).
+
+----------------------------------------------------------------------
+Lo que el bundle NO acredita
+----------------------------------------------------------------------
+
+  - El `bash scripts/ci.sh` completo NO pasa en este codigo.
+    El gate de ruff format FALLA. Esto es un estado del propio
+    tag v0.7.3 y NO sera subsanado moviendo tags ni modificando
+    el SHA del tag.
+  - Los 9 UATs "ancla estable" NO se reejecutan en este bundle.
+    Su estado PASS proviene de commits previos y se mantiene
+    por decision de politica (no son stubs del modo `read`,
+    sino anclas deliberadas).
+  - No incluye evidencia de que el fix V6 (commit `a6bb5ab`,
+    posterior al tag) haya sido revertido o reescrito. Esa
+    correccion esta en un commit separado y NO forma parte
+    del arbol del tag.
+
+----------------------------------------------------------------------
+Como volver a ejecutar la auditoria
+----------------------------------------------------------------------
+
+  1. Extraer: tar -xzf skillgraph-v0.7.3-audit-bundle.tar.gz
+  2. cd skillgraph-v0.7.3-bundle-content
+  3. git log -1 --format='%H'   # esperar: 6a536acfa...
+  4. uv sync  (instala deps; el bundle NO incluye .venv)
+  5. bash scripts/ci.sh        # fallara en format (esperado)
+  6. .venv/bin/python -m pytest  # pasara 637/1-skipped
+  7. .venv/bin/python tests/uat_audit.py  # reportara 16/0/0
+
+Si los pasos 3-7 no producen los resultados aqui listados, la
+extraccion del bundle fue defectuosa.
+
+----------------------------------------------------------------------
+Procedencia
+----------------------------------------------------------------------
+
+Este bundle se genero DESPUES del tag y DESPUES del fix V6 (commit
+`a6bb5ab`). Documenta el codigo del tag pero NO forma parte del
+arbol etiquetado. Su publicacion como evidencia complementaria del
+release v0.7.3 debe ser autorizada por separado.
+
+V6 (record_claim atomic) esta en `a6bb5ab`, posterior al tag.
+NO incluida en este bundle ni en v0.7.3.
+
+El main del proyecto contiene `tests/uat-evidence/UAT-08.json`
+y `UAT-09.json` modificados que apuntan a `8c0614b` (HEAD del
+main al momento de la captura). Esos cambios NO son parte del
+arbol del tag v0.7.3; son modificaciones locales del operador.
+Este bundle los sobreescribio a `6a536ac` durante la captura.
+
+Los operator files del proyecto (`.pipeline.kts`, `.tool-versions`,
+`ci/`) son trabajo del operador y NO se modificaron en este
+proceso.

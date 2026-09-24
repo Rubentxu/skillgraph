@@ -1,0 +1,117 @@
+=== SkillGraph v0.7.3 — Cleanroom (clon del tag 6a536ac) ===
+Tag SHA:       987be068c7f2b6d17aa6c209489906f94a542568
+Codigo SHA:    6a536acfa0566ae785fa42a9d72f24e13e973877
+Origen clon:   /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph (main, a6bb5ab)
+Ruta clon:     /var/home/rubentxu/.jcode/scratch/skillgraph-v0.7.3-clone
+Python:        Python 3.13.14
+pytest:        pytest 9.1.1
+ruff:          ruff 0.16.8
+Fecha captura: 2026-09-24T12:42:40+02:00
+
+Este es el bundle reproducible: el codigo del tag 6a536ac
+esta clonado en este arbol. NO incluye solo logs; cualquier
+auditor puede entrar aqui, ejecutar la bateria, y comparar.
+
+==================================================================
+=== bash scripts/ci.sh (gate oficial del proyecto, exit 1) ======
+==================================================================
+=== ci: formato ===
+unformatted: File would be reformatted
+   --> tests/test_h9_limitacion_7_slice1.py:21:1
+    |
+20  | """
+21  +
+22  | from __future__ import annotations
+--------------------------------------------------------------------------------
+181 |
+    -     def test_migrate_idempotent_after_partial_failure(
+    -         self, db_path: Path
+    -     ) -> None:
+182 +     def test_migrate_idempotent_after_partial_failure(self, db_path: Path) -> None:
+183 |         # Forzar fallo en la 2a sentencia de la 2a invocacion de _migrate
+--------------------------------------------------------------------------------
+251 |         )
+    -         assert len(link_rows) == 0, (
+    -             f"BUG: trace_link quedo en disco sin rollback. rows={link_rows}"
+    -         )
+252 +         assert len(link_rows) == 0, f"BUG: trace_link quedo en disco sin rollback. rows={link_rows}"
+253 |
+--------------------------------------------------------------------------------
+258 |
+    -     def test_upsert_resource_idempotent_without_explicit_transaction(
+    -         self, db_path: Path
+    -     ) -> None:
+259 +     def test_upsert_resource_idempotent_without_explicit_transaction(self, db_path: Path) -> None:
+260 |         """V2: `upsert_resource()` es multi-statement (SELECT + INSERT).
+--------------------------------------------------------------------------------
+307 |         from skillgraph.core.errors import IdentityConflictError
+308 +
+309 |         with pytest.raises(IdentityConflictError):
+--------------------------------------------------------------------------------
+320 |
+    -     def test_register_promotion_idempotency_key_protects_uniqueness(
+    -         self, db_path: Path
+    -     ) -> None:
+321 +     def test_register_promotion_idempotency_key_protects_uniqueness(self, db_path: Path) -> None:
+322 |         # Llamada exitosa.
+--------------------------------------------------------------------------------
+367 |         # Verificar que la conexion arranca limpia
+    -         s._conn.execute(
+    -             "CREATE TABLE marker (id INTEGER PRIMARY KEY, val TEXT)"
+    -         )
+368 +         s._conn.execute("CREATE TABLE marker (id INTEGER PRIMARY KEY, val TEXT)")
+369 |         # Forzar una excepcion de aplicacion dentro del bloque.
+--------------------------------------------------------------------------------
+374 |         # Verificar que el INSERT fue rollbackeado por el _atomic real.
+    -         rows = s._conn.execute(
+    -             "SELECT COUNT(*) FROM marker WHERE val = 'before'"
+    -         ).fetchone()[0]
+375 +         rows = s._conn.execute("SELECT COUNT(*) FROM marker WHERE val = 'before'").fetchone()[0]
+376 |         assert rows == 0, (
+    -             f"BUG: el rollback del _atomic real NO funciono, "
+    -             f"el INSERT quedo en disco. rows={rows}"
+377 +             f"BUG: el rollback del _atomic real NO funciono, el INSERT quedo en disco. rows={rows}"
+378 |         )
+379 |         # Verificar que la conexion sigue usable para una nueva transaccion.
+380 |         with s._atomic() as cur:
+381 |             cur.execute("INSERT INTO marker VALUES (2, 'after')")
+    -         rows = s._conn.execute(
+    -             "SELECT COUNT(*) FROM marker WHERE val = 'after'"
+    -         ).fetchone()[0]
+382 +         rows = s._conn.execute("SELECT COUNT(*) FROM marker WHERE val = 'after'").fetchone()[0]
+383 |         assert rows == 1, f"new transaction failed: rows={rows}"
+    |
+
+1 file would be reformatted, 108 files already formatted
+
+(El gate de formato FALLA — esto NO es regresion del fix V4;
+es un estado heredado de T19 en el archivo slice1.py.)
+
+==================================================================
+=== pytest directo (637 passed, 1 skipped) ======================
+==================================================================
+tests/test_h9_storage_run_reads.py ............                          [ 61%]
+tests/test_h9_storage_start_node_execution.py .....                      [ 62%]
+tests/test_h9_storage_transition_run_state.py .......                    [ 63%]
+tests/test_handoff.py .......................                            [ 67%]
+tests/test_knowledge_controller.py .................                     [ 69%]
+tests/test_knowledge_invalidation.py ..........                          [ 71%]
+tests/test_knowledge_storage.py ....................                     [ 74%]
+tests/test_parser.py ............                                        [ 76%]
+tests/test_paths.py ..........                                           [ 77%]
+tests/test_plan_loader.py .............                                  [ 79%]
+tests/test_recipe.py ......................                              [ 83%]
+tests/test_reconcile_one_node.py ....                                    [ 84%]
+tests/test_registry_branches.py .............                            [ 86%]
+tests/test_runcontroller.py ..........                                   [ 87%]
+tests/test_runtime_events.py ...................                         [ 90%]
+tests/test_s0_brick_minimo.py ..........                                 [ 92%]
+tests/test_s1_sqlite.py .......                                          [ 93%]
+tests/test_skill_importer.py ........                                    [ 94%]
+tests/test_uat_audit.py ..........                                       [ 96%]
+tests/test_uat_blocked.py ......                                         [ 97%]
+tests/test_workflow_plan.py ...................                          [100%]
+
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_cli_uat.py:363: blueprint no versionado en el repo
+================== 637 passed, 1 skipped in 122.48s (0:02:02) ==================
