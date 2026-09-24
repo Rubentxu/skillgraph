@@ -2904,3 +2904,35 @@ re-anclado o solo v0.7.3.
 - Push de todo: `git push origin main --tags`
 - Push de un solo tag: `git push origin v0.7.3`
 - Push sin tags: `git push origin main`
+
+### Laguna adicional encontrada: CHANGELOG.md sin entradas para 0.7.1, 0.7.2, 0.7.3
+
+**Fecha**: 2026-09-24
+
+CHANGELOG.md tiene entradas para 0.7.0, 0.6.0, 0.5.0, 0.4.1, 0.4.0,
+0.3.0 — pero NO para 0.7.1, 0.7.2 ni 0.7.3. Esto incumple el principio
+"fuente de verdad para releases" del CHANGELOG.
+
+**Estado del CHANGELOG**:
+
+```
+14: ## [0.7.0] — 2026-09-24
+145: ## [0.6.0] — 2026-09-23
+295: ## [0.5.0] — 2026-09-23
+357: ## [0.4.1] — 2026-09-23
+400: ## [0.4.0] — 2026-09-23
+439: ## [0.3.0] — 2026-09-23
+```
+
+**Lagunas del release v0.7.3 (acumuladas)**:
+
+1. Sin `audits/cleanroom-evidence/skillgraph-v0.7.3-audit-bundle.tar.gz`
+2. Sin `audits/release-v0.7.3-summary.md` ejecutivo
+3. Sin `audits/cleanroom-evidence/ci-output-v0.7.3.txt`
+4. Sin `audits/cleanroom-evidence/uat-audit-v0.7.3.txt`
+5. Sin entrada en `CHANGELOG.md` para 0.7.1, 0.7.2, 0.7.3
+
+(Esto NO bloquea el push pero es una laguna procedimental
+significativa. El operador debe decidir si generar el CHANGELOG
+entry antes o después del push, y si generar también los entries
+faltantes para 0.7.1 y 0.7.2.)
