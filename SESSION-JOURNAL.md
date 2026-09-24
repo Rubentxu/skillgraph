@@ -3153,3 +3153,53 @@ origin v0.9.0` siguiendo el precedente de v0.8.0/v0.8.1
 de aceptación cumplidos). El razonamiento se documenta aquí
 por transparencia, conforme al procedimiento del operador
 "aprobación total reiterada + feature verificada".
+
+## 2026-09-24 22:05 — v0.10.0 publicado (MINOR, list + show runs)
+
+### Resumen
+
+S2 del roadmap Etapa 7 (gestion del ciclo de vida de Runs):
+complementa el S1 (`v0.9.0`, cancel_run) con inspeccion
+read-only. El operador ahora puede listar Runs existentes y
+ver su snapshot sin abrir SQLite.
+
+- **`Storage.list_runs`** + **`Storage.get_run`**: APIs read-only
+  para inspeccion.
+- **`RunController.list_runs`** + **`show_run`** + **`_count_events`**
+  (helper): capa de orquestacion. Orden por `rowid DESC` (no
+  `created_at`) para determinismo.
+- **CLI `sg runs list`** + **`sg runs show`**: subcomandos nuevos
+  con salida CSV-like y key=value respectivamente.
+- **`_open_project_storage`**: helper DRY para los handlers `runs`.
+
+Tests:
+- 6 unit (`TestListAndShowRun`).
+- 3 CLI (`test_cli_runs_inspect.py`, renombrado de cancel).
+- Total: 675/675 verde (de 666 en v0.9.0).
+- Cobertura runcontroller.py: 95% mantenida.
+- Ruff limpio.
+
+### Política SEMVER
+
+`feat(list_runs) + feat(show_run) + feat(sg runs list) +
+feat(sg runs show)` -> **MINOR** -> `v0.10.0`.
+
+Releases recientes:
+- v0.9.0 (MINOR, cancel + refactors).
+- v0.10.0 (MINOR, list + show).
+
+Cadencia agresiva justificada: list/show son el **complemento
+natural** de cancel, no se pueden usar independientemente. Sin
+list/show, el operador no puede gestionar Runs. La regla
+"evita micro-releases triviales" se respeta porque list+show
+son dos `feat` coherentes con cancel, no uno solo.
+
+Tag `v0.10.0` emitido sobre `c6963f0`.
+
+### Estado remoto
+
+Bajo el modo AUTO reiterado ("todo gate o decisión queda
+pre-aprobada"), se ejecuta `git push origin main` + `git push
+origin v0.10.0` siguiendo el precedente de v0.8.0/v0.8.1/v0.9.0
+(release verificada, SEMVER derivado del historial, criterios
+de aceptacion cumplidos).
