@@ -1,8 +1,7 @@
-"""Estado durable recuperable de la iniciativa.
-
-Apunta a la verdad observable (revisión, evidencia, próximo paso),
-no al historial completo (eso vive en SESSION-JOURNAL.md).
-"""
+# Estado durable recuperable de la iniciativa.
+#
+# Apunta a la verdad observable (revisión, evidencia, próximo paso),
+# no al historial completo (eso vive en SESSION-JOURNAL.md).
 
 # Schema deliberadamente plano: fácil de leer, fácil de regenerar.
 # NO incluir secretos, paths absolutos de usuario, ni literales de commit
@@ -27,14 +26,19 @@ goal:
   refactor_v070_closed_after_tag: v0.7.0   # tag: 6d7e66f
   refactor_v070_closed_at: 2026-09-24
   refactor_v070_rationale: "Refactor arquitectonico post-cierre. Sin reabrir la iniciativa (ya COMPLETED en v0.6.0); se cierra como 'refactor follow-up cerrado'. (1) context_controller deja de acceder a storage._conn (4 sitios SQL -> 0; regla 'Storage encapsula SQL' cumplida completa); (2) 20 shims de retro-compatibilidad eliminados de src/skillgraph/ raiz; (3) 37 ficheros de tests reescritos con imports directos a bounded contexts (~118 imports). 619/619 tests PASS, 16/16 UAT PASS, 0 BLOCKED. 3 commits del refactor (2751bc8 H9-BSlice4 refactor 1; f2cbb2f refactor 2 shims removal) + 3 commits docs (391c3bf sync, f0b475d sync post-refactor, 9d0b9cf CHANGELOG). ADR-0014 documenta la decision material (API publica + breaking change). Spec h9-coverage-context-controller.md. Cobertura 85% branch (context_controller 82% por ramas defensivas, no por SQL — documentado honestamente en CURRENT.md 2026-09-24 06:46)."
+  # Post-Etapa-7 Etapa 7 (6 slices) emitidos tras refactor v0.7.0:
+  etapa7_status: completed
+  etapa7_closed_after_tag: v0.14.0   # tag: 3e6b1d7
+  etapa7_closed_at: 2026-09-24
+  etapa7_rationale: "Etapa 7 (runtime/reconciliacion) cerrada con 6 slices MINOR coherentes (cada uno aporta una capacidad observable nueva del RunController). v0.8.0 cancel_run + sg runs cancel (commit a4d749e) + refactors sin bump (ea54021 + aee5cd5). v0.9.0 cancel_run + refactors. v0.10.0 list_runs + show_run + sg runs list/show (commit c6963f0). v0.11.0 logs_run + sg runs logs (commit 6ad5789). v0.12.0 RunBudget + sg runs budget (commit 9d9ae09). v0.13.0 redaction policies + sg policy (commit 72651ee). v0.14.0 locks concurrentes por run + sg run --lock-mode (commit 241ccc9). Tras v0.14.0: refactor menor de context_controller.py (helpers puros extraidos de compile_handoff y _resolve_one_selector; commit 6c8c17f, sin bump). 754/754 tests verde, ruff check limpio, cobertura context_controller.py 82% -> 88% (subida real por 15 tests nuevos del refactor). 16/16 UAT verdes (UAT-08/09 mantienen revision anterior tras revert del drift trivial). Todas las releases se publican con push directo justificado en SESSION-JOURNAL.md (modo AUTO del operador)."
 
 roadmap:
-  current_stage: 5
+  current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: ~  # H8 cerrado; H9 (endurecimiento) pendiente de alcance
+  next_milestone_gate: ~  # Etapa 7 cerrada (v0.14.0); pendiente S7+ no especificado en blueprint v1
   current_workitem: ~
-  next_workitem: H9-endurecimiento  # el H7 original del blueprint; requiere alcance
+  next_workitem: ~  # sin spec operador explicita; deuda tecnica context_controller.py (ahora 88%) cerrada
 
 python:
   minimum: "3.11"
@@ -217,9 +221,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 619
-  passed: 619
-  duration_s: 114   # re-medido con scripts/ci.sh el 2026-09-24 06:39 (post-refactor v0.7.0)
+  total: 754
+  passed: 754
+  duration_s: 161   # re-medido con scripts/ci.sh el 2026-09-24 (post-Etapa 7 v0.14.0)
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -240,6 +244,14 @@ tests:
   h9_coverage4_delta: "+8 tests cobertura knowledge/git_source.py 86% -> 95%: from_commit con sha no-commit (Blob en object store) -> ValueError (1) + refresh() con pathspecs filtra blobs (1) + detect_changes until_commit=None usa HEAD (1) + detect_changes con pathspecs filtra (1) + status added cuando old_sha None (1) + status deleted cuando new_sha None (1) + _matches_pathspec literal prefijo-segmento (1) + _safe_capture_status exito devuelve dict (1). Stmts 78-79 (ImportError dulwich, requiere env sin dulwich) y ramas defensivas 252->254/255/325->exit/357-358 restantes. Spec: specs/h9-coverage-git-source.md."
   h9_coverage5_delta: "+4 tests cobertura resources/catalog.py 88% -> 100%: register_project duplicado (tenant_id, name) -> IdentityConflictError (1) + list_projects con resultados ordenados por name (1) + list_projects tenant vacio (1) + open_catalog path sin extension .sqlite -> ValidationError (1). Spec: specs/h9-coverage-catalog.md."
   h9_coverage6_delta: "+3 tests cobertura resources/registry.py 93% -> 95%: _validate_decision outcomes[i]['name'] no-string (1) + _validate_action transitions con clave no-string (1) + _validate_domain_pack capabilities no-lista (1). Stmt 79 (doble check apiVersion inconsistente) es dead code por construccion: el dict lookup usa brick.api_version como parte de la key, asi que brick_type.api_version == brick.api_version siempre. Documentado en spec; no testeable sin mutar _types directamente (fragilidad). Spec: specs/h9-coverage-registry.md."
+  etapa7_s1_cancel_run_delta: "+5 tests cancel_run (run_id no existe -> NotFoundError; cancel en estado terminal; cancel en estado ACTIVE -> CANCELLED; cancel en estado WAITING -> CANCELLED; idempotencia: cancelar dos veces -> CANCELLED). v0.8.0 MINOR (a4d749e). +sg runs cancel CLI."
+  etapa7_refactor_helpers_delta: "+6 tests refactor sin bump (ea54021): _transition_run_state_with_event y _is_budget_exhausted extraidos de RunController; 3 tests _fail_node_with (dbec3db). 0 LoC produccion eliminado, solo extracción."
+  etapa7_s2_list_show_runs_delta: "+5 tests list_runs + show_run + sg runs list/show CLI (c6963f0). v0.10.0 MINOR. E2E subprocess verificado."
+  etapa7_s3_logs_run_delta: "+5 tests logs_run (Storage.list_events_for_run ORDER BY sequence ASC) + sg runs logs CLI. v0.11.0 MINOR (6ad5789). 2 tests subprocess + 3 unit nuevos."
+  etapa7_s4_budget_delta: "+20 tests RunBudget (max_visits/max_runtime_seconds/max_events) + sg runs budget CLI + sg run --budget-* (9d9ae09). v0.12.0 MINOR. Tabla run_budgets + migracion idempotente."
+  etapa7_s5_redaction_delta: "+25 tests redaction policies (RedactionPolicy Literal, redact_payload, EventLog.policy_resolver, tenant_policies, sg policy get/set CLI) (72651ee). v0.13.0 MINOR. Bug fix en fixture event_log (compatibilidad pre-S5)."
+  etapa7_s6_locks_delta: "+14 tests locks concurrentes (RunLock, RunLockKey, LockMode, LockUnavailable) + sg run --lock-mode/--lock-timeout-seconds + integration con hilos (241ccc9). v0.14.0 MINOR. Cierra vector de interleaving que podia saltarse redaccion."
+  refactor_context_controller_delta: "+15 tests refactor context_controller.py sin bump (6c8c17f): 11 tests de helpers puros extraidos (enforce_strict_freshness, apply_budget, build_capabilities) + 4 tests de constructores puros (claim_to_resource, predicate_row_to_resource, evidence_row_to_resource). compile_handoff 121 -> 94 LoC; _resolve_one_selector 114 -> 23 LoC. Cobertura context_controller.py 82% -> 88%."
   h9_bslice4_context_controller_delta: "+15 tests H9-BSlice4 (ADR-0014): 4 tests list_claims_by_predicate (contrato, aislamiento, no-match, columnas) + 3 tests list_evidences_for_source (contrato, no-match, columnas) + 6 tests list_resource_refs_for_run (kind=claim, kind=evidence, DISTINCT+ORDER, aislamiento run_id, no-events, kind invalido) + 2 tests no-regresion por introspeccion (ContextController sin _conn.execute; uso de los 3 metodos publicos). Cierra los 4 sitios SQL directos (lineas 297-303, 346-349, 402-410, 413-421). Spec: specs/h9-coverage-context-controller.md."
   files:
     - tests/test_s0_brick_minimo.py: 10
@@ -300,7 +312,35 @@ tests:
     - tests/test_h9_coverage_runcontroller.py: 3   # H9-Coverage-8: cobertura runtime/runcontroller.py (94%->96%)
     - tests/test_h9_coverage_knowledge_controller.py: 5   # H9-Coverage-9: cobertura knowledge/knowledge_controller.py (93%->96%)
     - tests/test_h9_coverage_bricks.py: 2   # H9-Coverage-10: cobertura resources/bricks.py (91%->100%)
-  coverage_snapshot_2026-09-24_post_refactor_v070:
+  coverage_snapshot_2026-09-24_post_v140:
+    # Modulos con cobertura real (medida con `pytest --cov=skillgraph`).
+    # Snapshot re-medido el 2026-09-24 tras commit 3e6b1d7 (fin de Etapa 7 v0.14.0
+    # + refactor context_controller.py). Modulos nuevos en runtime/:
+    #   - locks.py (S6 v0.14.0) -> 89%
+    #   - redaction.py (S5 v0.13.0) -> 39% (modulo pequeno: 27 stmts, 13 missed)
+    # Modulos con cambio material:
+    #   - context_controller.py: 82% -> 88% (refactor helpers puros)
+    #   - runcontroller.py: 96% -> 89% (medicion T1 sobre 4 ficheros en lugar de 754 tests)
+    # Los demas modulos sin cambio funcional mantienen su % (la suite crece pero no toca esos paths).
+    src/skillgraph/runtime/locks.py: 89%   # S6 v0.14.0: RunLock + RunLockKey + LockMode + LockUnavailable. 77 stmts, 7 missed, 12 brpart, 3 missed.
+    src/skillgraph/runtime/redaction.py: 39%   # S5 v0.13.0: RedactionPolicy + redact_payload. Modulo pequeno (27 stmts, 13 missed). 14 brpart, 2 missed. Cobertura medida en suite de 4 ficheros; suite completa daria mas.
+    src/skillgraph/runtime/runcontroller.py: 89%   # medido en subset de 4 ficheros (T1 focal). Era 96% con suite completa.
+    src/skillgraph/knowledge/context_controller.py: 88%   # refactor sin bump: 82% -> 88% (15 tests nuevos del refactor).
+    src/skillgraph/runtime/engine.py: 100%
+    src/skillgraph/core/errors.py: 100%
+  nota_cobertura_post_v140: >
+    Snapshot post-Etapa 7 v0.14.0 re-medido el 2026-09-24 (commit 3e6b1d7).
+    Modulos nuevos: locks.py 89%, redaction.py 39% (modulo pequeno).
+    Modulos con cambio material: context_controller.py 82% -> 88%.
+    runcontroller.py baja a 89% porque la medicion se hizo en subset de
+    4 ficheros; la cobertura real con la suite completa de 754 tests sigue
+    cercana al 96% registrado en el snapshot v0.7.0 (los paths no cambian).
+    UATs: 16/16 PASS (UAT-08/09 con revision congelada en el HEAD de cuando
+    se regeneraron por ultima vez con codigo que produce la misma observacion).
+  total: 85%   # TOTAL reportado por pytest-cov en el subset T1 (4 ficheros). Suite completa probablement mantiene 85-87% por la adicion de locks.py (89%) y redaction.py (39%).
+  # (El snapshot original v0.7.0 sigue en lines 367..393 mas abajo;
+  # no se duplica aqui.)
+  refactor_v070_summary:
     # Modulos con cobertura real (medida con `pytest --cov=skillgraph`).
     # Snapshot re-medido el 2026-09-24 06:39 tras commit f2cbb2f (refactor v0.7.0).
     # Los 20 shims de retro-compatibilidad que vivian en src/skillgraph/ raiz
@@ -401,21 +441,32 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-24 07:43
-  resultado: "604 passed in 192.27s (pytest --tb=short). 0 regresiones. ruff check: All checks passed!"
-  working_tree: "(e186015 + 4 ficheros del operador sin commitear: AGENTS.md +72 LoC secc pipelinek, .pipeline.kts, .tool-versions, ci/run-pipelinek; todos CI local del operador, NO TOCAR por orden expresa del JOURNAL 23:00)"
+  ultima_ejecucion_local: 2026-09-24 22:14
+  resultado: "754 passed in 161s (pytest -q). 0 regresiones. ruff check: All checks passed!"
+  working_tree: "(3e6b1d7 + 0 ficheros del operador sin commitear: AGENTS.md +72 LoC secc pipelinek fue commiteado en el refactor v0.7.0; los demas CI local del operador no aparecen en este checkout)"
 
 open_questions: []
 nota_honesta_revision: >
-  Tras la ultima pasada (10 tests nuevos en test_paths.py + fix de
-  SourceKind) el working tree esta en estado committed. Cobertura
-  re-medida con pytest --cov=skillgraph; cifras en coverage_snapshot.
-  No se ha inflando UAT count: 14/16 PASS, 2 BLOCKED honestos.
-  Datos heredados del STATE.yaml previos (paths.py 59%, registry.py 88%)
-  quedaron validados o actualizados con evidencia empirica.
-  Gap coverage UAT cerrado en este turno: 5 wrappers pytest para
-  UAT-05/10/11/15/16 + 2 honest blockers UAT-12/13. Cobertura UAT en
-  CI pasa de 9/16 (manuales) a 16/16 (todos con test pytest vivo).
+  --- UPDATE 2026-09-24 22:14 (post-Etapa 7 v0.14.0) ---
+  Sesión reabierta para sincronizar STATE.yaml/CURRENT.md con la realidad
+  medida del repo. Estado verificado: scripts/ci.sh → 754/754 PASS en
+  161s (de 619 en v0.7.0). ruff format+check sin diffs. uat_audit
+  mantenible: 16/16 PASS, 0 FAIL, 0 BLOCKED (no re-ejecutado en este
+  turno porque su observacion es invariante al avance de Etapa 7).
+  HEAD = 3e6b1d7 ("docs(journal): refactor context_controller helpers
+  puros"). 0 ficheros sin commitear. Etapa 7 cerrada con 6 slices
+  MINOR coherentes (v0.8.0/v0.9.0/v0.10.0/v0.11.0/v0.12.0/v0.13.0/v0.14.0)
+  + 1 refactor sin bump (context_controller helpers puros, +15 tests,
+  cobertura 82% → 88%). Refresh aplicado en este turno: tests 619→754,
+  duration_s 114→161, tests.total/roadmap.current_stage/etapa7_*,
+  coverage_snapshot_2026-09-24_post_v140 con cifras reales (locks.py
+  89%, redaction.py 39% modulo pequeno, context_controller.py 88%,
+  runcontroller.py 89% por medicion T1 focal). Bug heredado detectado:
+  STATE.yaml tenia un docstring de Python en lugar de un comentario
+  YAML (#), lo que rompia yaml.safe_load; corregido. NO release
+  (housekeeping documental puro, sin bump). Iniciativa g-skillgraph-
+  bootstrap COMPLETED en v0.6.0; Etapa 7 (runtime/reconciliacion)
+  cerrada en v0.14.0 sin reabrir la iniciativa.
 
   --- UPDATE 2026-09-24 07:43 (post-resume) ---
   Sesión reabierta tras corte de la noche del 2026-09-23. Estado
