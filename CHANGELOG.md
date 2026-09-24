@@ -878,3 +878,31 @@ Ninguno.
   `_fail_node_with(exc=exc)` en vez de construir el string de error
   y llamar a `_mark_node_failed` directamente. La rama de outcome
   no declarado queda igual.
+
+## [Sin bump] — 2026-09-24 (refactor interno)
+
+**Tag**: ninguno. **Código efectivo**: commit `ea54021`
+("refactor(runtime): helpers _transition_run_state_with_event y
+_is_budget_exhausted").
+
+**Resumen**: deuda técnica pendiente del refactor previo
+(`v0.8.1`). `reconcile_run` tenía 122 LoC y tres ramas con el patrón
+`EventBuilder(...).run_completed(...) + transition_run_state_atomically`,
+más un bloque de 14 LoC para detectar budget de visitas agotado.
+Esta versión extrae dos helpers privados en `RunController`:
+
+- `_transition_run_state_with_event(*, tenant_id, project_id, run_id,
+  state, current_node, at=None)`: construye el `RunCompleted` y
+  llama a `transition_run_state_atomically` en una sola TX.
+  Reemplaza las 3 ramas de terminación del run.
+- `_is_budget_exhausted(plan, tenant_id, project_id, run_id,
+  prev_current)`: detecta H4 (self-loop + max_visits + ejecuciones
+  acumuladas >= max_visits).
+
+**SemVer**: refactor puro (sin cambio de contrato público, sin fix,
+sin feat). Regla "`refactor` → sin bump de versión" del CHANGELOG.
+No se publica tag.
+
+**Resultado**: 659/659 tests PASS (+4 nuevos sobre el helper).
+Ruff limpio. Cobertura `runcontroller.py`: 84% → 95%
+(umbral ≥90% AGENTS.md core). `reconcile_run`: 122 → 100 LoC.
