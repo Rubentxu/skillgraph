@@ -360,3 +360,317 @@ def test_approx_chars_is_heuristic() -> None:
     """approx_chars es heuristica (D4 cerrada), NO tokens reales."""
     assert approx_chars({"a": 1, "b": 2}) > 0
     assert approx_chars("hello") == 5
+
+
+# ---------------------------------------------------------------------------
+# Tests del refactor (helpers puros extraídos de compile_handoff)
+# ---------------------------------------------------------------------------
+
+
+class TestEnforceStrictFreshness:
+    """`enforce_strict_freshness`: pure function.
+
+    Reglas:
+    - policy != 'strict' -> nunca eleva.
+    - policy == 'strict' + 0 stale obligatorios -> OK (None).
+    - policy == 'strict' + N>0 stale -> StaleKnowledgeError.
+    - Solo importan items con resource_kind=='claim' y body['stale']==True.
+    """
+
+    def test_no_strict_policy_passes(self) -> None:
+        from skillgraph.core.errors import StaleKnowledgeError
+        from skillgraph.knowledge.context_controller import (
+            enforce_strict_freshness,
+        )
+
+        # Ninguna excepcion con policy != strict, aun con stale.
+        items: list[object] = [
+            _cr_with_body(stale=True),
+        ]
+        enforce_strict_freshness(items, policy="best_effort")
+        enforce_strict_freshness(items, policy="permissive")
+        # Verificacion: si policy != strict, nunca eleva.
+        assert True  # llega aqui sin raise
+        # Asegurar que la importacion de error existe (no usada directamente).
+        assert StaleKnowledgeError is not None
+
+    def test_strict_zero_stale_passes(self) -> None:
+        from skillgraph.knowledge.context_controller import (
+            enforce_strict_freshness,
+        )
+
+        items: list[object] = [
+            _cr_with_body(stale=False),
+            _cr_with_body(stale=False),
+        ]
+        enforce_strict_freshness(items, policy="strict")
+
+    def test_strict_with_stale_raises(self) -> None:
+        import pytest
+
+        from skillgraph.core.errors import StaleKnowledgeError
+        from skillgraph.knowledge.context_controller import (
+            enforce_strict_freshness,
+        )
+
+        items: list[object] = [
+            _cr_with_body(stale=False),
+            _cr_with_body(stale=True),
+        ]
+        with pytest.raises(StaleKnowledgeError):
+            enforce_strict_freshness(items, policy="strict")
+
+    def test_only_claim_kind_considered(self) -> None:
+        """Evidences stale NO cuentan (resource_kind != claim)."""
+        from skillgraph.knowledge.context_controller import (
+            enforce_strict_freshness,
+        )
+
+        items: list[object] = [
+            _cr_with_body(kind="evidence", stale=True),
+            _cr_with_body(kind="evidence", stale=True),
+        ]
+        enforce_strict_freshness(items, policy="strict")
+        # Sin raise porque nada es claim+stale.
+
+
+class TestApplyBudget:
+    """`apply_budget`: pure function.
+
+    Aplica budget a obligatorios (sin truncar) y luego intenta incluir
+    opcionales segun `overflow_strategy` ('fail' | 'drop_optional' |
+    'truncate_finding'). Devuelve (included, total_chars).
+
+    - obligatorios que NO caben solos -> TokenBudgetExceededError.
+    - opcional que no cabe + overflow='fail' -> TokenBudgetExceededError.
+    - opcional que no cabe + 'drop_optional' | 'truncate_finding' -> para.
+    """
+
+    def test_obligatory_exceeds_budget_raises(self) -> None:
+        import pytest
+
+        from skillgraph.core.errors import TokenBudgetExceededError
+        from skillgraph.knowledge.context_controller import apply_budget
+
+        items: list[object] = [_cr_with_size(100)]
+        with pytest.raises(TokenBudgetExceededError):
+            apply_budget(
+                obligatory=items,
+                optional=(),
+                budget_chars=50,
+                overflow_strategy="fail",
+            )
+
+    def test_optional_fits_within_budget(self) -> None:
+        from skillgraph.knowledge.context_controller import apply_budget
+
+        # approx_chars(json.dumps({"claim_id":"c","x":"a"*N})) = N + 26.
+        # 20+26 = 46; dos caben en budget=200.
+        obligatory: list[object] = [_cr_with_size(20)]
+        optional: list[object] = [_cr_with_size(20)]
+        included, total = apply_budget(
+            obligatory=obligatory,
+            optional=optional,
+            budget_chars=200,
+            overflow_strategy="fail",
+        )
+        assert total == 92
+        assert len(included) == 2
+
+    def test_optional_overflow_fail_raises(self) -> None:
+        import pytest
+
+        from skillgraph.core.errors import TokenBudgetExceededError
+        from skillgraph.knowledge.context_controller import apply_budget
+
+        # 20+26 = 46; budget=50 no admite dos.
+        obligatory: list[object] = [_cr_with_size(20)]
+        optional: list[object] = [_cr_with_size(20)]
+        with pytest.raises(TokenBudgetExceededError):
+            apply_budget(
+                obligatory=obligatory,
+                optional=optional,
+                budget_chars=50,
+                overflow_strategy="fail",
+            )
+
+    def test_optional_overflow_drop_optional_stops(self) -> None:
+        from skillgraph.knowledge.context_controller import apply_budget
+
+        # 20+26 = 46; budget=70 admite solo 1 (46).
+        # Segundo opt (46+46=92 > 70) -> para.
+        obligatory: list[object] = [_cr_with_size(20)]
+        optional: list[object] = [_cr_with_size(20), _cr_with_size(20)]
+        included, total = apply_budget(
+            obligatory=obligatory,
+            optional=optional,
+            budget_chars=70,
+            overflow_strategy="drop_optional",
+        )
+        assert total == 46
+        assert len(included) == 1
+
+
+class TestBuildCapabilities:
+    """`build_capabilities`: pure function.
+
+    Devuelve ('stale',) si freshness_policy='best_effort' y algun
+    included tiene body['stale']=True. En caso contrario, tuple vacio.
+    """
+
+    def test_no_stale_returns_empty(self) -> None:
+        from skillgraph.knowledge.context_controller import build_capabilities
+
+        items: list[object] = [_cr_with_body(stale=False)]
+        assert build_capabilities(items, policy="best_effort") == ()
+
+    def test_stale_in_best_effort_returns_marker(self) -> None:
+        from skillgraph.knowledge.context_controller import build_capabilities
+
+        items: list[object] = [
+            _cr_with_body(stale=False),
+            _cr_with_body(stale=True),
+        ]
+        assert build_capabilities(items, policy="best_effort") == ("stale",)
+
+    def test_stale_in_strict_returns_empty(self) -> None:
+        """strict + stale ya elevaria antes; aqui defense in depth."""
+        from skillgraph.knowledge.context_controller import build_capabilities
+
+        items: list[object] = [_cr_with_body(stale=True)]
+        # En strict nunca llegariamos aqui con stale, pero verificamos
+        # que el helper solo emite marker bajo best_effort.
+        assert build_capabilities(items, policy="strict") == ()
+
+
+def _cr_with_body(
+    *,
+    kind: str = "claim",
+    stale: bool = False,
+) -> object:
+    """CompiledResource fake para tests de helpers puros."""
+    from skillgraph.knowledge.context_controller import CompiledResource
+
+    return CompiledResource(
+        resource_kind=kind,
+        resource_namespace=f"{kind}:x",
+        resource_name="x",
+        body={"stale": stale, "claim_id": "c1"},
+    )
+
+
+def _cr_with_size(chars: int) -> object:
+    """CompiledResource con body de tamano conocido."""
+    from skillgraph.knowledge.context_controller import CompiledResource
+
+    return CompiledResource(
+        resource_kind="claim",
+        resource_namespace="claim:c",
+        resource_name="c",
+        body={"claim_id": "c", "x": "a" * chars},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests de los constructores puros de CompiledResource
+# ---------------------------------------------------------------------------
+
+
+class TestClaimToResource:
+    """`claim_to_resource`: dataclass Claim -> CompiledResource."""
+
+    def test_claim_maps_all_fields(self) -> None:
+        from skillgraph.knowledge.context_controller import (
+            CompiledResource,
+            claim_to_resource,
+        )
+        from skillgraph.knowledge.graph import Claim
+
+        claim = Claim(
+            claim_id="c-1",
+            subject_entity_id="e-1",
+            predicate="imports_module",
+            object_literal="os",
+            source_id="s-1",
+            checked_at_revision="rev-1",
+            stale=False,
+        )
+        res = claim_to_resource(claim, "e-1")
+        assert isinstance(res, CompiledResource)
+        assert res.resource_kind == "claim"
+        assert res.resource_namespace == "claim:c-1"
+        assert res.resource_name == "e-1"
+        assert res.body["claim_id"] == "c-1"
+        assert res.body["predicate"] == "imports_module"
+        assert res.body["object_literal"] == "os"
+        assert res.body["source_id"] == "s-1"
+        assert res.body["checked_at_revision"] == "rev-1"
+        assert res.body["stale"] is False
+
+
+class TestPredicateRowToResource:
+    """`predicate_row_to_resource`: fila SQL -> CompiledResource."""
+
+    def test_row_with_json_string_literal(self) -> None:
+        import json as _json
+
+        from skillgraph.knowledge.context_controller import (
+            predicate_row_to_resource,
+        )
+
+        row: dict[str, object] = {
+            "claim_id": "c-1",
+            "predicate": "imports",
+            "object_literal_json": _json.dumps("os"),
+            "source_id": "s-1",
+            "checked_at_revision": "rev-1",
+            "stale": 0,
+        }
+        res = predicate_row_to_resource(row, "imports")
+        assert res.resource_kind == "claim"
+        assert res.resource_namespace == "claim:c-1"
+        # JSON deserializado, no el string crudo.
+        assert res.body["object_literal"] == "os"
+        assert res.body["stale"] is False  # bool(0) == False
+
+    def test_row_with_stale_true(self) -> None:
+        import json as _json
+
+        from skillgraph.knowledge.context_controller import (
+            predicate_row_to_resource,
+        )
+
+        row: dict[str, object] = {
+            "claim_id": "c-2",
+            "predicate": "calls",
+            "object_literal_json": _json.dumps("foo"),
+            "source_id": "s-1",
+            "checked_at_revision": "rev-1",
+            "stale": 1,
+        }
+        res = predicate_row_to_resource(row, "calls")
+        assert res.body["stale"] is True
+
+
+class TestEvidenceRowToResource:
+    """`evidence_row_to_resource`: fila SQL -> CompiledResource."""
+
+    def test_evidence_maps_with_json_content(self) -> None:
+        import json as _json
+
+        from skillgraph.knowledge.context_controller import (
+            evidence_row_to_resource,
+        )
+
+        row: dict[str, object] = {
+            "evidence_id": "ev-1",
+            "kind": "static_analysis",
+            "content_json": _json.dumps({"matched": "os.path.join"}),
+            "source_id": "s-1",
+            "observed_at": "2026-01-01T00:00:00Z",
+        }
+        res = evidence_row_to_resource(row, "s-1")
+        assert res.resource_kind == "evidence"
+        assert res.resource_namespace == "evidence:ev-1"
+        assert res.body["content"] == {"matched": "os.path.join"}
+        assert res.body["observed_at"] == "2026-01-01T00:00:00Z"
