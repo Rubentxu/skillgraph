@@ -181,24 +181,27 @@ class RunController:
         """Crea un Run con el plan dado. NO lo ejecuta.
 
         Devuelve el `run_id`. Emite un evento `RunCreated`.
+
+        H9-run-lifecycle: la creacion del run y la emision del evento
+        `RunCreated` viven en una sola transaccion via
+        `Storage.create_run_atomically`. Antes iban en commits
+        separados (`Storage.create_run` + `EventLog.append`), con
+        riesgo de que el run quedara confirmado sin su evento si la
+        segunda escritura fallaba.
         """
-        # H9-BSlice3-S1: delega el INSERT en `Storage.create_run`
-        # (que es donde vive la generacion de run_id). La emision
-        # del evento `run_created` sigue siendo del RunController.
-        run_id = self._storage.create_run(
+        run_id = new_run_id()
+        return self._storage.create_run_atomically(
+            event=EventBuilder(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                correlation_id=run_id,
+            ).run_created(run_id=run_id, initial_node=plan.initial),
+            run_id=run_id,
             tenant_id=tenant_id,
             project_id=project_id,
             plan_json=plan_to_json(plan),
             initial_node=plan.initial,
         )
-        self._events.append(
-            EventBuilder(
-                tenant_id=tenant_id,
-                project_id=project_id,
-                correlation_id=run_id,
-            ).run_created(run_id=run_id, initial_node=plan.initial)
-        )
-        return run_id
 
     def reconcile_run(
         self,
@@ -241,13 +244,22 @@ class RunController:
             )
             if ok is False:
                 # FAILED terminal: paramos.
-                self._set_run_state(tenant_id, project_id, run_id, "FAILED", node_name)
-                self._events.append(
-                    EventBuilder(
+                # H9-run-lifecycle: la transicion a FAILED y la emision
+                # del evento `RunCompleted(state=FAILED)` viven en una
+                # sola transaccion via `Storage.transition_run_state_atomically`.
+                # Antes iban en commits separados (`transition_run_state`
+                # + `EventLog.append`).
+                self._storage.transition_run_state_atomically(
+                    event=EventBuilder(
                         tenant_id=tenant_id,
                         project_id=project_id,
                         correlation_id=run_id,
-                    ).run_completed(run_id=run_id, state="FAILED", at=node_name)
+                    ).run_completed(run_id=run_id, state="FAILED", at=node_name),
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    run_id=run_id,
+                    state="FAILED",
+                    current_node=node_name,
                 )
                 return self._snapshot(tenant_id, project_id, run_id)
 
@@ -283,22 +295,33 @@ class RunController:
         new_frontier = self._calculate_frontier(tenant_id, project_id, run_id, plan)
         if not new_frontier:
             if budget_exhausted:
-                self._set_run_state(tenant_id, project_id, run_id, "FAILED", prev_current)
-                self._events.append(
-                    EventBuilder(
+                # H9-run-lifecycle: FAILED por budget agotado. Transicion
+                # + evento atomicos.
+                self._storage.transition_run_state_atomically(
+                    event=EventBuilder(
                         tenant_id=tenant_id,
                         project_id=project_id,
                         correlation_id=run_id,
-                    ).run_completed(run_id=run_id, state="FAILED", at=prev_current)
+                    ).run_completed(run_id=run_id, state="FAILED", at=prev_current),
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    run_id=run_id,
+                    state="FAILED",
+                    current_node=prev_current,
                 )
             else:
-                self._set_run_state(tenant_id, project_id, run_id, "COMPLETED", None)
-                self._events.append(
-                    EventBuilder(
+                # H9-run-lifecycle: COMPLETED. Transicion + evento atomicos.
+                self._storage.transition_run_state_atomically(
+                    event=EventBuilder(
                         tenant_id=tenant_id,
                         project_id=project_id,
                         correlation_id=run_id,
-                    ).run_completed(run_id=run_id, state="COMPLETED")
+                    ).run_completed(run_id=run_id, state="COMPLETED"),
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    run_id=run_id,
+                    state="COMPLETED",
+                    current_node=None,
                 )
 
         return self._snapshot(tenant_id, project_id, run_id)

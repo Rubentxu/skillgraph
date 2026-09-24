@@ -1683,6 +1683,125 @@ class Storage:
             )
         return run_id
 
+    def create_run_atomically(
+        self,
+        *,
+        event: RuntimeEvent,
+        run_id: str,
+        tenant_id: str,
+        project_id: str,
+        plan_json: str,
+        initial_node: str,
+    ) -> str:
+        """Crea un Run en estado ``CREATED`` y emite el evento
+        ``RunCreated`` en UNA SOLA transaccion SQLite.
+
+        Esta es la grieta A del
+        ``h9-plan-b-atomicity-characterization.md``: ``Storage.create_run``
+        hace INSERT + COMMIT en una transaccion, y ``EventLog.append``
+        hace INSERT + COMMIT en otra. Si la segunda falla (fault
+        injection, ``MemoryError``, etc.), el run quedaba confirmado
+        sin su evento. Aqui ambas escrituras viven en el mismo
+        ``BEGIN/COMMIT/ROLLBACK`` via ``_atomic_state_and_event``.
+
+        El ``run_id`` lo aporta el caller (tipicamente el RunController
+        via ``new_run_id()``) para que el evento pueda construirse
+        con el run_id final antes de la transaccion (consumidores del
+        evento esperan ver el run_id, no un placeholder). La firma
+        del evento y sus campos se preservan intactos; el llamador
+        construye el ``RuntimeEvent`` con ``EventBuilder.run_created(...)``
+        y lo pasa aqui.
+
+        Idempotencia: el UNIQUE sobre ``runtime_events.event_id``
+        cumple UAT-07 (replay-safe). Si un proceso cae tras commitear
+        la transaccion completa y reintenta con el mismo ``event_id``,
+        la segunda invocacion lanza ``IdempotencyError``. En ese caso
+        el run ya esta creado (commit anterior), y el caller debe
+        tratar el duplicado como exito idempotente, no como fallo.
+
+        Equivalencia con ``create_run``:
+          - El INSERT en workflow_runs usa los mismos campos y valores.
+          - El ``run_id`` que se persiste es el que el caller aporto.
+        """
+        from skillgraph.core.errors import IdempotencyError
+
+        sql = (
+            "INSERT INTO workflow_runs "
+            "(run_id, tenant_id, project_id, state, plan_json, current_node) "
+            "VALUES (?, ?, ?, 'CREATED', ?, ?)"
+        )
+        params = (
+            run_id,
+            tenant_id,
+            project_id,
+            plan_json,
+            initial_node,
+        )
+        try:
+            self._atomic_state_and_event(
+                event=event,
+                exec_sql=(sql, params),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise IdempotencyError(
+                f"evento duplicado en create_run_atomically: {event.event_id}"
+            ) from exc
+        return run_id
+
+    def transition_run_state_atomically(
+        self,
+        *,
+        event: RuntimeEvent,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        state: str,
+        current_node: str | None,
+    ) -> None:
+        """Transiciona el ``state`` y/o ``current_node`` de un Run
+        y emite el evento ``RunCompleted`` (o el que corresponda) en
+        UNA SOLA transaccion SQLite.
+
+        Esta es la grieta E y la mitad de la G del
+        ``h9-plan-b-atomicity-characterization.md``:
+        ``Storage.transition_run_state`` y ``EventLog.append`` van en
+        commits separados. Aqui ambos viven en el mismo
+        ``BEGIN/COMMIT/ROLLBACK``.
+
+        ``state`` debe ser uno de los literales ``RunState``; la
+        validacion de tipo la hace el type checker, no este metodo.
+        ``current_node`` puede ser ``None`` (transiciones terminales
+        que cierran el run: ``COMPLETED`` con ``None``).
+
+        Idempotencia: el UNIQUE sobre ``runtime_events.event_id``
+        cumple UAT-07. Si un proceso cae tras commitear la
+        transaccion completa, un reintento con el mismo ``event_id``
+        lanza ``IdempotencyError``. El caller debe tratarlo como
+        exito idempotente.
+
+        UPDATE no-op si el run no existe: la fila simplemente no se
+        modifica y el evento SI se inserta. Esto preserva la
+        semantica de ``transition_run_state`` original.
+        """
+        from skillgraph.core.errors import IdempotencyError
+
+        sql = (
+            "UPDATE workflow_runs "
+            "SET state = ?, current_node = ?, "
+            "    updated_at = datetime('now') "
+            "WHERE tenant_id = ? AND project_id = ? AND run_id = ?"
+        )
+        params = (state, current_node, tenant_id, project_id, run_id)
+        try:
+            self._atomic_state_and_event(
+                event=event,
+                exec_sql=(sql, params),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise IdempotencyError(
+                f"evento duplicado en transition_run_state_atomically: {event.event_id}"
+            ) from exc
+
     def list_promotions(
         self,
         status: str | None = None,
