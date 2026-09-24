@@ -355,6 +355,44 @@ class Storage:
         with self._conn:
             yield self._conn.cursor()
 
+    @contextmanager
+    def _atomic(self) -> Iterator[sqlite3.Cursor]:
+        """Transaccion explicita con BEGIN/COMMIT/ROLLBACK.
+
+        Necesario para operaciones multi-statement en las que un fallo
+        a mitad NO deba dejar estado parcial en disco (H9-LIMITACION-7,
+        V4 `record_trace`). `isolation_level=None` en `_conn` hace que
+        cada `execute()` sea autocommit, por lo que `with self._conn:`
+        NO rollbackea de verdad — la salida del bloque solo emite
+        COMMIT o ROLLBACK si Python lo solicita explicitamente.
+
+        Este helper:
+          1. Emite `BEGIN` (start de transaccion manual).
+          2. Yieldea un cursor sobre la conexion transaccional.
+          3. Si el bloque retorna sin error: COMMIT explicito.
+          4. Si el bloque lanza: ROLLBACK explicito + re-raise.
+
+        Uso:
+            with self._atomic() as cur:
+                cur.execute(...)  # serollbackea si falla
+                cur.execute(...)
+
+        Tests: `tests/test_h9_limitacion_7_slice1.py::TestT17RecordTrace`.
+        """
+        self._conn.execute("BEGIN")
+        cur = self._conn.cursor()
+        try:
+            yield cur
+            self._conn.execute("COMMIT")
+        except BaseException:
+            # ROLLBACK es best-effort: si falla, sqlite3 abortara la
+            # transaccion de todos modos al detectar el error.
+            try:
+                self._conn.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            raise
+
     # ----- recursos -----
 
     def upsert_resource(self, brick: Brick) -> str:
@@ -885,8 +923,14 @@ class Storage:
     ) -> None:
         """Registra un OutcomeTrace y sus enlaces (claim/evidence en orden).
 
-        Idempotente por `trace_id` y por `(trace_id, link_kind, link_id)`."""
-        with self._tx() as cur:
+        Idempotente por `trace_id` y por `(trace_id, link_kind, link_id)`.
+
+        Usa `_atomic()` (BEGIN/COMMIT/ROLLBACK explicitos) en vez de
+        `_tx()` para garantizar que un fallo a mitad de las 1+N
+        sentencias no deje un `outcome_traces` orphan (sin sus
+        `outcome_trace_links`). H9-LIMITACION-7 V4.
+        """
+        with self._atomic() as cur:
             cur.execute(
                 """
                 INSERT OR REPLACE INTO outcome_traces

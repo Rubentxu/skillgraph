@@ -31,9 +31,9 @@ expuesta al usuario) y no usa `BEGIN`/`COMMIT`/`ROLLBACK` explícitos.
 |---|---------|------------|------------------------|
 | V1 | `_migrate()` | `executescript(SCHEMA)` + INSERT schema_version | El schema se aplica sin que `schema_version` quede registrado si la segunda sentencia falla. |
 | V2 | `upsert_resource()` | SELECT spec_json + INSERT/UPDATE | Si UPDATE/INSERT falla tras SELECT, el caller observa inconsistencia (record sí existe, version no). El SELECT no causa daño, pero la "transacción" no existe. |
-| V3 | `create_relation()` | SELECT existing + INSERT/UPDATE | Como V2 pero para relations. |
+| V3 | `add_relation()` | SELECT existing + INSERT/UPDATE | Como V2 pero para relations. |
 | V4 | `record_trace()` | INSERT trace + INSERT(s) trace_links | Si el INSERT de trace_links falla, el trace queda huérfano (sin sus enlaces). |
-| V5 | `enqueue_promotion()` | SELECT existing + INSERT/UPDATE | Como V2 pero para outbox de promoción. |
+| V5 | `register_promotion()` | SELECT existing + INSERT/UPDATE | Como V2 pero para outbox de promoción. |
 
 ### Grupo 2 — NO vulnerables (1 sentencia, autocommit es suficiente)
 
