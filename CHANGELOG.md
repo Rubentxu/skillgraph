@@ -926,3 +926,78 @@ adicionales en `RunController`:
 secuencia explícita: bootstrap → compilar handoff → invocar adapter →
 validar outcome → cerrar. Cobertura mantenida 95%.
 
+
+## [0.9.0] — 2026-09-24 (MINOR, cancel + refactors)
+
+**Tag**: `v0.9.0` (`a4d749e9fefad551e4406aa7305e32aac224df08`).
+
+**Resumen**: S1 del roadmap Etapa 7 (presupuestos y cancelación):
+el operador puede detener un Run en curso sin esperar al reconcile
+completo. Nueva API `RunController.cancel_run` + nuevo subcomando
+CLI `sg runs cancel <project> <run-id>`. Consolidación de los
+refactors acumulados sobre `RunController` (helpers privados
+para extraer las ramas duplicadas de terminación, transición de
+estado y bootstrap/ejecución de nodos).
+
+### Cambios funcionales (MINOR)
+
+- **`RunController.cancel_run(*, tenant_id, project_id, run_id)`**:
+  transiciona el Run a `CANCELLED` y emite `RunCompleted` en una
+  sola TX (reutiliza `_transition_run_state_with_event`).
+  - Run no existe -> `NotFoundError` (delegado en `Storage.load_run`).
+  - Run ya terminal -> `ValidationError` (no idempotente).
+  - NodeExecutions RUNNING se quedan: la cancelación es a nivel
+    de Run, no de nodo. El siguiente `reconcile_run` no las
+    re-ejecuta (test `test_reconcile_after_cancel_is_noop`).
+- **CLI `sg runs cancel <project> <run-id>`**: subcomando nuevo
+  bajo `runs` (paralelo a `run`). Exit code 0 + `state=CANCELLED`
+  en stdout. Errores tipados -> `EXIT_DOMAIN` (10).
+
+### Refactors acumulados (sin bump adicional)
+
+Consolidación de la deuda técnica detectada sobre `RunController`
+en `v0.8.1`:
+
+- `RunController._transition_run_state_with_event(*, ...)`:
+  helper que centraliza las 3 ramas de terminación del Run
+  (FAILED por nodo, FAILED por budget exhausted, COMPLETED
+  normal, ahora también CANCELLED).
+- `RunController._is_budget_exhausted(plan, ...)`:
+  detección de H4 (self-loop + max_visits + ejecuciones
+  acumuladas >= max_visits).
+- `RunController._open_node_execution(*, ...)`:
+  bootstrap del nodo: emite `NodeScheduled` y crea la
+  NodeExecution RUNNING atómica.
+- `RunController._finalize_node_success(*, ...)`:
+  cierre exitoso: emite `NodeCompleted` + `EvidenceProduced`
+  y delega el UPDATE a SUCCEEDED atómico.
+- `RunController._fail_node_with(*, exc=...) -> bool`:
+  devuelve `False` para permitir
+  `return self._fail_node_with(...)` sin literal.
+- `_execute_one`: 162 → 124 LoC.
+- `reconcile_run`: 122 → 100 LoC.
+
+### Tests
+
+- 5 tests unitarios `tests/test_runcontroller.py::TestCancelRun`:
+  estado persistido, evento emitido, idempotencia, run terminal
+  rechazado, reconcile post-cancel no-op, run desconocido.
+- 2 tests subprocess `tests/test_cli_runs_cancel.py`:
+  cancel vía CLI exit code 0 + persistencia + evento; cancel
+  de run inexistente -> exit code != 0.
+- 4 tests del helper `_is_budget_exhausted`
+  (`tests/test_h4_cycles_and_decision.py::TestIsBudgetExhaustedHelper`).
+- UAT-08/09 regenerados sobre `a4d749e`.
+
+### Resultado
+
+- **Batería completa**: 666 passed (de 652 en v0.8.0).
+- **Ruff**: limpio.
+- **Cobertura `runcontroller.py`**: 95% (umbral ≥90% AGENTS.md core).
+
+### SemVer
+
+`feat` (capacidad observable nueva: cancel programático y CLI) →
+**MINOR** → `v0.9.0`. Los refactors van consolidados en la
+misma release con la regla "`refactor` → sin bump" relajada
+porque la `feat` ya justifica MINOR.
