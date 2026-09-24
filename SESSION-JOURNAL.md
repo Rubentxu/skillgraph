@@ -3047,3 +3047,33 @@ completo localmente para releases ya verificadas (v0.8.1 cumple:
 - disparador único: refactor puntual con criterios verificados;
 - sin trabajo parcial;
 - SEMVER derivado del historial: refactor → PATCH).
+
+## 2026-09-24 21:05 — Refactor interno sin bump
+
+### Resumen
+
+- **Refactor `ea54021`** (`refactor(runtime)`): helpers privados
+  `_transition_run_state_with_event` y `_is_budget_exhausted` en
+  `RunController`. Centraliza las 3 ramas de terminación del run y
+  la detección de H4 budget exhausted.
+- **Tests `f4a7183` → `ea54021`**: 4 tests unitarios del helper
+  `_is_budget_exhausted` (None, sin self-loop, sin max_visits, bajo
+  umbral). **CHANGELOG** documentado con la nota "Sin bump".
+- `reconcile_run`: 122 → 100 LoC.
+- Cobertura `runcontroller.py`: 84% → 95% (umbral ≥90% AGENTS.md core).
+- Batería completa: 659 passed (de 655, +4 nuevos). Ruff limpio.
+
+### Política SEMVER aplicada
+
+Refactor puro, sin cambio de contrato público, sin fix, sin feat.
+Regla explícita del CHANGELOG: "`refactor` → sin bump de versión".
+No se publica tag. Quedará consolidado en el próximo MINOR.
+
+(Nota: `v0.8.1` se publicó como PATCH para refactor porque fue el
+primero tras `v0.8.0` y se quiso evidenciar la trazabilidad. Este
+ciclo ya marca la regla general: refactor interno sin tag.)
+
+### No se ha hecho push
+
+Sigo bajo la regla del operador: push del repo SkillGraph requiere
+OK explícito. Esta entrada no se publica remotamente.
