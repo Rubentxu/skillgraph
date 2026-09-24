@@ -479,21 +479,12 @@ class RunController:
         if attempt > MAX_NODE_ATTEMPTS:
             return False
         node = plan.node(node_name)
-        node_execution_id = new_node_execution_id()
-
-        events = EventBuilder(
+        events, node_execution_id = self._open_node_execution(
             tenant_id=tenant_id,
             project_id=project_id,
-            correlation_id=run_id,
-        )
-
-        self._events.append(
-            events.node_scheduled(
-                run_id=run_id,
-                node_execution_id=node_execution_id,
-                node_name=node_name,
-                attempt=attempt,
-            )
+            run_id=run_id,
+            node_name=node_name,
+            attempt=attempt,
         )
 
         # Compilar Handoff. Los errores tipados de compilación de
@@ -503,18 +494,6 @@ class RunController:
         # que `_mark_node_failed` tenga una fila que actualizar:
         # el UPDATE de `mark_node_failed_atomically` es afecta-0-filas
         # silencioso si la NodeExecution no existe.
-        node_started_event = events.node_started(run_id=run_id, node_execution_id=node_execution_id)
-        self._storage.start_node_execution_atomically(
-            event=node_started_event,
-            node_execution_id=node_execution_id,
-            tenant_id=tenant_id,
-            project_id=project_id,
-            run_id=run_id,
-            node_name=node_name,
-            attempt=attempt,
-            context_hash="",
-            handoff_json="{}",
-        )
         try:
             handoff = self._build_handoff(
                 tenant_id=tenant_id,
@@ -526,7 +505,7 @@ class RunController:
                 plan=plan,
             )
         except SkillGraphError as exc:
-            self._fail_node_with(
+            return self._fail_node_with(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 run_id=run_id,
@@ -534,7 +513,6 @@ class RunController:
                 node_name=node_name,
                 exc=exc,
             )
-            return False
         context_hash = handoff.context_hash
 
         self._events.append(
@@ -566,7 +544,7 @@ class RunController:
         try:
             result = self._adapter.invoke(handoff)
         except Exception as exc:
-            self._fail_node_with(
+            return self._fail_node_with(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 run_id=run_id,
@@ -574,7 +552,6 @@ class RunController:
                 node_name=node_name,
                 exc=exc,
             )
-            return False
 
         # Validar resultado (outcome declarado?)
         if not is_outcome_declared(result, plan, node_name):
@@ -595,27 +572,12 @@ class RunController:
         # en una SOLA transaccion via
         # `Storage.complete_node_execution_atomically`. Cierra el gap
         # detectado por la revision externa de v0.7.1.
-        ev_completed = events.node_completed(
+        self._finalize_node_success(
+            events=events,
             run_id=run_id,
             node_execution_id=node_execution_id,
-            outcome=result.outcome,
+            result=result,
             context_hash=context_hash,
-        )
-        # UAT-04: deja evidencia. Emitido como evento dentro de la
-        # transaccion atomica.
-        ev_evidence = events.evidence_produced(
-            run_id=run_id,
-            node_execution_id=node_execution_id,
-            outcome=result.outcome,
-            context_hash=context_hash,
-            evidence_ref=result.evidence_ref or context_hash,
-        )
-        self._storage.complete_node_execution_atomically(
-            event_completed=ev_completed,
-            event_evidence=ev_evidence,
-            node_execution_id=node_execution_id,
-            outcome=result.outcome,
-            result_json=json.dumps(result_to_jsonable(result), sort_keys=True),
         )
         return True
 
@@ -715,6 +677,96 @@ class RunController:
         )
         return compiled.knowledge
 
+    def _open_node_execution(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        node_name: str,
+        attempt: int,
+    ) -> tuple[EventBuilder, str]:
+        """Bootstrap de un nodo: emite `NodeScheduled` y crea la NodeExecution RUNNING.
+
+        Helper local para `_execute_one`. Devuelve la tupla
+        `(EventBuilder, node_execution_id)`: el builder se reutiliza
+        para los eventos posteriores (`HandoffCreated`, `NodeStarted`,
+        `NodeCompleted`, etc.) y `node_execution_id` identifica la fila
+        creada atómicamente.
+
+        `NodeStarted` se emite DENTRO de la transacción
+        `start_node_execution_atomically` (H9-BSlice3-S5), de modo que
+        `NodeExecution RUNNING` y el evento son atómicos.
+        """
+        node_execution_id = new_node_execution_id()
+        events = EventBuilder(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            correlation_id=run_id,
+        )
+        self._events.append(
+            events.node_scheduled(
+                run_id=run_id,
+                node_execution_id=node_execution_id,
+                node_name=node_name,
+                attempt=attempt,
+            )
+        )
+        node_started_event = events.node_started(
+            run_id=run_id, node_execution_id=node_execution_id
+        )
+        self._storage.start_node_execution_atomically(
+            event=node_started_event,
+            node_execution_id=node_execution_id,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_name=node_name,
+            attempt=attempt,
+            context_hash="",
+            handoff_json="{}",
+        )
+        return events, node_execution_id
+
+    def _finalize_node_success(
+        self,
+        *,
+        events: EventBuilder,
+        run_id: str,
+        node_execution_id: str,
+        result: AgentResult,
+        context_hash: str,
+    ) -> None:
+        """Cierre exitoso de un nodo: emite `NodeCompleted` + `EvidenceProduced`
+        y delega el UPDATE a SUCCEEDED en una sola transaccion.
+
+        Helper local para `_execute_one`. Reutiliza el `EventBuilder`
+        abierto por `_open_node_execution` para mantener la
+        trazabilidad de eventos (todos comparten el mismo `correlation_id`).
+        """
+        ev_completed = events.node_completed(
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            outcome=result.outcome,
+            context_hash=context_hash,
+        )
+        # UAT-04: deja evidencia. Emitido como evento dentro de la
+        # transaccion atomica.
+        ev_evidence = events.evidence_produced(
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            outcome=result.outcome,
+            context_hash=context_hash,
+            evidence_ref=result.evidence_ref or context_hash,
+        )
+        self._storage.complete_node_execution_atomically(
+            event_completed=ev_completed,
+            event_evidence=ev_evidence,
+            node_execution_id=node_execution_id,
+            outcome=result.outcome,
+            result_json=json.dumps(result_to_jsonable(result), sort_keys=True),
+        )
+
     def _fail_node_with(
         self,
         *,
@@ -724,11 +776,13 @@ class RunController:
         node_execution_id: str,
         node_name: str,
         exc: BaseException,
-    ) -> None:
+    ) -> bool:
         """Marca el nodo FAILED con la causa de una excepción, sin re-lanzar.
 
         Helper local para `_execute_one`: centraliza el formato
         `"{type(exc).__name__}: {exc}"` y delega en `_mark_node_failed`.
+        Devuelve siempre `False` para que el caller haga
+        `return self._fail_node_with(...)` sin escribir el literal.
         """
         self._mark_node_failed(
             tenant_id=tenant_id,
@@ -738,6 +792,7 @@ class RunController:
             node_name=node_name,
             error=f"{type(exc).__name__}: {exc}",
         )
+        return False
 
     def _mark_node_failed(
         self,
