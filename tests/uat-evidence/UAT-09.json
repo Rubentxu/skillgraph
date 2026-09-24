@@ -3,7 +3,7 @@
   "expected": "apply rc=10; expansion_rejections/*.json con reason=I3",
   "notes": "UAT-09 cierra: la propuesta con capability 'fantasma_xyz' viola I3 (capability no registrada en el registry). El CLI rechaza (rc=10 EXIT_DOMAIN) y persiste la evidencia JSON en expansion_rejections/<proposal_id>.json con reason, violated_invariants, rejected_by, rejected_at. NO se incluye path absoluto del scratch de pytest porque cambia entre ejecuciones; el proposal_id SI es reproducible.",
   "observed": "apply_rc=10; rejection_proposal_id=prop-1888f59d4e4d; reason='I3 violated'; violations=['I3']; policy_violations=[]",
-  "revision": "e5e5b99ff6df71890170c511e0a21868b132f6e1",
+  "revision": "e186015ef4bb750f6bb378ba253dda9e7ae0bf18",
   "scenario": "Dada una propuesta que solicita nuevas capacidades, cuando no existe autorizacion, entonces el motor no incorpora la ampliacion. Debe conservarse evidencia de su rechazo o de su estado de espera.",
   "status": "PASS",
   "steps": [

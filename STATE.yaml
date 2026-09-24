@@ -212,9 +212,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 586
-  passed: 586
-  duration_s: 136
+  total: 604
+  passed: 604
+  duration_s: 192   # re-medido con scripts/ci.sh el 2026-09-24 07:43 (post-resume)
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -294,71 +294,59 @@ tests:
     - tests/test_h9_coverage_runcontroller.py: 3   # H9-Coverage-8: cobertura runtime/runcontroller.py (94%->96%)
     - tests/test_h9_coverage_knowledge_controller.py: 5   # H9-Coverage-9: cobertura knowledge/knowledge_controller.py (93%->96%)
     - tests/test_h9_coverage_bricks.py: 2   # H9-Coverage-10: cobertura resources/bricks.py (91%->100%)
-  coverage_snapshot_2026-09-23:
+  coverage_snapshot_2026-09-24:
     # Modulos con cobertura real (medida con `pytest --cov=skillgraph`).
-    # Snapshot re-medido el 2026-09-23 21:42 post-H9-Coverage-3.
-    # Los shims de retro-compatibilidad (`catalog.py`, `knowledge_invalidator.py`,
-    # `runtime_types.py`, `dsl.py`, `errors.py`, `graph_expansion.py`,
-    # `handoff.py`, `storage.py`, `workflow.py`, `bricks.py`, `git_source.py`,
-    # `pack_loader.py`, `promotion.py`, `recipe.py`, `runcontroller.py`,
-    # `skill_importer.py`, `paths.py`, `agent.py`, `context_controller.py`,
-    # `knowledge_controller.py`) son re-exports de 1-2 LoC; su cobertura es
-    # siempre 100% (test_paths/test_recipe/etc. los importan transitivamente).
-    errors.py: 100%
-    recipe.py: 100%
-    runtime.py: 100%
-    agent.py: 100%
-    handoff.py: 100%
-    dsl.py: 100%
-    runcontroller.py: 100%
-    storage.py: 100%
-    catalog (shim): 0%   # solo __getattr__, sin tests directos
-    core/runtime_types.py: 97%
-    core/errors.py: 100%
-    core/recipe.py: 100%
-    knowledge/__init__.py: 100%   # via tests
-    domain/dsl.py: 97%
-    domain/pack_loader.py: 97%
-    domain/skill_importer.py: 98%
-    governance/graph_expansion.py: 98%
-    governance/promotion.py: 100%
-    knowledge/context_controller.py: 82%   # ramas son SQL directo a storage._conn (deuda tecnica, requiere refactor Storage API)
-    knowledge/git_source.py: 95%
-    knowledge/graph.py: 96%
-    knowledge/knowledge_controller.py: 93%
-    knowledge/knowledge_invalidator.py: 97%
-    platform/paths.py: 81%   # ANTES 59%. lineas 26-31 (Windows) inalcanzables en CI Linux.
-    platform/storage.py: 97%
-    resources/bricks.py: 91%
-    resources/catalog.py: 100%
-    resources/parser.py: 100%
-    resources/plan_loader.py: 100%
-    resources/registry.py: 95%
-    resources/workflow.py: 93%
-    runtime/agent.py: 97%
-    runtime/engine.py: 100%
-    runtime/handoff.py: 95%
-    runtime/runcontroller.py: 94%   # ANTES 94% (real). idem cobertura state previo.
-    __main__.py: 0%   # entry-point puro de CLI, no testeable con pytest-cov
-    cli/runner.py: 55%   # cobertura-por-exit-code; subprocess tests + in-process + UAT scripts
+    # Snapshot re-medido el 2026-09-24 07:43 tras resume del proyecto
+    # (anterior 2026-09-23 21:42 estaba desactualizado tras 4 slices H9-Coverage-7..10).
+    # Los shims de retro-compatibilidad en src/skillgraph/ (catalog.py, recipe.py,
+    # runtime_types.py, dsl.py, errors.py, graph_expansion.py, handoff.py,
+    # storage.py, workflow.py, bricks.py, git_source.py, pack_loader.py,
+    # promotion.py, runcontroller.py, skill_importer.py, paths.py, agent.py,
+    # context_controller.py, knowledge_controller.py, knowledge_invalidator.py)
+    # son re-exports de 1-9 LoC; su cobertura es siempre 100% via tests que
+    # importan los modulos activos transitivamente. Listados en coverage pero
+    # NO en tabla siguiente (omitidos por `skip-covered`).
+    src/skillgraph/core/runtime_types.py: 97%
+    src/skillgraph/domain/dsl.py: 97%
+    src/skillgraph/domain/pack_loader.py: 97%
+    src/skillgraph/domain/skill_importer.py: 98%
+    src/skillgraph/governance/graph_expansion.py: 98%
+    src/skillgraph/governance/promotion.py: 100%
+    src/skillgraph/knowledge/context_controller.py: 82%   # DEUDA VIVA: SQL directo en ctrl.storage._conn (8 puntos cursor.execute). Rompe regla "Storage encapsula SQL" introducida en H9-BSlice3. Opciones para cerrar: (1) refactor arquitectónico extrayendo 8 operaciones a metodos publicos de Storage con TDD (~30-40 tests + 8 metodos nuevos) — requiere aprobacion operador porque cambia API publica; (2) aceptar la deuda y cubrir solo las 6 ramas alcanzables (sube a ~90-93%, no llega al 95% del blueprint).
+    src/skillgraph/knowledge/git_source.py: 95%
+    src/skillgraph/knowledge/graph.py: 96%
+    src/skillgraph/knowledge/knowledge_controller.py: 96%
+    src/skillgraph/knowledge/knowledge_invalidator.py: 97%
+    src/skillgraph/platform/paths.py: 81%   # lineas 26-31 (rama Windows nt) inalcanzables en CI Linux.
+    src/skillgraph/platform/storage.py: 97%
+    src/skillgraph/resources/registry.py: 95%
+    src/skillgraph/resources/workflow.py: 100%   # H9-Coverage-7: 93% -> 100%
+    src/skillgraph/resources/bricks.py: 100%   # H9-Coverage-10: 91% -> 100%
+    src/skillgraph/runtime/agent.py: 97%
+    src/skillgraph/runtime/handoff.py: 95%
+    src/skillgraph/runtime/runcontroller.py: 96%   # H9-Coverage-8: 94% -> 96%
+    src/skillgraph/cli/runner.py: 55%   # cobertura-por-exit-code; subprocess tests + in-process + UAT scripts compensan
+    src/skillgraph/__main__.py: 0%   # entry-point CLI, no testeable con pytest-cov
   nota_cobertura: >
-    Cobertura RE-MEDIDA con `pytest --cov=skillgraph` el 2026-09-23 21:59
-    (post-H9-Coverage-6 = en este commit). Cifras validadas contra
-    `tests/uat_audit.py` con la suite completa (586 tests verde en 136s).
-    Modulos criticos del nucleo (errors/recipe/runtime/agent/handoff/dsl/
-    runcontroller/storage) al 100%. Modulos de dominio:
-    pack_loader.py 97% (+10 H9-Coverage-2), skill_importer.py 98%
-    (+8 H9-Coverage-3), graph_expansion.py 98% (+17 H9-Coverage-1),
-    knowledge/git_source.py 95% (+8 H9-Coverage-4),
-    resources/catalog.py 100% (+4 H9-Coverage-5),
-    resources/registry.py 95% (+3 H9-Coverage-6),
-    resources/workflow.py 100% (+8 H9-Coverage-7),
-    runtime/runcontroller.py 96% (+3 H9-Coverage-8),
-    knowledge/knowledge_controller.py 96% (+5 H9-Coverage-9),
-    resources/bricks.py 100% (+2 H9-Coverage-10).
-    Modulos con SQL directo en `_conn.execute` (knowledge/context_controller
-    82%) quedan como deuda tecnica rastreada: requiere refactor a
-    Storage API publica.
+    Cobertura RE-MEDIDA con `pytest --cov=skillgraph` el 2026-09-24 07:43
+    (post-resume, post-H9-Coverage-1..10). Cifras validadas contra
+    `scripts/ci.sh` con la suite completa (604 tests verde en 192s).
+    34 archivos con cobertura 100% omitidos por `skip-covered`
+    (incluye todos los shims de retro-compatibilidad y los modulos
+    del nucleo errors/recipe/runtime/engine/parser/plan_loader/catalog).
+    Modulos de nucleo: storage 97%, runcontroller 96%, paths 81%
+    (Windows-only), platform/__init__ 100%.
+    Modulos de dominio: graph_expansion 98%, pack_loader 97%,
+    skill_importer 98%, promotion 100%, knowledge_invalidator 97%,
+    context_controller 82% (DEUDA VIVA documentada arriba).
+    Modulos de knowledge: git_source 95%, graph 96%,
+    knowledge_controller 96% (H9-Coverage-9: 93% -> 96%).
+    Modulos de resources: workflow 100% (H9-Coverage-7: 93% -> 100%),
+    bricks 100% (H9-Coverage-10: 91% -> 100%), registry 95%.
+    Modulos de runtime: agent 97%, handoff 95%, engine 100%.
+    Grieta workflow_runs<->runtime_events: preservada por construccion,
+    requiere operaciones transaccionales de Storage para cerrar.
+  total: 85%   # TOTAL reportado por pytest-cov (3292 stmts, 906 branches, 431/906 missed = 85% branch coverage ponderado).
 
 uat:
   audit_script: tests/uat_audit.py
@@ -386,9 +374,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-23 14:11
-  resultado: "405 passed in 121s (pytest --tb=short). 0 regresiones. ruff check: All checks passed!"
-  working_tree: "(H6+H7 commits; 92cff48, 95a0ca9, 1722fa5)"
+  ultima_ejecucion_local: 2026-09-24 07:43
+  resultado: "604 passed in 192.27s (pytest --tb=short). 0 regresiones. ruff check: All checks passed!"
+  working_tree: "(e186015 + 4 ficheros del operador sin commitear: AGENTS.md +72 LoC secc pipelinek, .pipeline.kts, .tool-versions, ci/run-pipelinek; todos CI local del operador, NO TOCAR por orden expresa del JOURNAL 23:00)"
 
 open_questions: []
 nota_honesta_revision: >
@@ -401,6 +389,24 @@ nota_honesta_revision: >
   Gap coverage UAT cerrado en este turno: 5 wrappers pytest para
   UAT-05/10/11/15/16 + 2 honest blockers UAT-12/13. Cobertura UAT en
   CI pasa de 9/16 (manuales) a 16/16 (todos con test pytest vivo).
+
+  --- UPDATE 2026-09-24 07:43 (post-resume) ---
+  Sesión reabierta tras corte de la noche del 2026-09-23. Estado
+  verificado al resume: scripts/ci.sh → 604/604 PASS en 192s. ruff
+  format+check sin diffs. uat_audit → 16/16 PASS, 0 FAIL, 0 BLOCKED.
+  HEAD = e186015 ("docs(state): regenera UAT-08 y UAT-09 tras cierre
+  sesion"). 4 ficheros sin commitear (AGENTS.md +72 LoC secc
+  pipelinek, .pipeline.kts, .tool-versions, ci/run-pipelinek) son CI
+  local del operador — NO TOCAR por orden expresa del JOURNAL 23:00.
+  STATE.yaml desactualizado (586 tests declarados, 604 reales; cifras
+  de cobertura workflow/runcontroller/knowledge_controller/bricks
+  seguian en pre-H9-Coverage-7..10). Refresh aplicado en este turno:
+  tests 586→604, duration_s 136→192, coverage_snapshot 2026-09-23
+  → 2026-09-24 con cifras reales post-H9-Coverage-7..10, deuda
+  context_controller 82% (SQL directo en ctrl.storage._conn) re-
+  documentada con 2 opciones defendibles. NO release (refactor sin
+  bump): sigue siendo housekeeping documental puro. Iniciativa
+  g-skillgraph-bootstrap COMPLETED en v0.6.0, sin trabajo activo.
 
 deuda_tecnica_residual:
   - "H9-BSlice3-S4 cerrado (recuperacion sin evento): API Storage.recover_interrupted_node_executions(int) que ejecuta UNA sola UPDATE masiva en lugar del bucle que abria una tx por fila en el original. RunController._recover_interrupted queda como shim trivial. Escritura sin evento (no toca atomicidad de S3/S5/S6/S7). +8 tests (6 contrato observable + 1 atomicidad interna verificada con MagicMock sobre Storage._conn + 1 introspeccion no-regresion). 487/487 verde. SIN release (refactor sin bump)."

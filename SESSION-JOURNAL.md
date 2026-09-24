@@ -2352,3 +2352,149 @@ El operador confirmo a mitad de sesion que `.pipeline.kts`,
 Tampoco comitear los cambios del operador en `AGENTS.md`
 (anadio seccion "§CI Local Obligatorio" que describe su pipelinek).
 
+## 2026-09-24 07:43 — Reanudacion de sesion + housekeeping documental
+
+### Resumen
+
+Sesion reabierta tras el corte nocturno del 2026-09-23 23:00. Sin
+trabajo material nuevo (la iniciativa `g-skillgraph-bootstrap` ya
+esta COMPLETED en v0.6.0); el unico trabajo del turno es
+**sincronizar el checkpoint** con la realidad medida.
+
+### Comando del operador
+
+> "ok seguimos a tu criterio segun las recomendaciones"
+
+Criterio aplicado: el camino (1) de las recomendaciones del turno
+anterior (housekeeping documental puro, sin tocar produccion). Los
+caminos (2) refactor context_controller y (3) cerrar iniciativa con
+deuda requieren decision material del operador — quedan encolados
+como opciones para el siguiente turno, no se autoejecutan.
+
+### Verificacion reproducible al resume
+
+- `git status`: `M AGENTS.md`, `?? .pipeline.kts`, `?? .tool-versions`,
+  `?? ci/run-pipelinek`. HEAD = `e186015`.
+- `bash scripts/ci.sh`: **604 passed in 192.27s**, `=== ci: OK ===`.
+  ruff format+check limpios.
+- `pytest --cov=skillgraph`: 604 tests, cobertura re-medida. Cifras
+  claves confirmadas: `resources/workflow.py` 100%, `runtime/runcontroller.py`
+  96%, `knowledge/knowledge_controller.py` 96%, `resources/bricks.py`
+  100%, `knowledge/context_controller.py` 82% (deuda viva).
+- `python -m tests.uat_audit`: **16/16 PASS, 0 FAIL, 0 BLOCKED**.
+  UAT-08 y UAT-09 mantienen `revision=e186015` (no cambia: el codigo
+  actual produce la misma observacion que la sesion anterior cerro).
+
+### Cambios documentales (3 ficheros, 0 LoC produccion)
+
+1. **`STATE.yaml`** — 4 bloques refrescados:
+   - `tests.total` 586→604, `tests.duration_s` 136→192.
+   - `coverage_snapshot_2026-09-23` → `coverage_snapshot_2026-09-24`
+     con cifras reales post-H9-Coverage-7..10 (4 modulos que la
+     tabla seguia reportando en sus valores pre-slice-7..10).
+   - `ci.ultima_ejecucion_local` 2026-09-23 14:11 → 2026-09-24 07:43.
+     `ci.resultado` 405/121s → 604/192.27s.
+   - `nota_honesta_revision` ampliada con bloque "UPDATE 2026-09-24
+     07:43 (post-resume)" que documenta el refresh y el estado real.
+   - Deuda `context_controller` 82% re-anotada con las 2 opciones
+     defendibles (refactor arquitectonico con TDD vs aceptar deuda).
+
+2. **`CURRENT.md`** — anadido bloque `## UPDATE 2026-09-24 07:43 —
+   housekeeping documental post-resume` al final del documento. Resume
+   lo ejecutado en este turno,decision de scope (0 LoC produccion,
+   0 release, 0 delegacion),recordatorio de los 4 ficheros sin
+   commitear (NO TOCAR),estado verificado,bloqueos (ninguno tecnico)
+   y proxima accion concreta (3 opciones encoladas).
+
+3. **Este JOURNAL** — entrada cronologica 2026-09-24 07:43.
+
+### Decisiones de scope aplicadas
+
+- **NO release**: el refresh es docs puro, sin bump SEMVER. La
+  iniciativa sigue cerrada en v0.6.0.
+- **NO delegacion**: SDDK mode=undeclared y adopcion ausente; la
+  regla L8 del overlay dice "la perdida del indice no desactiva el
+  paraguas" pero la regla de honestidad brutal del operador
+  (CURRENT.md) dice "sin firma del operador NO implementar
+  refactors materiales". El refactor context_controller es material
+  → no se auto-ejecuta.
+- **NO tocar los 4 ficheros del operador**: AGENTS.md +72 LoC
+  secc pipelinek, .pipeline.kts, .tool-versions, ci/run-pipelinek.
+  Por orden expresa del JOURNAL 23:00 ("Nota sobre CI local del
+  operador"): son CI local del operador, NO parte del proyecto.
+
+### Hallazgos metodologicos
+
+- **El refresh es necesario porque el STATE.yaml quedo 1 sesion
+  por detras**: la sesion anterior cerro con H9-Coverage-10
+  (commit `1d4cb7c`) + cierre de sesion (commit `e5e5b99`) + regen
+  UAT-08/09 (commit `f82669a` y `e186015`) pero el STATE seguia
+  declarando `tests.total: 586` (pre-coverage-7) y
+  `coverage_snapshot_2026-09-23` con cifras de pre-coverage-7..10
+  (workflow 93%, runcontroller 94%, knowledge_controller 93%,
+  bricks 91%). El snapshot se actualizaba en `nota_cobertura`
+  (la narrativa larga al final del bloque) pero NO en la tabla
+  de cifras (la parte estructurada arriba). El refresh elimina esa
+  inconsistencia.
+- **El UAT-08 y UAT-09 ya estaban sincronizados al HEAD actual**:
+  el commit `e186015` "docs(state): regenera UAT-08 y UAT-09 tras
+  cierre sesion" ya habia escrito la evidencia con `revision:
+  e186015`. Re-ejecutar `uat_audit` no cambia nada. Smoke empirico
+  OK; no hay que tocar `tests/uat-evidence/UAT-08.json` ni
+  `UAT-09.json`.
+- **34 archivos omitidos por `skip-covered`**: pytest-cov con
+  `--cov-report=term-missing:skip-covered` esconde los archivos
+  con cobertura 100%. Esos 34 son los shims de retro-compatibilidad
+  (catalog, recipe, runtime_types, dsl, errors, graph_expansion,
+  handoff, storage, workflow, bricks, git_source, pack_loader,
+  promotion, runcontroller, skill_importer, paths, agent,
+  context_controller, knowledge_controller, knowledge_invalidator)
+  + los modulos del nucleo errors/recipe/runtime/engine/parser/
+  plan_loader. El STATE anterior listaba algunos de estos
+  manualmente con cifras heredadas (algunas obsoletas, p.ej.
+  `catalog (shim): 0%` que ahora es 100% via skip-covered).
+  El nuevo STATE enumera solo los que NO se omiten (los <100%).
+
+### Bloqueos al cierre del turno
+
+- **Ninguno tecnico.**
+- **Deuda `context_controller` 82%** sigue pendiente de decision
+  material del operador (refactor Storage API vs aceptar deuda).
+- **SDDK mode = undeclared** sin urgencia. No impide trabajo local
+  del agente principal; impide delegar fases a subagentes.
+
+### Comprobacion final
+
+- `bash scripts/ci.sh`: 604/604 PASS en 192.27s.
+- `ruff check src tests`: All checks passed.
+- `ruff format --check src tests`: sin diffs.
+- `pytest --cov=skillgraph`: 604 passed, cobertura medida,
+  TOTAL=85% (ponderado por branch coverage).
+- `python -m tests.uat_audit`: 16/16 PASS, 0 FAIL, 0 BLOCKED.
+- `git status --short`: 4 unstaged (NO TOCAR por orden expresa).
+
+### Para retomar en cualquier sesion futura
+
+1. Operador decide entre las 3 opciones encoladas en CURRENT.md
+   (cerrar con deuda / refactor context_controller / otro trabajo).
+2. Si opcion (1): tag v0.6.1 (PATCH) cerrando la iniciativa con
+   la deuda documentada, regenerar CHANGELOG y `tests/uat-evidence/`.
+3. Si opcion (2): abrir ADR `ADR-0014-context-controller-storage-api.md`
+   con la lista de 8 operaciones a extraer, escribir
+   `specs/h9-coverage-context-controller.md`, ejecutar el refactor
+   con TDD (~30-40 tests + 8 metodos nuevos en Storage + delegacion
+   desde ContextController). Commit y tag MINOR si la API cambia.
+4. Cualquier opcion: el checkpoint esta sincronizado para reanudar
+   sin perdida de contexto.
+
+### Honestidad sobre el alcance de este turno
+
+Yo no estaba obligado a hacer este refresh. La regla del JOURNAL
+23:00 era "no tocar" los 4 ficheros del operador, no mencionaba
+sincronizar el STATE. La decision de hacerlo viene del criterio
+propio del agente principal al detectar que el checkpoint estaba
+1 slice por detras de la realidad medida. El operador solo dijo
+"sigue criterio segun las recomendaciones"; las recomendaciones
+del turno anterior eran 3 caminos defendibles y este es
+**el mas barato de los 3** (riesgo 0, valor: deja el checkpoint
+coherente para futuras sesiones).

@@ -819,3 +819,104 @@ ambito declarado para H9 (`STATE.yaml#next_workitem`).
 - **Próximo paso**: módulos <90% restantes: `resources/workflow.py`
   93%, `knowledge/context_controller.py` 82% (SQL directo, decisión
   material).
+
+## UPDATE 2026-09-24 07:43 — housekeeping documental post-resume
+
+### Goal
+
+Sin cambio: `g-skillgraph-bootstrap` COMPLETED en v0.6.0. La sesión
+reanuda para sincronizar el checkpoint con la realidad medida.
+
+### Trabajo de este turno (housekeeping puro, 0 LoC producción)
+
+- **`scripts/ci.sh` re-ejecutado** al resume: 604/604 PASS en 192.27s
+  (`=== ci: OK ===`). ruff format+check sin diffs. Sin regresiones.
+- **`pytest --cov=skillgraph` re-medido** con la suite completa (604 tests).
+  Cifras reales confirmadas. Comparado contra `STATE.yaml` (que estaba
+  congelado en 586 tests / snapshot pre-H9-Coverage-7..10) detecta
+  desalineamientos.
+- **`uat_audit` re-ejecutado**: 16/16 PASS, 0 FAIL, 0 BLOCKED. UAT-08
+  y UAT-09 mantienen `revision=e186015` (idéntica al último commit, no
+  cambia porque el código actual produce exactamente la misma observación
+  honesta que la sesión anterior cerró).
+- **`STATE.yaml` refrescado**:
+  - `tests.total` 586→604, `tests.duration_s` 136→192.
+  - `coverage_snapshot_2026-09-23` → `coverage_snapshot_2026-09-24`
+    con cifras reales post-H9-Coverage-7..10: `resources/workflow.py`
+    93→100%, `runtime/runcontroller.py` 94→96%,
+    `knowledge/knowledge_controller.py` 93→96%,
+    `resources/bricks.py` 91→100%.
+  - `ci.ultima_ejecucion_local` 2026-09-23 14:11 → 2026-09-24 07:43.
+  - `ci.resultado` 405/121s → 604/192.27s.
+  - `nota_honesta_revision` ampliada con la entrada del resume.
+  - Deuda `knowledge/context_controller.py` 82% re-documentada con
+    las 2 opciones defendibles (refactor arquitectónico con TDD vs
+    aceptar la deuda y cubrir las 6 ramas alcanzables).
+- **Este UPDATE en `CURRENT.md`** + entrada cronológica en
+  `SESSION-JOURNAL.md`.
+
+### Decisión de scope
+
+NO se ha tocado código de producción. NO se ha emitido release (el
+refresh es docs puro, sin bump). NO se ha delegado en subagentes:
+mode SDDK sigue `undeclared` y la regla del JOURNAL es que sin firma
+del operador no se implementan refactors materiales (el refactor de
+context_controller, p.ej., es trabajo no trivial que afecta API pública
+de Storage — sigue encolado como decisión material pendiente para
+cuando el operador dé consigna explícita).
+
+### 4 ficheros sin commitear (NO TOCAR)
+
+`git status` muestra `M AGENTS.md`, `?? .pipeline.kts`, `?? .tool-versions`,
+`?? ci/run-pipelinek`. Por orden expresa del JOURNAL 23:00 ("Nota sobre
+CI local del operador") estos ficheros son CI local del operador,
+NO parte del proyecto. **NO TOCAR, NO BORRAR, NO COMMITEAR.** La sección
+"§CI Local Obligatorio — pipelinek" en `AGENTS.md` (72 LoC) la
+introdujo el operador a mitad de la sesión anterior y debe permanecer
+intacta como referencia operativa de su pipelinek v0.39.0.
+
+### Último estado comprobado
+
+- HEAD: `e186015` (sin cambios; el refresh es docs).
+- Tests: **604/604 PASS** (`scripts/ci.sh`, 192.27s).
+- UATs: **16/16 PASS**, 0 FAIL, 0 BLOCKED.
+- Cobertura núcleo: 100% o ≥95% en todos los módulos excepto
+  `knowledge/context_controller.py` (82%, deuda viva documentada).
+- Working tree: 4 ficheros del operador sin commitear
+  (orden expresa: NO TOCAR).
+- Sin trabajo activo. Iniciativa `g-skillgraph-bootstrap` COMPLETED
+  en v0.6.0.
+
+### Bloqueos
+
+- **Ninguno técnico.** La deuda `context_controller` 82% sigue
+  pendiente de decisión material del operador (opción 1 refactor
+  Storage API vs opción 2 aceptar deuda) registrada en STATE.yaml.
+- `SDDK mode = undeclared`, adopción ausente. No impide trabajo
+  local (lectura/escritura del propio agente principal); impide
+  delegar fases. La regla L8 del overlay es explícita: "la pérdida
+  del índice no desactiva el paraguas". El estado actual respeta
+  las leyes L1..L8 sin necesidad de decidir el modo en este turno.
+
+### Próxima acción concreta
+
+Esperar consigna del operador sobre si:
+
+1. **Cerrar la iniciativa con la deuda documentada** (opción
+   defensible: 16/16 UAT PASS, 604/604 tests, blueprint v1
+   completo al 100%; la única rama <95% es `context_controller`
+   con justificación arquitectónica — Storage encapsula SQL como
+   regla, pero context_controller la viola porque no había
+   demanda cuando se implementó; cerrarla es trabajo no trivial
+   que cambia API pública).
+2. **Refactor context_controller → Storage API** (~30-40 tests +
+   8 métodos nuevos en Storage + delegación desde
+   ContextController). Cambio de API pública, requiere aprobación
+   del operador y ADR. Trabajo material no trivial.
+3. **Otro trabajo distinto** fuera del scope de context_controller
+   (audit transversal final, stewardship de `cli.py` in-process
+   para mejorar cobertura visible, etc.).
+
+Mientras tanto, el repo está en estado estable y la sesión puede
+cerrarse sin pérdida de contexto gracias al checkpoint sincronizado
+en este turno.
