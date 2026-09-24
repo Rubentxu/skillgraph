@@ -155,7 +155,7 @@ class TestStorageRelationProperties:
     """Cierra la rama 'properties no vacias' de add_relation."""
 
     def test_add_relation_with_properties(self, tmp_data_root) -> None:
-        from skillgraph.storage import Storage
+        from skillgraph.platform.storage import Storage
 
         s = Storage(tmp_data_root / "p.sqlite")
         try:

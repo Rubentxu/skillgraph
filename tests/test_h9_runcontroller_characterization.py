@@ -28,12 +28,12 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.agent import FakeAgentAdapter
-from skillgraph.errors import IdempotencyError
-from skillgraph.runcontroller import RunController
+from skillgraph.core.errors import IdempotencyError
+from skillgraph.platform.storage import Storage
+from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
+from skillgraph.runtime.agent import FakeAgentAdapter
 from skillgraph.runtime.engine import EventLog, RuntimeEvent
-from skillgraph.storage import Storage
-from skillgraph.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
+from skillgraph.runtime.runcontroller import RunController
 
 TENANT = "t"
 PROJECT = "p"

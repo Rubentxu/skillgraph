@@ -23,12 +23,12 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.bricks import Brick, ResourceIdentity
-from skillgraph.errors import UnknownKindError, ValidationError
-from skillgraph.pack_loader import (
+from skillgraph.core.errors import UnknownKindError, ValidationError
+from skillgraph.domain.pack_loader import (
     declare_types_from_pack,
     validate_instance_against_registry,
 )
+from skillgraph.resources.bricks import Brick, ResourceIdentity
 from skillgraph.resources.parser import parse_file
 from skillgraph.resources.registry import load_defaults
 

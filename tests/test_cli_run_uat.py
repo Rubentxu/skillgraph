@@ -296,9 +296,9 @@ def _seed_active_run(
     """
     import yaml as _yaml
 
-    from skillgraph.agent import FakeAgentAdapter
-    from skillgraph.runcontroller import RunController
-    from skillgraph.storage import Storage
+    from skillgraph.platform.storage import Storage
+    from skillgraph.runtime.agent import FakeAgentAdapter
+    from skillgraph.runtime.runcontroller import RunController
 
     with open(plan_path, encoding="utf-8") as f:
         text = f.read()

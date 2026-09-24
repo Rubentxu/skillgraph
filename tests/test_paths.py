@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.paths import (
+from skillgraph.platform.paths import (
     DEFAULT_TENANT,
     ENV_DATA_ROOT,
     catalog_path,

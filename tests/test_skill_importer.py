@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.skill_importer import (
+from skillgraph.domain.skill_importer import (
     analyze_skill,
     register_imported_skill,
 )
-from skillgraph.storage import Storage
+from skillgraph.platform.storage import Storage
 
 
 def _write(p: Path, content: str) -> None:

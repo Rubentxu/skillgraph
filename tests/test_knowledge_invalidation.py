@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.errors import (
+from skillgraph.core.errors import (
     HopLimitExceededWarning,
     UnknownSourceError,
 )
 from skillgraph.knowledge.graph import Claim, Entity, Evidence, Source
-from skillgraph.knowledge_controller import KnowledgeController
-from skillgraph.storage import Storage
+from skillgraph.knowledge.knowledge_controller import KnowledgeController
+from skillgraph.platform.storage import Storage
 
 # ---------------------------------------------------------------------------
 # Helpers

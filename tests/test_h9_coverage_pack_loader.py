@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import pytest
 
-from skillgraph.bricks import Brick, ResourceIdentity
-from skillgraph.errors import ValidationError
-from skillgraph.pack_loader import (
+from skillgraph.core.errors import ValidationError
+from skillgraph.domain.pack_loader import (
     declare_types_from_pack,
     validate_instance_against_registry,
 )
+from skillgraph.resources.bricks import Brick, ResourceIdentity
 from skillgraph.resources.registry import load_defaults
 
 

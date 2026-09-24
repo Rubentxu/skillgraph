@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from skillgraph.errors import ValidationError
-from skillgraph.handoff import (
+from skillgraph.core.errors import ValidationError
+from skillgraph.runtime.handoff import (
     Handoff,
     HandoffBehavior,
     HandoffExecution,

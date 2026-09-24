@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.errors import (
+from skillgraph.core.errors import (
     InvalidSourceError,
     StaleKnowledgeWarning,
     UnknownClaimError,
@@ -31,11 +31,11 @@ from skillgraph.knowledge.graph import (
     OutcomeTrace,
     Source,
 )
-from skillgraph.knowledge_controller import (
+from skillgraph.knowledge.knowledge_controller import (
     KnowledgeController,
     make_claim_id,
 )
-from skillgraph.storage import Storage
+from skillgraph.platform.storage import Storage
 
 # ---------------------------------------------------------------------------
 # Helpers

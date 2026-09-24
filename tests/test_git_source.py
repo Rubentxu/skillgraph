@@ -13,14 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.errors import DulwichNotAvailableError
-from skillgraph.git_source import (
+from skillgraph.core.errors import DulwichNotAvailableError
+from skillgraph.knowledge.git_source import (
     GitSource,
     set_dulwich_import_failed,
 )
 from skillgraph.knowledge.graph import Source
-from skillgraph.knowledge_controller import KnowledgeController
-from skillgraph.storage import Storage
+from skillgraph.knowledge.knowledge_controller import KnowledgeController
+from skillgraph.platform.storage import Storage
 
 # ---------------------------------------------------------------------------
 # Helpers

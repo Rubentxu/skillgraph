@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from skillgraph.dsl import (
+from skillgraph.core.errors import ParseError, ValidationError
+from skillgraph.domain.dsl import (
     NODE_KINDS,
     NodeName,
     OutcomeLabel,
@@ -23,9 +24,8 @@ from skillgraph.dsl import (
     outcome,
     revision,
 )
-from skillgraph.errors import ParseError, ValidationError
 from skillgraph.resources.plan_loader import _plan_from_dict
-from skillgraph.workflow import WorkflowPlan
+from skillgraph.resources.workflow import WorkflowPlan
 
 
 class TestSmartConstructors:

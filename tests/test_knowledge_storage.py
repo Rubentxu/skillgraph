@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.errors import (
+from skillgraph.core.errors import (
     InvalidEntityIDError,
     InvalidSourceError,
     InvalidSourceIDError,
@@ -34,7 +34,7 @@ from skillgraph.knowledge.graph import (
     entity_id,
     source_id,
 )
-from skillgraph.storage import Storage
+from skillgraph.platform.storage import Storage
 
 # ---------------------------------------------------------------------------
 # Helpers

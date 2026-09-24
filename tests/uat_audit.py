@@ -554,9 +554,9 @@ def uat_05() -> Evidence:
     # 2. seed knowledge via python -c
     seed_cmd = (
         "from pathlib import Path;"
-        "from skillgraph.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;"
-        "from skillgraph.storage import Storage;"
-        "from skillgraph.knowledge_controller import KnowledgeController;"
+        "from skillgraph.platform.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;"
+        "from skillgraph.platform.storage import Storage;"
+        "from skillgraph.knowledge.knowledge_controller import KnowledgeController;"
         "from skillgraph.knowledge.graph import Claim, Entity, Source;"
         f"data_root = resolve_data_root(Path({str(data_root)!r}));"
         "db = project_db_path(data_root, 'demo', DEFAULT_TENANT);"
@@ -1031,9 +1031,9 @@ def uat_10() -> Evidence:
 
     seed_cmd = (
         "from pathlib import Path;"
-        "from skillgraph.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;"
-        "from skillgraph.storage import Storage;"
-        "from skillgraph.knowledge_controller import KnowledgeController;"
+        "from skillgraph.platform.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;"
+        "from skillgraph.platform.storage import Storage;"
+        "from skillgraph.knowledge.knowledge_controller import KnowledgeController;"
         "from skillgraph.knowledge.graph import Claim, Entity, Source;"
         f"dr = resolve_data_root(Path({str(data_root)!r}));"
         "db = project_db_path(dr, 'demo', DEFAULT_TENANT);"
@@ -1436,7 +1436,7 @@ def uat_14() -> Evidence:
         [
             sys.executable,
             "-c",
-            "import skillgraph.resources.registry; import skillgraph.bricks; import skillgraph.cli; print('ok')",
+            "import skillgraph.resources.registry; import skillgraph.resources.bricks; import skillgraph.cli; print('ok')",
         ],
         capture_output=True,
         text=True,
@@ -1445,7 +1445,7 @@ def uat_14() -> Evidence:
     )
     steps.append(
         {
-            "cmd": "python -c 'import skillgraph.resources.registry, skillgraph.bricks, skillgraph.cli'",
+            "cmd": "python -c 'import skillgraph.resources.registry, skillgraph.resources.bricks, skillgraph.cli'",
             "returncode": str(r.returncode),
             "stdout": r.stdout,
             "stderr": r.stderr,

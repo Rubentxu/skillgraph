@@ -23,7 +23,7 @@ from __future__ import annotations
 import pytest
 
 from skillgraph import ValidationError
-from skillgraph.recipe import ContextRecipe, ObligatorySelector
+from skillgraph.core.recipe import ContextRecipe, ObligatorySelector
 
 # ---------------------------------------------------------------------------
 # T1: ObligatorySelector.__post_init__ validation

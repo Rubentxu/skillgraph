@@ -19,7 +19,7 @@ from collections.abc import Mapping
 
 import pytest
 
-from skillgraph.graph_expansion import (
+from skillgraph.governance.graph_expansion import (
     AddNode,
     Authorization,
     EvaluationResult,
@@ -30,7 +30,7 @@ from skillgraph.graph_expansion import (
     PolicySettings,
     propose,
 )
-from skillgraph.workflow import WorkflowNode, WorkflowPlan
+from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan
 
 # ---------------------------------------------------------------------------
 # Fixtures (minimalistas; NO duplica las de test_h4_expansion.py)
@@ -120,7 +120,7 @@ def evaluate_proposal_valid(
     **kwargs: object,
 ) -> EvaluationResult:
     """Helper: llama a evaluate_proposal (no top-level para evitar confusion)."""
-    from skillgraph.graph_expansion import evaluate_proposal
+    from skillgraph.governance.graph_expansion import evaluate_proposal
 
     return evaluate_proposal(proposal, plan, registry, **kwargs)
 

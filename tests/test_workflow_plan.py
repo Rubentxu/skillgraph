@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from skillgraph.errors import ValidationError
-from skillgraph.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
+from skillgraph.core.errors import ValidationError
+from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 
 
 def _node(**overrides: object) -> WorkflowNode:

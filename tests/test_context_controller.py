@@ -10,15 +10,16 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.context_controller import (
-    ContextController,
-    OutcomeTracer,
-    approx_chars,
-)
-from skillgraph.errors import (
+from skillgraph.core.errors import (
     MissingObligatoryError,
     StaleKnowledgeError,
     TokenBudgetExceededError,
+)
+from skillgraph.core.recipe import ContextRecipe, ObligatorySelector
+from skillgraph.knowledge.context_controller import (
+    ContextController,
+    OutcomeTracer,
+    approx_chars,
 )
 from skillgraph.knowledge.graph import (
     Claim,
@@ -26,9 +27,8 @@ from skillgraph.knowledge.graph import (
     Evidence,
     Source,
 )
-from skillgraph.knowledge_controller import KnowledgeController
-from skillgraph.recipe import ContextRecipe, ObligatorySelector
-from skillgraph.storage import Storage
+from skillgraph.knowledge.knowledge_controller import KnowledgeController
+from skillgraph.platform.storage import Storage
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -346,7 +346,7 @@ def test_recipe_as_brick_roundtrip(tmp_path: Path) -> None:
 
 def test_recipe_as_dict_when_brick_disabled(tmp_path: Path) -> None:
     """Sin brick kind 'ContextRecipe', from_dict funciona puro."""
-    from skillgraph.errors import ValidationError
+    from skillgraph.core.errors import ValidationError
 
     with pytest.raises(ValidationError):
         ContextRecipe.from_dict(

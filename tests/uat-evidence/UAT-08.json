@@ -3,7 +3,7 @@
   "expected": "apply rc=0; plan.nodes contiene nuevo nodo 'extra'; originales intactos",
   "notes": "H4 Slice 1 implementado. UAT-08 cumple 'incorpora unicamente el cambio solicitado' + 'nodos completados mantienen revisiones y resultados originales'. apply devuelve plan NUEVO (inmutable); el original no se toca. Las revisiones de completados viven en node_executions (H2 slice 4+) y el patch opera a nivel de plan, no de ejecuciones.",
   "observed": "apply_rc=0; nodes_after=['child', 'extra', 'root']; added=True",
-  "revision": "e186015ef4bb750f6bb378ba253dda9e7ae0bf18",
+  "revision": "2751bc81a05c941160fd19311ded37f6493a554e",
   "scenario": "Dada una problematica no contemplada, cuando se propone un subgrafo valido y autorizado, entonces se incorpora unicamente el cambio solicitado. Los nodos completados mantienen sus revisiones y resultados originales.",
   "status": "PASS",
   "steps": [

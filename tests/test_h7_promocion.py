@@ -21,14 +21,14 @@ from __future__ import annotations
 
 import pytest
 
-from skillgraph.errors import IdentityConflictError, ValidationError
-from skillgraph.promotion import (
+from skillgraph.core.errors import IdentityConflictError, ValidationError
+from skillgraph.governance.promotion import (
     _compute_idempotency_key,
     apply_proposal,
     reconcile_pending,
     submit_proposal,
 )
-from skillgraph.storage import Storage
+from skillgraph.platform.storage import Storage
 
 
 @pytest.fixture

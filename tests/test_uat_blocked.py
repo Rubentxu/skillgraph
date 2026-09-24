@@ -102,16 +102,24 @@ def test_uat_13_h7_real_tests_pass() -> None:
 
 
 def test_h6_pack_loader_module_exists() -> None:
-    """src/skillgraph/pack_loader.py debe existir y exponer declare_types_from_pack."""
-    from skillgraph import pack_loader  # type: ignore[import-not-found]
+    """skillgraph.domain.pack_loader debe existir y exponer declare_types_from_pack.
+
+    Post-ADR-0014: el modulo vive en el bounded context `domain`, no en la
+    raiz del paquete. La capa de shim de compat se elimino.
+    """
+    from skillgraph.domain import pack_loader  # type: ignore[import-not-found]
 
     assert hasattr(pack_loader, "declare_types_from_pack")
     assert hasattr(pack_loader, "validate_instance_against_registry")
 
 
 def test_h7_promotion_module_exists() -> None:
-    """src/skillgraph/promotion.py debe existir y exponer las 3 funciones."""
-    from skillgraph import promotion  # type: ignore[import-not-found]
+    """skillgraph.governance.promotion debe existir y exponer las 3 funciones.
+
+    Post-ADR-0014: el modulo vive en el bounded context `governance`, no en
+    la raiz del paquete. La capa de shim de compat se elimino.
+    """
+    from skillgraph.governance import promotion  # type: ignore[import-not-found]
 
     assert hasattr(promotion, "submit_proposal")
     assert hasattr(promotion, "apply_proposal")

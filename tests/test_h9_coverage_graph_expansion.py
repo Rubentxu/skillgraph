@@ -47,7 +47,7 @@ from skillgraph.governance.graph_expansion import (
     propose,
     validate,
 )
-from skillgraph.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
+from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 
 # _Ok y _Err son internos pero la API publica ExpansionResult
 # los necesita para construirse. Los importamos por nombre

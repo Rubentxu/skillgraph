@@ -16,12 +16,12 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.agent import (
+from skillgraph.core.errors import NotFoundError, ValidationError
+from skillgraph.runtime.agent import (
     AgentResult,
     FakeAgentAdapter,
     RecordingAdapter,
 )
-from skillgraph.errors import NotFoundError, ValidationError
 from tests.test_handoff import _handoff
 
 

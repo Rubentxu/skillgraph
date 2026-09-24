@@ -17,10 +17,10 @@ from typing import Any
 
 import pytest
 
-from skillgraph.errors import (
+from skillgraph.core.errors import (
     UnauthorizedExpansionError,
 )
-from skillgraph.graph_expansion import (
+from skillgraph.governance.graph_expansion import (
     AddNode,
     AddTransition,
     Authorization,
@@ -31,7 +31,7 @@ from skillgraph.graph_expansion import (
     record_rejection,
     validate,
 )
-from skillgraph.workflow import (
+from skillgraph.resources.workflow import (
     WorkflowNode,
     WorkflowPlan,
     WorkflowTransition,

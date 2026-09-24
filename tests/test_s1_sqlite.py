@@ -20,8 +20,8 @@ from pathlib import Path
 import pytest
 
 from skillgraph import Brick, ResourceIdentity, parse_file
-from skillgraph.errors import IdentityConflictError
-from skillgraph.storage import Storage
+from skillgraph.core.errors import IdentityConflictError
+from skillgraph.platform.storage import Storage
 
 pytestmark = pytest.mark.spike
 

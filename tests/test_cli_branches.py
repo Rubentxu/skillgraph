@@ -157,7 +157,7 @@ class TestCliExitDomain:
         IdempotencyError (que es SkillGraphError) en medio del flujo.
         """
         from skillgraph.cli import runner
-        from skillgraph.errors import IdempotencyError
+        from skillgraph.core.errors import IdempotencyError
 
         # Forzamos que cmd_project_list lance una excepcion de dominio
         # interceptando catalog para que get_project lance IdempotencyError
@@ -237,8 +237,8 @@ class TestCliExitRunIncomplete:
         In-process y no subprocess porque no podemos monkeypatchear
         codigo que se ejecuta en otro proceso Python.
         """
-        import skillgraph.runcontroller as rc_module
-        from skillgraph.runcontroller import RunSnapshot
+        import skillgraph.runtime.runcontroller as rc_module
+        from skillgraph.runtime.runcontroller import RunSnapshot
 
         # Monkeypatch ANTES de main() porque el CLI hace import local
         # cada vez. In-process.
@@ -334,9 +334,9 @@ def _seed_knowledge(data_root: Path, *, source_id: str = "local:src/foo.py") -> 
     """
     code = (
         "from pathlib import Path;"
-        "from skillgraph.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;"
-        "from skillgraph.storage import Storage;"
-        "from skillgraph.knowledge_controller import KnowledgeController;"
+        "from skillgraph.platform.paths import resolve_data_root, project_db_path, DEFAULT_TENANT;"
+        "from skillgraph.platform.storage import Storage;"
+        "from skillgraph.knowledge.knowledge_controller import KnowledgeController;"
         "from skillgraph.knowledge.graph import Claim, Entity, Source;"
         f"data_root = resolve_data_root(Path({str(data_root)!r}));"
         "db = project_db_path(data_root, 'demo', DEFAULT_TENANT);"
