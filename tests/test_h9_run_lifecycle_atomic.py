@@ -479,3 +479,190 @@ class TestReopenAfterInjectedFault:
         )
         # Una sola transaccion completa despues del reopen: 1 RunCompleted.
         assert event_count == 1, f"Reopen fallo: RunCompleted count={event_count} (esperado 1)"
+
+
+# ---------- Test 5-7: no-duplicacion en camino feliz ----------
+#
+# Blindaje contra una regresion donde alguien duplique `EventLog.append`
+# o agregue una llamada paralela a `_insert_event_in_tx` dentro de
+# las APIs atomicas. Las pruebas en fallo cubren el rollback conjunto;
+# las de camino feliz cubren la parte complementaria: que un camino
+# exitoso NO produce duplicados.
+#
+# Operador: "la transaccion garantiza coherencia de las dos escrituras,
+# no idempotencia de solicitudes repetidas." Este blindaje NO prueba
+# idempotencia (que es UAT-07, ya cubierto en otros tests); prueba
+# que UNA llamada a la API atomica produce EXACTAMENTE una fila de
+# runtime_events y una fila (o UPDATE) de workflow_runs.
+
+
+class TestNoDuplicationOnHappyPath:
+    """Una sola invocacion de la API atomica -> un solo evento."""
+
+    def test_create_run_atomically_produces_single_run_created_event(self, fresh_db: str) -> None:
+        tenant_id = "t-nd-create"
+        project_id = "p-nd-create"
+        run_id = "r-nd-create-" + uuid.uuid4().hex[:8]
+        event = _run_event(tenant_id, project_id, run_id)
+
+        storage = Storage(path=fresh_db)
+        try:
+            storage.create_run_atomically(
+                event=event,
+                run_id=run_id,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                plan_json="{}",
+                initial_node="start",
+            )
+        finally:
+            storage.close()  # type: ignore[attr-defined]
+
+        verify = Storage(path=fresh_db)
+        try:
+            run_rows = verify._conn.execute(
+                "SELECT COUNT(*) FROM workflow_runs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()[0]
+            event_rows = verify._conn.execute(
+                "SELECT COUNT(*) FROM runtime_events "
+                "WHERE run_id = ? AND event_kind = 'RunCreated'",
+                (run_id,),
+            ).fetchone()[0]
+            all_for_run = verify._conn.execute(
+                "SELECT COUNT(*) FROM runtime_events WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()[0]
+        finally:
+            verify.close()  # type: ignore[attr-defined]
+
+        assert run_rows == 1, (
+            f"No-duplicacion rota: workflow_runs tiene {run_rows} filas para run_id={run_id} (esperado 1)"
+        )
+        assert event_rows == 1, (
+            f"No-duplicacion rota: hay {event_rows} RunCreated para run_id={run_id} (esperado 1)"
+        )
+        assert all_for_run == 1, (
+            f"No-duplicacion rota: hay {all_for_run} eventos totales para run_id={run_id} (esperado 1)"
+        )
+
+    def test_transition_run_state_atomically_produces_single_run_completed_event_failed(
+        self, fresh_db: str
+    ) -> None:
+        """FAILED terminal debe producir UN solo RunCompleted(state=FAILED)."""
+        tenant_id = "t-nd-fail"
+        project_id = "p-nd-fail"
+        run_id = "r-nd-fail-" + uuid.uuid4().hex[:8]
+        bootstrap = Storage(path=fresh_db)
+        try:
+            bootstrap._conn.execute(
+                "INSERT INTO workflow_runs "
+                "(run_id, tenant_id, project_id, state, plan_json, current_node) "
+                "VALUES (?, ?, ?, 'ACTIVE', '{}', ?)",
+                (run_id, tenant_id, project_id, "start"),
+            )
+            bootstrap._conn.commit()
+        finally:
+            bootstrap.close()  # type: ignore[attr-defined]
+
+        event = _completed_event(tenant_id, project_id, run_id, "FAILED", "start")
+        storage = Storage(path=fresh_db)
+        try:
+            storage.transition_run_state_atomically(
+                event=event,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+                state="FAILED",
+                current_node="start",
+            )
+        finally:
+            storage.close()  # type: ignore[attr-defined]
+
+        verify = Storage(path=fresh_db)
+        try:
+            run_state = verify._conn.execute(
+                "SELECT state FROM workflow_runs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()[0]
+            completed = verify._conn.execute(
+                "SELECT COUNT(*) FROM runtime_events "
+                "WHERE run_id = ? AND event_kind = 'RunCompleted'",
+                (run_id,),
+            ).fetchone()[0]
+            all_for_run = verify._conn.execute(
+                "SELECT COUNT(*) FROM runtime_events WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()[0]
+        finally:
+            verify.close()  # type: ignore[attr-defined]
+
+        assert run_state == "FAILED", (
+            f"No-duplicacion rota: workflow_runs.state={run_state!r} (esperado 'FAILED')"
+        )
+        assert completed == 1, f"No-duplicacion rota: hay {completed} RunCompleted (esperado 1)"
+        assert all_for_run == 1, (
+            f"No-duplicacion rota: hay {all_for_run} eventos totales (esperado 1)"
+        )
+
+    def test_transition_run_state_atomically_produces_single_run_completed_event_completed(
+        self, fresh_db: str
+    ) -> None:
+        """COMPLETED debe producir UN solo RunCompleted(state=COMPLETED)."""
+        tenant_id = "t-nd-comp"
+        project_id = "p-nd-comp"
+        run_id = "r-nd-comp-" + uuid.uuid4().hex[:8]
+        bootstrap = Storage(path=fresh_db)
+        try:
+            bootstrap._conn.execute(
+                "INSERT INTO workflow_runs "
+                "(run_id, tenant_id, project_id, state, plan_json, current_node) "
+                "VALUES (?, ?, ?, 'ACTIVE', '{}', ?)",
+                (run_id, tenant_id, project_id, "start"),
+            )
+            bootstrap._conn.commit()
+        finally:
+            bootstrap.close()  # type: ignore[attr-defined]
+
+        event = _completed_event(tenant_id, project_id, run_id, "COMPLETED", None)
+        storage = Storage(path=fresh_db)
+        try:
+            storage.transition_run_state_atomically(
+                event=event,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+                state="COMPLETED",
+                current_node=None,
+            )
+        finally:
+            storage.close()  # type: ignore[attr-defined]
+
+        verify = Storage(path=fresh_db)
+        try:
+            run_state = verify._conn.execute(
+                "SELECT state FROM workflow_runs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()[0]
+            completed = verify._conn.execute(
+                "SELECT COUNT(*) FROM runtime_events "
+                "WHERE run_id = ? AND event_kind = 'RunCompleted' "
+                "AND json_extract(payload_json, '$.state') = 'COMPLETED'",
+                (run_id,),
+            ).fetchone()[0]
+            all_for_run = verify._conn.execute(
+                "SELECT COUNT(*) FROM runtime_events WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()[0]
+        finally:
+            verify.close()  # type: ignore[attr-defined]
+
+        assert run_state == "COMPLETED", (
+            f"No-duplicacion rota: workflow_runs.state={run_state!r} (esperado 'COMPLETED')"
+        )
+        assert completed == 1, (
+            f"No-duplicacion rota: hay {completed} RunCompleted(COMPLETED) (esperado 1)"
+        )
+        assert all_for_run == 1, (
+            f"No-duplicacion rota: hay {all_for_run} eventos totales (esperado 1)"
+        )
