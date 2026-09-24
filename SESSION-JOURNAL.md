@@ -2733,3 +2733,73 @@ Procedí sin más interrupción.
 - Tag `v0.7.0` anclado a `6d7e66f`.
 - Sin remote `git push` (orden del operador).
 
+
+---
+
+## [2026-09-24] Plan B — Cierre de la grieta atómica estado↔evento (v0.7.1)
+
+### Hechos
+
+- **Tag emitido**: `v0.7.1` (anotado) → SHA `8b63db6a8e4cc585e51cdf7da39379f25a60fbc5`.
+- **Rama cerrada**: `h9-plan-b-atomicity`. Merge en `main` (merge commit `8b63db6`).
+- **APIs nuevas en `Storage`**:
+  - `start_node_execution_atomically`
+  - `complete_node_execution_atomically`
+  - `mark_node_failed_atomically`
+  - Helpers `_atomic_state_and_event` + `_insert_event_in_tx`.
+- **Tests**: 11 nuevos en `tests/test_h9_plan_b_atomicity.py`
+  (T7-T11). Total suite: 630/630 pasa (619 originales + 11 nuevos).
+- **UAT**: 16/16 PASS reproducible.
+
+### Decisiones arquitectónicas
+
+1. **BEGIN/COMMIT/ROLLBACK explícitos**. Descubrimiento empírico:
+   `with self._conn:` + `isolation_level=None` NO rollbackea al
+   fallar en el body. Las 3 APIs nuevas usan transacciones
+   explícitas sobre `self._conn`.
+
+2. **`UNIQUE(event_id)` como idempotencia** (UAT-07). Replay
+   con el mismo `event.event_id` → `IdempotencyError`; nunca un
+   duplicado.
+
+3. **`Storage._tx()` queda con la grieta** (preexistente): las
+   APIs no-atómicas siguen usando `with self._conn:`. Plan B no
+   la cierra. Registrada como **LIMITACIÓN-7** y listada como
+   follow-up en `audits/release-v0.7.1-summary.md`.
+
+4. **Principio de anclaje uat-evidence ↔ tag**. Por la
+   circularidad SHA↔contenido de git, el invariante
+   "tag-SHA == evidence-SHA" no es realizable cuando la evidence
+   referencia al SHA del tag. Decisión adoptada: tag en el SHA
+   del release (`8b63db6`) y evidence apuntando al mismo SHA.
+   Coincide cuando ambos son ancestros. Documentado en el
+   tag message y en `audits/release-v0.7.1-summary.md` §Decision
+   history.
+
+### Evidencia reproducible
+
+- `audits/cleanroom-evidence/skillgraph-v0.7.1-audit-bundle.tar.gz`
+  (1.32 MB).
+- `audits/cleanroom-evidence/ci-output-v0.7.1.txt`: 629 passed +
+  1 skipped (skip preexistente "blueprint no versionado en el repo").
+- `audits/cleanroom-evidence/uat-audit-v0.7.1.txt`: PASS=16 FAIL=0.
+- `audits/release-v0.7.1-summary.md`: doc ejecutivo.
+- `audits/h9-plan-b-atomicity-closure-b38c105.md`: doc de cierre.
+
+### Próximo paso
+
+- **Plan A**: cobertura de `Storage` para consolidar la cobertura
+  preexistente de las nuevas APIs y propagar la metodología.
+- **Plan C**: concurrencia + backup + adaptador real (cerrar
+  LIMITACIONES 2-6 de la auditoría v0.7.0).
+- **LIMITACIÓN-7**: refactor de `Storage` para que TODA escritura
+  use BEGIN/COMMIT/ROLLBACK. Material: requiere tests de
+  regresión sistemáticos.
+
+### Estado durable
+
+- `v0.7.1` tag en `8b63db6`. HEAD `main` posterior (`e86a5` / `12cb1`)
+  contiene los materiales del release (bundle reproducible + summary).
+- Tests estables: 630/630.
+- UAT estables: 16/16.
+- ruff + format: clean.
