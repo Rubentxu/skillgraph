@@ -246,6 +246,46 @@ el camino público del runtime, no solo en el Storage aislado.
   grieta; solo acredita la integración del runtime con las APIs
   atómicas ya introducidas en v0.7.1.
 
+## [0.8.0] — 2026-09-24 (sin tag, sin push; pendiente de autorización)
+
+**Tag**: no asignado (espera autorización del operador).
+**Código efectivo**: commit `528940297ec5ff981f0f59401fdb1e3f563236ab`
+("feat(runtime): contexto de run accesible en Handoff (slice H9)").
+
+**Resumen**: el `RunController` inyecta ahora el contexto del run
+(tenant/project/run_id y metadatos vigentes) en cada `Handoff`
+construido, persistido y recuperado vía `platform/storage`. El
+contrato de la API pública de `RunController.__init__` se amplía
+con un parámetro opcional `recipe_resolver: Callable[[str],
+ContextRecipe | None] | None` (default `None`). Cuando se
+proporciona, el resolver reemplaza el stub histórico
+`default-empty-recipe/v1`; cuando es `None`, el comportamiento
+previo se preserva (cambio backward-compatible).
+
+**SemVer**: `feat` con cambio **compatible hacia atrás** (nuevo
+parámetro opcional) → MINOR (v0.8.0).
+
+**Resultado**: 6 tests nuevos en `tests/test_h9_context_in_run.py`
+PASS. Batería completa previa: 652 passed. 16/16 UAT PASS, 0 FAIL.
+Cobertura mantenida.
+
+### Cambios funcionales
+
+- `RunController.__init__` acepta `recipe_resolver` opcional.
+- `RunController._execute_one` resuelve la receta de contexto del
+  nodo vía el resolver y la inyecta en `Handoff.context`.
+- `Storage` añade 1 método de lectura pura:
+  `fetch_run_context(*, run_id)` (devuelve metadatos vigentes del
+  run para poblar Handoff en relectura).
+- `Handoff` ahora carga `run_context` automáticamente desde
+  Storage cuando se recupera un handoff persistido.
+
+### Tests
+
+- 6 tests en `tests/test_h9_context_in_run.py` (parámetro opcional,
+  propagación, recuperación, persistencia, default-empty-recipe
+  preservado cuando no se inyecta resolver).
+
 ## [0.7.3] — 2026-09-24
 
 **Tag**: `v0.7.3` (987be068c7f2b6d17aa6c209489906f94a542568).
