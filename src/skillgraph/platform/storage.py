@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from skillgraph.core.errors import IdentityConflictError, NotFoundError, ValidationError
 from skillgraph.knowledge.graph import (
@@ -32,6 +32,9 @@ from skillgraph.knowledge.graph import (
     Source,
 )
 from skillgraph.resources.bricks import Brick
+
+if TYPE_CHECKING:
+    from skillgraph.runtime.engine import RuntimeEvent
 
 SCHEMA_VERSION = 1
 
@@ -1384,6 +1387,211 @@ class Storage:
                 """,
                 (error, node_execution_id),
             )
+
+    # ---------- H9-Plan-B: APIs atomicas estado+evento ----------
+    #
+    # Estas APIs combinan la mutacion de `node_executions` con la insercion
+    # de su(s) evento(s) en `runtime_events`, todo dentro de UNA transaccion
+    # SQLite sobre `self._conn`. Si cualquier INSERT o UPDATE falla, ROLLBACK
+    # automatico: no se confirma el estado ni el evento, garantizando la
+    # consistencia entre ambos.
+    #
+    # Dise~no: NO usan `EventLog.append` (que abre su propia transaccion via
+    # `with self._tx():`). El INSERT del evento se hace inline sobre el
+    # cursor de la transaccion compartida, evitando el doble-commit.
+
+    def _insert_event_in_tx(
+        self,
+        cur: sqlite3.Cursor,
+        event: RuntimeEvent,
+    ) -> None:
+        """Inserta un RuntimeEvent en `runtime_events` usando el cursor
+        dado (que pertenece a una transaccion ya abierta por el caller).
+
+        NO llama `cur.connection.commit()` ni `with self._conn:`. El
+        caller controla la transaccion.
+        """
+        import json as _json
+
+        cur.execute(
+            """
+            INSERT INTO runtime_events
+                (event_id, tenant_id, project_id, event_kind, run_id,
+                 resource_ref, causation_id, correlation_id,
+                 payload_json, timestamp, schema_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event.event_id,
+                event.tenant_id,
+                event.project_id,
+                event.event_kind,
+                event.run_id,
+                event.resource_ref,
+                event.causation_id,
+                event.correlation_id,
+                _json.dumps(dict(event.payload), ensure_ascii=False),
+                event.timestamp,
+                event.schema_version,
+            ),
+        )
+
+    def _atomic_state_and_event(
+        self,
+        *,
+        event: RuntimeEvent,
+        exec_sql: tuple[str, tuple[Any, ...]],
+    ) -> None:
+        """Ejecuta una sentencia de mutacion de estado + el INSERT del
+        evento en runtime_events bajo una SOLA transaccion SQLite
+        (BEGIN explicito + COMMIT/ROLLBACK).
+
+        Esto es necesario porque `with self._conn:` con
+        ``isolation_level=None`` NO rollbackea al fallar dentro del
+        cuerpo (cada ``execute`` ejecuta autocommit por sentencia).
+        Plan B arranca de esta verididad: ver
+        ``docs/architecture/h9-plan-b-atomicity-characterization.md``
+        §3 (grieta H9-Plan-B) y §5 (estrategia).
+
+        Re-raise como ``IdempotencyError`` cuando el UNIQUE sobre
+        ``runtime_events.event_id`` se viola (UAT-07, replay-safe).
+        """
+        try:
+            self._conn.execute("BEGIN")
+            self._conn.execute(exec_sql[0], exec_sql[1])
+            self._insert_event_in_tx(self._conn.cursor(), event)
+            self._conn.execute("COMMIT")
+        except Exception:
+            with suppress(Exception):
+                self._conn.execute("ROLLBACK")
+            raise
+
+    def start_node_execution_atomically(
+        self,
+        *,
+        event: RuntimeEvent,
+        node_execution_id: str,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        node_name: str,
+        attempt: int,
+        context_hash: str,
+        handoff_json: str,
+    ) -> None:
+        """Inserta NodeExecution RUNNING y el evento `NodeStarted` en
+        la MISMA transaccion. Si algo falla, rollback completo.
+
+        Idempotente por `UNIQUE(event_id)`: reintentos con el mismo
+        `event.event_id` lanzan `IdempotencyError` y rollbackean la
+        fila (si se intento re-insertar). Equivalente semantico a
+        "el primer commit gana".
+
+        H9-Plan-B: cierra la grieta atomica B del documento
+        `docs/architecture/h9-plan-b-atomicity-characterization.md` §3.
+        """
+        from skillgraph.core.errors import IdempotencyError
+
+        sql = (
+            "INSERT INTO node_executions "
+            "(node_execution_id, run_id, tenant_id, project_id, "
+            "node_name, attempt, state, context_hash, handoff_json, "
+            "started_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, datetime('now'))"
+        )
+        params = (
+            node_execution_id,
+            run_id,
+            tenant_id,
+            project_id,
+            node_name,
+            attempt,
+            context_hash,
+            handoff_json,
+        )
+        try:
+            self._atomic_state_and_event(
+                event=event,
+                exec_sql=(sql, params),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise IdempotencyError(
+                f"evento duplicado: {event.event_id}"
+            ) from exc
+
+    def complete_node_execution_atomically(
+        self,
+        *,
+        event_completed: RuntimeEvent,
+        event_evidence: RuntimeEvent,
+        node_execution_id: str,
+        outcome: str,
+        result_json: str,
+    ) -> None:
+        """Actualiza NodeExecution a SUCCEEDED + inserta `NodeCompleted`
+        + inserta `EvidenceProduced` en la MISMA transaccion.
+
+        H9-Plan-B: cierra la grieta atomica C del documento
+        `docs/architecture/h9-plan-b-atomicity-characterization.md` §3.
+        """
+        from skillgraph.core.errors import IdempotencyError
+
+        sql = (
+            "UPDATE node_executions "
+            "SET state = 'SUCCEEDED', outcome = ?, result_json = ?, "
+            "finished_at = datetime('now') "
+            "WHERE node_execution_id = ?"
+        )
+        params = (outcome, result_json, node_execution_id)
+        try:
+            self._conn.execute("BEGIN")
+            self._conn.execute(sql, params)
+            cur = self._conn.cursor()
+            self._insert_event_in_tx(cur, event_completed)
+            self._insert_event_in_tx(cur, event_evidence)
+            self._conn.execute("COMMIT")
+        except sqlite3.IntegrityError as exc:
+            with suppress(Exception):
+                self._conn.execute("ROLLBACK")
+            raise IdempotencyError(
+                f"evento duplicado en complete_node_execution_atomically: "
+                f"{event_completed.event_id} o {event_evidence.event_id}"
+            ) from exc
+        except Exception:
+            with suppress(Exception):
+                self._conn.execute("ROLLBACK")
+            raise
+
+    def mark_node_failed_atomically(
+        self,
+        *,
+        event: RuntimeEvent,
+        node_execution_id: str,
+        error: str,
+    ) -> None:
+        """Actualiza NodeExecution a FAILED + inserta `NodeFailed` en
+        la MISMA transaccion.
+
+        H9-Plan-B: cierra la grieta atomica D del documento
+        `docs/architecture/h9-plan-b-atomicity-characterization.md` §3.
+        """
+        from skillgraph.core.errors import IdempotencyError
+
+        sql = (
+            "UPDATE node_executions "
+            "SET state = 'FAILED', error = ?, finished_at = datetime('now') "
+            "WHERE node_execution_id = ?"
+        )
+        params = (error, node_execution_id)
+        try:
+            self._atomic_state_and_event(
+                event=event,
+                exec_sql=(sql, params),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise IdempotencyError(
+                f"evento duplicado: {event.event_id}"
+            ) from exc
 
     def create_run(
         self,
