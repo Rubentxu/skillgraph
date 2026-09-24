@@ -1,7 +1,7 @@
 # H9-LIMITACIÓN-7 — Cierre: Storage transactions explícitas para `record_trace`
 
 **Rama**: `h9-limitacion-7-storage-transactions`
-**SHA cierre**: ver tag final (v0.7.3)
+**Tag**: `v0.7.3` → `6697c258dda46e745f843d9c196e106cfce70cf1` (merge commit)
 **Fecha**: 2026-09-24
 
 ## Resumen ejecutivo
