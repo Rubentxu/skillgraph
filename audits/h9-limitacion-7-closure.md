@@ -1,7 +1,7 @@
 # H9-LIMITACIÓN-7 — Cierre: Storage transactions explícitas para `record_trace`
 
 **Rama**: `h9-limitacion-7-storage-transactions`
-**Tag**: `v0.7.3` → `10b5fea429eaccdd81194d7d0a1479e86988a88a` (HEAD actual)
+**Tag**: `v0.7.3` → `6a536acfa0566ae785fa42a9d72f24e13e973877` (HEAD actual)
 **Merge commit original**: `6697c258dda46e745f843d9c196e106cfce70cf1`
 **Commits post-merge incluidos en el tag** (housekeeping necesario):
 - `618cb70` docs(journal): auto-transgresión de consigna-por-slice
@@ -10,6 +10,7 @@
 - `e5a9454` refactor(storage): alinea `_atomic` con patrón `*_atomically`
 - `6773796` docs(limitacion-7): tag re-anclado (intermedio)
 - `10b5fea` docs(limitacion-7): SHA tag final
+- `6a536ac` test(limitacion-7): T19 cubre rollback path real
 **Fecha**: 2026-09-24
 
 ## Resumen ejecutivo
