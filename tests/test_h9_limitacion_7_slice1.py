@@ -20,12 +20,12 @@ Resultado esperado:
 """
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 import pytest
-import sqlite3
 
 from skillgraph.core.errors import IdentityConflictError
 from skillgraph.knowledge.graph import (
@@ -36,7 +36,6 @@ from skillgraph.knowledge.graph import (
 )
 from skillgraph.platform.storage import Storage
 from skillgraph.resources.bricks import Brick, ResourceIdentity
-
 
 TENANT = "tenant-test"
 PROJECT = "proj-test"
@@ -96,10 +95,8 @@ class FaultyStorage(Storage):
             yield CountingCursor(real_cur)
             self._conn.execute("COMMIT")
         except BaseException:
-            try:
+            with suppress(sqlite3.Error):
                 self._conn.execute("ROLLBACK")
-            except sqlite3.Error:
-                pass
             raise
 
     @contextmanager

@@ -387,10 +387,8 @@ class Storage:
         except BaseException:
             # ROLLBACK es best-effort: si falla, sqlite3 abortara la
             # transaccion de todos modos al detectar el error.
-            try:
+            with suppress(sqlite3.Error):
                 self._conn.execute("ROLLBACK")
-            except sqlite3.Error:
-                pass
             raise
 
     # ----- recursos -----
