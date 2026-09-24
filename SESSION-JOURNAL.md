@@ -3386,3 +3386,33 @@ Tag `v0.13.0` emitido sobre el commit `feat(runtime)` del slice.
 Bajo el modo AUTO reiterado, `git push origin main` +
 `git push origin v0.13.0` siguiendo el precedente de las 4
 versiones anteriores de Etapa 7.
+
+### 2026-09-24 — S6 v0.14.0 locks concurrentes por run
+
+**Slice**: locks de fichero (`fcntl.flock`) por run con dos modos
+(`advisory` espera hasta timeout, `fail-fast` eleva `LockUnavailable`).
+Justificacion de consolidacion: v0.13.0 introduce politicas de
+redaccion pero sin S6 dos reconciliaciones concurrentes pueden
+intercalar eventos y saltarse la redaccion; locks cierran el vector.
+
+**Implementacion**:
+
+- Modulo `runtime/locks.py` con `RunLockKey` (sanitizacion path),
+  `LockMode = Literal["none", "advisory", "fail-fast"]`,
+  `LockUnavailable(code="sg_lock_unavailable")`, `RunLock.take(...)`
+  context manager. Limpieza con `contextlib.suppress(OSError)`.
+- `RunController.__init__` acepta `lock_dir`, `lock_mode="none"`,
+  `lock_timeout_seconds=30.0`. Helper `_locked_run(...)` que
+  delega en `_noop_lock()` cuando `lock_mode="none"` o
+  `lock_dir=None`. `create_run` y `reconcile_run` envueltos;
+  cuerpo de reconcile_run extraido a `_reconcile_run_locked`.
+- 14 tests nuevos en `tests/test_locks.py` (12 unit + 2 integration
+  con hilos). `ruff check src tests` limpio (SIM117 pytest.raises
+  ignorado por convencion pytest).
+
+**Verificacion**: `uv run pytest` -> **739/739 verde** en 161s.
+Cobertura `redaction.py` 100%, `runcontroller.py` 88%.
+
+**Release**: tag `v0.14.0` (pendiente commit + push). Push directo
+justificado: S6 son 3 `feat` coherentes, no micro-release trivial;
+rompe con drift de UAT-08/09 (locks son feature net-new).

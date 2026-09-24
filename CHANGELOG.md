@@ -1311,3 +1311,74 @@ v0.12.0 emita eventos con secretos potenciales; sin S5, esos
 secretos iban a disco. La regla "evita micro-releases triviales"
 se respeta porque S5 son 4 `feat` coherentes (modelo, persistencia,
 integracion EventLog, CLI).
+
+## [0.14.0] — 2026-09-24 (MINOR, locks concurrentes por run)
+
+**Tag**: `v0.14.0` (pendiente; commit del slice en esta entrada).
+
+**Resumen**: S6 del roadmap Etapa 7 (locks concurrentes por run).
+Hasta v0.13.0, dos `sg run --concurrency` o dos schedulers
+externos apuntando al mismo `<tenant>/<project>/<run-id>` podian
+leer/escribir `runtime_events` y `runs` de forma entrelazada,
+corrompiendo la transicion de estado. S6 introduce locks de
+fichero por run para serializar reconcile_run y create_run
+dentro del mismo proceso y entre procesos, con dos politicas:
+`advisory` (espera hasta `lock-timeout-seconds`) y `fail-fast`
+(eleva `LockUnavailable` con `code=sg_lock_unavailable`).
+
+**Modulos / simbolos nuevos**:
+
+- `skillgraph.runtime.locks` (modulo nuevo):
+  - `RunLockKey(tenant_id, project_id, run_id)` con sanitizacion
+    de path traversal (caracteres `/\. ` reemplazados por `_`).
+  - `RunLockKey.to_filename() -> str` (`<tenant>__<project>__<run-id>.lock`).
+  - `LockMode = Literal["none", "advisory", "fail-fast"]`.
+  - `LockUnavailable(SkillGraphError)` con `code="sg_lock_unavailable"`.
+  - `RunLock(lock_dir: Path, key: RunLockKey).take(mode, timeout_seconds)`
+    context manager sobre `fcntl.flock` (LOCK_EX | LOCK_NB en polling
+    para advisory; LOCK_EX | LOCK_NB en fail-fast).
+  - Limpieza: `LOCK_UN`, `os.close`, `unlink()` con
+    `contextlib.suppress(OSError)`.
+
+**RunController**:
+
+- Constructor extendido: `lock_dir: Path | None`,
+  `lock_mode: LockMode = "none"`,
+  `lock_timeout_seconds: float = 30.0`.
+- Helper interno `_locked_run(tenant, project, run_id) -> Iterator`
+  que delega en `_noop_lock()` cuando `lock_mode="none"` o
+  `lock_dir=None`.
+- `create_run(...)` envuelto en `with self._locked_run(...)`.
+- `reconcile_run(...)` envuelve el cuerpo en
+  `with self._locked_run(...)`; extraido a `_reconcile_run_locked`.
+
+**Tests** (12 nuevos en `tests/test_locks.py`):
+
+- `TestRunLockTakeRelease` (3): acquire + release, no leak, idempotencia.
+- `TestRunLockConflict` (2): `fail-fast` eleva `LockUnavailable`;
+  `advisory` con timeout corto eleva `LockUnavailable`.
+- `TestRunLockReleasesOnException` (2): `try/except` interno libera
+  el lock; `with` con excepcion interna libera.
+- `TestRunLockKey` (3): filename estable, sanitizacion, sin colisiones.
+- `TestRunLockAcrossProcesses` (2): dos procesos via `multiprocessing`
+  se serializan en el mismo run.
+- `TestRunControllerLockIntegration` (1): dos `RunController`
+  reconciliando el mismo Run con `lock_mode="advisory"` se serializan
+  y terminan ambos en `COMPLETED`; lock_file no queda tras la ejecucion.
+- `TestRunControllerLockFailFast` (1): `fail-fast` eleva
+  `LockUnavailable` si otro reconcile_run tiene el lock
+  (test debil bajo concurrencia extrema).
+
+Total acumulado: **739 tests verde** (725 + 14 nuevos).
+`ruff check src tests`: limpio.
+
+### SemVer
+
+`feat(runtime.locks) + feat(RunController lock_dir/lock_mode/lock_timeout_seconds) +
+feat(create_run/reconcile_run lock wrapping)` -> **MINOR**
+-> `v0.14.0`. Consolidacion inmediata con v0.13.0 porque los locks
+son **complemento directo** del modelo de eventos: v0.13.0 introduce
+politicas de redaccion, pero sin S6 dos reconciliaciones concurrentes
+pueden intercalar eventos y saltarse la redaccion. La regla
+"evita micro-releases triviales" se respeta porque S6 son 3 `feat`
+coherentes (locks, integracion RunController, tests de concurrencia).
