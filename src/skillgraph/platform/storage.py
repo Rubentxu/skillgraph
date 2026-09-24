@@ -384,10 +384,11 @@ class Storage:
         try:
             yield cur
             self._conn.execute("COMMIT")
-        except BaseException:
-            # ROLLBACK es best-effort: si falla, sqlite3 abortara la
-            # transaccion de todos modos al detectar el error.
-            with suppress(sqlite3.Error):
+        except Exception:
+            # ROLLBACK es best-effort: si falla (p.ej. la conexion
+            # esta rota), sqlite3 abortara la transaccion de todos
+            # modos. Coherente con el patron de `*_atomically`.
+            with suppress(Exception):
                 self._conn.execute("ROLLBACK")
             raise
 
