@@ -1001,3 +1001,62 @@ en `v0.8.1`:
 **MINOR** → `v0.9.0`. Los refactors van consolidados en la
 misma release con la regla "`refactor` → sin bump" relajada
 porque la `feat` ya justifica MINOR.
+
+## [0.10.0] — 2026-09-24 (MINOR, list + show runs)
+
+**Tag**: `v0.10.0` (`c6963f072d6b6e51ab569e396de688633aed2fb2`).
+
+**Resumen**: S2 del roadmap Etapa 7 (gestion del ciclo de vida de
+Runs): complementa el S1 (`v0.9.0`, cancel_run) con inspeccion
+read-only. El operador ahora puede listar Runs existentes con
+`sg runs list` y ver el snapshot de un Run concreto con
+`sg runs show`, sin abrir SQLite directamente.
+
+### Cambios funcionales (MINOR)
+
+- **`Storage.list_runs(*, tenant_id, project_id, state=None, limit=50)`**:
+  SELECT con filtro opcional por estado, ordenado por `rowid DESC`
+  (mas reciente primero; monotono, independiente de la resolucion
+  de 1 segundo de `datetime('now')` en SQLite).
+- **`Storage.get_run(*, tenant_id, project_id, run_id)`**:
+  fila cruda de un Run; `NotFoundError` si no existe.
+- **`RunController.list_runs(...)`**: tupla inmutable de
+  `RunSnapshot` ordenados por mas reciente primero. Filtra por
+  estado opcional.
+- **`RunController.show_run(...)`**: snapshot de un Run por id;
+  `NotFoundError` si no existe. Delega en `Storage.get_run`.
+- **`RunController._count_events(...)`**: helper privado read-only
+  para contar eventos de un Run (usado por list/show).
+- **CLI `sg runs list <project> [--state S] [--limit N]`**:
+  salida CSV-like con columnas estables (run_id, state,
+  current_node, executed, events). '(sin runs)' si vacio.
+- **CLI `sg runs show <project> <run-id>`**: salida key=value
+  (run_id, state, current_node, executed_nodes, events_emitted).
+  Parseable con `awk`/`cut`.
+- **`_open_project_storage(args)`**: helper compartido por
+  `cmd_runs_list`/`show`/`cancel` (DRY: resolver proyecto +
+  abrir Storage en una sola funcion).
+
+### Tests
+
+- 6 tests unitarios `tests/test_runcontroller.py::TestListAndShowRun`:
+  vacio, orden, limit, filtro por estado, snapshot, NotFoundError.
+- 3 tests subprocess CLI `tests/test_cli_runs_inspect.py`:
+  list vacio, list orden, show snapshot.
+- Archivo renombrado: `test_cli_runs_cancel.py` ->
+  `test_cli_runs_inspect.py` (cubre cancel + list + show).
+- UAT-08/09 regenerados sobre `c6963f0`.
+
+### Resultado
+
+- **Bateria completa**: 675 passed (de 666 en v0.9.0, +9 nuevos).
+- **Ruff**: limpio.
+- **Cobertura `runcontroller.py`**: 95% mantenida.
+
+### SemVer
+
+`feat(list_runs) + feat(show_run) + feat(sg runs list) +
+feat(sg runs show)` -> **MINOR** -> `v0.10.0`. Consolidacion
+inmediata con v0.9.0 porque `list`/`show` son el complemento
+natural de `cancel`: sin ellos, el operador no puede saber
+que Run cancelar.
