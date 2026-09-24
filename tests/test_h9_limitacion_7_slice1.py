@@ -354,3 +354,44 @@ class TestT18RegisterPromotionIdempotency:
         s2.close()
         # EXCLUIDA: la idempotency_key actúa como protección incluso
         # sin transacción atómica.
+
+
+class TestT19AtomicRealRollbackPath:
+    """Cubre el path de rollback dentro del `_atomic` REAL (no override).
+
+    El `FaultyStorage._atomic` override NO ejecuta el codigo real del
+    `_atomic` (rollback path). Este test ejercita el codigo real
+    forzando una excepcion de aplicacion dentro del bloque, lo que
+    activa el `except Exception: ... ROLLBACK ... raise`."""
+
+    def test_atomic_real_rollback_on_application_error(
+        self,
+        db_path: Path,
+    ) -> None:
+        # Usar Storage real (sin override).
+        s = Storage(db_path)
+        # Verificar que la conexion arranca limpia
+        s._conn.execute(
+            "CREATE TABLE marker (id INTEGER PRIMARY KEY, val TEXT)"
+        )
+        # Forzar una excepcion de aplicacion dentro del bloque.
+        with pytest.raises(ValueError, match="app error"):
+            with s._atomic() as cur:
+                cur.execute("INSERT INTO marker VALUES (1, 'before')")
+                raise ValueError("app error")
+        # Verificar que el INSERT fue rollbackeado por el _atomic real.
+        rows = s._conn.execute(
+            "SELECT COUNT(*) FROM marker WHERE val = 'before'"
+        ).fetchone()[0]
+        assert rows == 0, (
+            f"BUG: el rollback del _atomic real NO funciono, "
+            f"el INSERT quedo en disco. rows={rows}"
+        )
+        # Verificar que la conexion sigue usable para una nueva transaccion.
+        with s._atomic() as cur:
+            cur.execute("INSERT INTO marker VALUES (2, 'after')")
+        rows = s._conn.execute(
+            "SELECT COUNT(*) FROM marker WHERE val = 'after'"
+        ).fetchone()[0]
+        assert rows == 1, f"new transaction failed: rows={rows}"
+        s.close()
