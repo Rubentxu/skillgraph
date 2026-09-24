@@ -1,0 +1,79 @@
+=== ci: formato ===
+107 files already formatted
+=== ci: lint ===
+All checks passed!
+=== ci: tests ===
+============================= test session starts ==============================
+platform linux -- Python 3.13.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /var/home/rubentxu/.jcode/scratch/skillgraph-8b63db6
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0
+collected 630 items
+
+tests/test_agent_adapter.py ................                             [  2%]
+tests/test_cli_branches.py .............                                 [  4%]
+tests/test_cli_run_uat.py ........                                       [  5%]
+tests/test_cli_uat.py .........s                                         [  7%]
+tests/test_context_controller.py .............                           [  9%]
+tests/test_dsl.py ..................                                     [ 12%]
+tests/test_git_source.py ........                                        [ 13%]
+tests/test_h4_cycles_and_decision.py .......                             [ 14%]
+tests/test_h4_expansion.py ...............                               [ 17%]
+tests/test_h4_expansion_cli.py ......                                    [ 18%]
+tests/test_h4_expansion_cli_slice3.py ...............                    [ 20%]
+tests/test_h4_expansion_slice3.py ...............                        [ 22%]
+tests/test_h6_multiproposito.py ............                             [ 24%]
+tests/test_h7_promocion.py ................                              [ 27%]
+tests/test_h8_public_paths.py .....                                      [ 28%]
+tests/test_h9_cli_inproc_knowledge_brick.py ...........                  [ 29%]
+tests/test_h9_cli_inproc_knowledge_refresh_compile_trace.py ............ [ 31%]
+                                                                         [ 31%]
+tests/test_h9_cli_inproc_promo_pack.py ............                      [ 33%]
+tests/test_h9_cli_promo_list_inproc.py .....                             [ 34%]
+tests/test_h9_coverage_bricks.py ..                                      [ 34%]
+tests/test_h9_coverage_catalog.py ....                                   [ 35%]
+tests/test_h9_coverage_git_source.py ........                            [ 36%]
+tests/test_h9_coverage_graph_expansion.py .................              [ 39%]
+tests/test_h9_coverage_knowledge_controller.py .....                     [ 40%]
+tests/test_h9_coverage_pack_loader.py ..........                         [ 41%]
+tests/test_h9_coverage_registry.py ...                                   [ 42%]
+tests/test_h9_coverage_runcontroller.py ...                              [ 42%]
+tests/test_h9_coverage_skill_importer.py ........                        [ 43%]
+tests/test_h9_coverage_workflow.py ........                              [ 45%]
+tests/test_h9_plan_b_atomicity.py ...........                            [ 46%]
+tests/test_h9_runcontroller_characterization.py ......                   [ 47%]
+tests/test_h9_storage_complete_node_execution.py ......                  [ 48%]
+tests/test_h9_storage_context_controller_reads.py ...............        [ 51%]
+tests/test_h9_storage_create_run.py .......                              [ 52%]
+tests/test_h9_storage_find_active_run.py .............                   [ 54%]
+tests/test_h9_storage_mark_node_failed.py ......                         [ 55%]
+tests/test_h9_storage_promo_list.py ..........                           [ 56%]
+tests/test_h9_storage_recover_interrupted.py ........                    [ 58%]
+tests/test_h9_storage_run_controller_no_conn.py ......                   [ 59%]
+tests/test_h9_storage_run_reads.py ............                          [ 61%]
+tests/test_h9_storage_start_node_execution.py .....                      [ 61%]
+tests/test_h9_storage_transition_run_state.py .......                    [ 63%]
+tests/test_handoff.py .......................                            [ 66%]
+tests/test_knowledge_controller.py .................                     [ 69%]
+tests/test_knowledge_invalidation.py ..........                          [ 70%]
+tests/test_knowledge_storage.py ....................                     [ 74%]
+tests/test_parser.py ............                                        [ 76%]
+tests/test_paths.py ..........                                           [ 77%]
+tests/test_plan_loader.py .............                                  [ 79%]
+tests/test_recipe.py ......................                              [ 83%]
+tests/test_reconcile_one_node.py ....                                    [ 83%]
+tests/test_registry_branches.py .............                            [ 85%]
+tests/test_runcontroller.py ..........                                   [ 87%]
+tests/test_runtime_events.py ...................                         [ 90%]
+tests/test_s0_brick_minimo.py ..........                                 [ 92%]
+tests/test_s1_sqlite.py .......                                          [ 93%]
+tests/test_skill_importer.py ........                                    [ 94%]
+tests/test_uat_audit.py ..........                                       [ 96%]
+tests/test_uat_blocked.py ......                                         [ 96%]
+tests/test_workflow_plan.py ...................                          [100%]
+
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_cli_uat.py:363: blueprint no versionado en el repo
+================== 629 passed, 1 skipped in 143.06s (0:02:23) ==================
+=== ci: OK ===
