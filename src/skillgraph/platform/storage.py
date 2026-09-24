@@ -702,11 +702,17 @@ class Storage:
         claim: Claim,
     ) -> str:
         """Registra una Claim. Devuelve su claim_id. Idempotente por
-        (subject, predicate, source, checked_at_revision)."""
+        (subject, predicate, source, checked_at_revision).
+
+        Usa `_atomic()` (BEGIN/COMMIT/ROLLBACK explicitos) en vez de
+        `_tx()` para garantizar que un fallo a mitad de las 1+N
+        sentencias no deje un `claims` orphan (sin sus
+        `claim_evidence` completos). H9-LIMITACION-7 V6.
+        """
         import json
 
         obj_json = json.dumps(claim.object_literal, sort_keys=True)
-        with self._tx() as cur:
+        with self._atomic() as cur:
             cur.execute(
                 """
                 INSERT OR IGNORE INTO claims
