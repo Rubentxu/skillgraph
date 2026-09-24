@@ -3441,3 +3441,81 @@ SIM117 pytest.raises ignorado).
 
 **Commit**: `6c8c17f` sin tag (refactor interno, sin bump).
 Push OK.
+
+### 2026-09-24 22:33 — Cierre de sesion con checkpoint durable
+
+**Trigger**: operador "cerramos sesion persiste todo el contexto del
+trabajo actual para manana".
+
+**Estado al cierre** (verificado en este turno):
+
+- HEAD: `878a159` ("docs(state): sincronizar STATE/CURRENT con realidad
+  v0.14.0").
+- Tests: **754/754 PASS** en ~135s.
+- UATs: **16/16 PASS** mantenibles (uat_audit invariante al avance).
+- Releases emitidas: 16 (v0.3.0 → v0.14.0, todas con tag remoto).
+- Working tree: limpio (0 ficheros pendientes).
+- ruff check: 2 errores SIM117 pytest.raises (ignorado por convencion
+  pytest; los tests usan `with pytest.raises():` que ruff marca como
+  nested-withs pero es patron pytest idiomatico).
+
+**Trabajo realizado en esta sesion** (continuacion de la sesion
+anterior 2026-09-24 que cerro v0.14.0):
+
+1. **S6 v0.14.0 — locks concurrentes por run**: 14 tests nuevos
+   (12 unit + 2 integration con hilos); modulo runtime/locks.py con
+   `RunLock`, `RunLockKey`, `LockMode = Literal["none","advisory",
+   "fail-fast"]`, `LockUnavailable(code="sg_lock_unavailable")`. Commit
+   `241ccc9`. Tag `v0.14.0`. Push OK.
+2. **Refactor context_controller.py (sin bump)**: extraccion de
+   helpers puros de `compile_handoff` (121 → 94 LoC) y
+   `_resolve_one_selector` (114 → 23 LoC); 15 tests nuevos
+   (11 helpers + 4 mappers). Cobertura 82% → **88%**. Commit
+   `6c8c17f`. Push OK.
+3. **Sincronizacion del estado durable** (este turno):
+   - STATE.yaml: bug heredado detectado (docstring Python en lugar
+     de comentario YAML; rompia yaml.safe_load). Corregido.
+   - STATE.yaml: `goal.etapa7_status=completed`,
+     `closed_after_tag=v0.14.0`, `roadmap.current_stage=7`,
+     `tests.total=754`, nuevo `coverage_snapshot_2026-09-24_post_v140`,
+     deltas etapa7_s1..s6 + refactor_context_controller, ci +
+     nota_honesta_revision actualizadas.
+   - CURRENT.md: reescrito (-1125 LoC de historial viejo); resumen
+     operativo verídico con tabla de 8 releases post-v0.7.0.
+   - Commit `878a159`. Push OK.
+
+**Pendientes documentados** (sin consigna operador):
+
+1. **S7+ del blueprint v1**: no definido en `external/blueprint-v1/`.
+   Etapa 7 cierra con "futuros horizontes abiertos".
+2. **Grieta de no-atomicidad workflow_runs ↔ runtime_events**:
+   conocida, preservada por construcción (decisión arquitectónica con
+   ADR pendiente). Los locks de S6 v0.14.0 mitigan interleaving a
+   nivel de proceso, no cierran la grieta transaccional.
+3. **Concurrencia real entre procesos con proveedor real**: probada
+   con `multiprocessing` en test_locks.py, no certificada bajo carga.
+
+**Checkpoint durable**:
+
+- `STATE.yaml`: 585 LoC, YAML válido, sincronizado con v0.14.0 / 754 tests.
+- `CURRENT.md`: 81 LoC, resumen operativo verídico, 3 pendientes + próxima acción.
+- `SESSION-JOURNAL.md`: entrada presente (este bloque).
+- `CHANGELOG.md`: 1384+ LoC, todas las releases v0.7.0..v0.14.0 documentadas.
+- `tests/uat-evidence/`: 16 UAT JSON, todas PASS.
+
+**Procedimiento de reanudación** (sesion 2026-09-25):
+
+1. Leer `CURRENT.md` (81 LoC) — resumen ejecutivo del estado.
+2. Confirmar HEAD = `878a159` con `git log --oneline -1`.
+3. Confirmar tests con `uv run pytest -q` (debe dar 754 verde en ~135s).
+4. Si el operador da consigna nueva, leer `STATE.yaml` (`etapa7_*`,
+   `next_workitem`, `next_action`) para entender el siguiente paso.
+5. Si el operador pregunta por histórico detallado, leer
+   `SESSION-JOURNAL.md` (entrada presente + anteriores).
+
+**Modo**: AUTO preautorizado (aprobación total reiterada). Regla L8
+del overlay SDDK respetada: "la pérdida del índice no desactiva el
+paraguas". SDDK mode `undeclared` por bug externo del binario
+(documentado en STATE.yaml `adoption.blocked_toolchain`); el
+paraguas se mantiene y el trabajo local continúa sin necesidad de
+decidir el modo en esta sesión.

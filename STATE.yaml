@@ -520,7 +520,7 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). 5 releases (v0.3.0/v0.4.0/v0.4.1/v0.5.0/v0.6.0), 16/16 UAT PASS, 405/405 tests, blueprint v1 COMPLETO al 100% segun contrato. Sin deuda testeable abierta. Ver .next-decision.md para posibles trabajos futuros FUERA de esta iniciativa."
+next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 16 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 754/754 tests, blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sin trabajo activo material. Sesion cerrada 2026-09-24 22:33 con checkpoint durable (STATE.yaml + CURRENT.md + SESSION-JOURNAL.md sincronizados). Pendientes sin spec operador: (1) S7+ del blueprint no definido; (2) grieta de no-atomicidad workflow_runs<->runtime_events preservada por construccion (locks S6 v0.14.0 mitigan interleaving pero no cierran la transaccional); (3) concurrencia real con proveedor real no certificada. Reanudar sesion 2026-09-25: leer CURRENT.md, confirmar HEAD=878a159, esperar consigna operador."
 
 
 release:
