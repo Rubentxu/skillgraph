@@ -5,7 +5,7 @@
 - Implementación: `0946d39` — `feat(storage): atomic state+event writes via BEGIN/COMMIT/ROLLBACK (H9-Plan-B)`
 - Style: `b38c105` — `style: ruff format storage + atomicity tests`
 
-**Caracterización previa**: [`h9-plan-b-atomicity-characterization.md`](h9-plan-b-atomicity-characterization.md)
+**Caracterización previa**: [`h9-plan-b-atomicity-characterization.md`](h9-plan-b-atomicity-characterization.md) (en `audits/` desde 2026-09-24; `docs/` no está versionado)
 
 ## Resultado
 
