@@ -18,6 +18,7 @@ Resultado esperado:
   - T15, T16, T18 GREEN (excluyen V1, V2, V5 por idempotencia).
   - T17 RED (demuestra el bug de V4: rollback falla porque autocommit).
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -178,9 +179,7 @@ class TestT15MigrateIdempotency:
     cada CREATE TABLE/INDEX usa IF NOT EXISTS, naturalmente recuperable.
     """
 
-    def test_migrate_idempotent_after_partial_failure(
-        self, db_path: Path
-    ) -> None:
+    def test_migrate_idempotent_after_partial_failure(self, db_path: Path) -> None:
         # Forzar fallo en la 2a sentencia de la 2a invocacion de _migrate
         # (executescript=1, SELECT=2). La 1a invocacion (en __init__)
         # corre con _fault_enabled=False por lo que no incrementa
@@ -250,18 +249,14 @@ class TestT17RecordTrace:
             f"BUG: trace_row quedo en disco sin rollback "
             f"(autocommit de isolation_level=None). rows={trace_rows}"
         )
-        assert len(link_rows) == 0, (
-            f"BUG: trace_link quedo en disco sin rollback. rows={link_rows}"
-        )
+        assert len(link_rows) == 0, f"BUG: trace_link quedo en disco sin rollback. rows={link_rows}"
 
 
 class TestT16UpsertResourceIdempotency:
     """V2: `upsert_resource()` es multi-statement (SELECT + INSERT/UPDATE).
     EXCLUIDA por idempotencia: re-ejecutar produce el mismo estado final."""
 
-    def test_upsert_resource_idempotent_without_explicit_transaction(
-        self, db_path: Path
-    ) -> None:
+    def test_upsert_resource_idempotent_without_explicit_transaction(self, db_path: Path) -> None:
         """V2: `upsert_resource()` es multi-statement (SELECT + INSERT).
         EXCLUIDA por idempotencia: el spec se valida en la SELECT; si
         cambia, la operacion se rechaza ANTES del INSERT/UPDATE, por
@@ -310,6 +305,7 @@ class TestT16UpsertResourceIdempotency:
         )
         s3 = Storage(db_path)
         from skillgraph.core.errors import IdentityConflictError
+
         with pytest.raises(IdentityConflictError):
             s3.upsert_resource(brick2)
         s3.close()
@@ -322,9 +318,7 @@ class TestT18RegisterPromotionIdempotency:
     EXCLUIDA por idempotencia: la UNIQUE constraint sobre
     idempotency_key protege la unicidad incluso sin rollback."""
 
-    def test_register_promotion_idempotency_key_protects_uniqueness(
-        self, db_path: Path
-    ) -> None:
+    def test_register_promotion_idempotency_key_protects_uniqueness(self, db_path: Path) -> None:
         # Llamada exitosa.
         s1 = Storage(db_path)
         s1.register_promotion(
@@ -371,27 +365,19 @@ class TestT19AtomicRealRollbackPath:
         # Usar Storage real (sin override).
         s = Storage(db_path)
         # Verificar que la conexion arranca limpia
-        s._conn.execute(
-            "CREATE TABLE marker (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        s._conn.execute("CREATE TABLE marker (id INTEGER PRIMARY KEY, val TEXT)")
         # Forzar una excepcion de aplicacion dentro del bloque.
-        with pytest.raises(ValueError, match="app error"):
-            with s._atomic() as cur:
-                cur.execute("INSERT INTO marker VALUES (1, 'before')")
-                raise ValueError("app error")
+        with pytest.raises(ValueError, match="app error"), s._atomic() as cur:
+            cur.execute("INSERT INTO marker VALUES (1, 'before')")
+            raise ValueError("app error")
         # Verificar que el INSERT fue rollbackeado por el _atomic real.
-        rows = s._conn.execute(
-            "SELECT COUNT(*) FROM marker WHERE val = 'before'"
-        ).fetchone()[0]
+        rows = s._conn.execute("SELECT COUNT(*) FROM marker WHERE val = 'before'").fetchone()[0]
         assert rows == 0, (
-            f"BUG: el rollback del _atomic real NO funciono, "
-            f"el INSERT quedo en disco. rows={rows}"
+            f"BUG: el rollback del _atomic real NO funciono, el INSERT quedo en disco. rows={rows}"
         )
         # Verificar que la conexion sigue usable para una nueva transaccion.
         with s._atomic() as cur:
             cur.execute("INSERT INTO marker VALUES (2, 'after')")
-        rows = s._conn.execute(
-            "SELECT COUNT(*) FROM marker WHERE val = 'after'"
-        ).fetchone()[0]
+        rows = s._conn.execute("SELECT COUNT(*) FROM marker WHERE val = 'after'").fetchone()[0]
         assert rows == 1, f"new transaction failed: rows={rows}"
         s.close()

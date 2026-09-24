@@ -32,6 +32,7 @@ Resultado esperado:
         trivial via reintento idempotente. Entonces se documenta
         y V6 queda excluido por idempotencia.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -76,9 +77,7 @@ def _seed_source_entity_and_evidences(s: Storage) -> None:
     s.upsert_entity(
         tenant_id=TENANT,
         project_id=PROJECT,
-        entity=Entity(
-            entity_id=SUBJECT_ENTITY_ID, kind="file", stable_key="src/foo.py"
-        ),
+        entity=Entity(entity_id=SUBJECT_ENTITY_ID, kind="file", stable_key="src/foo.py"),
     )
     for evidence_id in EVIDENCE_IDS:
         s.record_evidence(
@@ -131,9 +130,7 @@ class TestT20RecordClaimRollback:
     la implementacion ya garantiza atomicidad.
     """
 
-    def test_record_claim_rolls_back_when_middle_evidence_fails(
-        self, db_path: Path
-    ) -> None:
+    def test_record_claim_rolls_back_when_middle_evidence_fails(self, db_path: Path) -> None:
         """Hipotesis: si falla el 3er INSERT (durante el 2do evidence
         link), queda el INSERT del claim (1) + el INSERT del 1er
         evidence link (2) confirmados, y el resto fallido.
