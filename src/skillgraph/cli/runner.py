@@ -635,6 +635,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     kn_sub = kn.add_subparsers(dest="knowledge_command", required=True)
 
+    # ----- runs subcommand (Etapa 7 / S1) -----
+    # Gestion del ciclo de vida de Runs existentes (cancel, etc.).
+    # No crea Runs: eso es `sg run <project> <plan>`.
+    rn = sub.add_parser(
+        "runs",
+        help="Operaciones sobre Runs existentes.",
+    )
+    rn_sub = rn.add_subparsers(dest="runs_command", required=True)
+    rc = rn_sub.add_parser(
+        "cancel",
+        help="Cancela un Run en curso (ACTIVE/WAITING/CREATED).",
+    )
+    rc.add_argument("project", help="Proyecto destino.")
+    rc.add_argument("run_id", help="Run ID a cancelar.")
+
     ks = kn_sub.add_parser("stale", help="Lista Claims stale.")
     ks.add_argument("project", help="Proyecto destino.")
 
@@ -715,6 +730,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_promotion_reconcile(args)
         if args.command == "run":
             return cmd_run(args)
+        if args.command == "runs":
+            return _route_runs(args)
         if args.command == "knowledge":
             return _route_knowledge(args)
         if args.command == "expansion":
@@ -725,6 +742,52 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.print_help()
     return EXIT_USAGE
+
+
+def _route_runs(args: argparse.Namespace) -> int:
+    """Enruta subcommand `runs` al handler correspondiente."""
+    sub = args.runs_command
+    if sub == "cancel":
+        return cmd_runs_cancel(args)
+    print(f"ERROR: runs subcommand no reconocido: {sub!r}", file=sys.stderr)
+    return EXIT_USAGE
+
+
+def cmd_runs_cancel(args: argparse.Namespace) -> int:
+    """Cancela un Run existente via `RunController.cancel_run`.
+
+    No necesita Adapter: la cancelacion ocurre en la capa de
+    orquestacion sin volver a invocar al agente. La operacion
+    es atomica (transicion de estado + evento RunCompleted en
+    una sola TX, via `transition_run_state_atomically`).
+    """
+    from skillgraph.platform.storage import Storage
+    from skillgraph.runtime.agent import FakeAgentAdapter
+    from skillgraph.runtime.runcontroller import RunController
+
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return err
+    db_path = Path(project["db_path"])
+    if not db_path.exists():
+        print(
+            f"ERROR: base de datos ausente: {db_path}",
+            file=sys.stderr,
+        )
+        return EXIT_DB_MISSING
+    storage = Storage(db_path)
+    ctl = RunController(
+        storage=storage,
+        adapter=FakeAgentAdapter(Path("/dev/null")),  # cancel no invoca adapter
+    )
+    snap = ctl.cancel_run(
+        tenant_id=project["tenant_id"],
+        project_id=project["name"],
+        run_id=args.run_id,
+    )
+    print(f"run_id={snap.run_id} state={snap.state}")
+    return EXIT_OK
 
 
 def _route_knowledge(args: argparse.Namespace) -> int:

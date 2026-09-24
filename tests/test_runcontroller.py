@@ -42,7 +42,6 @@ def fixture_setup(tmp_path: Path) -> tuple[Storage, FakeAgentAdapter, sqlite3.Co
     conn = storage._conn  # type: ignore[attr-defined]
     return storage, adapter, conn
 
-
 def _node(name: str, **overrides: object) -> WorkflowNode:
     base: dict[str, object] = dict(
         name=name,
@@ -474,5 +473,174 @@ class TestFailNodeWithHelper:
         ).fetchone()
         assert row["state"] == "FAILED"
         assert row["error"] == "ValueError: boom-test"
+
+
+class TestCancelRun:
+    """Contrato de `RunController.cancel_run`.
+
+    Cubre el slice S1 del roadmap Etapa 7 (presupuestos y cancelacion):
+    el operador puede detener un run que esta ACTIVE sin esperar a
+    que el reconcile completo termine. Emite `RunCompleted` con
+    `state=CANCELLED` de forma atomica con la transicion de estado.
+    """
+
+    def test_cancel_active_run_marks_state_cancelled(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        storage, adapter, conn = fixture_setup
+        plan = _plan((_node("a"),))
+        # `fixture_setup` construye el adapter con su propio root
+        # `tmp_path/"fixtures"`; sembramos ahi.
+        _seed_fixture(
+            tmp_path / "fixtures",
+            tenant=TENANT,
+            project=PROJECT,
+            node_name="a",
+            outcome="ok",
+        )
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        snap = ctl.cancel_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id=run_id,
+        )
+        assert snap.state == "CANCELLED"
+        # DB consistente
+        row = conn.execute(
+            "SELECT state FROM workflow_runs WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        assert row["state"] == "CANCELLED"
+
+    def test_cancel_emits_run_completed_event(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        storage, adapter, conn = fixture_setup
+        plan = _plan((_node("a"),))
+        _seed_fixture(
+            tmp_path / "fixtures",
+            tenant=TENANT,
+            project=PROJECT,
+            node_name="a",
+            outcome="ok",
+        )
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        ctl.cancel_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id=run_id,
+        )
+        evs = conn.execute(
+            "SELECT event_kind, payload_json FROM runtime_events "
+            "WHERE run_id = ? ORDER BY sequence",
+            (run_id,),
+        ).fetchall()
+        # El ultimo evento del run debe ser RunCompleted con state=CANCELLED.
+        last = evs[-1]
+        assert last["event_kind"] == "RunCompleted"
+        payload = json.loads(last["payload_json"])
+        assert payload["state"] == "CANCELLED"
+
+    def test_cancel_terminal_run_raises_run_already_terminal(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        """Cancelar un run que ya es terminal (COMPLETED/FAILED/CANCELLED)
+        es un error operacional: el caller no debe poder 're-cancelar'."""
+        from skillgraph.core.errors import ValidationError
+
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        _seed_fixture(
+            tmp_path / "fixtures",
+            tenant=TENANT,
+            project=PROJECT,
+            node_name="a",
+            outcome="ok",
+        )
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        # Reconciliar hasta COMPLETED
+        ctl.reconcile_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        ctl.reconcile_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        snap = ctl._snapshot(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
+        assert snap.state == "COMPLETED"
+        with pytest.raises(ValidationError):
+            ctl.cancel_run(
+                tenant_id=TENANT,
+                project_id=PROJECT,
+                run_id=run_id,
+            )
+
+    def test_cancel_unknown_run_raises_not_found(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        from skillgraph.core.errors import NotFoundError
+
+        storage, adapter, _conn = fixture_setup
+        ctl = RunController(storage=storage, adapter=adapter)
+        with pytest.raises(NotFoundError):
+            ctl.cancel_run(
+                tenant_id=TENANT,
+                project_id=PROJECT,
+                run_id="run-que-no-existe",
+            )
+
+    def test_reconcile_after_cancel_is_noop(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        storage, adapter, conn = fixture_setup
+        plan = _plan((_node("a"),))
+        _seed_fixture(
+            tmp_path / "fixtures",
+            tenant=TENANT,
+            project=PROJECT,
+            node_name="a",
+            outcome="ok",
+        )
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        ctl.cancel_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id=run_id,
+        )
+        # Snapshot estable: reconcile_run no debe re-ejecutar el nodo
+        # ni emitir nuevos eventos.
+        events_before = conn.execute(
+            "SELECT COUNT(*) AS n FROM runtime_events WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()["n"]
+        snap = ctl.reconcile_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        assert snap.state == "CANCELLED"
+        events_after = conn.execute(
+            "SELECT COUNT(*) AS n FROM runtime_events WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()["n"]
+        assert events_after == events_before
 
 

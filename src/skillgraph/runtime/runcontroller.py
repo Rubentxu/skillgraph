@@ -338,6 +338,54 @@ class RunController:
         )
         return len(existing_prev) >= node_prev.max_visits
 
+    def cancel_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> RunSnapshot:
+        """Cancela un run en curso.
+
+        S1 del roadmap Etapa 7 (presupuestos y cancelacion): el operador
+        puede detener un run ACTIVE/WAITING sin esperar al reconcile
+        completo. Emite `RunCompleted(state=CANCELLED)` de forma
+        atomica con la transicion de estado a `CANCELLED` y deja
+        `current_node=None`.
+
+        - Si el run no existe -> `NotFoundError`.
+        - Si el run ya es terminal (COMPLETED/FAILED/CANCELLED) ->
+          `ValidationError` (operacion no idempotente: el caller
+          debe distinguir 'no cancelable').
+        - Si el run tiene NodeExecutions RUNNING, estas se quedan
+          en RUNNING: la cancelacion es a nivel de Run, no de
+          nodo. El siguiente reconcile_run no las re-ejecuta
+          porque detecta el estado terminal del Run al inicio.
+        """
+        from skillgraph.core.errors import ValidationError
+
+        # `Storage.load_run` lanza NotFoundError si el run no existe.
+        run = self._storage.load_run(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+        )
+        state = run["state"]
+        if is_terminal_run_state(state):
+            raise ValidationError(
+                f"Run {run_id!r} ya es terminal ({state}); no se puede cancelar"
+            )
+        # H9-run-lifecycle: la transicion a CANCELLED y la emision del
+        # evento `RunCompleted(state=CANCELLED)` viven en una sola TX.
+        self._transition_run_state_with_event(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            state="CANCELLED",
+            current_node=None,
+        )
+        return self._snapshot(tenant_id, project_id, run_id)
+
     def _transition_run_state_with_event(
         self,
         *,
