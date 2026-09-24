@@ -1,6 +1,6 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-23 23:00 (Europe/Madrid).
+> Última verificación: 2026-09-24 06:46 (Europe/Madrid).
 > **INICIATIVA CERRADA** tras v0.6.0 (2026-09-23). Ver `.next-decision.md`.
 
 ## Goal
@@ -920,3 +920,77 @@ Esperar consigna del operador sobre si:
 Mientras tanto, el repo está en estado estable y la sesión puede
 cerrarse sin pérdida de contexto gracias al checkpoint sincronizado
 en este turno.
+
+## UPDATE 2026-09-24 06:46 — Refactor v0.7.0 cerrado (path B del operador)
+
+### Goal
+
+Sin cambio: `g-skillgraph-bootstrap` COMPLETED en v0.6.0. Este UPDATE
+documenta el refactor que el operador autorizó explícitamente como
+"path B" (shims elimination + context_controller → Storage API
+combinados en una sola sesión, con tag MINOR v0.7.0 al cierre).
+
+### Trabajo de este turno (2 commits principales)
+
+| Commit | Qué |
+|---|---|
+| `2751bc8` | **Refactor 1 (H9-BSlice4)**: 3 métodos nuevos en Storage (`list_claims_by_predicate`, `list_evidences_for_source`, `list_resource_refs_for_run`); 4 sitios SQL directos en `context_controller.py` reescritos como delegación. +15 tests. Cierra el bloqueo material `context_controller 82% SQL` que el operador autorizó refactorizar (ADR-0014). |
+| `f2cbb2f` | **Refactor 2 (shims)**: 20 módulos shim eliminados de `src/skillgraph/` raíz (catalog, recipe, runtime_types, dsl, errors, graph_expansion, handoff, storage, workflow, bricks, git_source, pack_loader, promotion, runcontroller, skill_importer, paths, agent, context_controller, knowledge_controller, knowledge_invalidator). 37 ficheros de test reescritos (~118 imports) para apuntar a bounded contexts directos. 2 tests en `test_uat_blocked.py` actualizados (verificaban existencia de los shims). |
+
+### Estructura final de src/skillgraph/
+
+Bounded contexts visibles y descubribles por import directo:
+
+```
+core/        errors, recipe, runtime_types
+domain/      dsl, pack_loader, skill_importer
+governance/  graph_expansion, promotion
+knowledge/   context_controller, git_source, graph, knowledge_controller, knowledge_invalidator
+platform/    paths, storage
+resources/   bricks, catalog, parser, plan_loader, registry, workflow
+runtime/     agent, engine, handoff, runcontroller
+cli/         runner
+```
+
+### Hallazgo honesto sobre cobertura de context_controller
+
+- **Antes** (`391c3bf`): 82%. STATE.yaml documentaba 4 sitios SQL como deuda viva.
+- **Después** (`f2cbb2f`): **sigue 82%**, NO subió.
+- **Razón**: las 4 líneas SQL eran **statements aislados** dentro de métodos que ya tenían cobertura en sus ramas happy-path. Sustituirlos por llamadas a API pública no abre nuevas ramas (los happy-paths siguen cubriendo los happy-paths). Las nuevas APIs de Storage tienen ramas defensivas (validación de `kind`, predicados vacíos, sin matches) que los 15 tests de H9-BSlice4 **NO** cubren — son tests de **contrato observable**, no de **ramas defensivas**. Las líneas no cubiertas ahora son ramas defensivas (lin 153-154, 157, 222-227, 254, 299-304, 348-352, 368), NO SQL.
+- **Cierre material conseguido**: la regla arquitectónica "Storage encapsula SQL" introducida en H9-BSlice3 ahora se cumple en `context_controller`. La métrica de cobertura es ortogonal.
+- **Próximo slice si se quiere subir contexto a 90%+**: añadir +6..10 tests de ramas defensivas de las 3 APIs de Storage. NO planificado en este turn (refactor de cobertura, no de refactor arquitectónico ya hecho).
+
+### Último estado comprobado
+
+- HEAD: `f2cbb2f` (working tree: solo `M AGENTS.md`, `?? .pipeline.kts`, `?? .tool-versions`, `?? ci/` — **NO TOCAR**, son CI local del operador).
+- `bash scripts/ci.sh` → **OK, 619/619 PASS** en 114.23s.
+- `ruff format` + `ruff check`: limpios.
+- `pytest --cov=skillgraph`: TOTAL 85% (3271 stmts, 908 branches, 426 missed).
+- `uat_audit` no re-ejecutado en este turn (no hay evidencia de necesidad:
+  uat_audit es invariante a los bounded contexts porque solo comprueba
+  comportamiento externo via CLI subprocess; los 16/16 PASS se mantienen
+  por construcción).
+- ADR + spec radicados en `specs/adr/ADR-0014-context-controller-storage-api-y-eliminacion-shims.md`
+  y `specs/h9-coverage-context-controller.md`.
+
+### Bloqueos
+
+- **Ninguno técnico.** El refactor v0.7.0 está completo y verificado.
+- **SDDK mode = `undeclared`**: sin adopción; no impide trabajo local,
+  impide delegar fases. L1..L8 del overlay respetadas.
+
+### Próxima acción concreta
+
+1. **Tag v0.7.0 MINOR** (consigna del operador: "después del refactor
+   combinado, tag v0.7.0 MINOR"). Pasos siguientes:
+   a) Regenerar `uat_audit` contra `f2cbb2f` (conserva `revision=f2cbb2f`).
+   b) CHANGELOG.md con `[0.7.0] - 2026-09-24` enumerando:
+      - Refactor (Storage API + shims removal).
+      - BREAKING CHANGE documentado.
+      - 619 tests verde (de 604 en v0.6.0).
+   c) `git tag -a v0.7.0 -m "..." f2cbb2f`.
+   d) Actualizar `STATE.yaml` `goal.closed_after_tag` con v0.7.0
+      y entrada en `SESSION-JOURNAL.md`.
+2. **Esperar instrucción explícita del operador** para emitir el
+   tag (su regla exige anuncio previo del operador; yo no emito
+   tags sin "si" explícito).

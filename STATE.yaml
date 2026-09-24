@@ -212,9 +212,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 604
-  passed: 604
-  duration_s: 192   # re-medido con scripts/ci.sh el 2026-09-24 07:43 (post-resume)
+  total: 619
+  passed: 619
+  duration_s: 114   # re-medido con scripts/ci.sh el 2026-09-24 06:39 (post-refactor v0.7.0)
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -235,6 +235,7 @@ tests:
   h9_coverage4_delta: "+8 tests cobertura knowledge/git_source.py 86% -> 95%: from_commit con sha no-commit (Blob en object store) -> ValueError (1) + refresh() con pathspecs filtra blobs (1) + detect_changes until_commit=None usa HEAD (1) + detect_changes con pathspecs filtra (1) + status added cuando old_sha None (1) + status deleted cuando new_sha None (1) + _matches_pathspec literal prefijo-segmento (1) + _safe_capture_status exito devuelve dict (1). Stmts 78-79 (ImportError dulwich, requiere env sin dulwich) y ramas defensivas 252->254/255/325->exit/357-358 restantes. Spec: specs/h9-coverage-git-source.md."
   h9_coverage5_delta: "+4 tests cobertura resources/catalog.py 88% -> 100%: register_project duplicado (tenant_id, name) -> IdentityConflictError (1) + list_projects con resultados ordenados por name (1) + list_projects tenant vacio (1) + open_catalog path sin extension .sqlite -> ValidationError (1). Spec: specs/h9-coverage-catalog.md."
   h9_coverage6_delta: "+3 tests cobertura resources/registry.py 93% -> 95%: _validate_decision outcomes[i]['name'] no-string (1) + _validate_action transitions con clave no-string (1) + _validate_domain_pack capabilities no-lista (1). Stmt 79 (doble check apiVersion inconsistente) es dead code por construccion: el dict lookup usa brick.api_version como parte de la key, asi que brick_type.api_version == brick.api_version siempre. Documentado en spec; no testeable sin mutar _types directamente (fragilidad). Spec: specs/h9-coverage-registry.md."
+  h9_bslice4_context_controller_delta: "+15 tests H9-BSlice4 (ADR-0014): 4 tests list_claims_by_predicate (contrato, aislamiento, no-match, columnas) + 3 tests list_evidences_for_source (contrato, no-match, columnas) + 6 tests list_resource_refs_for_run (kind=claim, kind=evidence, DISTINCT+ORDER, aislamiento run_id, no-events, kind invalido) + 2 tests no-regresion por introspeccion (ContextController sin _conn.execute; uso de los 3 metodos publicos). Cierra los 4 sitios SQL directos (lineas 297-303, 346-349, 402-410, 413-421). Spec: specs/h9-coverage-context-controller.md."
   files:
     - tests/test_s0_brick_minimo.py: 10
     - tests/test_s1_sqlite.py: 7
@@ -294,25 +295,20 @@ tests:
     - tests/test_h9_coverage_runcontroller.py: 3   # H9-Coverage-8: cobertura runtime/runcontroller.py (94%->96%)
     - tests/test_h9_coverage_knowledge_controller.py: 5   # H9-Coverage-9: cobertura knowledge/knowledge_controller.py (93%->96%)
     - tests/test_h9_coverage_bricks.py: 2   # H9-Coverage-10: cobertura resources/bricks.py (91%->100%)
-  coverage_snapshot_2026-09-24:
+  coverage_snapshot_2026-09-24_post_refactor_v070:
     # Modulos con cobertura real (medida con `pytest --cov=skillgraph`).
-    # Snapshot re-medido el 2026-09-24 07:43 tras resume del proyecto
-    # (anterior 2026-09-23 21:42 estaba desactualizado tras 4 slices H9-Coverage-7..10).
-    # Los shims de retro-compatibilidad en src/skillgraph/ (catalog.py, recipe.py,
-    # runtime_types.py, dsl.py, errors.py, graph_expansion.py, handoff.py,
-    # storage.py, workflow.py, bricks.py, git_source.py, pack_loader.py,
-    # promotion.py, runcontroller.py, skill_importer.py, paths.py, agent.py,
-    # context_controller.py, knowledge_controller.py, knowledge_invalidator.py)
-    # son re-exports de 1-9 LoC; su cobertura es siempre 100% via tests que
-    # importan los modulos activos transitivamente. Listados en coverage pero
-    # NO en tabla siguiente (omitidos por `skip-covered`).
+    # Snapshot re-medido el 2026-09-24 06:39 tras commit f2cbb2f (refactor v0.7.0).
+    # Los 20 shims de retro-compatibilidad que vivian en src/skillgraph/ raiz
+    # han sido ELIMINADOS en f2cbb2f; este snapshot ya no los lista porque
+    # simplemente no existen en el arbol. Las cifras siguientes son las
+    # del codigo real en bounded contexts (core/, domain/, governance/,
+    # knowledge/, platform/, resources/, runtime/).
     src/skillgraph/core/runtime_types.py: 97%
     src/skillgraph/domain/dsl.py: 97%
     src/skillgraph/domain/pack_loader.py: 97%
     src/skillgraph/domain/skill_importer.py: 98%
     src/skillgraph/governance/graph_expansion.py: 98%
-    src/skillgraph/governance/promotion.py: 100%
-    src/skillgraph/knowledge/context_controller.py: 82%   # DEUDA VIVA: SQL directo en ctrl.storage._conn (8 puntos cursor.execute). Rompe regla "Storage encapsula SQL" introducida en H9-BSlice3. Opciones para cerrar: (1) refactor arquitectónico extrayendo 8 operaciones a metodos publicos de Storage con TDD (~30-40 tests + 8 metodos nuevos) — requiere aprobacion operador porque cambia API publica; (2) aceptar la deuda y cubrir solo las 6 ramas alcanzables (sube a ~90-93%, no llega al 95% del blueprint).
+    src/skillgraph/knowledge/context_controller.py: 82%   # Post-H9-BSlice4: SQL directos cerrados (4 sitios -> 0; ADR-0014). Las 4 lineas de query SQL fueron reescritas como 3 llamadas a APIs publicas de Storage (list_claims_by_predicate, list_evidences_for_source, list_resource_refs_for_run). Cobertura NO subio (sigue 82%) porque las 3 nuevas llamadas tienen ramas defensivas (validacion del parametro kind, predicado vacio, sin matches) que NO estan cubiertas por los 15 tests de H9-BSlice4; esos 15 tests son de CONTRATO observable, no de covereage de ramas. Las lineas no cubiertas ahora son las ramas defensivas de las nuevas APIs (lin 153-154, 157, 222-227, 254, 299-304, 348-352, 368), NO SQL directo.
     src/skillgraph/knowledge/git_source.py: 95%
     src/skillgraph/knowledge/graph.py: 96%
     src/skillgraph/knowledge/knowledge_controller.py: 96%
@@ -328,25 +324,51 @@ tests:
     src/skillgraph/cli/runner.py: 55%   # cobertura-por-exit-code; subprocess tests + in-process + UAT scripts compensan
     src/skillgraph/__main__.py: 0%   # entry-point CLI, no testeable con pytest-cov
   nota_cobertura: >
-    Cobertura RE-MEDIDA con `pytest --cov=skillgraph` el 2026-09-24 07:43
-    (post-resume, post-H9-Coverage-1..10). Cifras validadas contra
-    `scripts/ci.sh` con la suite completa (604 tests verde en 192s).
-    34 archivos con cobertura 100% omitidos por `skip-covered`
-    (incluye todos los shims de retro-compatibilidad y los modulos
-    del nucleo errors/recipe/runtime/engine/parser/plan_loader/catalog).
+    Cobertura RE-MEDIDA con `pytest --cov=skillgraph` el 2026-09-24 06:39
+    (post-commit f2cbb2f, fin del refactor v0.7.0 / eliminacion de shims).
+    Cifras validadas contra `scripts/ci.sh` con la suite completa
+    (619 tests verde en 114s; +15 vs v0.6.0).
+    Cambios observables vs v0.6.0:
+    - src/skillgraph/{shims} ELIMINADOS (20 modulos de 1-9 LoC).
+    - context_controller SQL cerrados (4 sitios -> 0); ramas defensivas
+      de las 3 APIs nuevas, NO testeadas (subir a 90%+ requiere +6..10
+      tests adicionales NO de contrato, NO planificados en H9-BSlice4).
+    - resto de cobertura sin cambios (Storage encapsula SQL desde H9-BSlice3,
+      los bounded contexts estaban testados bajo sus shims).
+    17 archivos con cobertura 100% omitidos por `skip-covered`.
     Modulos de nucleo: storage 97%, runcontroller 96%, paths 81%
-    (Windows-only), platform/__init__ 100%.
-    Modulos de dominio: graph_expansion 98%, pack_loader 97%,
+    (Windows-only). Dominio: graph_expansion 98%, pack_loader 97%,
     skill_importer 98%, promotion 100%, knowledge_invalidator 97%,
-    context_controller 82% (DEUDA VIVA documentada arriba).
-    Modulos de knowledge: git_source 95%, graph 96%,
-    knowledge_controller 96% (H9-Coverage-9: 93% -> 96%).
-    Modulos de resources: workflow 100% (H9-Coverage-7: 93% -> 100%),
-    bricks 100% (H9-Coverage-10: 91% -> 100%), registry 95%.
-    Modulos de runtime: agent 97%, handoff 95%, engine 100%.
-    Grieta workflow_runs<->runtime_events: preservada por construccion,
-    requiere operaciones transaccionales de Storage para cerrar.
-  total: 85%   # TOTAL reportado por pytest-cov (3292 stmts, 906 branches, 431/906 missed = 85% branch coverage ponderado).
+    context_controller 82% (H9-BSlice4 cierra SQL, NO sube cobertura).
+    Knowledge: git_source 95%, graph 96%, knowledge_controller 96%.
+    Resources: workflow 100%, bricks 100%, registry 95%.
+    Runtime: agent 97%, handoff 95%, runcontroller 96%.
+    CLI runner 55% (subprocess + in-process + UAT compensan).
+    TOTAL reportado: 85% branch coverage ponderado por pytest-cov.
+  total: 85%   # TOTAL reportado por pytest-cov (3271 stmts, 908 branches, 426/908 missed = 85% branch coverage ponderado).
+  refactor_v070_summary:
+    # Cierre del refactor v0.7.0 (ADR-0014)
+    adr: "specs/adr/ADR-0014-context-controller-storage-api-y-eliminacion-shims.md"
+    spec: "specs/h9-coverage-context-controller.md"
+    commit: f2cbb2f
+    tasks_closed:
+      - "Refactor 1: H9-BSlice4 — ContextController delega en Storage API (commit 2751bc8)"
+      - "Refactor 2: eliminar 20 shims de retro-compatibilidad (commit f2cbb2f)"
+    bounded_contexts_final:
+      - "core/        errors, recipe, runtime_types"
+      - "domain/      dsl, pack_loader, skill_importer"
+      - "governance/  graph_expansion, promotion"
+      - "knowledge/   context_controller, git_source, graph, knowledge_controller, knowledge_invalidator"
+      - "platform/    paths, storage"
+      - "resources/   bricks, catalog, parser, plan_loader, registry, workflow"
+      - "runtime/     agent, engine, handoff, runcontroller"
+      - "cli/         runner"
+    shims_removed: 20   # src/skillgraph/*.py 1-9 LoC re-exports puros
+    tests_rewritten_files: 37   # imports de shim a bounded context
+    imports_rewritten_approx: 118   # 1:1 shim -> bounded context, mecanico via script
+    tests_added_h9_bslice4: 15
+    breaking_change: "from skillgraph.storage import Storage -> from skillgraph.platform.storage import Storage (y analogos para el resto de los 19 shims). Documentado en ADR-0014. No hay importadores externos (proyecto local-only, push=false)."
+    reversibility: "git revert f2cbb2f revierte el refactor 2 completo; tests/test_uat_blocked.py fue el unico test con asserts explicitos sobre los shims, reescrito en el mismo commit."
 
 uat:
   audit_script: tests/uat_audit.py
