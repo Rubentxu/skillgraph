@@ -906,3 +906,23 @@ No se publica tag.
 **Resultado**: 659/659 tests PASS (+4 nuevos sobre el helper).
 Ruff limpio. Cobertura `runcontroller.py`: 84% → 95%
 (umbral ≥90% AGENTS.md core). `reconcile_run`: 122 → 100 LoC.
+
+### Continuación del refactor (aee5cd5)
+
+Misma rama, sin bump adicional. Extrae dos helpers privados
+adicionales en `RunController`:
+
+- `_open_node_execution(*, tenant_id, project_id, run_id, node_name,
+  attempt) -> tuple[EventBuilder, str]`: emite `NodeScheduled` y crea
+  la `NodeExecution` RUNNING atómica. Devuelve `(events,
+  node_execution_id)`.
+- `_finalize_node_success(*, events, run_id, node_execution_id,
+  result, context_hash)`: emite `NodeCompleted` + `EvidenceProduced`
+  y delega el UPDATE a SUCCEEDED atómico.
+- `_fail_node_with` ahora retorna `bool` (`False`); permite
+  `return self._fail_node_with(...)` sin repetir el literal.
+
+`_execute_one` colapsa 162 → 124 LoC. El orquestador queda como
+secuencia explícita: bootstrap → compilar handoff → invocar adapter →
+validar outcome → cerrar. Cobertura mantenida 95%.
+
