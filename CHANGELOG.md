@@ -142,6 +142,222 @@ como BREAKING por honestidad pero el impacto real es CERO
 Tests con asserts explícitos sobre los shims se reescribieron
 en el mismo commit (no quedan referencias explícitas).
 
+## [0.7.1] — 2026-09-24
+
+**Tag**: `v0.7.1` (965446fadd1ca4cb11d8dfb5ddd8e56b090f1eb0).
+
+**Resumen**: introduce 3 APIs atómicas nuevas en `Storage` para
+escribir mutaciones de `node_executions` y su(s) evento(s)
+correspondiente(s) en una sola transacción:
+
+- `start_node_execution_atomically(event=..., ...)`:
+  1 INSERT (RUNNING) + 1 evento (NodeScheduled).
+- `complete_node_execution_atomically(event_completed=..., event_evidence=..., ...)`:
+  1 UPDATE (SUCCEEDED) + 2 eventos (NodeCompleted + EvidenceProduced).
+- `mark_node_failed_atomically(event=..., ...)`:
+  1 UPDATE (FAILED) + 1 evento (NodeFailed).
+
+Cada llamada ejecuta una transacción compartida
+(BEGIN/COMMIT/ROLLBACK explícito sobre `_conn`). Si el INSERT del
+evento falla, la mutación de estado rollbackea como una sola
+unidad. Esto cierra las grietas atómicas B, C y D del documento
+de caracterización de Plan B.
+
+**Idempotencia**: `UNIQUE(event_id)` sobre `runtime_events` se
+traduce a `IdempotencyError` via `try/except sqlite3.IntegrityError`.
+Replay con el mismo `event_id` lanza `IdempotencyError`, nunca un
+duplicado. Cumplimiento UAT-07.
+
+**Importante**: las 3 APIs `*_atomically` corrigieron el **camino público**
+de `Storage` (las firmas que invocaba el runtime antes del refactor),
+pero el `with self._conn:` preexistente y los APIs NO-atómicas legacy
+del Storage siguen sin rollbackear en `isolation_level=None`. Esta
+grieta queda documentada como **LIMITACIÓN-7** (no resuelta en este
+release; huérfana hasta v0.7.3 con un fix parcial sobre V4).
+
+### Compatibilidad
+
+- `629 passed, 1 skipped in 143.06s` (cifra del log
+  `audits/cleanroom-evidence/ci-output-v0.7.1.txt`; skip en
+  `test_cli_uat.py:363`, preexistente). Sin tests nuevos propios:
+  este slice prepara el terreno para v0.7.2.
+- 16/16 UAT PASS, 0 FAIL, 0 BLOCKED.
+- 0 breaking changes: APIs legacy siguen vigentes.
+
+### Evidencia
+
+- `audits/release-v0.7.1-summary.md` (ya generado, link al bundle).
+- `audits/cleanroom-evidence/skillgraph-v0.7.1-audit-bundle.tar.gz`.
+- `audits/cleanroom-evidence/ci-output-v0.7.1.txt`.
+- `audits/cleanroom-evidence/uat-audit-v0.7.1.txt`.
+
+## [0.7.2] — 2026-09-24
+
+**Tag**: `v0.7.2` (338fcc2eed72eb0a0f24f54532032461bded83f3).
+
+**Resumen**: cierra el **defecto de integración** detectado por la
+auditoría externa de `v0.7.1`. El release anterior ofreció 3 APIs
+atómicas nuevas en `Storage` (`start/complete/fail *atomically`),
+pero `RunController._execute_one` seguía invocando las APIs
+no-atómicas y emitiendo eventos con llamadas separadas a
+`EventLog.append`. Esto significaba que **el recorrido real del
+runtime nunca obtuvo la garantía transaccional**.
+
+`v0.7.2` sustituye los pares modificar-estado → emitir-evento en
+`RunController` por las APIs atómicas. La garantía se acredita en
+el camino público del runtime, no solo en el Storage aislado.
+
+### `RunController._execute_one`
+
+| Momento | Antes (v0.7.1) | Después (v0.7.2) |
+|---|---|---|
+| Start | `start_node_execution(...)` + `EventLog.append(NodeStarted)` | `start_node_execution_atomically(event=..., ...)` |
+| Complete | `complete_node_execution(...)` + `EventLog.append(NodeCompleted)` + `EventLog.append(EvidenceProduced)` | `complete_node_execution_atomically(event_completed=..., event_evidence=..., ...)` |
+| Fail | `mark_node_failed(...)` + `EventLog.append(NodeFailed)` | `mark_node_failed_atomically(event=..., ...)` |
+
+### Tests nuevos
+
+- `tests/test_h10_runcontroller_atomic_integration.py`: 3 tests con
+  fault injection sobre `Storage._insert_event_in_tx`. Verifican que
+  al fallar el INSERT del evento, la mutación de estado rollbackea.
+
+### Compatibilidad
+
+- `632 passed, 1 skipped in 134.17s` (cifra del log
+  `audits/cleanroom-evidence/ci-output-v0.7.2.txt`; skip en
+  `test_cli_uat.py:363`, preexistente). Aritmética aproximada del
+  slice: 630 originales + 2-3 nuevos de integración
+  (`test_h10_runcontroller_atomic_integration.py` aporta 3).
+- 16/16 UAT PASS reproducible.
+- 0 breaking changes: APIs públicas no cambian.
+
+### Evidencia
+
+- `audits/release-v0.7.2-summary.md` (ya generado, link al bundle).
+- `audits/cleanroom-evidence/skillgraph-v0.7.2-audit-bundle.tar.gz`.
+- `audits/cleanroom-evidence/ci-output-v0.7.2.txt`.
+- `audits/cleanroom-evidence/uat-audit-v0.7.2.txt`.
+
+### Lo que sigue abierto al cerrar v0.7.2
+
+- **LIMITACIÓN-7**: el `with self._conn:` del Storage y las APIs
+  no-atómicas legacy siguen sin rollbackear en
+  `isolation_level=None`. v0.7.2 NO introduce un fix para esa
+  grieta; solo acredita la integración del runtime con las APIs
+  atómicas ya introducidas en v0.7.1.
+
+## [0.7.3] — 2026-09-24
+
+**Tag**: `v0.7.3` (987be068c7f2b6d17aa6c209489906f94a542568).
+
+**Código efectivo**: el tag apunta al commit `6a536ac` ("T19 cubre
+rollback path del _atomic REAL"), que es el último commit con
+cambios de código en el camino del fix. El SHA documental
+987be068 puede incluir archivos posteriores con ajustes de SHA o
+cierre de lagunas procedimentales; eso no afecta el código
+ejecutado.
+
+**Resumen**: cierra **un solo caso** de la grieta transaccional de
+LIMITACIÓN-7: `Storage.record_trace()`. La función realizaba 1
+INSERT en `outcome_traces` + N INSERTs en `outcome_trace_links`,
+pero usaba `with self._tx()` que con `isolation_level=None` NO
+abría transacción real. Un fallo durante el enlace dejaba un
+trace huérfano en disco sin sus enlaces.
+
+`v0.7.3` migra `record_trace()` a `Storage._atomic()`
+(BEGIN/COMMIT/ROLLBACK explícitos), garantizando que un fallo a
+mitad de las 1+N sentencias rollbackea el conjunto completo.
+Esto es análogo al patrón ya usado por las APIs `*_atomically`
+de v0.7.1 (que cubren `node_executions` + eventos).
+
+El inventario del slice 1 también caracterizó otras 4 funciones
+multi-statement de Storage (`_migrate`, `upsert_resource`,
+`add_relation`, `register_promotion`). Todas se excluyeron del
+alcance del fix por idempotencia natural o porque el fallo
+impide la escritura — **v0.7.3 NO las modifica**.
+
+### Cambios funcionales
+
+- `Storage._atomic`: helper nuevo que usa `BEGIN`/`COMMIT`/`ROLLBACK`
+  explícitos sobre `_conn` (alineado con el patrón de las APIs
+  `*_atomically`). El rollback se ejecuta con `contextlib.suppress`
+  para no enmascarar la excepción original.
+- `Storage.record_trace`: cambia `with self._tx()` por
+  `with self._atomic()` y actualiza su docstring para documentar
+  la garantía transaccional y la referencia al slice V4.
+
+### Tests
+
+- `tests/test_h9_limitacion_7_slice1.py` con 4 tests (T15-T18):
+  caracterización de V1, V2, V3, V5 y demostración del bug V4.
+- `tests/test_h9_limitacion_7_slice1.py::TestT19AtomicRealRollbackPath`:
+  cubre el path real de rollback del `_atomic`, no solo el override
+  de los tests de caracterización. (Líneas 387-393 de storage.py
+  antes en Missing; pasan a estar cubiertas con cobertura de
+  storage.py subiendo de 95% a 96%.)
+
+### Compatibilidad
+
+**Resultados observados en el clon del SHA `6a536ac`** (no en
+HEAD del main, que ya incluye el fix V6 en `a6bb5ab`):
+
+- **Pytest contra el código del tag**: `637 passed, 1 skipped`
+  en 122 s. (Skip preexistente: `tests/test_cli_uat.py:363`,
+  blueprint no versionado.)
+- **`bash scripts/ci.sh` completo**: EXIT 1. Aborta en el
+  **gate 1 (ruff format --check)** sobre `tests/test_h9_limitacion_7_slice1.py`
+  (archivo con T19, mezcla `with pytest.raises(...)` con `with s._atomic()...`).
+  `ruff check src tests` reporta además 1 error **SIM117** en
+  el mismo T19. Estado heredado del árbol del tag, no regresión
+  del fix V4.
+- **`python tests/uat_audit.py`** (modo lectura):
+  `PASS=16 FAIL=0 BLOCKED=0`.
+- 7 de 16 UATs se reejecutan contra el código del tag
+  (UAT-05/08/09/10/11/15/16). Los 9 restantes son anclas estables
+  cuyo PASS refleja commits previos.
+- Cobertura `storage.py`: 96% (subió de 95% al añadir T19).
+- 0 breaking changes: APIs públicas no cambian.
+
+**Lo que este release NO certifica para el run de CI**:
+
+El gate oficial `bash scripts/ci.sh` falla por formato/lint en
+T19 en el código del tag. Esto es una característica del propio
+árbol del tag. Si se requiere CI verde para una revisión posterior
+que contenga V6 (commit `a6bb5ab`), hay que arreglar formato y
+lint en un commit `chore(...)` separado, no modificar el SHA del
+tag v0.7.3.
+
+### Evidencia
+
+- `audits/release-v0.7.3-summary.md` (entregado en este slice).
+- `audits/cleanroom-evidence/skillgraph-v0.7.3-audit-bundle.tar.gz`
+  (pendiente, ver matriz de cierre).
+- `audits/cleanroom-evidence/ci-output-v0.7.3.txt` (pendiente).
+- `audits/cleanroom-evidence/uat-audit-v0.7.3.txt` (pendiente).
+
+### Lo que v0.7.3 NO cierra (sigue abierto)
+
+- **LIMITACIÓN-7 V6**: `Storage.record_claim()` con `evidence_ids`
+  pobladas presenta la misma clase de confirmación parcial que V4
+  antes del fix. La corrección se ejecuta en commit posterior al
+  tag (`a6bb5ab fix(storage): make record_claim evidence links
+  atomic`), con su prueba focal T20
+  (`tests/test_h9_limitacion_7_v6_record_claim.py`).
+  Esta corrección NO está incluida en `v0.7.3` ni será parte de
+  ese tag. La version que la incluya se decidirá después del
+  cierre del slice documental.
+
+- **`workflow_runs` ↔ `RunCreated` / `RunCompleted`**: las
+  mutaciones de `workflow_runs` siguen usando APIs no-atómicas.
+  Fuera del alcance de LIMITACIÓN-7; pertenece al Plan C.
+
+- **APIs legacy no-atómicas de Storage** (`upsert_resource`,
+  `start_node_execution` sin sufijo, `complete_node_execution`
+  sin sufijo, `mark_node_failed` sin sufijo): siguen sin
+  rollbackear en `isolation_level=None`. Cualquier llamada a esas
+  APIs desde un caller distinto al runtime verificado en v0.7.2
+  es responsabilidad del caller asegurar atomicidad externa.
+
 ## [0.6.0] — 2026-09-23
 
 **Resumen**: cierra los dos únicos gaps restantes del blueprint v1.
