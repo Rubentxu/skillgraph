@@ -261,17 +261,13 @@ class RunController:
                 # sola transaccion via `Storage.transition_run_state_atomically`.
                 # Antes iban en commits separados (`transition_run_state`
                 # + `EventLog.append`).
-                self._storage.transition_run_state_atomically(
-                    event=EventBuilder(
-                        tenant_id=tenant_id,
-                        project_id=project_id,
-                        correlation_id=run_id,
-                    ).run_completed(run_id=run_id, state="FAILED", at=node_name),
+                self._transition_run_state_with_event(
                     tenant_id=tenant_id,
                     project_id=project_id,
                     run_id=run_id,
                     state="FAILED",
                     current_node=node_name,
+                    at=node_name,
                 )
                 return self._snapshot(tenant_id, project_id, run_id)
 
@@ -293,42 +289,23 @@ class RunController:
         # Si frontier vacia -> terminamos.
         # Caso H4 budget exhausted: current con self-loop y max_visits
         # agotado -> FAILED. Caso DAG normal -> COMPLETED.
-        run_row = self._load_run(tenant_id, project_id, run_id)
-        prev_current = run_row["current_node"]
-        budget_exhausted = False
-        if prev_current is not None:
-            node_prev = plan.node(prev_current)
-            if has_self_loop(plan, prev_current) and node_prev.max_visits is not None:
-                existing_prev = self._node_executions_for(
-                    tenant_id, project_id, run_id, prev_current
-                )
-                if len(existing_prev) >= node_prev.max_visits:
-                    budget_exhausted = True
+        prev_current = self._load_run(tenant_id, project_id, run_id)["current_node"]
         new_frontier = self._calculate_frontier(tenant_id, project_id, run_id, plan)
         if not new_frontier:
-            if budget_exhausted:
+            if self._is_budget_exhausted(plan, tenant_id, project_id, run_id, prev_current):
                 # H9-run-lifecycle: FAILED por budget agotado. Transicion
                 # + evento atomicos.
-                self._storage.transition_run_state_atomically(
-                    event=EventBuilder(
-                        tenant_id=tenant_id,
-                        project_id=project_id,
-                        correlation_id=run_id,
-                    ).run_completed(run_id=run_id, state="FAILED", at=prev_current),
+                self._transition_run_state_with_event(
                     tenant_id=tenant_id,
                     project_id=project_id,
                     run_id=run_id,
                     state="FAILED",
                     current_node=prev_current,
+                    at=prev_current,
                 )
             else:
                 # H9-run-lifecycle: COMPLETED. Transicion + evento atomicos.
-                self._storage.transition_run_state_atomically(
-                    event=EventBuilder(
-                        tenant_id=tenant_id,
-                        project_id=project_id,
-                        correlation_id=run_id,
-                    ).run_completed(run_id=run_id, state="COMPLETED"),
+                self._transition_run_state_with_event(
                     tenant_id=tenant_id,
                     project_id=project_id,
                     run_id=run_id,
@@ -337,6 +314,64 @@ class RunController:
                 )
 
         return self._snapshot(tenant_id, project_id, run_id)
+
+    def _is_budget_exhausted(
+        self,
+        plan: WorkflowPlan,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        prev_current: str | None,
+    ) -> bool:
+        """H4: budget de visitas agotado en un nodo con self-loop.
+
+        True si `prev_current` tiene self-loop, `max_visits` definido,
+        y ya se han emitido `>= max_visits` ejecuciones del nodo.
+        """
+        if prev_current is None:
+            return False
+        node_prev = plan.node(prev_current)
+        if not has_self_loop(plan, prev_current) or node_prev.max_visits is None:
+            return False
+        existing_prev = self._node_executions_for(
+            tenant_id, project_id, run_id, prev_current
+        )
+        return len(existing_prev) >= node_prev.max_visits
+
+    def _transition_run_state_with_event(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        state: str,
+        current_node: str | None,
+        at: str | None = None,
+    ) -> None:
+        """Transiciona el estado del run emitiendo `RunCompleted` en una sola TX.
+
+        Helper de `reconcile_run` que centraliza las 3 ramas de terminación
+        del run (FAILED por nodo fallido, FAILED por budget exhausted,
+        COMPLETED normal). El parámetro `at` indica el nodo en que el run
+        termina (solo FAILED; COMPLETED pasa None).
+        """
+        event = EventBuilder(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            correlation_id=run_id,
+        ).run_completed(
+            run_id=run_id,
+            state=state,
+            at=at,
+        )
+        self._storage.transition_run_state_atomically(
+            event=event,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            state=state,
+            current_node=current_node,
+        )
 
     # ---------- internals ----------
 

@@ -38,3 +38,4 @@ external/inputs/
 audits/*-audit-bundle.tar.gz
 .atl/
 .tool-versions
+.pipeline.kts

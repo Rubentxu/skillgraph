@@ -166,6 +166,83 @@ class TestMaxVisitsSelfLoop:
         assert n_exec == 1
 
 
+class TestIsBudgetExhaustedHelper:
+    """Contrato del helper privado `_is_budget_exhausted`."""
+
+    def test_prev_current_none_returns_false(self, tmp_path: Path) -> None:
+        a = _node("a")
+        plan = WorkflowPlan(
+            nodes=(a,),
+            transitions=(),
+            initial="a",
+        )
+        _storage, ctl = _build(tmp_path, plan)
+        result = ctl._is_budget_exhausted(
+            plan=plan,
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id="r",
+            prev_current=None,
+        )
+        assert result is False
+
+    def test_no_self_loop_returns_false(self, tmp_path: Path) -> None:
+        a = _node("a", metadata={"max_visits": 1})
+        plan = WorkflowPlan(
+            nodes=(a,),
+            transitions=(),
+            initial="a",
+        )
+        _storage, ctl = _build(tmp_path, plan)
+        result = ctl._is_budget_exhausted(
+            plan=plan,
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id="r",
+            prev_current="a",
+        )
+        assert result is False
+
+    def test_self_loop_without_max_visits_returns_false(self, tmp_path: Path) -> None:
+        a = _node("a")  # sin max_visits
+        plan = WorkflowPlan(
+            nodes=(a,),
+            transitions=(WorkflowTransition(source="a", outcome="ok", target="a"),),
+            initial="a",
+        )
+        _storage, ctl = _build(tmp_path, plan)
+        result = ctl._is_budget_exhausted(
+            plan=plan,
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id="r",
+            prev_current="a",
+        )
+        assert result is False
+
+    def test_self_loop_with_max_visits_below_threshold_returns_false(
+        self, tmp_path: Path
+    ) -> None:
+        a = _node("a", metadata={"max_visits": 3})
+        plan = WorkflowPlan(
+            nodes=(a,),
+            transitions=(WorkflowTransition(source="a", outcome="ok", target="a"),),
+            initial="a",
+        )
+        _storage, ctl = _build(tmp_path, plan)
+        # crear run con 1 ejecucion del nodo 'a' < max_visits=3
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
+        result = ctl._is_budget_exhausted(
+            plan=plan,
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id=run_id,
+            prev_current="a",
+        )
+        assert result is False
+
+
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
