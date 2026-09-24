@@ -133,21 +133,45 @@ bajo al menos 4 escenarios:
 
 ## Riesgos conocidos
 
-- `_atomic()` captura `BaseException` para garantizar el ROLLBACK
-  incluso ante `KeyboardInterrupt` o `SystemExit`. Esto preserva la
-  consistencia pero podría enmascarar errores de infraestructura. La
-  política de `with` es: `ROLLBACK` siempre, `raise` siempre (no se
-  traga la excepción).
+- `_atomic()` captura `Exception` (alineado con el patrón de las 3
+  APIs `*_atomically` de v0.7.1). NO captura `KeyboardInterrupt` ni
+  `SystemExit` — coherente con el comportamiento típico de Python y
+  con las APIs preexistentes.
 - El ROLLBACK dentro de `except` es best-effort: si la propia
   sentencia `ROLLBACK` lanza (p.ej. la conexión está rota), se ignora
   y se re-lanza la excepción original. Esto es intencional: el
   cleanup no debe ocultar el bug original.
+
+## Lagunas del release (observadas, no resueltas)
+
+El release v0.7.3 está técnicamente cerrado pero NO tiene algunos
+artefactos que v0.7.1 y v0.7.2 sí generaron como parte de su gate.
+Estos requieren decisión del operador antes de generarse:
+
+1. **Sin `audits/cleanroom-evidence/skillgraph-v0.7.3-audit-bundle.tar.gz`**.
+   v0.7.0, v0.7.1 y v0.7.2 tienen bundle reproducible. El patrón
+   de release "verificable por terceros" no se ha aplicado a v0.7.3.
+
+2. **Sin `audits/release-v0.7.3-summary.md`** ejecutivo.
+   v0.7.1 (`release-v0.7.1-summary.md`) y v0.7.2
+   (`release-v0.7.2-summary.md`) tienen un resumen ejecutivo
+   orientado a revisores externos. Este doc técnico de cierre
+   (`h9-limitacion-7-closure.md`) cubre el "qué" pero NO el "cómo
+   se ve este release desde fuera".
+
+3. **Sin `audits/cleanroom-evidence/ci-output-v0.7.3.txt`** ni
+   `uat-audit-v0.7.3.txt`.
+
+Estos items NO bloquean el push pero son lagunas procedimentales
+que el operador debe decidir si cerrar antes o después del push.
 
 ## Trazabilidad
 
 - Plan original: `audits/h9-plan-b-atomicity-closure-b38c105.md`
 - Inventario V1-V5: `audits/h9-limitacion-7-inventory-slice1.md`
 - Hallazgo externo sobre v0.7.1: `audits/review-finding-v0.7.1-integration-gap.md`
-- Tests: `tests/test_h9_limitacion_7_slice1.py`
+- Tests: `tests/test_h9_limitacion_7_slice1.py` (T15-T19)
+- T19 cubre el rollback path del `_atomic` REAL (no del override
+  de `FaultyStorage`), elevando cobertura storage.py a 96%.
 - Implementación: `src/skillgraph/platform/storage.py` (`_atomic()`,
   `record_trace()`)
