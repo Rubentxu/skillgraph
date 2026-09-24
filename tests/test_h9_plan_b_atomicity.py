@@ -134,6 +134,7 @@ class TestT7StartNodeExecutionAtomic:
     def test_rolls_back_on_event_insert_failure(self, seeded_run, monkeypatch) -> None:
         """Si el INSERT del evento falla, ambos rollbackean."""
         storage, _a, conn, run_id = seeded_run
+
         # Forzar error en la segunda escritura (INSERT runtime_events).
         # Parcheamos _insert_event_in_tx para no depender de que
         # sqlite3.Connection acepte setattr en su `.execute` (read-only).
@@ -169,8 +170,7 @@ class TestT7StartNodeExecutionAtomic:
         # Estado: rollback completo. La fila ne-t7-rb NO existe.
         rows = list(
             conn.execute(
-                "SELECT node_execution_id FROM node_executions "
-                "WHERE node_execution_id = ?",
+                "SELECT node_execution_id FROM node_executions WHERE node_execution_id = ?",
                 ("ne-t7-rb",),
             )
         )
@@ -246,9 +246,7 @@ class TestT8CompleteNodeExecutionAtomic:
         }
         assert ev_ids == {"evt-completed", "evt-evidence"}
 
-    def test_rolls_back_on_evidence_event_failure(
-        self, seeded_run, monkeypatch
-    ) -> None:
+    def test_rolls_back_on_evidence_event_failure(self, seeded_run, monkeypatch) -> None:
         """Si falla la inserción de EvidenceProduced (segundo evento),
         el UPDATE SUCCEEDED y el NodeCompleted rollbackean."""
         storage, _a, conn, run_id = seeded_run
@@ -304,8 +302,7 @@ class TestT8CompleteNodeExecutionAtomic:
         # Ningún evento persistido.
         evs = list(
             conn.execute(
-                "SELECT event_id FROM runtime_events WHERE "
-                "event_id IN ('evt-c-rb', 'evt-e-rb')"
+                "SELECT event_id FROM runtime_events WHERE event_id IN ('evt-c-rb', 'evt-e-rb')"
             )
         )
         assert evs == []
@@ -406,9 +403,7 @@ class TestT10IdempotentReplay:
     - el estado NO se duplica ni se corrompe (replay del primer commit).
     """
 
-    def test_replay_same_event_id_raises_idempotency(
-        self, seeded_run
-    ) -> None:
+    def test_replay_same_event_id_raises_idempotency(self, seeded_run) -> None:
         from skillgraph.core.errors import IdempotencyError
 
         storage, _a, conn, run_id = seeded_run
@@ -449,8 +444,7 @@ class TestT10IdempotentReplay:
         # Estado consistente (sólo 1 fila, 1 evento).
         st = list(
             conn.execute(
-                "SELECT node_execution_id, state FROM node_executions "
-                "WHERE node_execution_id = ?",
+                "SELECT node_execution_id, state FROM node_executions WHERE node_execution_id = ?",
                 ("ne-seed",),
             )
         )

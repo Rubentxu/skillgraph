@@ -1515,9 +1515,7 @@ class Storage:
                 exec_sql=(sql, params),
             )
         except sqlite3.IntegrityError as exc:
-            raise IdempotencyError(
-                f"evento duplicado: {event.event_id}"
-            ) from exc
+            raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
 
     def complete_node_execution_atomically(
         self,
@@ -1589,9 +1587,7 @@ class Storage:
                 exec_sql=(sql, params),
             )
         except sqlite3.IntegrityError as exc:
-            raise IdempotencyError(
-                f"evento duplicado: {event.event_id}"
-            ) from exc
+            raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
 
     def create_run(
         self,
