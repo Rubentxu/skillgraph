@@ -29,9 +29,9 @@ import json
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
-from skillgraph.core.errors import SkillGraphError
+from skillgraph.core.errors import SkillGraphError, ValidationError
 from skillgraph.core.runtime_types import RunState, is_terminal_run_state
 from skillgraph.platform.storage import Storage
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
@@ -78,6 +78,54 @@ class RuntimeEventLog:
 
     sequence: int
     event: RuntimeEvent
+
+
+# Categorias de presupuesto que un Run puede violar. Categoria de
+# negocio (payload del evento BudgetExceeded), NO event_kind.
+BudgetViolationKind = Literal["visits", "runtime", "events"]
+
+
+@dataclass(frozen=True, slots=True)
+class RunBudget:
+    """Limites opt-in que un Run respeta para auto-abortarse.
+
+    Cualquier campo `None` significa "sin limite" para esa categoria.
+    Si TODOS los campos son `None`, el budget es efectivamente
+    inactivo (compat con Runs anteriores a S4 Etapa 7).
+
+    Invariantes (validadas en `__post_init__`):
+    - Los limites no negativos.
+    - Si todos son `None`, se acepta (equivale a sin budget).
+    - Si se da un limite, debe ser > 0 (limite 0 abortaria el Run
+      en su primer nodo, sin permitir ni RunCreated efectivo).
+    """
+
+    max_visits: int | None = None
+    max_runtime_seconds: int | None = None
+    max_events: int | None = None
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("max_visits", self.max_visits),
+            ("max_runtime_seconds", self.max_runtime_seconds),
+            ("max_events", self.max_events),
+        ):
+            if value is not None and value < 0:
+                raise ValidationError(
+                    f"RunBudget.{name} no puede ser negativo: {value}"
+                )
+            if value is not None and value == 0:
+                raise ValidationError(
+                    f"RunBudget.{name} debe ser > 0 si se especifica: {value}"
+                )
+
+    @property
+    def is_active(self) -> bool:
+        """True si al menos un limite esta definido (>0)."""
+        return any(
+            v is not None
+            for v in (self.max_visits, self.max_runtime_seconds, self.max_events)
+        )
 
 
 def plan_to_json(plan: WorkflowPlan) -> str:
@@ -203,10 +251,16 @@ class RunController:
         tenant_id: str,
         project_id: str,
         plan: WorkflowPlan,
+        budget: RunBudget | None = None,
     ) -> str:
         """Crea un Run con el plan dado. NO lo ejecuta.
 
         Devuelve el `run_id`. Emite un evento `RunCreated`.
+
+        Si `budget` se pasa Y `budget.is_active`, lo persiste en
+        `run_budgets` (idempotente: INSERT OR REPLACE). Si se pasa
+        un budget inactivo (todos None), se ignora para mantener la
+        semantica de ausencia de fila = sin limites.
 
         H9-run-lifecycle: la creacion del run y la emision del evento
         `RunCreated` viven en una sola transaccion via
@@ -216,7 +270,7 @@ class RunController:
         segunda escritura fallaba.
         """
         run_id = new_run_id()
-        return self._storage.create_run_atomically(
+        result = self._storage.create_run_atomically(
             event=EventBuilder(
                 tenant_id=tenant_id,
                 project_id=project_id,
@@ -228,6 +282,16 @@ class RunController:
             plan_json=plan_to_json(plan),
             initial_node=plan.initial,
         )
+        if budget is not None and budget.is_active:
+            self._storage.upsert_budget(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+                max_visits=budget.max_visits,
+                max_runtime_seconds=budget.max_runtime_seconds,
+                max_events=budget.max_events,
+            )
+        return result
 
     def reconcile_run(
         self,
@@ -337,20 +401,111 @@ class RunController:
         run_id: str,
         prev_current: str | None,
     ) -> bool:
-        """H4: budget de visitas agotado en un nodo con self-loop.
+        """H4 + S4 Etapa 7: budget de visitas agotado en un nodo con self-loop.
 
-        True si `prev_current` tiene self-loop, `max_visits` definido,
-        y ya se han emitido `>= max_visits` ejecuciones del nodo.
+        Chequeos (en orden):
+        1. `prev_current` con self-loop Y `max_visits` (del nodo) Y
+           ejecuciones del nodo >= limite.
+        2. Si el Run tiene un `RunBudget` activo:
+           a. `max_visits` (global del Run) y ejecuciones totales del
+              nodo `prev_current` >= limite.
+           b. `max_events` (del Run) y total de eventos >= limite.
+
+        Si el chequeo 1 falla pero el chequeo 2a o 2b falla, emite un
+        evento `BudgetExceeded` con `kind=visits` o `kind=events`
+        respectivamente antes de devolver True. Asi el timeline del
+        Run (v0.11.0) muestra al operador POR QUE se aborto.
+
+        True si ALGUNO de los chequeos indica agotamiento.
         """
         if prev_current is None:
             return False
+
+        # Chequeo 1: H4 original (max_visits por nodo en self-loop).
         node_prev = plan.node(prev_current)
-        if not has_self_loop(plan, prev_current) or node_prev.max_visits is None:
-            return False
+        h4_exhausted = (
+            has_self_loop(plan, prev_current)
+            and node_prev.max_visits is not None
+        )
         existing_prev = self._node_executions_for(
             tenant_id, project_id, run_id, prev_current
         )
-        return len(existing_prev) >= node_prev.max_visits
+        if h4_exhausted and len(existing_prev) >= node_prev.max_visits:
+            return True
+
+        # Chequeo 2: budget global del Run (S4 Etapa 7).
+        budget_row = self._storage.get_budget(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+        )
+        if budget_row is None:
+            return False
+
+        # 2a: max_visits del Run.
+        mv = budget_row.get("max_visits")
+        if mv is not None and len(existing_prev) >= mv:
+            self._emit_budget_exceeded(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+                kind="visits",
+                limit=mv,
+                observed=len(existing_prev),
+            )
+            return True
+
+        # 2b: max_events del Run.
+        me = budget_row.get("max_events")
+        if me is not None:
+            event_count = self._count_events(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+            )
+            if event_count >= me:
+                self._emit_budget_exceeded(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    run_id=run_id,
+                    kind="events",
+                    limit=me,
+                    observed=event_count,
+                )
+                return True
+
+        return False
+
+    def _emit_budget_exceeded(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        kind: BudgetViolationKind,
+        limit: int,
+        observed: int,
+    ) -> None:
+        """Emite un evento `BudgetExceeded` (helper de enforcement).
+
+        Persiste via `EventLog.append` directamente para mantener
+        atomicidad con la siguiente transicion a FAILED (que se hace
+        fuera de este helper). El caller (reconcile_run) cierra el
+        Run en FAILED justo despues.
+        """
+        events = EventBuilder(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            correlation_id=run_id,
+        )
+        self._events.append(
+            events.budget_exceeded(
+                run_id=run_id,
+                kind=kind,
+                limit=limit,
+                observed=observed,
+            )
+        )
 
     def list_runs(
         self,
@@ -440,13 +595,15 @@ class RunController:
     def _count_events(
         self, *, tenant_id: str, project_id: str, run_id: str
     ) -> int:
-        """Cuenta eventos asociados a un Run (read-only)."""
-        row = self._storage._conn.execute(  # type: ignore[attr-defined]
-            "SELECT COUNT(*) AS n FROM runtime_events "
-            "WHERE tenant_id = ? AND project_id = ? AND run_id = ?",
-            (tenant_id, project_id, run_id),
-        ).fetchone()
-        return int(row["n"])
+        """Cuenta eventos asociados a un Run (read-only).
+
+        Delega en `Storage.list_events_for_run` (regla "Storage
+        encapsula SQL"); no toca `_conn` directamente.
+        """
+        rows = self._storage.list_events_for_run(
+            tenant_id=tenant_id, project_id=project_id, run_id=run_id
+        )
+        return len(rows)
 
     def logs_run(
         self,
@@ -676,6 +833,19 @@ class RunController:
         node_name: str,
     ) -> bool:
         """Ejecuta UN nodo. Devuelve False si FAILED terminal."""
+        # S4 Etapa 7: si el budget global del Run esta agotado ANTES
+        # de ejecutar, emitimos BudgetExceeded y devolvemos False.
+        # Asi el caller (reconcile_run) cierra el Run en FAILED.
+        prev = self._load_run(tenant_id, project_id, run_id)
+        if self._is_budget_exhausted(
+            plan,
+            tenant_id,
+            project_id,
+            run_id,
+            prev_current=prev["current_node"],
+        ):
+            return False
+
         # Idempotencia: si ya hay SUCCEEDED Y el plan NO declara un
         # self-loop en este nodo, no hacemos nada (DAG lineal).
         # H4: en self-loop, debemos re-ejecutar para gastar el budget.

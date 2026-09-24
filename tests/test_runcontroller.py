@@ -844,3 +844,348 @@ class TestLogsRun:
         }
 
 
+
+
+class TestRunBudgetDataclass:
+    """Tests para el dataclass inmutable RunBudget (Etapa 7 S4).
+
+    Validacion de invariantes:
+    - `None` permitido para cualquier campo.
+    - Valor negativo rechazado.
+    - Valor 0 rechazado.
+    - `is_active` refleja si hay al menos un limite.
+    """
+
+    def test_run_budget_allows_all_none(self) -> None:
+        """RunBudget() sin argumentos = sin limites."""
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        budget = RunBudget()
+        assert budget.max_visits is None
+        assert budget.max_runtime_seconds is None
+        assert budget.max_events is None
+        assert budget.is_active is False
+
+    def test_run_budget_accepts_positive_values(self) -> None:
+        """RunBudget con limites positivos es valido."""
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        budget = RunBudget(
+            max_visits=10, max_runtime_seconds=300, max_events=1000
+        )
+        assert budget.is_active is True
+
+    def test_run_budget_rejects_negative(self) -> None:
+        """RunBudget rechaza limite negativo."""
+        from skillgraph.core.errors import ValidationError
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        with pytest.raises(ValidationError):
+            RunBudget(max_visits=-1)
+
+    def test_run_budget_rejects_zero(self) -> None:
+        """RunBudget rechaza limite 0 (abortaria antes de empezar)."""
+        from skillgraph.core.errors import ValidationError
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        with pytest.raises(ValidationError):
+            RunBudget(max_runtime_seconds=0)
+
+    def test_is_active_when_at_least_one_limit(self) -> None:
+        """is_active=True si cualquier campo tiene valor."""
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        b1 = RunBudget(max_visits=5)
+        b2 = RunBudget(max_events=100)
+        b3 = RunBudget(max_runtime_seconds=60)
+        assert b1.is_active and b2.is_active and b3.is_active
+
+
+class TestStorageBudget:
+    """Tests para Storage.upsert_budget/get_budget (Etapa 7 S4).
+
+    Cubre persistencia basica + idempotencia + lectura de Run sin
+    budget (compatibilidad con Runs anteriores a S4).
+    """
+
+    def test_upsert_then_get_budget_round_trips(self, fixture_setup) -> None:
+        """upsert + get preserva los 3 campos."""
+        from skillgraph.platform.storage import Storage
+
+        storage, _adapter, _conn = fixture_setup
+        assert isinstance(storage, Storage)
+        storage.upsert_budget(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id="r1",
+            max_visits=10,
+            max_runtime_seconds=300,
+            max_events=1000,
+        )
+        row = storage.get_budget(
+            tenant_id=TENANT, project_id=PROJECT, run_id="r1"
+        )
+        assert row is not None
+        assert row["max_visits"] == 10
+        assert row["max_runtime_seconds"] == 300
+        assert row["max_events"] == 1000
+
+    def test_upsert_budget_with_nones_stores_nulls(self, fixture_setup) -> None:
+        """upsert acepta None en cualquier campo y persiste como NULL."""
+        from skillgraph.platform.storage import Storage
+
+        storage, _adapter, _conn = fixture_setup
+        assert isinstance(storage, Storage)
+        storage.upsert_budget(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id="r2",
+            max_visits=None,
+            max_runtime_seconds=None,
+            max_events=None,
+        )
+        row = storage.get_budget(
+            tenant_id=TENANT, project_id=PROJECT, run_id="r2"
+        )
+        assert row is not None
+        assert row["max_visits"] is None
+        assert row["max_runtime_seconds"] is None
+        assert row["max_events"] is None
+
+    def test_get_budget_returns_none_when_absent(self, fixture_setup) -> None:
+        """get_budget en Run sin budget devuelve None (no NotFound)."""
+        from skillgraph.platform.storage import Storage
+
+        storage, _adapter, _conn = fixture_setup
+        assert isinstance(storage, Storage)
+        row = storage.get_budget(
+            tenant_id=TENANT, project_id=PROJECT, run_id="no-bud"
+        )
+        assert row is None
+
+    def test_upsert_is_idempotent_on_repeated_call(self, fixture_setup) -> None:
+        """upsert idempotente: dos llamadas con mismos params = una fila."""
+        from skillgraph.platform.storage import Storage
+
+        storage, _adapter, _conn = fixture_setup
+        assert isinstance(storage, Storage)
+        for _ in range(3):
+            storage.upsert_budget(
+                tenant_id=TENANT,
+                project_id=PROJECT,
+                run_id="r3",
+                max_visits=5,
+                max_runtime_seconds=None,
+                max_events=None,
+            )
+        row = storage.get_budget(
+            tenant_id=TENANT, project_id=PROJECT, run_id="r3"
+        )
+        assert row["max_visits"] == 5
+
+
+class TestCreateRunWithBudget:
+    """Tests para RunController.create_run con RunBudget (Etapa 7 S4)."""
+
+    def test_create_run_persists_budget_when_provided(
+        self, fixture_setup
+    ) -> None:
+        """create_run con budget= lo persiste en Storage."""
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            plan=plan,
+            budget=RunBudget(max_visits=5, max_runtime_seconds=60),
+        )
+        row = storage.get_budget(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        assert row is not None
+        assert row["max_visits"] == 5
+        assert row["max_runtime_seconds"] == 60
+        assert row["max_events"] is None
+
+    def test_create_run_without_budget_persists_none(
+        self, fixture_setup
+    ) -> None:
+        """create_run sin budget no escribe en run_budgets."""
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        row = storage.get_budget(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        assert row is None
+        _ = RunBudget  # import-only sanity check
+
+    def test_create_run_with_inactive_budget_skips_persistence(
+        self, fixture_setup
+    ) -> None:
+        """create_run con budget sin limites activos (todos None) no persiste.
+
+        Optimizacion: no escribimos una fila de budget si todos los
+        limites son None. Asi la query `get_budget` distingue
+        semantica entre "sin budget" (ausencia de fila) y "budget
+        explicito con None" (fila presente, todos NULL).
+        """
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            plan=plan,
+            budget=RunBudget(),  # todos None, is_active=False
+        )
+        row = storage.get_budget(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        assert row is None
+
+
+class TestBudgetEnforcement:
+    """Tests para enforcement de RunBudget en reconcile_run (S4 Etapa 7).
+
+    Cubre el comportamiento end-to-end:
+    - Run con max_visits=1: el primer reconcile ejecuta el nodo, el
+      segundo (en un plan con self-loop) aborta con BudgetExceeded.
+    - Sin budget: comportamiento sin cambios.
+    """
+
+    def test_reconcile_emits_budget_exceeded_when_visits_exhausted(
+        self, fixture_setup
+    ) -> None:
+        """Plan con self-loop y max_visits=1 -> segundo pase emite BudgetExceeded."""
+        from skillgraph.resources.workflow import (
+            WorkflowNode,
+            WorkflowPlan,
+            WorkflowTransition,
+        )
+        from skillgraph.runtime.runcontroller import RunBudget
+
+        storage, adapter, _conn = fixture_setup
+        a = WorkflowNode(
+            name="a",
+            kind="ActionNode",
+            namespace="ns",
+            api_version="v1",
+            resource_revision=1,
+            expected_result="ok",
+            max_visits=1,
+        )
+        plan = WorkflowPlan(
+            initial="a",
+            nodes=(a,),
+            transitions=(WorkflowTransition(source="a", outcome="ok", target="a"),),
+        )
+        # Sembrar fixture para el FakeAgentAdapter (self-loop re-ejecuta).
+        _seed_fixtures_for_plan(
+            adapter._root, plan, outcome_for={"a": "ok"}
+        )
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            plan=plan,
+            budget=RunBudget(max_visits=1),
+        )
+        # Primer pase: ejecuta "a" (SUCCEEDED).
+        ctl.reconcile_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        # Segundo pase: self-loop + max_visits=1 agotado -> BudgetExceeded.
+        snap2 = ctl.reconcile_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        assert snap2.state == "FAILED"
+        # Verifica que se emitio el evento BudgetExceeded.
+        rows = storage.list_events_for_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        kinds = [r["event_kind"] for r in rows]
+        assert "BudgetExceeded" in kinds
+        budget_event = next(r for r in rows if r["event_kind"] == "BudgetExceeded")
+        import json as _json
+        payload = _json.loads(budget_event["payload_json"])
+        assert payload["kind"] == "visits"
+        assert payload["limit"] == 1
+        assert payload["observed"] >= 1
+
+    def test_reconcile_without_budget_does_not_enforce(
+        self, fixture_setup
+    ) -> None:
+        """Sin budget, un DAG lineal no se aborta por max_visits."""
+        from skillgraph.resources.workflow import (
+            WorkflowNode,
+            WorkflowPlan,
+        )
+
+        storage, adapter, _conn = fixture_setup
+        fixtures_root = adapter._root
+        # Plan lineal: a -> (sin sucesor). NO hay self-loop.
+        a = WorkflowNode(
+            name="a",
+            kind="ActionNode",
+            namespace="ns",
+            api_version="v1",
+            resource_revision=1,
+            expected_result="ok",
+        )
+        plan = WorkflowPlan(initial="a", nodes=(a,), transitions=())
+        # Sembrar fixture para que el FakeAgentAdapter no falle.
+        _seed_fixtures_for_plan(
+            fixtures_root, plan, outcome_for={"a": "ok"}
+        )
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        snap = ctl.reconcile_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        # Plan lineal sin budget: COMPLETED (nodo terminal ejecutado).
+        assert snap.state == "COMPLETED"
+
+
+class TestBudgetKindValidation:
+    """Tests para EventBuilder.budget_exceeded (validacion de kind)."""
+
+    def test_budget_exceeded_rejects_invalid_kind(self) -> None:
+        """budget_exceeded rechaza kinds fuera del canon."""
+        from skillgraph.core.errors import ValidationError
+        from skillgraph.runtime.engine import EventBuilder
+
+        eb = EventBuilder(
+            tenant_id="t", project_id="p", correlation_id="c"
+        )
+        with pytest.raises(ValidationError):
+            eb.budget_exceeded(
+                run_id="r", kind="invalid", limit=1, observed=2
+            )
+
+    def test_budget_exceeded_accepts_known_kinds(self) -> None:
+        """budget_exceeded acepta visits|runtime|events."""
+        from skillgraph.runtime.engine import EventBuilder
+
+        eb = EventBuilder(
+            tenant_id="t", project_id="p", correlation_id="c"
+        )
+        for k in ("visits", "runtime", "events"):
+            ev = eb.budget_exceeded(
+                run_id="r", kind=k, limit=10, observed=11
+            )
+            assert ev.payload["kind"] == k
+            assert ev.payload["limit"] == 10
+            assert ev.payload["observed"] == 11

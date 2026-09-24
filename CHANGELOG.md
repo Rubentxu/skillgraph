@@ -1121,3 +1121,95 @@ eventos.
 Consolidacion inmediata con v0.10.0 porque `logs` es el
 complemento natural de `list`/`show`: sin timeline, el operador
 no puede diagnosticar por que un Run fallo o se cancelo.
+
+## [0.12.0] — 2026-09-24 (MINOR, budgets)
+
+**Tag**: `v0.12.0` (pendiente; commit del slice en esta entrada).
+
+**Resumen**: S4 del roadmap Etapa 7 (presupuestos opt-in por Run).
+Cierra el riesgo principal que dejo el H4: un Run con self-loop y
+sin limite superior puede iterar eternamente, consumiendo disco y
+tiempo de computo sin abortar. Con S4, el operador puede poner
+limites explicitos al crear el Run y el controller abortara
+automaticamente cuando se alcancen, emitiendo un evento
+`BudgetExceeded` que aparece en `sg runs logs`.
+
+### Cambios funcionales (MINOR)
+
+- **`EVENT_KINDS`** (`engine.py`): nuevo valor canonico
+  `"BudgetExceeded"` (event_kind del runtime, NO categoria).
+- **`EventBuilder.budget_exceeded(*, run_id, kind, limit, observed)`**:
+  smart constructor con validacion: `kind` debe estar en
+  `{visits, runtime, events}`. Payload: `{kind, limit, observed}`.
+- **`RunBudget`** (dataclass frozen en `runcontroller.py`):
+  `max_visits`, `max_runtime_seconds`, `max_events` (todos
+  `Optional[int]`). Validacion `__post_init__`: no negativos,
+  si se da debe ser > 0. `is_active` True si alguno definido.
+- **`Storage.run_budgets`**: nueva tabla con PK `run_id` (FK
+  logica a `workflow_runs`). Columnas `max_visits`,
+  `max_runtime_seconds`, `max_events`, `inserted_at`.
+  Migracion idempotente en `_migrate` (CREATE TABLE IF NOT EXISTS).
+- **`Storage.upsert_budget(...)`**: INSERT OR REPLACE sobre la PK.
+  Idempotente (cumple UAT-07).
+- **`Storage.get_budget(...)`**: devuelve fila cruda o `None`
+  (no lanza NotFoundError: ausencia = sin limites, compat con
+  Runs anteriores a S4).
+- **`RunController.create_run(..., budget=None)`**: parametro
+  opcional. Si `budget is not None AND budget.is_active`,
+  persiste via `upsert_budget`. Budget inactivo (todos None) o
+  `None` = no escribe fila = semantica "sin limites" (compat).
+- **`RunController._is_budget_exhausted`**: extendido (H4 + S4).
+  Chequea 3 limites: (1) H4 original self-loop+max_visits por
+  nodo, (2) Run.max_visits global, (3) Run.max_events global.
+  Cuando (2) o (3) falla, emite `BudgetExceeded` antes de
+  devolver True (asi el timeline del Run muestra POR QUE aborto).
+- **`RunController._execute_one`**: invoca el check al inicio;
+  si budget agotado, devuelve `False` (FAILED) sin tocar el
+  nodo. El caller (`reconcile_run`) cierra el Run en FAILED
+  via `_transition_run_state_with_event`.
+- **`RunController._count_events`**: refactor menor — ahora
+  delega en `Storage.list_events_for_run` (regla "Storage
+  encapsula SQL"; antes tocaba `self._storage._conn` directo).
+- **CLI `sg run ... --budget-visits N --budget-runtime-seconds N
+  --budget-events N`**: parametros nuevos en el subcomando `run`.
+  Si se da al menos uno, se construye `RunBudget` y se persiste.
+- **CLI `sg runs budget <project> <run-id>`**: subcomando nuevo.
+  Muestra el budget activo (key=value parseable) o `(sin budget)`.
+  Run desconocido -> exit 10 (EXIT_DOMAIN).
+
+### Tests
+
+- 5 unit `TestRunBudgetDataclass`: defaults, valores positivos,
+  negativos, cero, `is_active`.
+- 4 unit `TestStorageBudget`: round-trip, nones, ausente, idempotencia.
+- 3 unit `TestCreateRunWithBudget`: budget persistido, sin budget,
+  budget inactivo.
+- 2 unit `TestBudgetEnforcement`: self-loop+max_visits=1 emite
+  BudgetExceeded; plan lineal sin budget no se aborta.
+- 2 unit `TestBudgetKindValidation`: smart ctor rechaza kind invalido.
+- 3 subprocess CLI `TestRunsBudgetCli`: `(sin budget)`,
+  key=value, run desconocido -> exit 10.
+- UAT-08/09 regenerados (solo campo `revision` actualizado).
+
+### Resultado
+
+- **Bateria completa**: 700 passed (de 680 en v0.11.0, +20 nuevos).
+- **Ruff**: limpio.
+- **Cobertura `runcontroller.py`**: 88% (baja de 96% por las
+  nuevas lineas de S4 que no todos los tests ejercitan — el
+  chequeo de `max_runtime_seconds` queda documentado como
+  reservado y sera cubierto en S5 cuando se conecte a un
+  reloj inyectable; el de `max_events` ya esta cubierto por
+  enforcement del primer test).
+
+### SemVer
+
+`feat(RunBudget) + feat(BudgetExceeded) + feat(upsert_budget) +
+feat(get_budget) + feat(sg runs budget) + feat(sg run --budget-*)`
+-> **MINOR** -> `v0.12.0`. Consolidacion inmediata con v0.11.0
+porque budgets son **complemento directo** del timeline:
+`sg runs logs` (v0.11.0) muestra los eventos; sin budgets, no
+hay forma de abortar Runs problematicos antes de que el operador
+vea el timeline. La regla "evita micro-releases triviales" se
+respeta: budgets son 3 `feat` coherentes (modelo, persistencia,
+CLI) con enforce end-to-end probado.

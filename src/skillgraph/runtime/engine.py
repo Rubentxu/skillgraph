@@ -40,6 +40,7 @@ EVENT_KINDS = frozenset(
         "GraphExpansionAccepted",
         "GraphExpansionRejected",
         "RunCompleted",
+        "BudgetExceeded",
     }
 )
 
@@ -366,4 +367,40 @@ class EventBuilder:
             run_id=run_id,
             resource_ref=f"run/{run_id}",
             payload=payload,
+        )
+
+    def budget_exceeded(
+        self,
+        *,
+        run_id: str,
+        kind: str,
+        limit: int,
+        observed: int,
+    ) -> RuntimeEvent:
+        """Emite un evento BudgetExceeded cuando un Run viola su presupuesto.
+
+        Args:
+            run_id: identificador del Run.
+            kind: tipo de presupuesto violado (`visits` | `runtime` |
+                `events`). Es una categoria de negocio, no del evento
+                mismo; el `event_kind` siempre es `BudgetExceeded`.
+            limit: limite configurado en el RunBudget.
+            observed: valor observado al momento de la violacion.
+
+        Raises:
+            ValidationError: si `kind` no esta en el conjunto canonico.
+        """
+        if kind not in {"visits", "runtime", "events"}:
+            raise ValidationError(
+                f"budget kind invalido: {kind!r} (esperado visits|runtime|events)"
+            )
+        return self._emit(
+            kind="BudgetExceeded",
+            run_id=run_id,
+            resource_ref=f"run/{run_id}",
+            payload={
+                "kind": kind,
+                "limit": int(limit),
+                "observed": int(observed),
+            },
         )

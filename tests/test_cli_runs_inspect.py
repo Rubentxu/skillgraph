@@ -326,3 +326,92 @@ class TestRunsInspectCli:
         )
         assert result.returncode == 10, result.stderr
         assert "no encontrado" in result.stderr or "NotFound" in result.stderr
+
+
+class TestRunsBudgetCli:
+    """Tests para `sg runs budget <project> <run-id>` (S4 Etapa 7).
+
+    Cubre:
+    - Run sin budget -> "(sin budget)".
+    - Run con budget -> key=value con max_visits, max_runtime_seconds, max_events.
+    - Run desconocido -> exit 10 (EXIT_DOMAIN) + stderr.
+    """
+
+    def test_budget_run_via_cli_no_budget_prints_marker(
+        self, tmp_path: Path
+    ) -> None:
+        """`sg runs budget` sobre Run sin budget -> '(sin budget)'."""
+        data_root = _init_project(tmp_path)
+        db_path = _project_db_path(data_root)
+        db = _open_project_db(db_path)
+        try:
+            db.execute(
+                """
+                INSERT INTO workflow_runs
+                    (run_id, tenant_id, project_id, plan_json, state,
+                     current_node, created_at, updated_at)
+                VALUES ('run-no-bud', 'default', 'demo', '{}', 'CREATED', 'a',
+                        datetime('now'), datetime('now'))
+                """
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        result = _run_cli(
+            "runs", "budget", "demo", "run-no-bud",
+            cwd=tmp_path, data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "(sin budget)" in result.stdout
+
+    def test_budget_run_via_cli_with_budget_outputs_keyvalue(
+        self, tmp_path: Path
+    ) -> None:
+        """`sg runs budget` sobre Run con budget -> key=value."""
+        data_root = _init_project(tmp_path)
+        db_path = _project_db_path(data_root)
+        db = _open_project_db(db_path)
+        try:
+            db.execute(
+                """
+                INSERT INTO workflow_runs
+                    (run_id, tenant_id, project_id, plan_json, state,
+                     current_node, created_at, updated_at)
+                VALUES ('run-bud', 'default', 'demo', '{}', 'CREATED', 'a',
+                        datetime('now'), datetime('now'))
+                """
+            )
+            db.execute(
+                """
+                INSERT INTO run_budgets
+                    (run_id, tenant_id, project_id,
+                     max_visits, max_runtime_seconds, max_events)
+                VALUES ('run-bud', 'default', 'demo', 5, 60, 100)
+                """
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        result = _run_cli(
+            "runs", "budget", "demo", "run-bud",
+            cwd=tmp_path, data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "run_id=run-bud" in result.stdout
+        assert "max_visits=5" in result.stdout
+        assert "max_runtime_seconds=60" in result.stdout
+        assert "max_events=100" in result.stdout
+
+    def test_budget_run_via_cli_unknown_run_returns_error(
+        self, tmp_path: Path
+    ) -> None:
+        """`sg runs budget` con run desconocido -> exit 10."""
+        data_root = _init_project(tmp_path)
+        result = _run_cli(
+            "runs", "budget", "demo", "no-existe",
+            cwd=tmp_path, data_root=data_root,
+        )
+        assert result.returncode == 10, result.stderr
+        assert "no encontrado" in result.stderr or "NotFound" in result.stderr

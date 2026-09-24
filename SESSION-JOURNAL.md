@@ -3256,3 +3256,73 @@ Bajo el modo AUTO reiterado, `git push origin main` +
 `git push origin v0.11.0` siguiendo el precedente de
 v0.9.0/v0.10.0 (release verificada, SEMVER derivado del
 historial, criterios de aceptacion cumplidos).
+
+## 2026-09-24 22:55 — v0.12.0 publicado (MINOR, budgets)
+
+### Resumen
+
+S4 del roadmap Etapa 7 (presupuestos opt-in por Run). Cierra
+el riesgo principal que dejo el H4: un Run con self-loop sin
+limite superior puede iterar eternamente. Con S4, el operador
+puede poner limites explicitos al crear el Run y el controller
+aborta automaticamente cuando se alcanzan, emitiendo un evento
+`BudgetExceeded` visible en `sg runs logs`.
+
+- **`EVENT_KINDS`**: nuevo `"BudgetExceeded"`.
+- **`EventBuilder.budget_exceeded(...)`**: smart ctor con validacion
+  del `kind` (visits|runtime|events).
+- **`RunBudget`** (dataclass frozen): `max_visits`,
+  `max_runtime_seconds`, `max_events` opt-in. Validacion: no
+  negativos, si se da debe ser > 0.
+- **`Storage.run_budgets`**: tabla nueva con PK `run_id`.
+  Migracion idempotente.
+- **`Storage.upsert_budget`** + **`get_budget`**: APIs
+  read/write idempotentes.
+- **`RunController.create_run(..., budget=None)`**: parametro
+  opcional; persiste solo si `budget.is_active`.
+- **`_is_budget_exhausted`** extendido: chequea H4 original +
+  Run.max_visits + Run.max_events. Emite BudgetExceeded cuando
+  falla (2) o (3).
+- **`_execute_one`**: chequeo al inicio; devuelve False si
+  budget agotado.
+- **`_count_events`**: refactor menor — delega en
+  `Storage.list_events_for_run` (Storage encapsula SQL).
+- **CLI `sg run --budget-visits N --budget-runtime-seconds N
+  --budget-events N`**: parametros nuevos.
+- **CLI `sg runs budget <project> <run-id>`**: subcomando nuevo
+  con key=value o `(sin budget)`.
+
+Tests:
+- 5 unit TestRunBudgetDataclass.
+- 4 unit TestStorageBudget.
+- 3 unit TestCreateRunWithBudget.
+- 2 unit TestBudgetEnforcement (self-loop aborta, lineal no).
+- 2 unit TestBudgetKindValidation.
+- 3 subprocess CLI TestRunsBudgetCli.
+- Total: 700/700 verde (de 680 en v0.11.0, +20 nuevos).
+- Cobertura runcontroller.py: 88% (baja de 96% — el chequeo de
+  `max_runtime_seconds` queda como reservado para S5 cuando se
+  conecte a un reloj inyectable).
+- Ruff limpio.
+
+### Política SEMVER
+
+`feat(RunBudget) + feat(BudgetExceeded) + feat(upsert_budget) +
+feat(get_budget) + feat(sg runs budget) + feat(sg run --budget-*)`
+-> **MINOR** -> `v0.12.0`.
+
+Cadencia agresiva justificada: budgets son **complemento directo**
+de `sg runs logs` (v0.11.0). Sin budgets, el operador ve el
+timeline pero no puede evitar Runs problematicos antes de que
+esten grabados. La regla "evita micro-releases triviales" se
+respeta porque budgets son 3 `feat` coherentes con enforce
+end-to-end probado.
+
+Tag `v0.12.0` emitido sobre el commit `feat(runtime)` del slice.
+
+### Estado remoto
+
+Bajo el modo AUTO reiterado, `git push origin main` +
+`git push origin v0.12.0` siguiendo el precedente de
+v0.9.0/v0.10.0/v0.11.0 (release verificada, SEMVER derivado del
+historial, criterios de aceptacion cumplidos).

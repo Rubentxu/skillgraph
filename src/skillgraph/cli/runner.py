@@ -553,6 +553,24 @@ def _build_parser() -> argparse.ArgumentParser:
         default=50,
         help="Maximo de pasadas de reconcile_run (default: 50).",
     )
+    rp.add_argument(
+        "--budget-visits",
+        type=int,
+        default=None,
+        help="Limite de ejecuciones por nodo (S4 Etapa 7).",
+    )
+    rp.add_argument(
+        "--budget-runtime-seconds",
+        type=int,
+        default=None,
+        help="Limite (reservado) de duracion total en segundos (S4 Etapa 7).",
+    )
+    rp.add_argument(
+        "--budget-events",
+        type=int,
+        default=None,
+        help="Limite de eventos emitidos por el Run (S4 Etapa 7).",
+    )
 
     # ----- expansion subcommand (H4 Slice 1) ---------------------------
     # DISCOVER -> PROPOSE -> VALIDATE -> AUTHORIZE -> APPLY.
@@ -691,6 +709,14 @@ def _build_parser() -> argparse.ArgumentParser:
     rc.add_argument("project", help="Proyecto destino.")
     rc.add_argument("run_id", help="Run ID a cancelar.")
 
+    # sg runs budget <project> <run-id>
+    rbu = rn_sub.add_parser(
+        "budget",
+        help="Muestra el RunBudget activo de un Run (S4 Etapa 7).",
+    )
+    rbu.add_argument("project", help="Proyecto destino.")
+    rbu.add_argument("run_id", help="Run ID a inspeccionar.")
+
     ks = kn_sub.add_parser("stale", help="Lista Claims stale.")
     ks.add_argument("project", help="Proyecto destino.")
 
@@ -796,6 +822,8 @@ def _route_runs(args: argparse.Namespace) -> int:
         return cmd_runs_logs(args)
     if sub == "cancel":
         return cmd_runs_cancel(args)
+    if sub == "budget":
+        return cmd_runs_budget(args)
     print(f"ERROR: runs subcommand no reconocido: {sub!r}", file=sys.stderr)
     return EXIT_USAGE
 
@@ -959,6 +987,52 @@ def cmd_runs_cancel(args: argparse.Namespace) -> int:
         run_id=args.run_id,
     )
     print(f"run_id={snap.run_id} state={snap.state}")
+    return EXIT_OK
+
+
+def cmd_runs_budget(args: argparse.Namespace) -> int:
+    """Muestra el RunBudget activo de un Run (S4 Etapa 7).
+
+    Read-only: NO emite eventos. Si el Run no tiene budget, imprime
+    `(sin budget)`. Salida key=value parseable con awk/cut.
+    """
+    storage, err = _open_project_storage(args)
+    if err != EXIT_OK or storage is None:
+        return err
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, _ = resolver.lookup(args.project)
+    # Validamos existencia del Run con un try/except explicito para
+    # emitir un mensaje de error claro cuando es NotFoundError.
+    from skillgraph.core.errors import NotFoundError
+
+    try:
+        storage.get_run(
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+            run_id=args.run_id,
+        )
+    except NotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return EXIT_DOMAIN
+
+    row = storage.get_budget(
+        tenant_id=project["tenant_id"],
+        project_id=project["name"],
+        run_id=args.run_id,
+    )
+    if row is None:
+        print("(sin budget)")
+        return EXIT_OK
+    print(f"run_id={args.run_id}")
+    print(f"max_visits={row['max_visits'] if row['max_visits'] is not None else '-'}")
+    print(
+        "max_runtime_seconds="
+        f"{row['max_runtime_seconds'] if row['max_runtime_seconds'] is not None else '-'}"
+    )
+    print(
+        "max_events="
+        f"{row['max_events'] if row['max_events'] is not None else '-'}"
+    )
     return EXIT_OK
 
 
@@ -1511,7 +1585,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from skillgraph.platform.paths import agents_root
     from skillgraph.resources.plan_loader import load_plan_file
     from skillgraph.runtime.agent import FakeAgentAdapter
-    from skillgraph.runtime.runcontroller import RunController
+    from skillgraph.runtime.runcontroller import RunBudget, RunController
 
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.project)
@@ -1557,10 +1631,28 @@ def cmd_run(args: argparse.Namespace) -> int:
         if existing_run_id is not None:
             run_id = existing_run_id
         else:
+            # S4 Etapa 7: construye RunBudget solo si el usuario paso
+            # al menos un limite. Si los tres son None, budget=None
+            # (compat con Runs anteriores).
+            budget: RunBudget | None = None
+            if any(
+                v is not None
+                for v in (
+                    args.budget_visits,
+                    args.budget_runtime_seconds,
+                    args.budget_events,
+                )
+            ):
+                budget = RunBudget(
+                    max_visits=args.budget_visits,
+                    max_runtime_seconds=args.budget_runtime_seconds,
+                    max_events=args.budget_events,
+                )
             run_id = ctl.create_run(
                 tenant_id=project["tenant_id"],
                 project_id=project["name"],
                 plan=plan,
+                budget=budget,
             )
         # UAT-06 (fix): max_iterations cuenta TODAS las llamadas reconcile,
         # incluida la primera. Antes habia una llamada externa al while

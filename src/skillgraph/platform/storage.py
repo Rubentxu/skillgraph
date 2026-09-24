@@ -116,6 +116,16 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
 CREATE INDEX IF NOT EXISTS workflow_runs_by_state
     ON workflow_runs(tenant_id, project_id, state);
 
+CREATE TABLE IF NOT EXISTS run_budgets (
+    run_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    max_visits INTEGER,
+    max_runtime_seconds INTEGER,
+    max_events INTEGER,
+    inserted_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS node_executions (
     node_execution_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
@@ -1269,6 +1279,62 @@ class Storage:
             "ORDER BY sequence ASC",
             (tenant_id, project_id, run_id),
         ).fetchall()
+
+    # ----- presupuestos por Run (S4 Etapa 7) -----
+
+    def upsert_budget(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        max_visits: int | None,
+        max_runtime_seconds: int | None,
+        max_events: int | None,
+    ) -> None:
+        """Inserta o reemplaza el budget de un Run (idempotente).
+
+        `None` significa "sin limite" para esa categoria. La PK sobre
+        `run_id` + la politica REPLACE garantiza idempotencia aunque
+        se llame dos veces con los mismos parametros (UAT-07):
+        la UNIQUE constraint rechaza el duplicado si lo hubiera.
+        """
+        self._conn.execute(
+            """
+            INSERT OR REPLACE INTO run_budgets
+                (run_id, tenant_id, project_id,
+                 max_visits, max_runtime_seconds, max_events)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                tenant_id,
+                project_id,
+                max_visits,
+                max_runtime_seconds,
+                max_events,
+            ),
+        )
+
+    def get_budget(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> dict[str, Any] | None:
+        """Devuelve la fila cruda del budget de un Run, o None si no existe.
+
+        No lanza NotFoundError: ausencia de budget significa "sin
+        limites" (compat con Runs anteriores a S4).
+        """
+        row = self._conn.execute(
+            "SELECT max_visits, max_runtime_seconds, max_events "
+            "FROM run_budgets "
+            "WHERE tenant_id = ? AND project_id = ? AND run_id = ?",
+            (tenant_id, project_id, run_id),
+        ).fetchone()
+        return None if row is None else dict(row)
 
     # ----- lecturas del ciclo de vida de un Run (H9-BSlice3-S1) -----
 
