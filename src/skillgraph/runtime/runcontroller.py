@@ -25,10 +25,12 @@ No responsabilidades:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from skillgraph.core.errors import SkillGraphError, ValidationError
@@ -37,6 +39,11 @@ from skillgraph.platform.storage import Storage
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 from skillgraph.runtime.agent import AgentAdapter, AgentResult
 from skillgraph.runtime.engine import EventBuilder, EventLog, RuntimeEvent
+from skillgraph.runtime.locks import (
+    LockMode,
+    RunLock,
+    RunLockKey,
+)
 
 if TYPE_CHECKING:
     from skillgraph.core.recipe import ContextRecipe
@@ -53,6 +60,18 @@ from skillgraph.runtime.handoff import (
 
 # Maximo de reintentos por nodo antes de marcar FAILED terminal.
 MAX_NODE_ATTEMPTS = 2
+
+
+@contextlib.contextmanager
+def _noop_lock() -> Iterator[None]:
+    """Context manager noop (compat con S6 cuando lock_mode='none').
+
+    Devuelve un iterador vacio: el `with _noop_lock():` es equivalente
+    a un pass. Asi `_locked_run` puede devolver siempre un context
+    manager compatible sin ramificar el caller.
+    """
+    yield
+    return
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +243,9 @@ class RunController:
         storage: Storage,
         adapter: AgentAdapter,
         recipe_resolver: Callable[[str], ContextRecipe | None] | None = None,
+        lock_dir: Path | None = None,
+        lock_mode: LockMode = "none",
+        lock_timeout_seconds: float = 30.0,
     ) -> None:
         # H9-BSlice3-S8/S9: el constructor deja de recibir
         # ``conn``. La conexion se obtiene de ``storage.conn``
@@ -234,6 +256,13 @@ class RunController:
         # ``storage.conn``.
         self._storage = storage
         self._adapter = adapter
+        # S6 Etapa 7: configuracion de locks por run_id.
+        # `lock_dir=None` + `lock_mode='none'` = no locks (compat
+        # pre-S6; tests existentes no se enteran). Cualquier otra
+        # combinacion activa la proteccion.
+        self._lock_dir = Path(lock_dir) if lock_dir is not None else None
+        self._lock_mode: LockMode = lock_mode
+        self._lock_timeout_seconds = lock_timeout_seconds
         # S5 Etapa 7: inyectamos un policy_resolver en el EventLog
         # para que aplique redaccion al payload antes de persistir.
         # El resolver delega en Storage.get_policy (regla "Storage
@@ -255,6 +284,39 @@ class RunController:
         self._workspace_ref = "ws:."
 
     # ---------- ciclo de vida del Run ----------
+
+    def _locked_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> Iterator[None]:
+        """Context manager: lock por run_id si S6 esta activo.
+
+        Devuelve un iterator vacio si el modo es 'none' o si
+        `lock_dir` es None (compat pre-S6). En caso contrario,
+        delega en `RunLock.take(...)`.
+
+        Raises:
+            LockUnavailable: si el lock esta tomado y expira el
+                timeout (modo advisory) o si ya estaba tomado
+                (modo fail-fast).
+        """
+        if self._lock_dir is None or self._lock_mode == "none":
+            return _noop_lock()
+        lock = RunLock(
+            lock_dir=self._lock_dir,
+            key=RunLockKey(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+            ),
+        )
+        return lock.take(
+            mode=self._lock_mode,
+            timeout_seconds=self._lock_timeout_seconds,
+        )
 
     def create_run(
         self,
@@ -281,28 +343,31 @@ class RunController:
         segunda escritura fallaba.
         """
         run_id = new_run_id()
-        result = self._storage.create_run_atomically(
-            event=EventBuilder(
-                tenant_id=tenant_id,
-                project_id=project_id,
-                correlation_id=run_id,
-            ).run_created(run_id=run_id, initial_node=plan.initial),
-            run_id=run_id,
-            tenant_id=tenant_id,
-            project_id=project_id,
-            plan_json=plan_to_json(plan),
-            initial_node=plan.initial,
-        )
-        if budget is not None and budget.is_active:
-            self._storage.upsert_budget(
-                tenant_id=tenant_id,
-                project_id=project_id,
+        with self._locked_run(
+            tenant_id=tenant_id, project_id=project_id, run_id=run_id
+        ):
+            result = self._storage.create_run_atomically(
+                event=EventBuilder(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    correlation_id=run_id,
+                ).run_created(run_id=run_id, initial_node=plan.initial),
                 run_id=run_id,
-                max_visits=budget.max_visits,
-                max_runtime_seconds=budget.max_runtime_seconds,
-                max_events=budget.max_events,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                plan_json=plan_to_json(plan),
+                initial_node=plan.initial,
             )
-        return result
+            if budget is not None and budget.is_active:
+                self._storage.upsert_budget(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    run_id=run_id,
+                    max_visits=budget.max_visits,
+                    max_runtime_seconds=budget.max_runtime_seconds,
+                    max_events=budget.max_events,
+                )
+            return result
 
     def reconcile_run(
         self,
@@ -315,7 +380,27 @@ class RunController:
 
         Devuelve el snapshot del estado. Si el Run ya estaba terminal,
         devuelve el snapshot sin emitir eventos.
+
+        S6: toma el lock por run_id al inicio (si esta configurado)
+        para serializar reconciliaciones concurrentes del mismo Run.
         """
+        with self._locked_run(
+            tenant_id=tenant_id, project_id=project_id, run_id=run_id
+        ):
+            return self._reconcile_run_locked(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+            )
+
+    def _reconcile_run_locked(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> RunSnapshot:
+        """Cuerpo de reconcile_run ejecutado dentro del lock."""
         run = self._load_run(tenant_id, project_id, run_id)
         plan = plan_from_json(run["plan_json"])
         state = run["state"]
