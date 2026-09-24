@@ -27,14 +27,20 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from skillgraph.core.errors import SkillGraphError
 from skillgraph.core.runtime_types import RunState, is_terminal_run_state
 from skillgraph.platform.storage import Storage
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 from skillgraph.runtime.agent import AgentAdapter, AgentResult
 from skillgraph.runtime.engine import EventBuilder, EventLog
+
+if TYPE_CHECKING:
+    from skillgraph.core.recipe import ContextRecipe
+
 from skillgraph.runtime.handoff import (
     Handoff,
     HandoffBehavior,
@@ -153,6 +159,7 @@ class RunController:
         *,
         storage: Storage,
         adapter: AgentAdapter,
+        recipe_resolver: Callable[[str], ContextRecipe | None] | None = None,
     ) -> None:
         # H9-BSlice3-S8/S9: el constructor deja de recibir
         # ``conn``. La conexion se obtiene de ``storage.conn``
@@ -164,8 +171,11 @@ class RunController:
         self._storage = storage
         self._adapter = adapter
         self._events = EventLog(storage.conn)
-        # Stubs para Etapa 3: el ContextController (receta) y
-        # KnowledgeController se aniadiran cuando hagan falta.
+        # H9-context-in-run: resolver opt-in de recetas de contexto.
+        # None (default) preserva el stub `default-empty-recipe/v1`.
+        # El resolver recibe la ctx_recipe_ref del nodo y devuelve la
+        # ContextRecipe a compilar, o None para degradar al stub.
+        self._recipe_resolver = recipe_resolver
         self._recipe_ref = "default-empty-recipe/v1"
         self._workspace_ref = "ws:."
 
@@ -449,16 +459,45 @@ class RunController:
             )
         )
 
-        # Compilar Handoff
-        handoff = self._build_handoff(
+        # Compilar Handoff. Los errores tipados de compilación de
+        # contexto (Stale, MissingObligatory, TokenBudget) marcan el
+        # nodo FAILED sin invocar el adapter (H9-context-in-run).
+        # El NodeExecution RUNNING se inserta ANTES de compilar para
+        # que `_mark_node_failed` tenga una fila que actualizar:
+        # el UPDATE de `mark_node_failed_atomically` es afecta-0-filas
+        # silencioso si la NodeExecution no existe.
+        node_started_event = events.node_started(run_id=run_id, node_execution_id=node_execution_id)
+        self._storage.start_node_execution_atomically(
+            event=node_started_event,
+            node_execution_id=node_execution_id,
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
-            node_execution_id=node_execution_id,
+            node_name=node_name,
             attempt=attempt,
-            node=node,
-            plan=plan,
+            context_hash="",
+            handoff_json="{}",
         )
+        try:
+            handoff = self._build_handoff(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+                node_execution_id=node_execution_id,
+                attempt=attempt,
+                node=node,
+                plan=plan,
+            )
+        except SkillGraphError as exc:
+            self._mark_node_failed(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+                node_execution_id=node_execution_id,
+                node_name=node_name,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            return False
         context_hash = handoff.context_hash
 
         self._events.append(
@@ -477,15 +516,11 @@ class RunController:
         # `_events.append(NodeStarted)` eran dos operaciones
         # separadas y `with self._conn:` no rollbackea (LIMITACION-7)
         # -> podian quedar desincronizadas ante un fallo del proceso.
-        node_started_event = events.node_started(run_id=run_id, node_execution_id=node_execution_id)
-        self._storage.start_node_execution_atomically(
-            event=node_started_event,
+        # El INSERT real de la NodeExecution (RUNNING + NodeStarted)
+        # ya ocurrio arriba, antes de compilar el handoff: aqui solo
+        # se persisten el context_hash y el handoff_json definitivos.
+        self._storage.update_node_execution_handoff(
             node_execution_id=node_execution_id,
-            tenant_id=tenant_id,
-            project_id=project_id,
-            run_id=run_id,
-            node_name=node_name,
-            attempt=attempt,
             context_hash=context_hash,
             handoff_json=json.dumps(handoff.to_dict(), sort_keys=False),
         )
@@ -578,9 +613,12 @@ class RunController:
             definition_revision=node.resource_revision,
             api_version=node.api_version,
         )
-        knowledge = HandoffKnowledge(
-            recipe_ref=self._recipe_ref,
-            included=(),
+        knowledge = self._compile_knowledge(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            node=node,
         )
         execution = HandoffExecution(
             workspace_ref=self._workspace_ref,
@@ -595,6 +633,54 @@ class RunController:
             expected_result=node.expected_result,
             capabilities=node.capabilities,
         )
+
+    def _compile_knowledge(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        node_execution_id: str,
+        node: WorkflowNode,
+    ) -> HandoffKnowledge:
+        """Resuelve la receta de contexto del nodo (H9-context-in-run).
+
+        Si hay `recipe_resolver` y devuelve una ContextRecipe, compila
+        via ContextController (claims/evidencias reales en `included`).
+        Errores tipados del compilador (Stale, MissingObligatory,
+        TokenBudget) se propagan: el nodo falla en vez de ejecutar el
+        adapter con contexto incompleto.
+
+        Sin resolver, o si el resolver devuelve None, degrada al stub
+        `default-empty-recipe/v1` con `included=()`.
+        """
+        recipe_ref = node.metadata.get("ctx_recipe_ref") or self._recipe_ref
+        if self._recipe_resolver is None:
+            return HandoffKnowledge(recipe_ref=recipe_ref, included=())
+        recipe = self._recipe_resolver(recipe_ref)
+        if recipe is None:
+            return HandoffKnowledge(recipe_ref=recipe_ref, included=())
+        from skillgraph.knowledge.context_controller import ContextController
+        from skillgraph.knowledge.knowledge_controller import KnowledgeController
+
+        kctl = KnowledgeController(
+            storage=self._storage,
+            tenant_id=tenant_id,
+            project_id=project_id,
+        )
+        ctx = ContextController(knowledge=kctl)
+        compiled = ctx.compile_handoff(
+            recipe=recipe,
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            definition_kind=node.kind,
+            definition_name=node.name,
+            definition_namespace=node.namespace,
+            definition_revision=node.resource_revision,
+            api_version=node.api_version,
+            expected_result=node.expected_result,
+        )
+        return compiled.knowledge
 
     def _mark_node_failed(
         self,

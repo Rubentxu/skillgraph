@@ -1566,6 +1566,28 @@ class Storage:
         except sqlite3.IntegrityError as exc:
             raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
 
+    def update_node_execution_handoff(
+        self,
+        *,
+        node_execution_id: str,
+        context_hash: str,
+        handoff_json: str,
+    ) -> None:
+        """Persiste el context_hash y el handoff_json definitivos de una
+        NodeExecution ya insertada (H9-context-in-run).
+
+        La fila se crea con placeholders vacios antes de compilar el
+        handoff (para que un fallo de compilacion pueda dejarla FAILED
+        via `mark_node_failed_atomically`); este UPDATE la rellena.
+        """
+        self._conn.execute(
+            "UPDATE node_executions "
+            "SET context_hash = ?, handoff_json = ? "
+            "WHERE node_execution_id = ?",
+            (context_hash, handoff_json, node_execution_id),
+        )
+        self._conn.commit()
+
     def complete_node_execution_atomically(
         self,
         *,
