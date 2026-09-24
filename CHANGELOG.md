@@ -844,3 +844,37 @@ El historial completo de commits previos forma parte del cuerpo
 desarrollado hacia esta release.
 
 [0.3.0]: #030--2026-09-23
+
+## [0.8.1] — 2026-09-24 (PATCH, refactor)
+
+**Tag**: `v0.8.1` (`ab7b5171aec5524320c67e44ad511ae78b70a7d1`).
+
+**Código efectivo**: commit `ab7b517` ("refactor(runtime): helper
+_fail_node_with(exc=...) en RunController").
+
+**Resumen**: el método `_execute_one` repite el patrón
+`except X as exc: self._mark_node_failed(... error=f"{type(exc).__name__}: {exc}")`
+en dos ramas (compilación de handoff y adaptador). Esta versión
+centraliza ese formato en un helper privado `_fail_node_with(exc=...)`
+que delega en `_mark_node_failed`. La tercera rama (outcome no
+declarado) usa una firma distinta (incluye `outcome=`) y se conserva
+como llamada directa.
+
+**SemVer**: refactor puro → PATCH (v0.8.1). Sin cambio de
+comportamiento observable.
+
+**Resultado**: 652/652 tests PASS; 16/16 UAT PASS, 0 FAIL. Ruff
+limpio. Cobertura mantenida.
+
+### Cambios funcionales
+
+Ninguno.
+
+### Refactor (sin bump adicional)
+
+- `RunController._fail_node_with(*, tenant_id, project_id, run_id,
+  node_execution_id, node_name, exc)` añadido como helper privado.
+- `RunController._execute_one`: 2 ramas `except` pasan a usar
+  `_fail_node_with(exc=exc)` en vez de construir el string de error
+  y llamar a `_mark_node_failed` directamente. La rama de outcome
+  no declarado queda igual.
