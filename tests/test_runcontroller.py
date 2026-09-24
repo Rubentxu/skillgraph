@@ -352,3 +352,127 @@ class TestRecordingAdapter:
         assert len(rec) == 2
         names = sorted(c.behavior.definition_name for c in rec.calls)
         assert names == ["a", "b"]
+
+
+def _seed_adapter_fixture(tmp_path):
+    fixtures_root = tmp_path / "fixtures_helper"
+    fixtures_root.mkdir()
+    return FakeAgentAdapter(fixtures_root)
+
+
+def _seed_adapter_fixture(tmp_path):
+    """Construye un FakeAgentAdapter con su propio fixtures_root."""
+    fixtures_root = tmp_path / "fixtures_helper"
+    fixtures_root.mkdir()
+    return FakeAgentAdapter(fixtures_root)
+
+
+class TestFailNodeWithHelper:
+    """El helper `_fail_node_with(exc=...)` centraliza el formato de
+    error de `_mark_node_failed`. Estos tests verifican el contrato:
+    acepta cualquier excepción, no re-lanza, y delega correctamente.
+    """
+
+    def test_helper_accepts_arbitrary_exception(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        """El helper debe aceptar Exception genérica sin re-lanzar."""
+        storage, _adapter, _conn = fixture_setup
+        ctl = RunController(storage=storage, adapter=_seed_adapter_fixture(tmp_path))
+        ctl.create_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            plan=_plan((_node("a"),)),
+        )
+        # No debe lanzar: UPDATE de una NodeExecution inexistente es no-op.
+        ctl._fail_node_with(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id="r-test-1",
+            node_execution_id="ne-no-existe",
+            node_name="a",
+            exc=ValueError("boom"),
+        )
+
+    def test_helper_accepts_skill_graph_error(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        """El helper debe aceptar subclases de SkillGraphError, que es
+        el caso real que la rama de compilación de contexto emite."""
+        from skillgraph.core.errors import SkillGraphError
+
+        storage, _adapter, _conn = fixture_setup
+        ctl = RunController(storage=storage, adapter=_seed_adapter_fixture(tmp_path))
+        ctl.create_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            plan=_plan((_node("a"),)),
+        )
+        ctl._fail_node_with(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id="r-test-2",
+            node_execution_id="ne-no-existe",
+            node_name="a",
+            exc=SkillGraphError("stale claim o cualquier subtype"),
+        )
+
+    def test_helper_persists_error_for_existing_node_execution(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        """Si la NodeExecution existe, el helper debe persistir el
+        error con formato '<Type>: <message>' en node_executions.error.
+        """
+        storage, _adapter, conn = fixture_setup
+        ctl = RunController(storage=storage, adapter=_seed_adapter_fixture(tmp_path))
+        # create_run inserta la NodeExecution en RUNNING via start.
+        run_id = ctl.create_run(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            plan=_plan((_node("a"),)),
+        )
+        # Sembrar manualmente una NodeExecution mínima para que el
+        # helper tenga fila que actualizar.
+        node_execution_id = "ne-x"
+        from skillgraph.runtime.engine import EventBuilder
+        event = EventBuilder(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            correlation_id=run_id,
+        ).node_started(
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+        )
+        ctl._storage.start_node_execution_atomically(
+            event=event,
+            node_execution_id=node_execution_id,
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id=run_id,
+            node_name="a",
+            attempt=1,
+            context_hash="",
+            handoff_json="{}",
+        )
+        ctl._fail_node_with(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            node_name="a",
+            exc=ValueError("boom-test"),
+        )
+        row = conn.execute(
+            "SELECT state, error FROM node_executions WHERE node_execution_id = ?",
+            (node_execution_id,),
+        ).fetchone()
+        assert row["state"] == "FAILED"
+        assert row["error"] == "ValueError: boom-test"
+
+
