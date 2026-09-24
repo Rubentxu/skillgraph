@@ -742,6 +742,84 @@ class Storage:
             out.append(_row_to_claim(row, [r["evidence_id"] for r in ev_rows], json))
         return out
 
+    # ---- H9-Coverage-11: lecturas puras para ContextController (ADR-0014)
+    #
+    # Estas 3 APIs cierran los 4 sitios `_conn.execute` directos que
+    # quedaron en ContextController despues del refactor H9-BSlice3.
+    # Devuelven tuplas inmutables (no list) para mantener consistencia
+    # con la regla "inmutabilidad por defecto" (AGENTS.md §1.1) y para
+    # que el caller no pueda mutar el resultado por accidente.
+
+    def list_claims_by_predicate(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        predicate: str,
+    ) -> tuple[dict[str, object], ...]:
+        """Devuelve todos los Claims con `predicate == value` para el
+        (tenant, project) dado.
+
+        Devuelve `tuple[dict, ...]` con cada fila como `sqlite3.Row`
+        (key access por nombre de columna). El caller deserializa
+        `object_literal_json` con `json.loads` si lo necesita.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM claims WHERE tenant_id = ? AND project_id = ? AND predicate = ?",
+            (tenant_id, project_id, predicate),
+        ).fetchall()
+        return tuple(dict(row) for row in rows)
+
+    def list_evidences_for_source(
+        self,
+        *,
+        source_id: str,
+    ) -> tuple[dict[str, object], ...]:
+        """Devuelve todas las Evidences asociadas a `source_id`.
+
+        NO filtra por tenant+project: la fuente ya garantiza aislamiento
+        (source_id es unico en el sistema via PK + FK en claims).
+        El caller deserializa `content_json` con `json.loads`.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM evidences WHERE source_id = ?",
+            (source_id,),
+        ).fetchall()
+        return tuple(dict(row) for row in rows)
+
+    def list_resource_refs_for_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        kind: str,
+    ) -> tuple[str, ...]:
+        """Devuelve los `resource_ref` unicos del run dado, filtrados por
+        prefijo `claim:` o `evidence:`.
+
+        Reemplaza los 2 sitios `_conn.execute` casi-identicos del
+        OutcomeTracer (lineas 402-410 y 413-421 de context_controller.py).
+        El parametro `kind` valida contra `Literal["claim", "evidence"]`
+        en runtime; cualquier otro valor lanza `ValidationError`.
+        """
+        # Validacion atomica: kind debe ser uno de los prefijos validos.
+        # Esto blinda un error silencioso si el caller pasa un kind
+        # arbitrario (la query usaria `LIKE '%:%'` y devolveria TODOS
+        # los refs, no los filtrados por tipo).
+        if kind not in ("claim", "evidence"):
+            from skillgraph.core.errors import ValidationError
+
+            raise ValidationError(f"kind debe ser 'claim' o 'evidence', recibio {kind!r}")
+        rows = self._conn.execute(
+            "SELECT DISTINCT resource_ref FROM runtime_events "
+            "WHERE tenant_id = ? AND project_id = ? AND run_id = ? "
+            "  AND resource_ref LIKE ? "
+            "ORDER BY resource_ref",
+            (tenant_id, project_id, run_id, f"{kind}:%"),
+        ).fetchall()
+        return tuple(row["resource_ref"] for row in rows)
+
     def attach_evidence_to_claim(
         self,
         *,

@@ -294,13 +294,13 @@ class ContextController:
 
         if kind == "predicate":
             # Buscar Claims con predicate == value.
-            rows = ctrl.storage._conn.execute(  # type: ignore[attr-defined]
-                """
-                SELECT * FROM claims
-                WHERE tenant_id = ? AND project_id = ? AND predicate = ?
-                """,
-                (ctrl.tenant_id, ctrl.project_id, value),  # type: ignore[attr-defined]
-            ).fetchall()
+            # H9-Coverage-11: delega en Storage.list_claims_by_predicate
+            # (cierra el sitio SQL directo que tenia en la linea 297-303).
+            rows = ctrl.storage.list_claims_by_predicate(
+                tenant_id=ctrl.tenant_id,  # type: ignore[attr-defined]
+                project_id=ctrl.project_id,  # type: ignore[attr-defined]
+                predicate=value,
+            )
             return [
                 CompiledResource(
                     resource_kind="claim",
@@ -343,10 +343,11 @@ class ContextController:
             ]
             if label:
                 # Encontrar evidence para esa source.
-                evid_rows = ctrl.storage._conn.execute(  # type: ignore[attr-defined]
-                    "SELECT * FROM evidences WHERE source_id = ?",
-                    (src.source_id,),
-                ).fetchall()
+                # H9-Coverage-11: delega en Storage.list_evidences_for_source
+                # (cierra el sitio SQL directo que tenia en la linea 346-349).
+                evid_rows = ctrl.storage.list_evidences_for_source(
+                    source_id=src.source_id,
+                )
                 for ev in evid_rows:
                     out.append(
                         CompiledResource(
@@ -399,29 +400,25 @@ class OutcomeTracer:
         """
         ctrl = knowledge  # type: ignore[assignment]
         # Claim refs via runtime_events del run.
-        rows = ctrl.storage._conn.execute(  # type: ignore[attr-defined]
-            """
-            SELECT DISTINCT resource_ref FROM runtime_events
-            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
-              AND resource_ref LIKE 'claim:%'
-            ORDER BY resource_ref
-            """,
-            (ctrl.tenant_id, ctrl.project_id, run_id),  # type: ignore[attr-defined]
-        ).fetchall()
-        claim_refs: tuple[str, ...] = tuple(r["resource_ref"].removeprefix("claim:") for r in rows)
-        # Evidence refs analogamente.
-        ev_rows = ctrl.storage._conn.execute(  # type: ignore[attr-defined]
-            """
-            SELECT DISTINCT resource_ref FROM runtime_events
-            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
-              AND resource_ref LIKE 'evidence:%'
-            ORDER BY resource_ref
-            """,
-            (ctrl.tenant_id, ctrl.project_id, run_id),  # type: ignore[attr-defined]
-        ).fetchall()
-        evidence_refs: tuple[str, ...] = tuple(
-            r["resource_ref"].removeprefix("evidence:") for r in ev_rows
+        # H9-Coverage-11: delega en Storage.list_resource_refs_for_run con
+        # kind="claim" (cierra el sitio SQL directo que tenia en linea 402-410).
+        rows = ctrl.storage.list_resource_refs_for_run(  # type: ignore[attr-defined]
+            tenant_id=ctrl.tenant_id,  # type: ignore[attr-defined]
+            project_id=ctrl.project_id,  # type: ignore[attr-defined]
+            run_id=run_id,
+            kind="claim",
         )
+        claim_refs: tuple[str, ...] = tuple(r.removeprefix("claim:") for r in rows)
+        # Evidence refs analogamente.
+        # H9-Coverage-11: delega en Storage.list_resource_refs_for_run con
+        # kind="evidence" (cierra el sitio SQL directo que tenia en linea 413-421).
+        ev_rows = ctrl.storage.list_resource_refs_for_run(  # type: ignore[attr-defined]
+            tenant_id=ctrl.tenant_id,  # type: ignore[attr-defined]
+            project_id=ctrl.project_id,  # type: ignore[attr-defined]
+            run_id=run_id,
+            kind="evidence",
+        )
+        evidence_refs: tuple[str, ...] = tuple(r.removeprefix("evidence:") for r in ev_rows)
         # trace_id determinista si no se da.
         tid = trace_id or f"tr-{run_id}-{_now_iso()}"
         return OutcomeTrace(
