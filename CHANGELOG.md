@@ -1060,3 +1060,64 @@ feat(sg runs show)` -> **MINOR** -> `v0.10.0`. Consolidacion
 inmediata con v0.9.0 porque `list`/`show` son el complemento
 natural de `cancel`: sin ellos, el operador no puede saber
 que Run cancelar.
+
+## [0.11.0] — 2026-09-24 (MINOR, logs run)
+
+**Tag**: `v0.11.0` (pendiente; commit del slice en esta entrada).
+
+**Resumen**: S3 del roadmap Etapa 7. Cierra el triangulo de
+inspeccion read-only de Runs: tras listar (`v0.10.0`) y snapshotear
+(`v0.10.0`), el operador puede ahora examinar el timeline completo
+de eventos de un Run con `sg runs logs`. Read-only, sin emitir
+eventos.
+
+### Cambios funcionales (MINOR)
+
+- **`Storage.list_events_for_run(*, tenant_id, project_id, run_id)`**:
+  SELECT ordenado por `sequence ASC` (orden causal) filtrado por
+  run_id usando el indice `events_by_run` ya existente. Devuelve
+  tupla de tuplas crudas `(sequence, event_id, kind, timestamp,
+  payload_json)`; el parsing a `RuntimeEvent` vive en `RunController`
+  para mantener Storage libre de tipos del bounded context `runtime`.
+- **`RuntimeEventLog`**: nuevo dataclass frozen
+  `(sequence: int, event: RuntimeEvent)` que expone `sequence` al
+  exterior sin modificar el contrato del evento runtime (sequence
+  es meta-informacion de almacenamiento, no del evento en si).
+- **`RunController.logs_run(*, tenant_id, project_id, run_id)`**:
+  fail-fast con `get_run` (NotFoundError si no existe). Itera
+  `_row_to_event_dict` sobre cada row y lo envuelve en
+  `RuntimeEventLog(sequence, event)`. No emite eventos.
+- **CLI `sg runs logs <project> <run-id> [--limit N]`**: salida
+  CSV-like con cabecera (`seq event_kind timestamp payload`) y una
+  linea por evento con resumen del payload (primer nivel
+  `clave=valor` truncado a 40 chars). '--limit N' corta por cabeza
+  despues de cargar todo (util para depurar los primeros N eventos
+  de Runs largos). '(sin eventos)' si vacio.
+- **`_route_runs`**: nueva rama `logs -> cmd_runs_logs`.
+- **Reuso**: `cmd_runs_logs` delega en `_open_project_storage`
+  (mismo helper DRY que list/show/cancel).
+
+### Tests
+
+- 3 tests unitarios `tests/test_runcontroller.py::TestLogsRun`:
+  NotFoundError, RunCreated presente, RuntimeEventLog expone
+  sequence + RuntimeEvent.
+- 2 tests subprocess CLI `tests/test_cli_runs_inspect.py`:
+  `test_logs_run_via_cli_outputs_event_timeline` (cabecera +
+  1 linea RunCreated con payload resumido) y
+  `test_logs_run_via_cli_unknown_run_returns_error` (exit 10).
+- UAT-08/09 regenerados (solo campo `revision` actualizado).
+
+### Resultado
+
+- **Bateria completa**: 680 passed (de 675 en v0.10.0, +5 nuevos:
+  3 unit + 2 subprocess).
+- **Ruff**: limpio.
+- **Cobertura `runcontroller.py`**: 96% (sube de 95% a 96%).
+
+### SemVer
+
+`feat(logs_run) + feat(sg runs logs)` -> **MINOR** -> `v0.11.0`.
+Consolidacion inmediata con v0.10.0 porque `logs` es el
+complemento natural de `list`/`show`: sin timeline, el operador
+no puede diagnosticar por que un Run fallo o se cancelo.

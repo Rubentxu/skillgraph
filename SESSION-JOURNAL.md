@@ -3203,3 +3203,56 @@ pre-aprobada"), se ejecuta `git push origin main` + `git push
 origin v0.10.0` siguiendo el precedente de v0.8.0/v0.8.1/v0.9.0
 (release verificada, SEMVER derivado del historial, criterios
 de aceptacion cumplidos).
+
+## 2026-09-24 22:22 — v0.11.0 publicado (MINOR, logs run)
+
+### Resumen
+
+S3 del roadmap Etapa 7: cierra el triangulo de inspeccion
+read-only de Runs con `sg runs logs`. Tras listar (v0.10.0) y
+snapshotear (v0.10.0), el operador puede ahora examinar el
+timeline completo de eventos de un Run.
+
+- **`Storage.list_events_for_run`**: SELECT ordenado por
+  `sequence ASC` filtrado por run_id usando el indice
+  `events_by_run`. Tupla de tuplas crudas.
+- **`RuntimeEventLog`**: nuevo dataclass frozen que expone
+  `sequence` sin modificar el contrato de `RuntimeEvent`.
+- **`RunController.logs_run`**: fail-fast con `get_run`
+  (NotFoundError), parsea rows a `RuntimeEvent`, envuelve en
+  `RuntimeEventLog`. No emite eventos.
+- **CLI `sg runs logs <project> <run-id> [--limit N]`**:
+  salida CSV-like con cabecera `seq event_kind timestamp payload`.
+  Una linea por evento con resumen del payload. `(sin eventos)`
+  si vacio.
+- **Reuso**: helper `_open_project_storage` ya compartido por
+  list/show/cancel/logs.
+
+Tests:
+- 3 unit (`TestLogsRun`: NotFoundError, RunCreated presente,
+  RuntimeEventLog expone sequence + RuntimeEvent).
+- 2 CLI (`test_cli_runs_inspect.py`: timeline con payload,
+  run desconocido -> exit 10).
+- Total: 680/680 verde (de 675 en v0.10.0, +5 nuevos).
+- Cobertura runcontroller.py: **96%** (sube de 95% a 96%).
+- Ruff limpio.
+
+### Política SEMVER
+
+`feat(logs_run) + feat(sg runs logs)` -> **MINOR** -> `v0.11.0`.
+
+Cadencia agresiva justificada: `logs` es el **complemento
+natural** de `list`/`show`/`cancel`. Sin timeline, el operador
+no puede diagnosticar por que un Run fallo, se cancelo o
+se atasco en WAITING. La regla "evita micro-releases triviales"
+se respeta porque logs es una capacidad coherente con la triada
+de inspeccion, no un cambio aislado.
+
+Tag `v0.11.0` emitido sobre el commit `feat(runtime)` del slice.
+
+### Estado remoto
+
+Bajo el modo AUTO reiterado, `git push origin main` +
+`git push origin v0.11.0` siguiendo el precedente de
+v0.9.0/v0.10.0 (release verificada, SEMVER derivado del
+historial, criterios de aceptacion cumplidos).

@@ -757,3 +757,90 @@ class TestListAndShowRun:
             )
 
 
+class TestLogsRun:
+    """Contrato de `RunController.logs_run`.
+
+    Inspeccion read-only del timeline de eventos de un Run.
+    Complementa `list_runs`/`show_run`: tras localizar un Run y
+    ver su snapshot, el operador ve el detalle de que eventos
+    se emitieron (nodo a nodo, en orden).
+    """
+
+    def test_logs_run_unknown_raises_not_found(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        from skillgraph.core.errors import NotFoundError
+
+        storage, adapter, _conn = fixture_setup
+        ctl = RunController(storage=storage, adapter=adapter)
+        with pytest.raises(NotFoundError):
+            ctl.logs_run(
+                tenant_id=TENANT,
+                project_id=PROJECT,
+                run_id="run-que-no-existe",
+            )
+
+    def test_logs_run_returns_run_created_for_empty_run(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        """Run recien creado -> al menos el evento `RunCreated`."""
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        events = ctl.logs_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        kinds = tuple(e.event.event_kind for e in events)
+        # Como minimo: RunCreated.
+        assert "RunCreated" in kinds
+        # Orden monotono por sequence.
+        seqs = tuple(e.sequence for e in events)
+        assert seqs == tuple(sorted(seqs))
+
+    def test_logs_run_returns_event_details(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        """Cada `RuntimeEventLog` expone sequence + RuntimeEvent.
+
+        El RuntimeEvent subyacente tiene event_kind, timestamp,
+        payload, correlation_id.
+        """
+        from skillgraph.runtime.engine import RuntimeEvent
+        from skillgraph.runtime.runcontroller import RuntimeEventLog
+
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        run_id = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        events = ctl.logs_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
+        )
+        assert len(events) > 0
+        ev = events[0]
+        assert isinstance(ev, RuntimeEventLog)
+        assert isinstance(ev.event, RuntimeEvent)
+        assert isinstance(ev.sequence, int)
+        assert isinstance(ev.event.event_kind, str)
+        assert ev.event.event_kind in {
+            "RunCreated",
+            "NodeScheduled",
+            "NodeStarted",
+            "HandoffCreated",
+            "NodeCompleted",
+            "NodeFailed",
+            "EvidenceProduced",
+            "RunCompleted",
+        }
+
+

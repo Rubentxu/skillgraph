@@ -270,3 +270,59 @@ class TestRunsInspectCli:
         assert "run_id=run-show" in result.stdout
         assert "state=CREATED" in result.stdout
         assert "current_node=a" in result.stdout
+
+    def test_logs_run_via_cli_outputs_event_timeline(
+        self, tmp_path: Path
+    ) -> None:
+        """`sg runs logs <project> <run_id>` imprime el timeline de eventos."""
+        data_root = _init_project(tmp_path)
+        db_path = _project_db_path(data_root)
+        db = _open_project_db(db_path)
+        try:
+            db.execute(
+                """
+                INSERT INTO workflow_runs
+                    (run_id, tenant_id, project_id, plan_json, state,
+                     current_node, created_at, updated_at)
+                VALUES ('run-logs', 'default', 'demo', '{}', 'CREATED', 'a',
+                        datetime('now'), datetime('now'))
+                """
+            )
+            db.execute(
+                """
+                INSERT INTO runtime_events
+                    (event_id, tenant_id, project_id, run_id, sequence,
+                     event_kind, timestamp, payload_json, resource_ref,
+                     schema_version)
+                VALUES ('evt-1', 'default', 'demo', 'run-logs', 1,
+                        'RunCreated', '2024-01-01T00:00:00Z',
+                        '{"plan_id":"p1","trigger":"manual"}',
+                        'workflow_run:run-logs', 1)
+                """
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        result = _run_cli(
+            "runs", "logs", "demo", "run-logs",
+            cwd=tmp_path, data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        # Cabecera + 1 linea de evento con sequence + event_kind + payload.
+        assert "event_kind" in result.stdout
+        assert "RunCreated" in result.stdout
+        assert "plan_id=p1" in result.stdout
+        assert "trigger=manual" in result.stdout
+
+    def test_logs_run_via_cli_unknown_run_returns_error(
+        self, tmp_path: Path
+    ) -> None:
+        """`sg runs logs` con run desconocido -> exit code de dominio (10)."""
+        data_root = _init_project(tmp_path)
+        result = _run_cli(
+            "runs", "logs", "demo", "no-existe",
+            cwd=tmp_path, data_root=data_root,
+        )
+        assert result.returncode == 10, result.stderr
+        assert "no encontrado" in result.stderr or "NotFound" in result.stderr

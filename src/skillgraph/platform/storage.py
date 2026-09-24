@@ -1249,6 +1249,27 @@ class Storage:
             raise NotFoundError(f"run no encontrado: {run_id}")
         return dict(row)
 
+    def list_events_for_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> list[sqlite3.Row]:
+        """Lista eventos de un Run ordenados por sequence ASC.
+
+        Lectura pura: usada por `RunController.logs_run` para
+        mostrar el timeline de eventos al operador. NO filtra por
+        `correlation_id` porque el `run_id` ya esta indexado
+        (`events_by_run`).
+        """
+        return self._conn.execute(
+            "SELECT * FROM runtime_events "
+            "WHERE tenant_id = ? AND project_id = ? AND run_id = ? "
+            "ORDER BY sequence ASC",
+            (tenant_id, project_id, run_id),
+        ).fetchall()
+
     # ----- lecturas del ciclo de vida de un Run (H9-BSlice3-S1) -----
 
     def load_run(

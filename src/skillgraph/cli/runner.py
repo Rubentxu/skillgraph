@@ -670,6 +670,20 @@ def _build_parser() -> argparse.ArgumentParser:
     rs.add_argument("project", help="Proyecto destino.")
     rs.add_argument("run_id", help="Run ID a inspeccionar.")
 
+    # sg runs logs <project> <run-id> [--limit N]
+    rl2 = rn_sub.add_parser(
+        "logs",
+        help="Muestra el timeline de eventos de un Run.",
+    )
+    rl2.add_argument("project", help="Proyecto destino.")
+    rl2.add_argument("run_id", help="Run ID a inspeccionar.")
+    rl2.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Numero maximo de eventos a mostrar (default: todos).",
+    )
+
     rc = rn_sub.add_parser(
         "cancel",
         help="Cancela un Run en curso (ACTIVE/WAITING/CREATED).",
@@ -778,6 +792,8 @@ def _route_runs(args: argparse.Namespace) -> int:
         return cmd_runs_list(args)
     if sub == "show":
         return cmd_runs_show(args)
+    if sub == "logs":
+        return cmd_runs_logs(args)
     if sub == "cancel":
         return cmd_runs_cancel(args)
     print(f"ERROR: runs subcommand no reconocido: {sub!r}", file=sys.stderr)
@@ -873,6 +889,47 @@ def cmd_runs_show(args: argparse.Namespace) -> int:
     print(f"current_node={snap.current_node or '-'}")
     print(f"executed_nodes={','.join(snap.executed_nodes) or '-'}")
     print(f"events_emitted={snap.events_emitted}")
+    return EXIT_OK
+
+
+def cmd_runs_logs(args: argparse.Namespace) -> int:
+    """Muestra el timeline de eventos de un Run via `RunController.logs_run`.
+
+    Read-only: no emite eventos. Salida CSV-like con una linea por
+    evento: `seq event_kind timestamp payload_summary`.
+    """
+    from skillgraph.runtime.agent import FakeAgentAdapter
+    from skillgraph.runtime.runcontroller import RunController
+
+    storage, err = _open_project_storage(args)
+    if err != EXIT_OK or storage is None:
+        return err
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, _ = resolver.lookup(args.project)
+    ctl = RunController(
+        storage=storage,
+        adapter=FakeAgentAdapter(Path("/dev/null")),  # logs no invoca adapter
+    )
+    logs = ctl.logs_run(
+        tenant_id=project["tenant_id"],
+        project_id=project["name"],
+        run_id=args.run_id,
+    )
+    if args.limit is not None:
+        logs = logs[: args.limit]
+    if not logs:
+        print("(sin eventos)")
+        return EXIT_OK
+    print(f"{'seq':<6} {'event_kind':<22} {'timestamp':<26} payload")
+    for entry in logs:
+        # Resumen corto del payload (primer nivel clave=valor).
+        kv = ",".join(
+            f"{k}={v!s:.40}" for k, v in entry.event.payload.items()
+        )
+        print(
+            f"{entry.sequence:<6} {entry.event.event_kind:<22} "
+            f"{entry.event.timestamp:<26} {kv}"
+        )
     return EXIT_OK
 
 

@@ -36,7 +36,7 @@ from skillgraph.core.runtime_types import RunState, is_terminal_run_state
 from skillgraph.platform.storage import Storage
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 from skillgraph.runtime.agent import AgentAdapter, AgentResult
-from skillgraph.runtime.engine import EventBuilder, EventLog
+from skillgraph.runtime.engine import EventBuilder, EventLog, RuntimeEvent
 
 if TYPE_CHECKING:
     from skillgraph.core.recipe import ContextRecipe
@@ -64,6 +64,20 @@ class RunSnapshot:
     current_node: str | None
     executed_nodes: tuple[str, ...]
     events_emitted: int
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeEventLog:
+    """Vista inmutable de un evento de runtime con su `sequence`.
+
+    `RuntimeEvent` (engine.py) modela el evento persistido en
+    `runtime_events`, pero NO incluye el `sequence` (PK rowid de
+    SQLite). Para mostrar el timeline de un Run al operador
+    necesitamos el orden monotono; este wrapper lo expone.
+    """
+
+    sequence: int
+    event: RuntimeEvent
 
 
 def plan_to_json(plan: WorkflowPlan) -> str:
@@ -433,6 +447,57 @@ class RunController:
             (tenant_id, project_id, run_id),
         ).fetchone()
         return int(row["n"])
+
+    def logs_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> tuple[RuntimeEventLog, ...]:
+        """Devuelve el timeline de eventos de un Run en orden monotono.
+
+        Inspeccion read-only: NO emite eventos. Levanta `NotFoundError`
+        si el run no existe (delegado en `Storage.get_run`; lo
+        validamos ANTES de leer eventos para fallar rapido si el
+        run no existe vs. devolver una tupla vacia).
+        """
+        from skillgraph.runtime.engine import _row_to_event_dict
+
+        # Validacion temprana: si el run no existe, error tipado
+        # en lugar de una tupla vacia confusa.
+        self._storage.get_run(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+        )
+        rows = self._storage.list_events_for_run(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+        )
+        out: list[RuntimeEventLog] = []
+        for row in rows:
+            d = _row_to_event_dict(row)
+            out.append(
+                RuntimeEventLog(
+                    sequence=int(d["sequence"]),
+                    event=RuntimeEvent(
+                        event_id=d["event_id"],
+                        tenant_id=d["tenant_id"],
+                        project_id=d["project_id"],
+                        event_kind=d["event_kind"],
+                        run_id=d["run_id"],
+                        resource_ref=d["resource_ref"],
+                        causation_id=d["causation_id"],
+                        correlation_id=d["correlation_id"],
+                        payload=d["payload"],
+                        timestamp=d["timestamp"],
+                        schema_version=d["schema_version"],
+                    ),
+                )
+            )
+        return tuple(out)
 
     def cancel_run(
         self,
