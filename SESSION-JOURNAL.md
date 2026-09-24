@@ -3416,3 +3416,28 @@ Cobertura `redaction.py` 100%, `runcontroller.py` 88%.
 **Release**: tag `v0.14.0` (pendiente commit + push). Push directo
 justificado: S6 son 3 `feat` coherentes, no micro-release trivial;
 rompe con drift de UAT-08/09 (locks son feature net-new).
+
+### 2026-09-24 — Refactor de context_controller.py (sin bump)
+
+**Slice**: deuda tecnica (AGENTS.md §1.5). Dos funciones excedian
+umbral ~40 LoC: `compile_handoff` (121) y `_resolve_one_selector`
+(114).
+
+**Cambios**:
+
+- 3 helpers puros de modulo: `enforce_strict_freshness`,
+  `apply_budget`, `build_capabilities`. `compile_handoff` queda como
+  orquestador declarativo de 94 LoC (incluyendo docstring).
+- 3 ramas `_resolve_entity_selector` (14), `_resolve_predicate_selector`
+  (16), `_resolve_source_selector` (31). `_resolve_one_selector` queda
+  como dispatcher de 23 LoC.
+- 3 constructores `claim_to_resource`, `predicate_row_to_resource`,
+  `evidence_row_to_resource` extraidos para encapsular el mapeo a
+  `CompiledResource`.
+
+**Verificacion**: T4 **754/754 verde** (739 previos + 15 nuevos:
+11 helpers + 4 mappers). ruff check limpio (RUF059 corregido,
+SIM117 pytest.raises ignorado).
+
+**Commit**: `6c8c17f` sin tag (refactor interno, sin bump).
+Push OK.

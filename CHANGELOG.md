@@ -1382,3 +1382,27 @@ politicas de redaccion, pero sin S6 dos reconciliaciones concurrentes
 pueden intercalar eventos y saltarse la redaccion. La regla
 "evita micro-releases triviales" se respeta porque S6 son 3 `feat`
 coherentes (locks, integracion RunController, tests de concurrencia).
+
+## [Sin bump] — 2026-09-24 (refactor interno)
+
+**Commit**: `6c8c17f` (sin tag, refactor sin bump).
+
+**Resumen**: Reduccion de tamano de funciones en `knowledge/context_controller.py`
+para cumplir AGENTS.md §1.5 (umbral ~40 LoC).
+
+- `ContextController.compile_handoff`: 121 -> 94 LoC. Delegacion en
+  3 helpers puros de modulo:
+  - `enforce_strict_freshness(items, policy)`
+  - `apply_budget(obligatory, optional, *, budget_chars, overflow_strategy)`
+  - `build_capabilities(included, policy)`
+- `ContextController._resolve_one_selector`: 114 -> 23 LoC. Dispatcher
+  que delega en 3 ramas:
+  - `_resolve_entity_selector(ctrl, value)` (14 LoC)
+  - `_resolve_predicate_selector(ctrl, value)` (16 LoC)
+  - `_resolve_source_selector(ctrl, value, label)` (31 LoC)
+- Mapeo a `CompiledResource` encapsulado en 3 funciones puras de
+  modulo: `claim_to_resource`, `predicate_row_to_resource`,
+  `evidence_row_to_resource`.
+
+**Tests**: 15 nuevos en `tests/test_context_controller.py`
+(11 helpers + 4 mappers). Total: **754/754 verde**. ruff limpio.
