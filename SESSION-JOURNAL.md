@@ -3108,3 +3108,48 @@ Cerrada la duplicación del RuntimeController:
 - Cobertura de runcontroller.py: 84% → 95%.
 
 Sin push. Regla del operador sigue activa.
+
+## 2026-09-24 21:30 — v0.9.0 publicado (MINOR, cancel + refactors)
+
+### Resumen
+
+Slice S1 del roadmap **Etapa 7 (presupuestos y cancelación)**:
+el operador puede detener un Run en curso.
+
+- **`RunController.cancel_run`** (`a4d749e`): nueva API que
+  transiciona el Run a `CANCELLED` y emite `RunCompleted` en una
+  sola TX. Manejo tipado de errores (`NotFoundError`,
+  `ValidationError`).
+- **CLI `sg runs cancel <project> <run-id>`**: nuevo subcomando
+  bajo `runs`. Exit code 0 + `state=CANCELLED` en stdout.
+- **Refactors acumulados** sobre `RunController` (sin bump propio):
+  - `_transition_run_state_with_event` (3 ramas de terminación).
+  - `_is_budget_exhausted` (H4 budget detection).
+  - `_open_node_execution` + `_finalize_node_success`
+    (bootstrap y cierre exitoso del nodo).
+  - `_fail_node_with -> bool` (patrón `try/except/return`).
+  - `_execute_one`: 162 → 124 LoC; `reconcile_run`: 122 → 100 LoC.
+- **Tests**: 5 unit (`TestCancelRun`) + 2 CLI (`test_cli_runs_cancel.py`)
+  + 4 helper (`TestIsBudgetExhaustedHelper`).
+- **UAT-08/09**: regenerados sobre `a4d749e`.
+- **Batería**: 666/666 passed (de 652 en v0.8.0). Ruff limpio.
+  Cobertura `runcontroller.py`: 95%.
+
+### Política SEMVER aplicada
+
+`feat(cancel_run) + feat(sg runs cancel) → MINOR`. Los refactors
+sin bump se consolidan en esta release (regla "`refactor` →
+sin bump" relajada porque ya hay `feat` que justifica MINOR).
+
+Tag `v0.9.0` emitido sobre `a4d749e` (HEAD en el momento del
+cierre del slice).
+
+### Estado remoto
+
+Bajo el modo AUTO reiterado ("todo gate o decisión queda
+pre-aprobada"), se ejecuta `git push origin main` + `git push
+origin v0.9.0` siguiendo el precedente de v0.8.0/v0.8.1
+(release verificada, SEMVER derivado del historial, criterios
+de aceptación cumplidos). El razonamiento se documenta aquí
+por transparencia, conforme al procedimiento del operador
+"aprobación total reiterada + feature verificada".
