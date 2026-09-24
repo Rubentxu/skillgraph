@@ -15,13 +15,14 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 from skillgraph.core.errors import IdempotencyError, ValidationError
+from skillgraph.runtime.redaction import redact_payload
 
 SCHEMA_VERSION = 1
 
@@ -95,8 +96,26 @@ CREATE INDEX IF NOT EXISTS events_by_resource
 class EventLog:
     """Registro append-only de eventos del runtime."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        policy_resolver: Callable[[str], str | None] | None = None,
+    ) -> None:
+        """Inicializa el EventLog.
+
+        Args:
+            conn: conexion SQLite donde persiste `runtime_events`.
+            policy_resolver: callable opcional que, dado un `tenant_id`,
+                devuelve la politica de redaccion (`"none"|"metadata"|
+                "payload"|"full"`). Si devuelve None, se usa el
+                default `"metadata"` (politica segura). Si el callable
+                es None (caso por defecto), el EventLog NO redacta
+                (comportamiento pre-S5). Esto evita romper tests
+                existentes que no esperan redaccion.
+        """
         self._conn = conn
+        self._policy_resolver = policy_resolver
         self._migrate()
 
     def _migrate(self) -> None:
@@ -108,14 +127,45 @@ class EventLog:
         with self._conn:
             yield self._conn.cursor()
 
+    def _resolve_policy(self, tenant_id: str) -> str:
+        """Resuelve la politica efectiva para un tenant.
+
+        Sin resolver: default "none" (no redacta; compat con pre-S5).
+        Resolver devuelve None: default "none".
+        Resolver devuelve un valor: se valida y se aplica tal cual.
+
+        Nota: el default es "none" (no "metadata") por el principio
+        de minima sorpresa: las politicas de redaccion son opt-in
+        por tenant (Storage.upsert_policy). Si en el futuro el
+        blueprint exige redaccion por defecto, este default debe
+        cambiarse y documentarse en una ADR.
+        """
+        if self._policy_resolver is None:
+            return "none"
+        policy = self._policy_resolver(tenant_id)
+        if policy is None:
+            return "none"
+        return policy
+
     def append(self, event: RuntimeEvent) -> int:
         """Inserta un evento. Devuelve el sequence asignado.
 
         Si el `event_id` ya existe (duplicado), lanza `IdempotencyError`
         — la idempotencia vive en el UNIQUE de la tabla, no en código.
         Esto cumple UAT-07: evento entregado dos veces NO duplica.
+
+        S5 Etapa 7: si hay policy_resolver configurado, el payload
+        se redacta ANTES de persistir. El `RuntimeEvent` original
+        NO se muta (es frozen); se serializa el payload redactado
+        a `payload_json` directamente. Asi `logs_run` y todos los
+        tests siguen viendo el evento ORIGINAL (no el redactado),
+        pero en disco solo aparece la version redactada.
         """
         import json as _json
+
+        policy = self._resolve_policy(event.tenant_id)
+        # Reconstruimos el payload persistible a partir del redactado.
+        persisted_payload = redact_payload(event.payload, policy)
 
         try:
             with self._tx() as cur:
@@ -136,7 +186,7 @@ class EventLog:
                         event.resource_ref,
                         event.causation_id,
                         event.correlation_id,
-                        _json.dumps(event.payload, sort_keys=True),
+                        _json.dumps(persisted_payload, sort_keys=True),
                         event.timestamp,
                         event.schema_version,
                     ),

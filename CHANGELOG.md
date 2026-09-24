@@ -1213,3 +1213,101 @@ hay forma de abortar Runs problematicos antes de que el operador
 vea el timeline. La regla "evita micro-releases triviales" se
 respeta: budgets son 3 `feat` coherentes (modelo, persistencia,
 CLI) con enforce end-to-end probado.
+
+## [0.13.0] — 2026-09-24 (MINOR, redaction policies)
+
+**Tag**: `v0.13.0` (pendiente; commit del slice en esta entrada).
+
+**Resumen**: S5 del roadmap Etapa 7 (politicas de redaccion por
+tenant). Cierra el vector de exfiltracion que dejo el modelo de
+eventos: hasta v0.12.0, cualquier payload de evento (que puede
+contener API keys, tokens, paths de workspace) se persistia integro
+en `runtime_events.payload_json`. Con S5, el operador configura una
+politica por tenant (`none` | `metadata` | `payload` | `full`) y
+el `EventLog` redacta automaticamente antes de persistir.
+
+### Cambios funcionales (MINOR)
+
+- **`runtime.redaction`** (modulo nuevo):
+  - `RedactionPolicy = Literal["none", "metadata", "payload", "full"]`.
+  - `validate_policy(policy)`: smart constructor; `ValidationError`
+    si la politica no esta en el conjunto canonico.
+  - `redact_payload(payload, policy)`: funcion pura (no I/O,
+    no reloj, determinista). Implementa las 4 politicas:
+    - `none`: copia superficial (compat con pre-S5).
+    - `metadata`: conserva claves, valores -> `[REDACTED]`.
+    - `payload`: redaccion recursiva (escalares `[REDACTED]`,
+      colecciones conservadas en forma).
+    - `full`: devuelve `{}` (descarta todo el payload).
+  - `REDACTED_MARKER: Final[str] = "[REDACTED]"`: constante
+    publica para UIs que quieran detectar y formatear.
+- **`Storage.tenant_policies`**: nueva tabla con PK `tenant_id`.
+  Columnas: `redaction_policy TEXT NOT NULL DEFAULT 'none'`,
+  `updated_at`.
+- **`Storage.get_policy(*, tenant_id)`**: devuelve la politica
+  configurada o `None` (sin fila = sin limite = default `none`).
+- **`Storage.upsert_policy(*, tenant_id, policy)`**: INSERT OR
+  REPLACE idempotente sobre la PK. Storage NO valida la politica;
+  la validacion vive en `runtime.redaction` (regla "Storage
+  encapsula SQL, no reglas de negocio").
+- **`EventLog.__init__(conn, *, policy_resolver=None)`**: nuevo
+  parametro opcional. `policy_resolver` es un `Callable[[str],
+  str | None]` que, dado un `tenant_id`, devuelve la politica
+  efectiva. Sin resolver -> default `none` (compat con pre-S5).
+- **`EventLog._resolve_policy(tenant_id)`**: helper privado.
+  Sin resolver -> `"none"`. Resolver devuelve None -> `"none"`.
+  Resolver devuelve valor -> se aplica tal cual.
+- **`EventLog.append`**: si hay policy_resolver configurado,
+  el payload se redacta ANTES de serializar a `payload_json`.
+  El `RuntimeEvent` original NO se muta (es frozen). Asi `logs_run`
+  sigue viendo el evento ORIGINAL; en disco solo aparece la
+  version redactada.
+- **`RunController.__init__`**: inyecta un policy_resolver que
+  delega en `Storage.get_policy` (regla "Storage encapsula SQL").
+- **CLI `sg policy get <project>`**: imprime la politica efectiva
+  del tenant. Default `none` si no hay fila.
+- **CLI `sg policy set <project> --redact-policy X`**: persiste
+  la politica. Choices validadas via argparse: `none|metadata|payload|full`.
+- **`_route_policy`**: dispatcher para `policy get|set`.
+
+### Politica default
+
+Sin politica configurada para un tenant, el `EventLog` aplica
+`"none"` (passthrough). Esto preserva el comportamiento de
+v0.12.0 y anteriores: los Runs creados antes de S5 siguen
+persistiendo payloads integros. La redaccion es **opt-in** por
+tenant. Migrar un tenant a redaccion requiere ejecutar
+`sg policy set <project> --redact-policy <X>`.
+
+### Tests
+
+- 14 unit `test_redaction.py`: validate_policy (2) + none (2) +
+  metadata (2) + full (2) + payload (3) + pureza (2) + type (1).
+- 3 unit `TestStoragePolicyPersistence`: round-trip, ausente,
+  idempotencia.
+- 4 unit `TestEventLogRedaction`: resolver=metadata redacta,
+  default=none passthrough, resolver=payload recursivo,
+  resolver=none passthrough.
+- 4 subprocess CLI `test_cli_policy.py`: get sin policy,
+  set+get round-trip, set invalido -> exit != 0, persistencia SQL.
+- UAT-08/09 regenerados (solo campo `revision` actualizado).
+
+### Resultado
+
+- **Bateria completa**: 725 passed (de 700 en v0.12.0, +25 nuevos).
+- **Ruff**: limpio.
+- **Cobertura `redaction.py`**: **100%** (modulo nuevo puro).
+- **Cobertura `runcontroller.py`**: 88% (sin cambios: las lineas
+  nuevas de S4 siguen sin cubrir `max_runtime_seconds`, que se
+  conectara a un reloj inyectable en una iteracion futura).
+
+### SemVer
+
+`feat(redaction) + feat(EventLog.policy_resolver) +
+feat(tenant_policies) + feat(sg policy get/set)` -> **MINOR**
+-> `v0.13.0`. Consolidacion inmediata con v0.12.0 porque la
+redaccion es **complemento directo** del modelo de eventos:
+v0.12.0 emita eventos con secretos potenciales; sin S5, esos
+secretos iban a disco. La regla "evita micro-releases triviales"
+se respeta porque S5 son 4 `feat` coherentes (modelo, persistencia,
+integracion EventLog, CLI).

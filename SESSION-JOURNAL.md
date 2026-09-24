@@ -3326,3 +3326,63 @@ Bajo el modo AUTO reiterado, `git push origin main` +
 `git push origin v0.12.0` siguiendo el precedente de
 v0.9.0/v0.10.0/v0.11.0 (release verificada, SEMVER derivado del
 historial, criterios de aceptacion cumplidos).
+
+## 2026-09-24 23:10 — v0.13.0 publicado (MINOR, redaction policies)
+
+### Resumen
+
+S5 del roadmap Etapa 7: politicas de redaccion por tenant.
+Cierra el vector de exfiltracion: hasta v0.12.0, los payloads
+de eventos (que pueden contener API keys, tokens, paths de
+workspace) se persistian integros. Con S5, el operador configura
+una politica por tenant y el EventLog redacta automaticamente
+antes de persistir.
+
+- **`runtime.redaction`** (modulo nuevo):
+  - `RedactionPolicy = Literal["none", "metadata", "payload", "full"]`.
+  - `validate_policy(policy)`: smart ctor con ValidationError.
+  - `redact_payload(payload, policy)`: funcion pura (4 politicas).
+  - `REDACTED_MARKER: Final[str] = "[REDACTED]"`.
+- **`Storage.tenant_policies`**: tabla nueva con PK tenant_id,
+  default "none" (compat pre-S5).
+- **`Storage.get_policy`/`upsert_policy`**: APIs idempotentes.
+- **`EventLog.__init__`**: parametro `policy_resolver` opcional.
+- **`EventLog.append`**: aplica redaccion antes de persistir.
+  El RuntimeEvent original NO se muta.
+- **`RunController.__init__`**: inyecta policy_resolver que
+  delega en `Storage.get_policy`.
+- **CLI `sg policy get|set <project>`**: nuevo subcomando.
+  Choices validadas via argparse.
+
+Politica default: "none" (opt-in por tenant, no rompe pre-S5).
+
+Tests:
+- 14 unit test_redaction.py (validate_policy + 4 politicas +
+  pureza + tipo).
+- 3 unit TestStoragePolicyPersistence.
+- 4 unit TestEventLogRedaction.
+- 4 subprocess CLI test_cli_policy.py.
+- Total: 725/725 verde (de 700 en v0.12.0, +25 nuevos).
+- Cobertura redaction.py: **100%**.
+- Ruff limpio.
+
+### Política SEMVER
+
+`feat(redaction) + feat(EventLog.policy_resolver) +
+feat(tenant_policies) + feat(sg policy get/set)` -> **MINOR**
+-> `v0.13.0`.
+
+Cadencia agresiva justificada: la redaccion es **complemento
+directo** del modelo de eventos. Sin S5, los secretos que
+v0.12.0 presupuestaba iban a disco sin filtro. La regla
+"evita micro-releases triviales" se respeta porque S5 son 4
+`feat` coherentes (modelo, persistencia, integracion EventLog,
+CLI).
+
+Tag `v0.13.0` emitido sobre el commit `feat(runtime)` del slice.
+
+### Estado remoto
+
+Bajo el modo AUTO reiterado, `git push origin main` +
+`git push origin v0.13.0` siguiendo el precedente de las 4
+versiones anteriores de Etapa 7.

@@ -653,6 +653,31 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     kn_sub = kn.add_subparsers(dest="knowledge_command", required=True)
 
+    # ----- policy subcommand (Etapa 7 / S5) -----
+    pol = sub.add_parser(
+        "policy",
+        help="Politicas de redaccion por tenant (S5).",
+    )
+    pol_sub = pol.add_subparsers(dest="policy_command", required=True)
+
+    pol_get = pol_sub.add_parser(
+        "get",
+        help="Muestra la politica de redaccion del tenant.",
+    )
+    pol_get.add_argument("project", help="Proyecto (su tenant es el target).")
+
+    pol_set = pol_sub.add_parser(
+        "set",
+        help="Configura la politica de redaccion del tenant.",
+    )
+    pol_set.add_argument("project", help="Proyecto (su tenant es el target).")
+    pol_set.add_argument(
+        "--redact-policy",
+        choices=("none", "metadata", "payload", "full"),
+        required=True,
+        help="Politica de redaccion a aplicar al tenant.",
+    )
+
     # ----- runs subcommand (Etapa 7 / S1) -----
     # Gestion del ciclo de vida de Runs existentes (cancel, etc.).
     # No crea Runs: eso es `sg run <project> <plan>`.
@@ -799,6 +824,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_run(args)
         if args.command == "runs":
             return _route_runs(args)
+        if args.command == "policy":
+            return _route_policy(args)
         if args.command == "knowledge":
             return _route_knowledge(args)
         if args.command == "expansion":
@@ -1033,6 +1060,52 @@ def cmd_runs_budget(args: argparse.Namespace) -> int:
         "max_events="
         f"{row['max_events'] if row['max_events'] is not None else '-'}"
     )
+    return EXIT_OK
+
+
+def _route_policy(args: argparse.Namespace) -> int:
+    """Enruta subcommand `policy` al handler correspondiente."""
+    sub = args.policy_command
+    if sub == "get":
+        return cmd_policy_get(args)
+    if sub == "set":
+        return cmd_policy_set(args)
+    print(f"ERROR: policy subcommand no reconocido: {sub!r}", file=sys.stderr)
+    return EXIT_USAGE
+
+
+def cmd_policy_get(args: argparse.Namespace) -> int:
+    """Muestra la politica de redaccion del tenant (S5 Etapa 7).
+
+    Read-only. Imprime `policy=<valor>` o `policy=none` (default).
+    """
+    storage, err = _open_project_storage(args)
+    if err != EXIT_OK or storage is None:
+        return err
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, _ = resolver.lookup(args.project)
+    policy = storage.get_policy(tenant_id=project["tenant_id"])
+    print(f"tenant_id={project['tenant_id']}")
+    print(f"policy={policy or 'none'}")
+    return EXIT_OK
+
+
+def cmd_policy_set(args: argparse.Namespace) -> int:
+    """Configura la politica de redaccion del tenant (S5 Etapa 7).
+
+    Valida el argumento via argparse choices (none|metadata|payload|full)
+    y delega en Storage.upsert_policy. Persistente: aplica a TODOS los
+    Runs futuros del tenant.
+    """
+    storage, err = _open_project_storage(args)
+    if err != EXIT_OK or storage is None:
+        return err
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, _ = resolver.lookup(args.project)
+    storage.upsert_policy(
+        tenant_id=project["tenant_id"], policy=args.redact_policy
+    )
+    print(f"tenant_id={project['tenant_id']} policy={args.redact_policy}")
     return EXIT_OK
 
 

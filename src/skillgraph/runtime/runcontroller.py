@@ -234,7 +234,18 @@ class RunController:
         # ``storage.conn``.
         self._storage = storage
         self._adapter = adapter
-        self._events = EventLog(storage.conn)
+        # S5 Etapa 7: inyectamos un policy_resolver en el EventLog
+        # para que aplique redaccion al payload antes de persistir.
+        # El resolver delega en Storage.get_policy (regla "Storage
+        # encapsula SQL"). Si no hay politica configurada para el
+        # tenant, el resolver devuelve None y EventLog usa el
+        # default seguro "metadata".
+        self._events = EventLog(
+            storage.conn,
+            policy_resolver=lambda tenant_id: storage.get_policy(
+                tenant_id=tenant_id
+            ),
+        )
         # H9-context-in-run: resolver opt-in de recetas de contexto.
         # None (default) preserva el stub `default-empty-recipe/v1`.
         # El resolver recibe la ctx_recipe_ref del nodo y devuelve la

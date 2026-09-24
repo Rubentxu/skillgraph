@@ -44,7 +44,7 @@ def _make_event(*, event_kind: str = "RunCreated", event_id: str | None = None) 
 def event_log() -> EventLog:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    return EventLog(conn)
+    return EventLog(conn, policy_resolver=lambda _t: "none")
 
 
 class TestEventAppend:

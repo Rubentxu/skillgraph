@@ -126,6 +126,12 @@ CREATE TABLE IF NOT EXISTS run_budgets (
     inserted_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS tenant_policies (
+    tenant_id TEXT PRIMARY KEY,
+    redaction_policy TEXT NOT NULL DEFAULT 'metadata',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS node_executions (
     node_execution_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
@@ -1335,6 +1341,40 @@ class Storage:
             (tenant_id, project_id, run_id),
         ).fetchone()
         return None if row is None else dict(row)
+
+    # ----- politicas por tenant (S5 Etapa 7) -----
+
+    def get_policy(self, *, tenant_id: str) -> str | None:
+        """Devuelve la politica de redaccion del tenant, o None.
+
+        None significa: no hay politica configurada explicitamente;
+        el caller debe usar el default seguro ("metadata"). Asi la
+        politica se aplica a TODOS los tenants aunque no la hayan
+        configurado, sin necesidad de un INSERT en el seed.
+        """
+        row = self._conn.execute(
+            "SELECT redaction_policy FROM tenant_policies WHERE tenant_id = ?",
+            (tenant_id,),
+        ).fetchone()
+        return None if row is None else str(row["redaction_policy"])
+
+    def upsert_policy(self, *, tenant_id: str, policy: str) -> None:
+        """Crea o reemplaza la politica de redaccion del tenant.
+
+        Idempotente (INSERT OR REPLACE sobre la PK). El caller
+        debe haber validado `policy` con `validate_policy`
+        (storage NO valida la politica; eso vive en el modulo
+        `redaction` por la regla "Storage encapsula SQL, no reglas
+        de negocio").
+        """
+        self._conn.execute(
+            """
+            INSERT OR REPLACE INTO tenant_policies
+                (tenant_id, redaction_policy, updated_at)
+            VALUES (?, ?, datetime('now'))
+            """,
+            (tenant_id, policy),
+        )
 
     # ----- lecturas del ciclo de vida de un Run (H9-BSlice3-S1) -----
 
