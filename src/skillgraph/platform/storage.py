@@ -1186,6 +1186,69 @@ class Storage:
             return None
         return row["run_id"]
 
+    def list_runs(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        state: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Lista Runs de un (tenant, project) ordenados por mas reciente.
+
+        Args:
+            state: si se da, filtra por estado exacto (e.g. "CREATED",
+                "ACTIVE", "COMPLETED", "FAILED", "CANCELLED").
+            limit: tope de filas devueltas (default 50). 0 o negativo
+                se trata como sin limite.
+
+        Orden por `rowid DESC` (monótono, mas reciente primero).
+        No usamos `created_at` porque SQLite lo genera con
+        `datetime('now')` y dos inserciones en el mismo segundo
+        empatan.
+
+        Lectura pura: no participa en transacciones compartidas.
+        """
+        if limit <= 0:
+            limit = 10**9  # cap practico: no necesitamos >10^9 runs
+        sql = (
+            "SELECT run_id, state, current_node, created_at, updated_at "
+            "FROM workflow_runs "
+            "WHERE tenant_id = ? AND project_id = ?"
+        )
+        params: list[Any] = [tenant_id, project_id]
+        if state is not None:
+            sql += " AND state = ?"
+            params.append(state)
+        sql += " ORDER BY rowid DESC LIMIT ?"
+        params.append(limit)
+        rows = self._conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Devuelve la fila cruda de un Run.
+
+        Lanza ``NotFoundError`` si no existe. API explicita para que
+        `RunController.show_run` no dependa de `load_run` (que es
+        la API de runtime pero tiene la misma semantica).
+        """
+        row = self._conn.execute(
+            "SELECT run_id, state, current_node, plan_json, "
+            "       created_at, updated_at "
+            "FROM workflow_runs "
+            "WHERE tenant_id = ? AND project_id = ? AND run_id = ?",
+            (tenant_id, project_id, run_id),
+        ).fetchone()
+        if row is None:
+            raise NotFoundError(f"run no encontrado: {run_id}")
+        return dict(row)
+
     # ----- lecturas del ciclo de vida de un Run (H9-BSlice3-S1) -----
 
     def load_run(

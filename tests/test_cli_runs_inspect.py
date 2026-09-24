@@ -1,9 +1,14 @@
-"""Tests subprocess del CLI `runs cancel` (Etapa 7 / S1).
+"""Tests subprocess del CLI `runs` (Etapa 7).
 
-Cubre el contrato externo del comando `sg runs cancel <project> <run-id>`:
-- Exit code 0 cuando el run se cancela OK.
-- Estado persistido = CANCELLED en `workflow_runs`.
-- Evento `RunCompleted(state=CANCELLED)` emitido.
+Cubre los subcomandos:
+- `runs cancel <project> <run-id>`: cancela un Run en curso.
+- `runs list <project> [--state S] [--limit N]`: lista Runs existentes.
+- `runs show <project> <run-id>`: muestra el snapshot de un Run.
+
+Contratos externos:
+- Exit code 0 cuando la operacion es OK.
+- Estado persistido coherente con la operacion.
+- Evento emitido cuando aplica (cancel).
 - Exit code != 0 cuando el run no existe (NotFoundError -> EXIT_DOMAIN).
 
 Reglas (external/blueprint-v1/plan/ESTRATEGIA-DE-TESTS.md):
@@ -102,7 +107,7 @@ def _latest_run_id(db: sqlite3.Connection) -> str:
     return row["run_id"]
 
 
-class TestRunsCancelCli:
+class TestRunsInspectCli:
     def test_cancel_active_run_via_cli_marks_cancelled(
         self, tmp_path: Path
     ) -> None:
@@ -184,3 +189,84 @@ class TestRunsCancelCli:
             f"esperaba rc != 0; stdout: {result.stdout}\n"
             f"stderr: {result.stderr}"
         )
+
+    def test_list_runs_via_cli_empty(
+        self, tmp_path: Path
+    ) -> None:
+        """`sg runs list <project>` con proyecto vacio -> '(sin runs)'."""
+        data_root = _init_project(tmp_path)
+        result = _run_cli(
+            "runs", "list", "demo",
+            cwd=tmp_path, data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "(sin runs)" in result.stdout
+
+    def test_list_runs_via_cli_shows_recent_first(
+        self, tmp_path: Path
+    ) -> None:
+        """`sg runs list` muestra los runs en orden mas reciente primero."""
+        data_root = _init_project(tmp_path)
+        db_path = _project_db_path(data_root)
+        db = _open_project_db(db_path)
+        try:
+            # Insertar 3 runs manualmente con created_at creciente
+            # (rowid DESC garantiza el orden).
+            for rid in ("run-1", "run-2", "run-3"):
+                db.execute(
+                    """
+                    INSERT INTO workflow_runs
+                        (run_id, tenant_id, project_id, plan_json, state,
+                         current_node, created_at, updated_at)
+                    VALUES (?, 'default', 'demo', '{}', 'CREATED', 'a',
+                            datetime('now'), datetime('now'))
+                    """,
+                    (rid,),
+                )
+            db.commit()
+        finally:
+            db.close()
+
+        result = _run_cli(
+            "runs", "list", "demo",
+            cwd=tmp_path, data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        # run-3 (mas reciente) debe aparecer antes que run-1.
+        idx_3 = result.stdout.find("run-3")
+        idx_1 = result.stdout.find("run-1")
+        assert idx_3 != -1
+        assert idx_1 != -1
+        assert idx_3 < idx_1, (
+            f"esperaba run-3 antes que run-1; stdout: {result.stdout}"
+        )
+
+    def test_show_run_via_cli_outputs_snapshot(
+        self, tmp_path: Path
+    ) -> None:
+        """`sg runs show <project> <run_id>` imprime key=value snapshot."""
+        data_root = _init_project(tmp_path)
+        db_path = _project_db_path(data_root)
+        db = _open_project_db(db_path)
+        try:
+            db.execute(
+                """
+                INSERT INTO workflow_runs
+                    (run_id, tenant_id, project_id, plan_json, state,
+                     current_node, created_at, updated_at)
+                VALUES ('run-show', 'default', 'demo', '{}', 'CREATED', 'a',
+                        datetime('now'), datetime('now'))
+                """,
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        result = _run_cli(
+            "runs", "show", "demo", "run-show",
+            cwd=tmp_path, data_root=data_root,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "run_id=run-show" in result.stdout
+        assert "state=CREATED" in result.stdout
+        assert "current_node=a" in result.stdout

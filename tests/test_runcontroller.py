@@ -644,3 +644,116 @@ class TestCancelRun:
         assert events_after == events_before
 
 
+class TestListAndShowRun:
+    """Contrato de `RunController.list_runs` y `RunController.show_run`.
+
+    Inspeccion read-only de Runs sin volver a reconciliar. Complementa
+    `cancel_run`: el operador primero lista, decide cual cancelar.
+    """
+
+    def test_list_runs_empty_returns_empty_tuple(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        storage, adapter, _conn = fixture_setup
+        ctl = RunController(storage=storage, adapter=adapter)
+        result = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT)
+        assert result == ()
+
+    def test_list_runs_returns_recent_first(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        """El mas reciente aparece primero (orden por rowid DESC)."""
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        rid1 = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        rid2 = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        rid3 = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        rows = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT)
+        ids = tuple(r.run_id for r in rows)
+        assert ids == (rid3, rid2, rid1)
+
+    def test_list_runs_respects_limit(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        for _ in range(5):
+            ctl.create_run(
+                tenant_id=TENANT, project_id=PROJECT, plan=plan
+            )
+        rows = ctl.list_runs(
+            tenant_id=TENANT, project_id=PROJECT, limit=2
+        )
+        assert len(rows) == 2
+
+    def test_list_runs_filters_by_state(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        """`state` opcional filtra runs por estado."""
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        rid = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        # El run recien creado esta en CREATED.
+        rows_created = ctl.list_runs(
+            tenant_id=TENANT, project_id=PROJECT, state="CREATED"
+        )
+        assert rid in tuple(r.run_id for r in rows_created)
+        # Filtrar por COMPLETED no debe devolver nada.
+        rows_completed = ctl.list_runs(
+            tenant_id=TENANT, project_id=PROJECT, state="COMPLETED"
+        )
+        assert rows_completed == ()
+
+    def test_show_run_returns_snapshot(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        storage, adapter, _conn = fixture_setup
+        plan = _plan((_node("a"),))
+        ctl = RunController(storage=storage, adapter=adapter)
+        rid = ctl.create_run(
+            tenant_id=TENANT, project_id=PROJECT, plan=plan
+        )
+        snap = ctl.show_run(
+            tenant_id=TENANT, project_id=PROJECT, run_id=rid
+        )
+        assert snap.run_id == rid
+        assert snap.state == "CREATED"
+
+    def test_show_run_unknown_raises_not_found(
+        self,
+        fixture_setup: tuple[Storage, FakeAgentAdapter, sqlite3.Connection],
+        tmp_path: Path,
+    ) -> None:
+        from skillgraph.core.errors import NotFoundError
+
+        storage, adapter, _conn = fixture_setup
+        ctl = RunController(storage=storage, adapter=adapter)
+        with pytest.raises(NotFoundError):
+            ctl.show_run(
+                tenant_id=TENANT,
+                project_id=PROJECT,
+                run_id="run-que-no-existe",
+            )
+
+

@@ -643,6 +643,33 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Operaciones sobre Runs existentes.",
     )
     rn_sub = rn.add_subparsers(dest="runs_command", required=True)
+
+    # sg runs list <project> [--state S] [--limit N]
+    rl = rn_sub.add_parser(
+        "list",
+        help="Lista Runs existentes (mas reciente primero).",
+    )
+    rl.add_argument("project", help="Proyecto destino.")
+    rl.add_argument(
+        "--state",
+        default=None,
+        help="Filtra por estado (CREATED, ACTIVE, COMPLETED, FAILED, CANCELLED).",
+    )
+    rl.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Numero maximo de Runs a listar (default 20).",
+    )
+
+    # sg runs show <project> <run-id>
+    rs = rn_sub.add_parser(
+        "show",
+        help="Muestra el snapshot de un Run.",
+    )
+    rs.add_argument("project", help="Proyecto destino.")
+    rs.add_argument("run_id", help="Run ID a inspeccionar.")
+
     rc = rn_sub.add_parser(
         "cancel",
         help="Cancela un Run en curso (ACTIVE/WAITING/CREATED).",
@@ -747,10 +774,106 @@ def main(argv: list[str] | None = None) -> int:
 def _route_runs(args: argparse.Namespace) -> int:
     """Enruta subcommand `runs` al handler correspondiente."""
     sub = args.runs_command
+    if sub == "list":
+        return cmd_runs_list(args)
+    if sub == "show":
+        return cmd_runs_show(args)
     if sub == "cancel":
         return cmd_runs_cancel(args)
     print(f"ERROR: runs subcommand no reconocido: {sub!r}", file=sys.stderr)
     return EXIT_USAGE
+
+
+def _open_project_storage(args: argparse.Namespace) -> tuple[Storage | None, int]:
+    """Abre el Storage de un proyecto o devuelve exit code de error.
+
+    Helper para `cmd_runs_*`. Centraliza la resolucion del proyecto
+    y la apertura del Storage (los handlers list/show/cancel la
+    comparten). Devuelve (storage, EXIT_OK) o (None, exit_code).
+    """
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, err = resolver.lookup(args.project)
+    if err is not None:
+        return None, err
+    db_path = Path(project["db_path"])
+    if not db_path.exists():
+        print(
+            f"ERROR: base de datos ausente: {db_path}",
+            file=sys.stderr,
+        )
+        return None, EXIT_DB_MISSING
+    return Storage(db_path), EXIT_OK
+
+
+def cmd_runs_list(args: argparse.Namespace) -> int:
+    """Lista Runs del proyecto via `RunController.list_runs`.
+
+    Read-only: no emite eventos. Salida CSV-like para legibilidad
+    en shell (una linea por run con columnas estables).
+    """
+    from skillgraph.runtime.agent import FakeAgentAdapter
+    from skillgraph.runtime.runcontroller import RunController
+
+    storage, err = _open_project_storage(args)
+    if err != EXIT_OK or storage is None:
+        return err
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, _ = resolver.lookup(args.project)
+    ctl = RunController(
+        storage=storage,
+        adapter=FakeAgentAdapter(Path("/dev/null")),  # list no invoca adapter
+    )
+    runs = ctl.list_runs(
+        tenant_id=project["tenant_id"],
+        project_id=project["name"],
+        state=args.state,
+        limit=args.limit,
+    )
+    if not runs:
+        print("(sin runs)")
+        return EXIT_OK
+    print(
+        f"{'run_id':<40} {'state':<11} {'current_node':<20} "
+        f"{'executed':<10} {'events':<8}"
+    )
+    for r in runs:
+        print(
+            f"{r.run_id:<40} {r.state:<11} "
+            f"{(r.current_node or '-'):<20} "
+            f"{','.join(r.executed_nodes):<10} {r.events_emitted:<8}"
+        )
+    return EXIT_OK
+
+
+def cmd_runs_show(args: argparse.Namespace) -> int:
+    """Muestra el snapshot de un Run via `RunController.show_run`.
+
+    Read-only: no emite eventos. Salida en formato key=value para
+    que un caller shell pueda parsear con awk/cut.
+    """
+    from skillgraph.runtime.agent import FakeAgentAdapter
+    from skillgraph.runtime.runcontroller import RunController
+
+    storage, err = _open_project_storage(args)
+    if err != EXIT_OK or storage is None:
+        return err
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, _ = resolver.lookup(args.project)
+    ctl = RunController(
+        storage=storage,
+        adapter=FakeAgentAdapter(Path("/dev/null")),  # show no invoca adapter
+    )
+    snap = ctl.show_run(
+        tenant_id=project["tenant_id"],
+        project_id=project["name"],
+        run_id=args.run_id,
+    )
+    print(f"run_id={snap.run_id}")
+    print(f"state={snap.state}")
+    print(f"current_node={snap.current_node or '-'}")
+    print(f"executed_nodes={','.join(snap.executed_nodes) or '-'}")
+    print(f"events_emitted={snap.events_emitted}")
+    return EXIT_OK
 
 
 def cmd_runs_cancel(args: argparse.Namespace) -> int:
@@ -761,22 +884,14 @@ def cmd_runs_cancel(args: argparse.Namespace) -> int:
     es atomica (transicion de estado + evento RunCompleted en
     una sola TX, via `transition_run_state_atomically`).
     """
-    from skillgraph.platform.storage import Storage
     from skillgraph.runtime.agent import FakeAgentAdapter
     from skillgraph.runtime.runcontroller import RunController
 
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
-    if err is not None:
+    storage, err = _open_project_storage(args)
+    if err != EXIT_OK or storage is None:
         return err
-    db_path = Path(project["db_path"])
-    if not db_path.exists():
-        print(
-            f"ERROR: base de datos ausente: {db_path}",
-            file=sys.stderr,
-        )
-        return EXIT_DB_MISSING
-    storage = Storage(db_path)
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    project, _ = resolver.lookup(args.project)
     ctl = RunController(
         storage=storage,
         adapter=FakeAgentAdapter(Path("/dev/null")),  # cancel no invoca adapter

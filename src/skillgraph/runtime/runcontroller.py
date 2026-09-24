@@ -338,6 +338,102 @@ class RunController:
         )
         return len(existing_prev) >= node_prev.max_visits
 
+    def list_runs(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        state: str | None = None,
+        limit: int = 50,
+    ) -> tuple[RunSnapshot, ...]:
+        """Lista Runs de un (tenant, project) ordenados por mas reciente.
+
+        Inspeccion read-only: NO emite eventos NI modifica estado.
+        Complementa `cancel_run`: el operador primero lista, decide
+        cual cancelar.
+
+        Args:
+            state: filtro opcional por estado exacto.
+            limit: tope de runs devueltos (default 50).
+
+        Returns:
+            Tupla inmutable de `RunSnapshot` ordenada por created_at
+            DESC. El snapshot expone run_id, state, current_node y
+            la lista de nodos ejecutados (via `_executed_node_names`).
+        """
+        rows = self._storage.list_runs(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            state=state,
+            limit=limit,
+        )
+        snapshots: list[RunSnapshot] = []
+        for row in rows:
+            executed = self._executed_node_names(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=row["run_id"],
+            )
+            snapshots.append(
+                RunSnapshot(
+                    run_id=row["run_id"],
+                    state=row["state"],  # type: ignore[arg-type]
+                    current_node=row["current_node"],
+                    executed_nodes=executed,
+                    events_emitted=self._count_events(
+                        tenant_id=tenant_id,
+                        project_id=project_id,
+                        run_id=row["run_id"],
+                    ),
+                )
+            )
+        return tuple(snapshots)
+
+    def show_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> RunSnapshot:
+        """Devuelve el snapshot de un Run por id.
+
+        Inspeccion read-only: NO emite eventos. Levanta `NotFoundError`
+        si el run no existe (delegado en `Storage.get_run`).
+        """
+        row = self._storage.get_run(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+        )
+        executed = self._executed_node_names(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+        )
+        return RunSnapshot(
+            run_id=row["run_id"],
+            state=row["state"],  # type: ignore[arg-type]
+            current_node=row["current_node"],
+            executed_nodes=executed,
+            events_emitted=self._count_events(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+            ),
+        )
+
+    def _count_events(
+        self, *, tenant_id: str, project_id: str, run_id: str
+    ) -> int:
+        """Cuenta eventos asociados a un Run (read-only)."""
+        row = self._storage._conn.execute(  # type: ignore[attr-defined]
+            "SELECT COUNT(*) AS n FROM runtime_events "
+            "WHERE tenant_id = ? AND project_id = ? AND run_id = ?",
+            (tenant_id, project_id, run_id),
+        ).fetchone()
+        return int(row["n"])
+
     def cancel_run(
         self,
         *,
