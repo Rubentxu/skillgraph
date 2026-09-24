@@ -446,13 +446,17 @@ class RunController:
             )
         )
 
-        # H9-BSlice3-S5: delega el INSERT del NodeExecution RUNNING
-        # en `Storage.start_node_execution`. La emision del evento
-        # `node_started` queda inmediatamente despues, fuera de la
-        # transaccion (storage no coordina eventos). Mantener la
-        # separacion evita acoplar Storage al emisor (decision
-        # arquitectonica del 2026-09-23 18:24).
-        self._storage.start_node_execution(
+        # H9-BSlice3-S5 (actualizado en H10/v0.7.2): delega el INSERT del
+        # NodeExecution RUNNING + el evento `NodeStarted` en una SOLA
+        # transaccion via `Storage.start_node_execution_atomically`.
+        # Esto cierra el gap detectado por la revision externa del
+        # release v0.7.1: antes, `_storage.start_node_execution` y
+        # `_events.append(NodeStarted)` eran dos operaciones
+        # separadas y `with self._conn:` no rollbackea (LIMITACION-7)
+        # -> podian quedar desincronizadas ante un fallo del proceso.
+        node_started_event = events.node_started(run_id=run_id, node_execution_id=node_execution_id)
+        self._storage.start_node_execution_atomically(
+            event=node_started_event,
             node_execution_id=node_execution_id,
             tenant_id=tenant_id,
             project_id=project_id,
@@ -463,8 +467,6 @@ class RunController:
             handoff_json=json.dumps(handoff.to_dict(), sort_keys=False),
         )
 
-        self._events.append(events.node_started(run_id=run_id, node_execution_id=node_execution_id))
-
         # Invocar Adapter
         try:
             result = self._adapter.invoke(handoff)
@@ -473,15 +475,10 @@ class RunController:
             self._mark_node_failed(
                 tenant_id=tenant_id,
                 project_id=project_id,
+                run_id=run_id,
                 node_execution_id=node_execution_id,
+                node_name=node_name,
                 error=error_msg,
-            )
-            self._events.append(
-                events.node_failed(
-                    run_id=run_id,
-                    node_execution_id=node_execution_id,
-                    error=error_msg,
-                )
             )
             return False
 
@@ -491,48 +488,40 @@ class RunController:
             self._mark_node_failed(
                 tenant_id=tenant_id,
                 project_id=project_id,
+                run_id=run_id,
                 node_execution_id=node_execution_id,
+                node_name=node_name,
                 error=error_msg,
-            )
-            self._events.append(
-                events.node_failed(
-                    run_id=run_id,
-                    node_execution_id=node_execution_id,
-                    error="outcome no declarado",
-                    outcome=result.outcome,
-                )
+                outcome=result.outcome,
             )
             return False
 
-        # H9-BSlice3-S6: delega el UPDATE a SUCCEEDED en
-        # `Storage.complete_node_execution`. Las dos emisiones de
-        # eventos (node_completed + evidence_produced) quedan justo
-        # despues, fuera de la transaccion; storage no coordina
-        # eventos (decision arquitectonica del 2026-09-23 18:24).
-        self._storage.complete_node_execution(
+        # H9-BSlice3-S6 (actualizado en H10/v0.7.2): delega el UPDATE a
+        # SUCCEEDED + los dos eventos (NodeCompleted y EvidenceProduced)
+        # en una SOLA transaccion via
+        # `Storage.complete_node_execution_atomically`. Cierra el gap
+        # detectado por la revision externa de v0.7.1.
+        ev_completed = events.node_completed(
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            outcome=result.outcome,
+            context_hash=context_hash,
+        )
+        # UAT-04: deja evidencia. Emitido como evento dentro de la
+        # transaccion atomica.
+        ev_evidence = events.evidence_produced(
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            outcome=result.outcome,
+            context_hash=context_hash,
+            evidence_ref=result.evidence_ref or context_hash,
+        )
+        self._storage.complete_node_execution_atomically(
+            event_completed=ev_completed,
+            event_evidence=ev_evidence,
             node_execution_id=node_execution_id,
             outcome=result.outcome,
             result_json=json.dumps(result_to_jsonable(result), sort_keys=True),
-        )
-
-        self._events.append(
-            events.node_completed(
-                run_id=run_id,
-                node_execution_id=node_execution_id,
-                outcome=result.outcome,
-                context_hash=context_hash,
-            )
-        )
-
-        # UAT-04: deja evidencia.
-        self._events.append(
-            events.evidence_produced(
-                run_id=run_id,
-                node_execution_id=node_execution_id,
-                outcome=result.outcome,
-                context_hash=context_hash,
-                evidence_ref=result.evidence_ref or context_hash,
-            )
         )
         return True
 
@@ -589,14 +578,29 @@ class RunController:
         *,
         tenant_id: str,
         project_id: str,
+        run_id: str,
         node_execution_id: str,
+        node_name: str,
         error: str,
+        outcome: str | None = None,
     ) -> None:
-        # H9-BSlice3-S7: shim que delega el UPDATE a FAILED en
-        # `Storage.mark_node_failed`. La emision del evento
-        # `node_failed` sigue siendo del caller (ver _execute_one).
-        del tenant_id, project_id  # conservados por compatibilidad de firma
-        self._storage.mark_node_failed(
+        # H9-BSlice3-S7 (actualizado en H10/v0.7.2): ahora delega el
+        # UPDATE a FAILED + el evento NodeFailed en una SOLA
+        # transaccion via `Storage.mark_node_failed_atomically`.
+        # Cierra el gap detectado por la revision externa de v0.7.1.
+        events = EventBuilder(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            correlation_id=run_id,
+        )
+        node_failed_event = events.node_failed(
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            error=error,
+            outcome=outcome,
+        )
+        self._storage.mark_node_failed_atomically(
+            event=node_failed_event,
             node_execution_id=node_execution_id,
             error=error,
         )
