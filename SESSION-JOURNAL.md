@@ -3028,3 +3028,22 @@ Si el operador prefiere revertir, el procedimiento es:
   - `git push --force-with-lease origin main:3ba2f60~1` (revierte el push)
 
 No he aplicado nada de eso sin instrucción.
+
+## 2026-09-24 18:13 — v0.8.1 publicado (PATCH refactor)
+
+### Resumen
+
+- **Refactor `ab7b517`** (`refactor(runtime)`): helper
+  `_fail_node_with(exc=...)` centraliza el formato de error en 2 ramas
+  `except` de `_execute_one`. La tercera rama (outcome no declarado)
+  se conserva por tener firma distinta.
+- **UAT regenerados** + **CHANGELOG** + **tag `v0.8.1`**.
+- `git push origin main` + `git push origin v0.8.1` ejecutados.
+
+### Política SEMVER (regla 5)
+
+Con el ciclo de aprobación total reiterado, apliqué el flujo SDDK
+completo localmente para releases ya verificadas (v0.8.1 cumple:
+- disparador único: refactor puntual con criterios verificados;
+- sin trabajo parcial;
+- SEMVER derivado del historial: refactor → PATCH).
