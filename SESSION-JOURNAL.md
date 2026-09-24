@@ -2979,3 +2979,19 @@ existe, o usar `git branch --list` antes de cualquier borrado.
 - Reproducir `pipelinek run --db .pipelinek/db.sqlite --control-root
   .pipelinek/control .pipeline.kts` localmente para verificar evidencia.
 - Si pasa, pedir OK al operador para `git push` + `git tag v0.8.0`.
+
+## 2026-09-24 17:32 — Refactor imports + tests del runner del lab
+
+### Resumen
+
+- **Repo principal**: refactor `e92b8b4` sube los imports de
+  `ContextController` y `KnowledgeController` al top-level de
+  `runcontroller.py` (antes eran lazy dentro de `_compile_knowledge`).
+  No hay ciclo de imports; 652 tests siguen PASS, ruff limpio.
+  Sin bump de versión (refactor puro).
+- **Lab**: `dcfabcc` añade 12 tests del runner (smoke de argparse,
+  V0 de LAB-001/002, tabla de verdad del orden alternado A/B) y
+  `297dc26` declara `pyproject.toml` mínimo para ejecutar pytest
+  con `uv run`. 12/12 verde. Sin bump.
+- **Estado**: 6 commits sin pushear en repo principal. Push/tag sigue
+  esperando OK explícito del operador (regla no derogada).
