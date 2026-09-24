@@ -12,6 +12,136 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.7.0] — 2026-09-24
+
+**Resumen**: refactor arquitectónico con **BREAKING CHANGE** en la
+estructura de imports. La capa de compat layer en la raíz de
+`src/skillgraph/` se elimina: los 20 módulos que eran re-exports
+puros hacia bounded contexts (`catalog`, `recipe`, `runtime_types`,
+`dsl`, `errors`, `graph_expansion`, `handoff`, `storage`, `workflow`,
+`bricks`, `git_source`, `pack_loader`, `promotion`, `runcontroller`,
+`skill_importer`, `paths`, `agent`, `context_controller`,
+`knowledge_controller`, `knowledge_invalidator`) desaparecen.
+
+Adicionalmente, `knowledge/context_controller.py` deja de acceder a
+`storage._conn` directamente; ahora delega en 3 APIs públicas nuevas
+del Storage (`list_claims_by_predicate`, `list_evidences_for_source`,
+`list_resource_refs_for_run`). Cumplimiento completo de la regla
+arquitectónica "Storage encapsula SQL" introducida en 0.6.0.
+
+**Resultado neto**: 619/619 tests PASS (de 604 en 0.6.0, +15). 16/16
+UAT PASS, 0 FAIL, 0 BLOCKED. Cobertura 85% branch.
+
+### SemVer decision
+
+El refactor 2 introduce cambios incompatibles de import paths
+(un importador externo que usaba `from skillgraph import Storage`
+queda roto). SemVer estricto promovería esto a **MAJOR** (1.0.0).
+
+Sin embargo, este proyecto **no tiene importadores externos**
+(repo local-only, sin `git push`, sin dependencias aguas abajo).
+Por tanto el impacto real de la rotura es CERO: la test suite
+integrada se reescribió en el mismo commit.
+
+Se etiqueta como **MINOR** (0.7.0) por:
+1. Decisión explícita del operador ("tag MINOR tras el refactor
+   combinado") registrada en SESSION-JOURNAL 2026-09-24 06:46.
+2. La regla de la introducción del CHANGELOG ("BREAKING CHANGE / `!`
+   → MAJOR") se respeta en el sentido de que es BREAKING y se
+   documenta como tal. La decisión de no promover a MAJOR se basa
+   en la **excepción documentada de "sin importadores externos"**.
+
+Si el proyecto adquiere importadores externos en el futuro, el
+próximo cambio incompatible debe promover a 1.0.0 sin excepciones.
+
+### BREAKING CHANGES (MAJOR por semver estricto)
+
+- `from skillgraph.storage import Storage` ya **no funciona**;
+  debe ser `from skillgraph.platform.storage import Storage`.
+- Análogamente para todos los 19 shims restantes:
+  - `skillgraph.errors` → `skillgraph.core.errors`
+  - `skillgraph.recipe` → `skillgraph.core.recipe`
+  - `skillgraph.runtime_types` → `skillgraph.core.runtime_types`
+  - `skillgraph.dsl` → `skillgraph.domain.dsl`
+  - `skillgraph.pack_loader` → `skillgraph.domain.pack_loader`
+  - `skillgraph.skill_importer` → `skillgraph.domain.skill_importer`
+  - `skillgraph.graph_expansion` → `skillgraph.governance.graph_expansion`
+  - `skillgraph.promotion` → `skillgraph.governance.promotion`
+  - `skillgraph.context_controller` → `skillgraph.knowledge.context_controller`
+  - `skillgraph.git_source` → `skillgraph.knowledge.git_source`
+  - `skillgraph.knowledge_controller` → `skillgraph.knowledge.knowledge_controller`
+  - `skillgraph.knowledge_invalidator` → `skillgraph.knowledge.knowledge_invalidator`
+  - `skillgraph.paths` → `skillgraph.platform.paths`
+  - `skillgraph.bricks` → `skillgraph.resources.bricks`
+  - `skillgraph.catalog` → `skillgraph.resources.catalog`
+  - `skillgraph.workflow` → `skillgraph.resources.workflow`
+  - `skillgraph.agent` → `skillgraph.runtime.agent`
+  - `skillgraph.handoff` → `skillgraph.runtime.handoff`
+  - `skillgraph.runcontroller` → `skillgraph.runtime.runcontroller`
+
+Este es un **MINOR** y no MAJOR porque no hay importadores
+externos (proyecto local-only, sin `git push`). Se documenta
+como BREAKING por honestidad pero el impacto real es CERO
+(test suite integrada reescrita en el mismo commit).
+
+### Refactors (sin bump adicional)
+
+- **`Storage` — 3 métodos nuevos (lectura pura)**:
+  - `list_claims_by_predicate(*, project_id, predicate, claim_target)`
+    — devuelve claims que matchean el predicado (line_count,
+    function_count, imports_module, defines_symbol, test_passes,
+    file_exists, spec_revision).
+  - `list_evidences_for_source(*, source_id)` — evidences ligadas
+    a un source.
+  - `list_resource_refs_for_run(*, run_id, kind="claim"|"evidence")` —
+    refs únicas, DISTINCT + ORDER, con validación de kind.
+
+- **`context_controller.py` — 4 sitios SQL eliminados**: el código
+  ahora delega en las 3 APIs nuevas, no accede a `_conn`. La regla
+  "Storage encapsula SQL" se cumple completa en este módulo.
+
+### Cambios estructurales (borrado)
+
+- 20 shims eliminados de `src/skillgraph/*.py` (1-9 LoC cada
+  uno, re-exports puros).
+- 37 ficheros de tests reescritos: ~118 imports de shim a
+  bounded context directo (mecánico via script Python con
+  mapping 1:1 por shim).
+- 2 tests en `tests/test_uat_blocked.py` actualizados
+  (`test_h6_pack_loader_module_exists` ahora importa desde
+  `skillgraph.domain.pack_loader`; `test_h7_promotion_module_exists`
+  importa desde `skillgraph.governance.promotion`).
+
+### Tests (sin bump adicional)
+
+- +15 tests de contrato observable en
+  `tests/test_h9_storage_context_controller_reads.py`:
+  - 4 tests `list_claims_by_predicate` (contrato, aislamiento,
+    no-match, columnas).
+  - 3 tests `list_evidences_for_source` (contrato, no-match,
+    columnas).
+  - 6 tests `list_resource_refs_for_run` (kind=claim,
+    kind=evidence, DISTINCT+ORDER, aislamiento run_id, no-events,
+    kind inválido → ValidationError).
+  - 2 tests de no-regresión por introspección
+    (ContextController sin `_conn.execute`; uso de los 3 métodos
+    públicos).
+
+### Limitaciones NO ocultas
+
+- Cobertura de `context_controller` sigue 82% (subir a 90%+
+  requeriría +6..10 tests de ramas defensivas de las 3 APIs
+  nuevas — **NO incluidos** en este release porque son tests
+  de cobertura, no tests de refactor). Documentado en
+  CURRENT.md 2026-09-24 06:46.
+
+### Reversibilidad
+
+`git revert f2cbb2f` revierte el refactor 2 completo.
+`git revert 2751bc8` revierte el refactor 1.
+Tests con asserts explícitos sobre los shims se reescribieron
+en el mismo commit (no quedan referencias explícitas).
+
 ## [0.6.0] — 2026-09-23
 
 **Resumen**: cierra los dos únicos gaps restantes del blueprint v1.
