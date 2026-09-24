@@ -1,0 +1,37 @@
+=== Modo lectura (no se ejecuta nada; evidencia persistida) ===
+  UAT-01: PASS (rev=cb7e34822b61, persisted)
+  UAT-02: PASS (rev=cb7e34822b61, persisted)
+  UAT-03: PASS (rev=cb7e34822b61, persisted)
+  UAT-04: PASS (rev=cb7e34822b61, persisted)
+  UAT-05: PASS (rev=cb7e34822b61, persisted)
+  UAT-06: PASS (rev=cb7e34822b61, persisted)
+  UAT-07: PASS (rev=cb7e34822b61, persisted)
+  UAT-08: PASS (rev=bc64f6df4564, persisted)
+  UAT-09: PASS (rev=bc64f6df4564, persisted)
+  UAT-10: PASS (rev=cb7e34822b61, persisted)
+  UAT-11: PASS (rev=cb7e34822b61, persisted)
+  UAT-12: PASS (rev=d220ec2773d3, persisted)
+  UAT-13: PASS (rev=d220ec2773d3, persisted)
+  UAT-14: PASS (rev=cb7e34822b61, persisted)
+  UAT-15: PASS (rev=cb7e34822b61, persisted)
+  UAT-16: PASS (rev=cb7e34822b61, persisted)
+
+=== Resumen ===
+  OK UAT-01: PASS
+  OK UAT-02: PASS
+  OK UAT-03: PASS
+  OK UAT-04: PASS
+  OK UAT-05: PASS
+  OK UAT-06: PASS
+  OK UAT-07: PASS
+  OK UAT-08: PASS
+  OK UAT-09: PASS
+  OK UAT-10: PASS
+  OK UAT-11: PASS
+  OK UAT-12: PASS
+  OK UAT-13: PASS
+  OK UAT-14: PASS
+  OK UAT-15: PASS
+  OK UAT-16: PASS
+
+PASS=16  FAIL=0  BLOCKED=0
