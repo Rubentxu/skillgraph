@@ -36,10 +36,11 @@ import argparse
 import json
 import sys
 import tempfile
-import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from bench._common import median_ms
 
 # Asegurar import del paquete cuando se ejecuta como ``python -m bench.bench_storage_reads``.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -153,17 +154,6 @@ def _build_corpus(
     return storage, main_run_id, n_node_executions
 
 
-def _median_ms(repeats: int, fn: object) -> float:
-    """Ejecuta `fn` `repeats` veces y devuelve la mediana en ms."""
-    samples: list[int] = []
-    for _ in range(repeats):
-        t0 = time.perf_counter_ns()
-        fn()  # type: ignore[operator]
-        samples.append(time.perf_counter_ns() - t0)
-    samples.sort()
-    return samples[len(samples) // 2] / 1e6
-
-
 def _bench_one(
     *,
     storage: Storage,
@@ -178,11 +168,11 @@ def _bench_one(
     s = storage
     rid = main_run_id
     tn = target_node
-    load_ms = _median_ms(
+    load_ms = median_ms(
         WARM_REPEATS,
         lambda: s.load_run(tenant_id=_TENANT, project_id=_PROJECT, run_id=rid),
     )
-    list_ne_ms = _median_ms(
+    list_ne_ms = median_ms(
         WARM_REPEATS,
         lambda: s.list_node_executions(
             tenant_id=_TENANT,
@@ -191,7 +181,7 @@ def _bench_one(
             node_name=tn,
         ),
     )
-    list_names_ms = _median_ms(
+    list_names_ms = median_ms(
         WARM_REPEATS,
         lambda: s.list_executed_node_names(tenant_id=_TENANT, project_id=_PROJECT, run_id=rid),
     )

@@ -34,6 +34,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from bench._common import format_table, median_ms
+
 # Asegurar import del paquete cuando se ejecuta como ``python -m bench.bench_context``.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT / "src") not in sys.path:
@@ -69,7 +71,12 @@ WARM_REPEATS: int = 3
 
 @dataclass(frozen=True, slots=True)
 class BenchRow:
-    """Una fila de resultado: tamano N + 3 mediciones en ms."""
+    """Una fila de resultado: tamano N + 3 mediciones en ms.
+
+    Schema JSON estable (columnas top-level, NO anidadas bajo
+    ``columns``) por compatibilidad con consumidores externos que
+    esperan el shape original v1.
+    """
 
     claims: int
     sources: int
@@ -179,18 +186,15 @@ def _measure_compile(
     cold_ns = time.perf_counter_ns() - t0
 
     # Warm (mediana de repeats para suavizar ruido).
-    samples: list[int] = []
-    for _ in range(repeats):
-        t0 = time.perf_counter_ns()
-        ctx.compile_handoff(recipe=recipe, run_id="r1", node_execution_id="n1")
-        samples.append(time.perf_counter_ns() - t0)
-    samples.sort()
-    warm_median_ns = samples[len(samples) // 2]
+    warm_ms = median_ms(
+        repeats,
+        lambda: ctx.compile_handoff(recipe=recipe, run_id="r1", node_execution_id="n1"),
+    )
 
     # Aseguramos que `h_cold` se usa (silencia linter de unused).
     _ = h_cold.context_hash
 
-    return cold_ns / 1e6, warm_median_ns / 1e6
+    return cold_ns / 1e6, warm_ms
 
 
 def _measure_refresh(
@@ -201,15 +205,15 @@ def _measure_refresh(
     repeats: int,
 ) -> float:
     """Mide `refresh_handoff` con `previous_hash` dado (mediana)."""
-    samples: list[int] = []
-    for _ in range(repeats):
-        t0 = time.perf_counter_ns()
-        ctx.refresh_handoff(
-            previous_hash=previous_hash, recipe=recipe, run_id="r1", node_execution_id="n1"
-        )
-        samples.append(time.perf_counter_ns() - t0)
-    samples.sort()
-    return samples[len(samples) // 2] / 1e6
+    return median_ms(
+        repeats,
+        lambda: ctx.refresh_handoff(
+            previous_hash=previous_hash,
+            recipe=recipe,
+            run_id="r1",
+            node_execution_id="n1",
+        ),
+    )
 
 
 def run_bench(*, sizes: Sequence[int] = DEFAULT_SIZES) -> BenchReport:
@@ -267,17 +271,23 @@ def _format_table(report: BenchReport) -> str:
         "included",
         "hash",
     )
-    lines: list[str] = [
-        "| " + " | ".join(headers) + " |",
-        "| " + " | ".join("---" for _ in headers) + " |",
-    ]
-    for r in report.rows:
-        lines.append(
-            f"| {r.claims} | {r.sources} | {r.compile_cold_ms:.3f} | "
-            f"{r.compile_warm_median_ms:.3f} | {r.refresh_warm_median_ms:.3f} | "
-            f"{r.included_count} | `{r.context_hash}` |"
+
+    def row_to_cells(r: object) -> tuple[str, ...]:
+        return (
+            f"{r.claims}",  # type: ignore[attr-defined]
+            f"{r.sources}",  # type: ignore[attr-defined]
+            f"{r.compile_cold_ms:.3f}",  # type: ignore[attr-defined]
+            f"{r.compile_warm_median_ms:.3f}",  # type: ignore[attr-defined]
+            f"{r.refresh_warm_median_ms:.3f}",  # type: ignore[attr-defined]
+            f"{r.included_count}",  # type: ignore[attr-defined]
+            f"`{r.context_hash}`",  # type: ignore[attr-defined]
         )
-    return "\n".join(lines)
+
+    return format_table(
+        report=report,
+        headers=headers,
+        row_to_cells=row_to_cells,
+    )
 
 
 def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
