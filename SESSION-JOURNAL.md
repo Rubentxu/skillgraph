@@ -4442,3 +4442,68 @@ RunController). Housekeeping de format cerrado. Sin deuda abierta.
 
 **Proximo** sin trabajo activo hasta proxima consigna. Las opciones B/C
 del backlog P1 siguen requiriendo spec del operador.
+
+## Sesion 2026-09-25 11:31 - 11:49 · Refactor DRY bench/_common (T8.6 reconsiderado)
+
+**Contexto**: operador autorizo continuar sin bloqueos. Reviso
+opciones reales de stewardship con valor y riesgo bajo. Detecto
+duplicacion real (regla 4 CALIDAD) entre bench_context.py y
+bench_storage_reads.py: ambos implementaban median_ms con codigo
+identico y el patron de format_table inline.
+
+**Acciones ejecutadas (workflow A-min)**:
+
+1. **TDD rojo** para bench/_common.py:
+   - tests/test_bench_common.py (140 LoC, 9 tests):
+     * TestMedianMs (3): trivial workload, odd/even repeats.
+     * TestBenchRow (2): frozen immutability + to_dict round trip.
+     * TestBenchReport (2): empty + with rows.
+     * TestFormatTable (2): empty rows + rows in order.
+
+2. **Apply**: bench/_common.py (134 LoC) con primitivas reusables:
+   - ``median_ms(repeats, fn) -> float``: mide N veces, devuelve
+     mediana en ms.
+   - ``BenchRow(label, columns)``: fila generica JSON-friendly.
+   - ``BenchReport(schema, python_version, rows)``: contenedor.
+   - ``format_table(report, headers, row_to_cells)``: Markdown tabla.
+   - BenchRow local preservado en cada bench para NO romper schema
+     JSON externo (consumidores esperan row['claims'] top-level, no
+     row['columns']['claims']).
+   - format_table usa duck typing via Any para aceptar BenchRow
+     local via adaptador row_to_cells.
+
+3. **Verde**: 9/9 tests unitarios PASS + 3 smoke tests bench_context
+   + 3 smoke tests bench_storage_reads (15/15 bench tests).
+
+4. **Suite completa**: 784/784 PASS (775 + 9 nuevos). ruff check +
+   format limpios. Cobertura sin cambios (83% sobre src/skillgraph,
+   bench/ excluido por pyproject.toml).
+
+**Lecciones aprendidas (regla 3 CIERRE REAL)**:
+
+- **TDD salva contratos**: el primer intento rompio el schema JSON
+  externo de bench_context (anide columnas bajo 'columns' para usar
+  BenchRow generico). El test_bench_smoke.py fallo con KeyError en
+  'claims', detectando el breaking change antes de cualquier commit.
+  Revertir fue trivial.
+- **Schema externo > DRY interno**: la duplicacion entre benches era
+  tolerable; romper el contrato externo no lo era. La decision
+  correcta fue BenchRow local + format_table con adaptador.
+- **No avanzar artificialmente**: evalué T8.6 (bench budget) pero
+  el comportamiento bajo presupuesto ya está cubierto por los 20
+  tests del S4 (Etapa 7 RunBudget). Un bench mide performance, no
+  correctness; el valor marginal era bajo. Regla 3 CIERRE REAL:
+  "no avanzar artificialmente entre ciclos". El refactor DRY era
+  el cierre real de este tramo.
+
+**Comite unico**: `fde185d` refactor(bench): extraer primitivas
+compartidas a bench/_common.py. Push FF a origin/main OK.
+
+**Resultado**: 3 benches operativos (bench_context, bench_storage_reads,
+_common); 784/784 tests verde; DRY real sin breaking changes. Sin
+deuda abierta. Sin trabajo activo material a la espera de proxima
+consigna.
+
+**Proximo**: sin trabajo accionable sin spec operador. P1 Opciones B/C
+siguen requiriendo consigna (grieta transaccional, multi-tenancy,
+Adapter real).
