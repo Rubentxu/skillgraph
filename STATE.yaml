@@ -521,7 +521,7 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 16 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 754/754 tests, blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sesion 2026-09-25 cerro con auditoria post-Etapa 7 (audits/runtime-2026-09-25.md), 2 hallazgos aplicados (F-1 + F-3), 3 descartados (F-2 revertido por tests, F-4 diferido por contrato, F-5 falso positivo), housekeeping final + push FF a origin/main. Stewardship backlog priorizado para futuras sesiones (ver stewardship_backlog al final): P1=spec S7+ (operador), P2=lock preventivo uat-evidence (mio, accionable), P3=auditoria redaction.py (mio, accionable), P4=cli runner cobertura 70%+ (mio, accionable), P5=ejecucion S7+ (depende P1). Sin trabajo activo hasta proxima consigna. Reanudar sesion futura: leer STATE.yaml.stewardship_backlog y CURRENT.md.Auditoria 2026-09-25."
+next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 16 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 754/754 tests, blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sesion 2026-09-25 cerro P2 del stewardship backlog (DT-2 lock UAT evidence, helper centralizado + 11 tests + refactor de callers + CI format gate desbloqueado). 765/765 tests PASS, ruff limpio. Tres commits pushed a origin/main (FF): 9889ee8 style(format), 8bebaf3 feat(evidence_lock), 984d739 refactor(callers). Stewardship backlog restante: P1=spec S7+ (operador), P3=auditoria redaction.py, P4=cli runner cobertura 70%+, P5=ejecucion S7+ (depende P1). Sin trabajo activo hasta proxima consigna. Reanudar sesion futura: leer STATE.yaml.stewardship_backlog y CURRENT.md."
 
 # ---- Backlog priorizado de stewardship (2026-09-25 08:19) ----
 # Orden de ejecucion recomendado para futuras sesiones. Cada item tiene
@@ -545,6 +545,26 @@ stewardship_backlog:
     riesgo: "nulo (preventivo)"
     valor: "medio (evita reabrir si xdist llega)"
     accionable_sin_spec: true
+    estado: completed
+    cerrado_en_sesion: "2026-09-25 08:44"
+    commits: ["8bebaf3", "984d739"]
+    implementacion: >
+      Centralizado en tests/_evidence_lock.py (162 LoC, exports save_with_lock
+      y evidence_lock context manager). 11 tests en tests/test_evidence_lock.py
+      cubren: simple write, dir auto-creacion, 8 writers concurrentes al
+      mismo uat_id (exactamente 1 payload), 6 writers a uat_ids distintos
+      (locking granular), history_keep True/False, liberacion via context
+      manager, fallback Windows (_HAS_FCNTL=False monkeypatch), payload no
+      serializable (raise sin corromper), 4-thread barrier sync realista.
+      Callers refactorizados: _save_evidence (uat_audit.py),
+      _emit_uat_08_evidence y _emit_uat_09_evidence (test_h4_expansion_cli.py).
+      DRY: -12 LoC en uat_audit.py, -6 LoC en test_h4_expansion_cli.py.
+      Suite: 765/765 PASS, ruff check + format limpios.
+    extra_commit: "9889ee8 (style: cerrar drift ruff format + SIM117 nested-with)"
+      # 9889ee8 es sibling commit que elimina el drift de ruff format
+      # que estaba bloqueando el CI gate format/format --check. No es
+      # parte de DT-2 pero se emite en el mismo turno para no partir
+      # atomicidad.
   prioridad_3_audit_redaction:
     descripcion: "Auditar src/skillgraph/runtime/redaction.py (39% cobertura reportada, 107 LoC, 21 tests existentes). Determinar si 39% es cifra heredada (suite de 4 ficheros) o si hay gaps reales. Cerrar gaps si los hay."
     archivos_afectados: ["src/skillgraph/runtime/redaction.py", "tests/test_redaction.py"]
