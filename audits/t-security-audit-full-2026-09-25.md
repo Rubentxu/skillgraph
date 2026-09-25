@@ -138,6 +138,23 @@ Patrones de identificación rápida:
 
 Ningún caller cruza tenants en estos 26 sitios.
 
+### Cross-check de exhaustividad de callers (post-audit)
+
+Para eliminar complacencia y confirmar que el grep transversal cubrió **todos** los call sites (incluyendo tests y cross-module imports), se ejecutó una verificación adicional:
+
+| Función auditada | Callers en `src/` | Callers en `tests/` | Total | Veredicto |
+|---|---|---|---|---|
+| `storage.upsert_resource` | 2 (runner.py CLI) | 18 (tests programador) | 20 | NO gap (CLI local + tests = mismo-tenant) |
+| `storage.get_run` | 3 (RunController + runner.py) | 0 | 3 | NO gap (mismo-tenant) |
+| `ExpansionResult.unwrap` | 1 (runner.py CLI) | 4 (tests programador) | 5 | NO gap (API misuse, caller-provided) |
+| `open_catalog` | 5 (runner.py CLI) | 3 (tests programador) | 8 | NO gap (CLI local) |
+| `storage.open_project_storage` | 7 (runner.py CLI) | 0 | 7 | NO gap (CLI local) |
+| `context_controller.enforce_strict_freshness` | 1 (interno l.301) | 0 | 1 | NO gap (interno same-tenant) |
+
+**Hallazgo adicional**: `enforce_strict_freshness` solo se llama desde una ubicación interna (`context_controller.py:301`), no directamente desde CLI. Esto refuerza el veredicto del sitio `context_controller.py:92`: el StaleKnowledgeError se lanza en una capa interna donde el caller ya es mismo-tenant por construcción (KnowledgeController).
+
+**Conclusión del cross-check**: el audit original (43 sitios) cubre **todos** los call sites reales. No hay sitios f-string sin `!r` que sean invocados desde contextos cross-tenant sin trazar.
+
 ## Resultado
 
 **0 gaps S2/I en los 38 sitios restantes**. Combinado con el mini-audit previo (5 sitios), el repositorio está **100% conforme con ADR-0015** para f-strings con identificadores.
@@ -161,6 +178,9 @@ Ningún caller cruza tenants en estos 26 sitios.
 ADR-0015 está completamente implementado para todos los identificadores filtrables en mensajes de error. El codebase SkillGraph no leak-ea identificadores cross-tenant en excepciones de dominio.
 
 **Próximos pasos derivados** (todos opcionales, sin gap):
+
 1. Re-auditar tras cualquier cambio de schema Storage (Gap D trigger).
+   *No aplicaba en este ciclo: `git log 244ddf3..HEAD -- src/skillgraph/platform/storage.py` = vacío, no hubo cambios de schema entre mini-audit y exhaustivo.*
 2. Auditar mensajes `WARNING` y `INFO` (este audit fue solo sobre `raise .*Error`).
 3. Auditar logs estructurados (`structlog`, `logging.*`) — fuera del scope S2/I del ADR-0015.
+4. Si en el futuro se introduce un caller cross-tenant (e.g. un endpoint HTTP multi-tenant), re-evaluar los 26 sitios triviales marcados como "CLI local" — hoy son seguros, pero un nuevo caller podría cambiar el veredicto.
