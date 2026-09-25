@@ -242,7 +242,17 @@ Conclusiones:
 - 3 sitios en `knowledge_controller.py` corregidos (l.135, l.216, l.488).
 - Sin bump de release (regla SEMVER: fix sin breaking en contrato observable, acumulado a proxima release).
 
-## Pendientes post-T8
+### Verificación T3-S2-002 entity_id (2026-09-25 ~17:20)
+
+- HEAD post-ciclo: `026747e` == origin/main.
+- 4/4 tests nuevos PASS en `tests/test_t3_s2_entity_message_no_entity_id.py` (0.67s).
+- T4 completa: **853/853 PASS en 478s, exit 0**, 0 regresiones.
+- Audit dedicado: `audits/t3-s2-entity-message-redaction-2026-09-25.md`.
+- 2 sitios en `knowledge_controller.py` corregidos (l.179, l.490).
+- Housekeeping adicional: T3 test E2E-08 endurecido (ya exige no source_id ni tenant_id), UAT-08/09 refresh pointers.
+- Sin bump de release (4 commits coherentes acumulados a proxima release).
+
+## Pendientes (sin cambio)
 
 - **P1 opciones A/B/C** (Adapter real / grieta transaccional /
   certificación de concurrencia) — siguen requiriendo spec operador
