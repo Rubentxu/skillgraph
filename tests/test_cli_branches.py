@@ -28,6 +28,10 @@ import sys
 from itertools import pairwise
 from pathlib import Path
 
+import pytest
+
+from skillgraph.cli import runner
+
 # ---------------------------------------------------------------------------
 # Helpers (duplicados a proposito: cero acoplamiento entre test files)
 # ---------------------------------------------------------------------------
@@ -319,6 +323,83 @@ class TestCliHelpAndVersion:
         # Todos los subcomandos aparecen en el help.
         for cmd in ("init", "project", "brick", "run"):
             assert cmd in result.stdout
+
+
+class TestCliArgparseErrors:
+    """Ramas de error del parser argparse (entrada InProcess de `main`).
+
+    Estos errores se manifiestan como `SystemExit(2)` desde argparse;
+    subprocess tests los ven como rc=2, pero pytest-cov solo registra
+    la cobertura de codigo ejecutado InProcess. Por eso los cubrimos
+    explicitamente aqui con `pytest.raises(SystemExit)` en lugar de
+    via subprocess: para sumar ~3-5% de cobertura del entry point
+    `main()` sin duplicar los tests de acceptance.
+    """
+
+    def test_main_unknown_flag_exits_with_2(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`main(["--bogus-flag"])` -> argparse eleva SystemExit(2)."""
+        with pytest.raises(SystemExit) as exc_info:
+            runner.main(
+                [
+                    "--data-root",
+                    str(tmp_path / "data"),
+                    "--no-such-flag",
+                    "init",
+                ]
+            )
+        assert exc_info.value.code == 2
+        err = capsys.readouterr().err
+        assert "unrecognized arguments" in err
+        assert "--no-such-flag" in err
+
+    def test_main_project_invalid_subcommand_exits_with_2(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`main(["project", "bogus"])` -> argparse 'invalid choice'."""
+        with pytest.raises(SystemExit) as exc_info:
+            runner.main(
+                [
+                    "--data-root",
+                    str(tmp_path / "data"),
+                    "project",
+                    "bogus-sub",
+                ]
+            )
+        assert exc_info.value.code == 2
+        err = capsys.readouterr().err
+        assert "invalid choice" in err
+
+    def test_main_project_list_extra_positional_exits_with_2(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`main(["project", "list", "extra"])` -> argparse 'unrecognized'."""
+        with pytest.raises(SystemExit) as exc_info:
+            runner.main(
+                [
+                    "--data-root",
+                    str(tmp_path / "data"),
+                    "project",
+                    "list",
+                    "extra-positional",
+                ]
+            )
+        assert exc_info.value.code == 2
+        err = capsys.readouterr().err
+        assert "unrecognized arguments" in err
+
+    def test_main_help_full_prints_and_returns_0(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`main(["--help"])` -> SystemExit(0) con help completo."""
+        with pytest.raises(SystemExit) as exc_info:
+            runner.main(["--help"])
+        assert exc_info.value.code == 0
+        out = capsys.readouterr().out
+        assert "SkillGraph" in out
+        assert "--data-root" in out
+        assert "--version" in out
 
 
 # ---------------------------------------------------------------------------
