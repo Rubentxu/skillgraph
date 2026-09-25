@@ -521,7 +521,7 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 16 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 754/754 tests, blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sesion 2026-09-25 cerro P2 del stewardship backlog (DT-2 lock UAT evidence, helper centralizado + 11 tests + refactor de callers + CI format gate desbloqueado). 765/765 tests PASS, ruff limpio. Tres commits pushed a origin/main (FF): 9889ee8 style(format), 8bebaf3 feat(evidence_lock), 984d739 refactor(callers). Stewardship backlog restante: P1=spec S7+ (operador), P3=auditoria redaction.py, P4=cli runner cobertura 70%+, P5=ejecucion S7+ (depende P1). Sin trabajo activo hasta proxima consigna. Reanudar sesion futura: leer STATE.yaml.stewardship_backlog y CURRENT.md."
+next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 16 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 769/769 tests, blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sesion 2026-09-25 08:19-09:04: stewardship transversal cerro P2 (DT-2 lock UAT evidence), P3 (audit redaction.py: 100% real, 0 gaps) y P4 (audit cli/runner.py: 49% real por gap estructural de pytest-cov subprocess, 4 tests argparse errors InProcess aplicados). 9 commits pushed FF a origin/main: 9889ee8 style(format), 8bebaf3 feat(evidence_lock), 984d739 refactor(callers), f31fa53/a3fe52c/6a4ae3e docs, 130f89a refresh, 32197db feat(argparse tests), 5de1717 docs(audit). Stewardship backlog restante: P1=spec S7+ del operador (4 opciones: A Adapter real, B grieta transaccional, C cert. concurrencia, D multi-tenancy), P5=ejecucion S7+ (depende P1). Sin trabajo activo hasta proxima consigna. Reanudar sesion futura: leer STATE.yaml.stewardship_backlog y CURRENT.md."
 
 # ---- Backlog priorizado de stewardship (2026-09-25 08:19) ----
 # Orden de ejecucion recomendado para futuras sesiones. Cada item tiene
@@ -572,6 +572,20 @@ stewardship_backlog:
     riesgo: "nulo (auditoria + tests aditivos)"
     valor: "medio (cierra outlier de cobertura)"
     accionable_sin_spec: true
+    estado: completed
+    cerrado_en_sesion: "2026-09-25 09:04"
+    commit: "5de1717"
+    implementacion: >
+      39% era cifra heredada del snapshot T1 (subset focal de 4
+      ficheros). Re-medido con suite completa: 27/27 stmts, 14/14
+      branches = 100%. Modulo puro (sin I/O, sin globales, sin
+      reloj). 3 funciones (validate_policy, redact_payload,
+      _redact_recursive) cubiertas por 21 tests en 8 clases que
+      verifican cada contrato observable (validacion smart
+      constructor, 4 politicas x happy/edge, inmutabilidad,
+      determinismo, persistencia Storage, integracion EventLog).
+      Veredicto: sin gaps, 0 LoC produccion modificados, 0 tests
+      nuevos. Audit completo en audits/redaction-2026-09-25.md.
   prioridad_4_cli_runner_coverage:
     descripcion: "Subir src/skillgraph/cli/runner.py de 55% a 70%+ mediante tests in-process con click.testing.CliRunner para comandos criticos (sg run, sg knowledge, sg expansion show)."
     archivos_afectados: ["src/skillgraph/cli/runner.py", "tests/test_cli_branches.py"]
@@ -579,6 +593,21 @@ stewardship_backlog:
     riesgo: "bajo (aditivo)"
     valor: "medio (uniforma perfil pytest-cov)"
     accionable_sin_spec: true
+    estado: completed
+    cerrado_en_sesion: "2026-09-25 09:04"
+    commits: ["32197db", "5de1717"]
+    implementacion: >
+      Cifra 55% era heredada del subset T1 (4 ficheros). Re-medido
+      con suite completa: 49% real (1077 stmts, 501 miss, 294
+      branches, 39 missed). Gap ESTRUCTURAL: pytest-cov NO rastrea
+      codigo ejecutado en proceso hijo. 24 comandos cubiertos por
+      subprocess (acceptance real del binario instalado) + 6
+      InProcess. Subir cifra sin duplicar subprocess tests seria
+      violar CALIDAD §4 (no duplicar acceptance). Aplicados 4 tests
+      argparse errors InProcess en commit 32197db: cierran contrato
+      de argparse ante invocaciones invalidas (NO suben cifra:
+      argparse eleva SystemExit antes del main()). Audit completo
+      en audits/runner-coverage-2026-09-25.md.
   prioridad_5_s7plus_ejecucion:
     descripcion: "Ejecutar el slice S7+ una vez priorizado (prioridad_1)."
     bloqueado_por: [prioridad_1_spec_s7plus]
