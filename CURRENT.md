@@ -28,9 +28,18 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 - Etapa 7 slices 1-6: **cerrados** (v0.8.0 → v0.14.0).
 - Refactor context_controller (sin bump): **cerrado** en `6c8c17f`.
 
-## Último estado comprobado
+# INITIATIVE-CLOSED
 
-- HEAD: `116a2b5` (feat(governance): H15 Evaluación y automejora acotada).
+**Initiative g-skillgraph-bootstrap cerrada formalmente** (segundo
+acto, sesion 2026-09-25T15:37:08Z por consigna del operador "1").
+HEAD terminal: `f1b92ff`. Certificado completo en
+`INITIATIVE-CLOSED.md`. Sin trabajo autonomo pendiente; 4 Trabajos
+de Etapa 7 (E1 Adapter, T3 Threat, T5 Backups, T6 Observabilidad)
+requieren spec operador para reabrir.
+
+## Ultimo estado comprobado
+
+- HEAD: `f1b92ff` (docs(drift): cerrar drift API publica y CHANGELOG post-evolution-v2). HEAD terminal del goal cerrado.
 - Tests: **830/830 PASS** en 189s (`mise exec -- uv run pytest -q`; baseline 821 → 830 con +9 nuevos: test_h15_improvement UAT-EVO-15..18).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
@@ -78,15 +87,19 @@ Refactor sin bump: `6c8c17f` (extract pure helpers from ContextController).
 
 ## Próxima acción concreta
 
-- Esperar consigna explícita del operador sobre si:
-  1. Cerrar la iniciativa con Etapa 7 documentada (defendible: 769 tests,
-     16/16 UAT, blueprint + Etapa 7 cerrados al 100%).
-  2. Especificar y arrancar S7+ (nuevo goal).
-  3. Otro trabajo distinto (audit transversal, stewardship cli.py,
-     integración con proveedor real, etc.).
+**Initiative cerrada formalmente** (2026-09-25T15:37:08Z, segundo
+acto por consigna del operador "1"). Sin próxima acción autonoma.
 
-Mientras tanto, el repo está en estado estable con checkpoint sincronizado
-en este turno.
+Para reactivar la iniciativa o abrir una nueva:
+- Operador aporta spec para uno de los 4 Trabajos pendientes de
+  Etapa 7 (E1 Adapter real, T3 Threat model, T5 Backups CLI,
+  T6 Observabilidad), formato libre ~1 parrafo.
+- Operador reabre con consigna explicita; el protocolo de
+  reapertura esta en `INITIATIVE-CLOSED.md` seccion 8.
+
+Mientras tanto, el repo esta en estado estable con checkpoint
+sincronizado en `f1b92ff` (HEAD terminal) y certificado de cierre
+en `INITIATIVE-CLOSED.md`.
 
 ## Auditoría 2026-09-25
 

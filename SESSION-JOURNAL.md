@@ -4804,3 +4804,50 @@ acotada (evolution-v2). DOCS siguen en commit separado.
 **Siguiente**: SPEC DEL OPERADOR (prioridad_5_s7plus_ejecucion
 explicitamente bloqueado por spec). No hay workitems autonomos
 pendientes.
+
+## 2026-09-25 — Cierre formal de la iniciativa g-skillgraph-bootstrap (segundo acto)
+
+**Consigna operador** (2026-09-25T15:37:08Z): "1" — opcion de
+repriorizacion: cierre formal.
+
+**Decision con criterio**: la opcion 1 del menu propuesto (cerrar
+la iniciativa con Etapa 7 documentada) es defendible: 830/830 tests,
+16/16 UAT, blueprint 0-6 + 5/8 Trabajos de E7, evolution-v2 100%,
+17 releases. La grieta transaccional y los 4 Trabajos pendientes
+(E1 Adapter, T3 Threat, T5 Backups, T6 Observabilidad) requieren
+spec del operador y estan registrados como backlog explicito.
+
+**Plan ejecutado**:
+1. Creado `INITIATIVE-CLOSED.md` (152 LoC) — certificado formal
+   con: alcance original, estado observable verificable (830 tests,
+   16 UAT, 17 releases), roadmap compliance (Etapa 7 = 5/8),
+   stewardship transversal ejecutado en sesion, grietas documentadas,
+   decisiones del operador verbatim, backlog explicito, protocolo
+   de reapertura, comandos de verificacion final.
+2. STATE.yaml: anadidos campos `closure_act_2_at` (2026-09-25),
+   `closure_act_2_head` (`f1b92ff`), `closure_act_2_certificate`
+   (`INITIATIVE-CLOSED.md`), `closure_act_2_rationale` (paragrafo
+   multilinea) y `closure_act_2_backlog` (protocolo de reapertura).
+3. CURRENT.md: header cambiado a `# INITIATIVE-CLOSED` con resumen;
+   HEAD terminal registrado como `f1b92ff`; "Proxima accion concreta"
+   reescrita para reflejar cierre + protocolo de reapertura.
+4. SESSION-JOURNAL.md: esta entrada.
+
+**Cifras duras del cierre (verificables)**:
+- 830/830 tests PASS en 189s
+- 16/16 UAT PASS
+- 17 releases (v0.3.0 .. v0.14.0)
+- 50 tests UAT-EVO nuevos (H11..H15 + H0/H10)
+- 5 modulos nuevos (file_signature, file_scope, file_handoff,
+  governance/receipts, governance/improvement)
+- Cobertura nucleo 83%; modulos nuevos 73-85%
+- Working tree limpio; ruff check + format limpios
+
+**Estado formal**:
+- goal.status: COMPLETED (sin cambio; ya lo era)
+- closure_act_2_*: registrado en STATE.yaml
+- INITIATIVE-CLOSED.md: certificado canonico
+
+**Siguiente**: SIN trabajo autonomo. Reapertura requiere
+consigna operador + spec. Protocolo documentado en
+INITIATIVE-CLOSED.md seccion 8.

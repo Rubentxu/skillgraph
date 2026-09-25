@@ -21,6 +21,24 @@ goal:
   reopened_reason: "Operador comando 'todo esta en el roadmap, siguelo aplicando criterio' -> autoriza ejecutar H6 (UAT-12) y H7 (UAT-13) con criterio propio. Iniciativa reabierta en estado in_progress, no COMPLETED."
   closed_at_v060: "2026-09-23 tras tag v0.6.0"
   closure_rationale: "Cierre DEFINITIVO tras 5 releases (v0.3.0 / v0.4.0 / v0.4.1 / v0.5.0 / v0.6.0). 405/405 tests pytest verde. 16/16 UAT PASS, 0 FAIL, 0 BLOCKED. TODOS los hitos del blueprint cerrados (H0..H7). 32 tests nuevos (12 H6 + 16 H7 + 4 gap-test inversion). CHANGELOG.md actualizado, STATE/CURRENT/JOURNAL sincronizados. Sin deuda testeable abierta. Initiative COMPLETED. El checkpoint durable permite reanudar en cualquier sesion futura sin perdida de contexto."
+  # Segundo acto formal de cierre (sesion 2026-09-25):
+  closure_act_2_at: 2026-09-25
+  closure_act_2_head: f1b92ff679cff36dc9da2f8972ab6723acc63807
+  closure_act_2_certificate: INITIATIVE-CLOSED.md
+  closure_act_2_rationale: >
+    Cierre formal tras Etapa 7 (5/8 Trabajos, 62.5%) + evolution-v2
+    (H0..H15 = 100%) + stewardship transversal (P2/P3/P4 cerradas,
+    P1 Opcion A y D cerradas, B/C explicitadas como bloqueadas por
+    spec operador). 830/830 tests verde, 16/16 UAT, 17 releases.
+    4 Trabajos pendientes de Etapa 7 (E1 Adapter, T3 Threat, T5 Backups,
+    T6 Observabilidad) requieren spec operador; el backlog esta
+    registrado en STATE.yaml.stewardship_backlog y en INITIATIVE-CLOSED.md
+    seccion 7. Trazabilidad completa por commits y receipts; sin
+    perdida de contexto para sesiones futuras.
+  closure_act_2_backlog: |
+    Sin spec operador, NO se ejecuta trabajo pendiente. Reapertura
+    requiere consigna explicita + spec. Ver INITIATIVE-CLOSED.md
+    seccion 8 para protocolo de reapertura.
   # Post-bloomberg v0.7.0 (refactor follow-up, no reabre iniciativa):
   refactor_v070: true
   refactor_v070_closed_after_tag: v0.7.0   # tag: 6d7e66f
