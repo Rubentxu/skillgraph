@@ -4382,3 +4382,63 @@ cobertura real medida con la suite completa, no cifras heredadas de
 subsets. No se reabre iniciativa. Sin deuda abierta.
 
 **Commits**: este tramo cierra el stewardship de cobertura del dia.
+
+## Sesion 2026-09-25 11:01 - 11:18 · Stewardship T8.5 (bench Storage reads) + housekeeping format
+
+**Contexto**: operador autorizo modo AUTO con criterio propio. Backlog
+material cerrado (P1=Opciones B/C requieren spec operador). Se ejecuta
+stewardship menor de valor: bench Storage reads + housekeeping format.
+
+**Acciones ejecutadas**:
+
+1. **T8.5 bench Storage reads** (workflow A-min: spec -> tests -> apply -> verify):
+
+   - **Rojo**: `tests/test_bench_storage_reads_smoke.py` con 3 tests
+     (default runs/exit, JSON schema valido, custom sizes). Test
+     invoca `python -m bench.bench_storage_reads` como subprocess.
+   - **Apply**: `bench/bench_storage_reads.py` (309 LoC). Mide las 3
+     APIs de lectura de `Storage` que alimentan el RunController tras
+     H9-BSlice3-S1 (Etapa 7 S1 reads): `load_run`,
+     `list_node_executions`, `list_executed_node_names`.
+     Storage SQLite en tempdir, 1 run principal + N NodeExecutions
+     SUCCEEDED + M runs de ruido. Mediana de 3 warm repeats. Schema
+     JSON estable (`skillgraph.bench.storage_reads.v1`).
+   - **Verde**: 3/3 smoke tests PASS tras refactor `s = storage; rid =
+     main_run_id; tn = target_node` para silenciar B023 (lambda
+     binding loop vars).
+   - **Baseline 2026-09-25** (Python 3.13.15, sizes 10/100/1000,
+     1 run ruido, warm_repeats=3):
+       runs | node_executions | load_run | list_ne  | list_names
+       2    | 10              | 0.012ms  | 0.017ms  | 0.016ms
+       2    | 100             | 0.010ms  | 0.017ms  | 0.098ms
+       2    | 1000            | 0.016ms  | 0.017ms  | 0.922ms
+   - **Hallazgo**: `load_run` y `list_node_executions` son O(1) con
+     PK indexada. `list_executed_node_names` escala lineal con N
+     (DISTINCT + ORDER BY sin indice cubriente en `node_name`) --
+     oportunidad para optimizacion futura (indice compuesto
+     `(tenant_id, project_id, run_id, state, node_name)`).
+
+2. **Housekeeping format** (workflow B-direct: chore atomico):
+
+   - `ruff format --check .` fallaba silenciosamente en 10 archivos
+     pre-existentes (AGENTS.md, 1 audit, 1 ADR, 6 specs/h[34]-slice-*.md).
+   - Cambios son 100% cosmeticos en code fences Python dentro de
+     Markdown (alineacion de comentarios trailing, whitespace en
+     tuplas, etc.). Prose no se toca.
+   - `ruff format .` aplicado. 10 files / +197 -107 LoC. `ruff format
+     --check .` ahora limpio (179 files already formatted).
+
+**Verificacion final**: 775/775 PASS (772 + 3 nuevos), `ruff check`
+clean, `ruff format --check` clean. Push FF a origin/main OK.
+
+**Commits atomicos**:
+
+- `947065d` feat(bench): bench Storage reads (load_run / list_node_executions / list_executed_node_names)
+- `9663cd8` style(format): cerrar drift de ruff format en 10 archivos (Markdown/JSON/specs)
+
+**Resultado**: T8.5 cerrado (suite completa de 2 benches: bench_context
+para compile/refresh handoff + bench_storage_reads para lecturas del
+RunController). Housekeeping de format cerrado. Sin deuda abierta.
+
+**Proximo** sin trabajo activo hasta proxima consigna. Las opciones B/C
+del backlog P1 siguen requiriendo spec del operador.

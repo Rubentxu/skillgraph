@@ -30,8 +30,8 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `6aa6308` (docs(state): sync SHAs y doc del snapshot de cobertura post-session).
-- Tests: **772/772 PASS** en 170s (`mise exec -- uv run pytest --cov -q`; baseline 754 post-v0.14.0 → 772 con +18 nuevos: 11 evidence_lock + 4 argparse + 3 bench smoke).
+- HEAD: `9663cd8` (style: cerrar drift de ruff format en 10 archivos).
+- Tests: **775/775 PASS** en 211s (`mise exec -- uv run pytest -q`; baseline 772 → 775 con +3 nuevos: bench Storage reads smoke).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
 - Cobertura núcleo re-medida: **83%** total (3811 stmts, 573 miss, 1028 branches) sobre 30 módulos productivos. Ver `coverage_snapshot_2026-09-25_post_session`. Re-valoraciones: redaction 39%→100% (era cifra heredada del subset T1), runcontroller 89%→96%, context_controller 88%→90%.
