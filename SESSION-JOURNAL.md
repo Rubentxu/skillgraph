@@ -5197,3 +5197,26 @@ ni capacidad nueva a nivel de release).
 **Próximo**: `next_workitem: null` en STATE. Pendientes estructurales
 sin spec operadora: E1 Adapter real, T5 Backups CLI, T6 Observabilidad,
 Gap A (workflow_runs↔runtime_events), Gap C (stress N=10).
+
+---
+
+## 2026-09-25T22:33Z — Checkpoint durable fin de sesión (commit `+1`)
+
+Operador: "guardamos todo lo realizado en esta sesion y dejar constancia
+para el proxima sesion de trabajo con sddk".
+
+Acción: crear `SESSION-CHECKPOINT-2026-09-25.md` como índice de reanudación
+para la próxima sesión. NO reemplaza STATE/CURRENT/JOURNAL — los
+complementa con:
+
+1. TL;DR (HEAD, working dir, tests)
+2. Tabla de los 5 ciclos entregados hoy con commits
+3. Orden de lectura para retomar (CURRENT → STATE → último audit)
+4. Backlog con/sin spec operadora
+5. Patrones de la sesión (qué funcionó, qué NO hacer)
+6. Reglas del operador (recordatorio)
+7. Toolchain
+8. Línea de tiempo de commits
+
+Sin bump de release (solo docs). HEAD `70e93ea` permanece.
+
