@@ -131,7 +131,8 @@ roadmap:
   evolution_v2:
     T3_threat_model_cerrado:
       fecha: 2026-09-25
-      commit: pending
+      commit: a25e8f9
+      pushed: 2026-09-25
       criterios_cumplidos:
         - ADR-0015 con 7 superficies (S1..S7) y 4 perfiles de atacante (A1..A4) (filesystem local, no trackeado en git por .gitignore de external/)
         - 14 tests de attestation en tests/test_t3_threat_model_attestation.py (trackeados en git)
