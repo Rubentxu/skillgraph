@@ -125,10 +125,27 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: T3_S2_entity_gap_cerrado  # Cierre del sub-gap entity_id de S2/I (ADR-0015)
-  current_workitem: T3-S2-entity-message-redaction
-  next_workitem: null  # T3-S2-002 cerrado. Quedan E1 Adapter real, T5 Backups, T6 Observabilidad (todos requieren spec operador)
+  next_milestone_gate: T3_S2_S2I_completo  # KnowledgeController S2/I cerrado completamente (source_id, entity_id, claim_id)
+  current_workitem: T3-S2-claim-message-redaction
+  next_workitem: null  # S2/I KnowledgeController cerrado. Quedan E1 Adapter real, T5 Backups, T6 Observabilidad (todos requieren spec operador)
   evolution_v2:
+    T3_S2_claim_message_redaction_cerrado:
+      fecha: 2026-09-25
+      ciclo: STEWARDSHIP-T3-S2-003
+      commit: a84b44c
+      pushed: 2026-09-25
+      criterios_cumplidos:
+        - "Sub-gap claim_id de S2/I cerrado: 1 sitio en knowledge_controller.py (l.508 get_claim)"
+        - "Auditoria completa de KnowledgeController: 6 sitios S2/I TOTALMENTE cerrados (3 source_id + 2 entity_id + 1 claim_id)"
+        - "2 tests nuevos en tests/test_t3_s2_claim_message_no_claim_id.py (1 attestation + 1 chain)"
+        - "Audit dedicado en audits/t3-s2-claim-message-redaction-2026-09-25.md con inventario completo"
+      notas:
+        - "Tipo de excepcion invariante (UnknownClaimError se sigue lanzando)"
+        - "Lookup directo, sin chain __cause__"
+        - "T4 completa 855/855 PASS (verificacion real, no declaracion)"
+        - "Sin bump de release (regla SEMVER: fix sin breaking)"
+      siguiente: "E1 Adapter real (spec operador), T5 Backups (spec operador), T6 Observabilidad (spec operador)"
+
     T3_S2_entity_message_redaction_cerrado:
       fecha: 2026-09-25
       ciclo: STEWARDSHIP-T3-S2-002

@@ -5019,3 +5019,70 @@ quiere cubrir eso de forma sistematica, lo abordo en un ciclo dedicado
 (probablemente un `STEWARDSHIP-T3-S2-003` con audit completo y refactor
 sistematico). Por ahora no abro ese trabajo porque seria nuevo diseno,
 no derivado directo de evidencia ya capturada.
+
+## 2026-09-25 (modo autonomo, ~17:27) — STEWARDSHIP-T3-S2-003 (cierre S2/I KnowledgeController)
+
+**Trigger**: operador reabre sesion en modo autonomo, recordando la
+recomendacion explicita del turn anterior: "auditar de forma
+sistematica el resto de identificadores que podrian filtrar".
+
+**Auditoria completa** (preliminar, sobre `grep -rnE "raise .*Error\\(f"` +
+filtrar `!r`):
+
+- **KnowledgeController** (el unico modulo cross-tenant directo):
+  6 sitios filtraban identificadores.
+- **Resto de modulos** (`runtime/`, `plan_loader`, `recipe`, `workflow`,
+  etc.): sus `raise ValidationError(f"...{!r}")` son **errores de
+  programador** (validacion de kinds/selectors). NO son gaps S2/I
+  en el sentido ADR-0015 (no cruzan boundary tenant).
+
+**Decisiones de priorizacion**:
+
+- Source_id y entity_id: ya cerrados.
+- Claim_id (l.508, `UnknownClaimError`): **unico sitio pendiente** en
+  KnowledgeController.
+- Costo del cierre: 1 linea + 2 tests + 1 audit = mismo patron que
+  S2-001 / S2-002 (validado en 2 ciclos previos).
+
+**Sub-trabajos ejecutados (este turno)**:
+
+A. **Inventario completo** del KnowledgeController (tabla en audit).
+
+B. **Tests rojos** (1 iteracion, predicado `file_exists` ya conocido):
+   `tests/test_t3_s2_claim_message_no_claim_id.py` (84 LoC, 2 tests):
+   - `test_get_claim_message_does_not_leak_claim_id` (verifica l.508)
+   - `test_get_claim_no_cause_chain` (sanea lookup directo)
+
+C. **Fix**: 1 linea en `knowledge_controller.py:508`:
+   ```
+   - raise UnknownClaimError(f"Claim no encontrado: {claim_id!r}")
+   + raise UnknownClaimError("Claim no encontrado")
+   ```
+
+D. **Audit**: `audits/t3-s2-claim-message-redaction-2026-09-25.md`
+   documenta el inventario completo.
+
+**Verificacion**: T1 2/2 PASS en 0.86s; T4 completa **855/855 PASS
+en 170s, exit 0**, 0 regresiones; ruff check limpio; sin regresion
+en `test_get_unknown_claim_raises` (que solo valida tipo).
+
+**Sin bump de release**: 3 commits coherentes (S2-001+002+003 todos
+fix security del mismo gap S2/I, mensajes opacos, sin breaking en
+contrato observable). Regla del operador §6: "agurpa cambios pequenos
+coherentes; evita micro-releases triviales". Sera acumulado a la
+siguiente release explicita que el operador decida.
+
+**Resultado final**: tras S2-003, la superficie S2/I (Information
+Disclosure entre tenants) en KnowledgeController esta cerrada al
+100%. 6 sitios arreglados en 3 commits coherentes:
+
+  - dcbf81a (S2-001): 3 sitios source_id
+  - eac6838 (S2-002): 2 sitios entity_id
+  - a84b44c (S2-003): 1 sitio claim_id
+
+**Siguiente**: ninguno accionable sin spec. Si en el futuro surge un
+caso cross-tenant en otro modulo (e.g. el CLI runner acepta input
+de usuario que filtra selector.kind), se abordara con el mismo patron.
+Por ahora, **S2/I de KnowledgeController esta cerrado y esa superficie
+no admite mas trabajo derivado** sin spec operadora para algo
+nuevo.
