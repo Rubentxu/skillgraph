@@ -1,0 +1,36 @@
+{
+  "schema": "skillgraph.bench.v1",
+  "python_version": "3.13.15",
+  "rows": [
+    {
+      "claims": 10,
+      "sources": 2,
+      "entities": 2,
+      "compile_cold_ms": 0.5265,
+      "compile_warm_median_ms": 0.3098,
+      "refresh_warm_median_ms": 0.3182,
+      "included_count": 10,
+      "context_hash": "ff8d7b793724"
+    },
+    {
+      "claims": 100,
+      "sources": 15,
+      "entities": 15,
+      "compile_cold_ms": 2.6669,
+      "compile_warm_median_ms": 2.3679,
+      "refresh_warm_median_ms": 2.4893,
+      "included_count": 100,
+      "context_hash": "8ba0b4bd5861"
+    },
+    {
+      "claims": 1000,
+      "sources": 143,
+      "entities": 143,
+      "compile_cold_ms": 34.1702,
+      "compile_warm_median_ms": 31.2465,
+      "refresh_warm_median_ms": 32.3285,
+      "included_count": 1000,
+      "context_hash": "06034b73f550"
+    }
+  ]
+}
