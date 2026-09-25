@@ -340,6 +340,98 @@ class KnowledgeController:
             sigs.append(sig)
         return tuple(sigs)
 
+    # ----- Scopes H12 (evolution-v2) -----
+
+    def aggregate_file_signatures(
+        self,
+        *,
+        scope_query: object,  # ScopeQuery (forward ref para evitar ciclo import)
+        member_source_ids: tuple[str, ...],
+    ) -> object:  # forward ref (lazy import para evitar ciclo import)
+        """Agrega FileSignatures de varios sources con aislamiento.
+
+        H12 evolution-v2: UAT-EVO-05..08.
+
+        Args:
+            scope_query: ``ScopeQuery`` (file_scope) declarativo.
+            member_source_ids: tupla de source_ids a agregar.
+
+        Returns:
+            ``AggregatedSignatures`` (file_scope) con cobertura global
+            y signatures deduplicadas por foco.
+
+        Raises:
+            UnknownSourceError: si algun ``member_source_ids`` NO
+                pertenece al scope (tenant_id, project_id) de este
+                controller. Es el comportamiento de UAT-EVO-08:
+                rechazo explicito sin filtrar contenido.
+
+        Notes:
+            El aislamiento es por (tenant_id, project_id): el controller
+            inyecta ambos en ``__init__``. ``get_source`` ya filtra por
+            estos campos; si devuelve UnknownSourceError, NO hay
+            filtrado parcial: el caller ve el rechazo explicito.
+        """
+        # Lazy imports para evitar ciclo runtime<->knowledge (regla AGENTS §11.7).
+        from skillgraph.knowledge.file_scope import (
+            AggregatedSignatures,
+            ScopeQuery,
+            aggregate_signatures,
+        )
+
+        # Validacion de tipo: si scope_query no es ScopeQuery, TypeError
+        # explicito antes de iterar.
+        if not isinstance(scope_query, ScopeQuery):
+            raise TypeError(
+                f"scope_query debe ser ScopeQuery, recibio {type(scope_query).__name__}"
+            )
+        if not member_source_ids:
+            # Sin miembros: agregacion vacia.
+            return AggregatedSignatures(
+                scope=scope_query,
+                signatures=(),
+                total_files=0,
+                cobertura_global=0,
+            )
+
+        # Aislamiento E2E-08: distinguir source-en-otro-proyecto de
+        # source-inexistente. Si el source existe en OTRO proyecto, se
+        # rechaza explicitamente (no se filtra contenido). Si NO existe
+        # en ningun proyecto, se omite silenciosamente (typo del caller).
+        sources_in_scope: list[str] = []
+        for source_id in member_source_ids:
+            try:
+                self.get_source(source_id=source_id)
+                sources_in_scope.append(source_id)
+            except UnknownSourceError:
+                # Distinguir: source-en-otro-proyecto vs no-existe.
+                cross = self.storage._conn.execute(
+                    "SELECT 1 FROM sources WHERE source_id = ? LIMIT 1",
+                    (source_id,),
+                ).fetchone()
+                if cross is not None:
+                    # Existe en OTRO tenant/project: rechazo explicito.
+                    # El mensaje NO revela el source_id (regla E2E-08:
+                    # no filtrar contenido de otro proyecto).
+                    raise UnknownSourceError(
+                        "Uno o mas sources pertenecen a otro proyecto; "
+                        "rechazado sin filtrar contenido (UAT-EVO-08)"
+                    ) from None
+                # No existe en ningun proyecto: omitir silenciosamente.
+
+        # Recolectar FileSignatures de cada source existente en el scope.
+        signatures_per_source: dict[str, tuple[FileSignature, ...]] = {}
+        for source_id in sources_in_scope:
+            signatures_per_source[source_id] = self.list_file_signatures_for_source(
+                source_id=source_id,
+                only_stale=False,
+            )
+
+        return aggregate_signatures(
+            signatures_per_source=signatures_per_source,
+            scope=scope_query,
+        )
+
     # ----- Claims -----
 
     def record_claim(self, *, claim: Claim) -> ClaimID:
