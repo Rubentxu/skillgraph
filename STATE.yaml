@@ -521,7 +521,7 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 16 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 769/769 tests, blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sesion 2026-09-25 08:19-09:37 (stewardship transversal): cerro P2 (DT-2 lock UAT evidence), P3 (audit redaction.py: 100% real), P4 (audit cli/runner.py: 49% real por gap estructural subprocess) y AVANZO Opcion D de P1 (T8 benchmark suite: bench/bench_context.py + 3 smoke tests + audit). 12 commits pushed FF a origin/main en esta sesion: 9889ee8, 8bebaf3, 984d739, f31fa53, a3fe52c, 6a4ae3e, 130f89a, 32197db, 5de1717, cda56fa, 7304f54, e9e577e, bfd98d4, 8dcbe40, fd3f189, dea05bc, 7182c3a, 3b4dc7d, ee00a9f, cd51732. Tests: 769 -> 772 PASS (3 nuevos de test_bench_smoke.py). Stewardship backlog restante: P1=Opciones A/B/C (Adapter real / grieta transaccional / cert. concurrencia — requieren spec operador; Opcion D ya cerrada). Sin trabajo activo hasta proxima consigna. Reanudar sesion futura: leer STATE.yaml.stewardship_backlog y CURRENT.md."
+next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 17 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 772/772 tests (769 -> 772 con +3 bench smoke + 11 evidence_lock + 4 argparse), blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sesion 2026-09-25 08:19-09:55 (stewardship transversal): cerro P2 (DT-2 lock UAT evidence), P3 (audit redaction.py: 100% real), P4 (audit cli/runner.py: 49% real por gap estructural subprocess), AVANZO Opcion D de P1 (T8 benchmark suite: bench/bench_context.py + 3 smoke tests + audit) y SINCRONIZO STATE.yaml.release con realidad v0.14.0 (17 releases + 30 capacidades_entregadas + SHAs corregidos; audit en audits/state-sync-gap-2026-09-25.md). 23 commits pushed FF a origin/main en esta sesion: 9889ee8, 8bebaf3, 984d739, f31fa53, a3fe52c, 6a4ae3e, 130f89a, 32197db, 5de1717, cda56fa, 7304f54, e9e577e, bfd98d4, 8dcbe40, fd3f189, dea05bc, 7182c3a, 3b4dc7d, ee00a9f, cd51732, 76f3429 + 2 del sync estatal (audits/state-sync-gap + commit fix). Stewardship backlog restante: P1=Opciones A/B/C (Adapter real / grieta transaccional / cert. concurrencia — requieren spec operador; Opcion D ya cerrada). Sin trabajo activo hasta proxima consigna. Reanudar sesion futura: leer STATE.yaml.stewardship_backlog y CURRENT.md."
 
 # ---- Backlog priorizado de stewardship (2026-09-25 08:19) ----
 # Orden de ejecucion recomendado para futuras sesiones. Cada item tiene
@@ -646,22 +646,22 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.6.0
-  fecha: 2026-09-23
+  tag: v0.14.0
+  fecha: 2026-09-24
   semver_bump: MINOR
-  rationale: "0 breaking + 2 feat + 0 fix desde v0.5.0 (regla 4 SEMVER). feat(h6) pack_loader declarativo + Domain Pack narrativo cierra UAT-12. feat(h7) promotion.py + outbox en storage.py con reconciliacion idempotente cierra UAT-13. Sin cambios en API publica existente (storage.py solo EXTENSION: tabla promotion_outbox + 6 metodos; registry/bricks/parser 0 LoC)."
+  rationale: "0 breaking + N feat + 0 fix desde v0.13.0. v0.14.0 cierra la ultima slice de Etapa 7 (locks concurrentes por run, MINOR). Sincronizacion post-T8 (2026-09-25 09:55): el campo release.tag se habia quedado en v0.6.0 por oversight del commit 878a159 que sincronizo goal.* y tests.* pero omitio la seccion release. Audit completo en audits/state-sync-gap-2026-09-25.md."
   releases:
     - tag: v0.3.0
       fecha: 2026-09-23
-      sha: "3f3c2352cc6cb467efe6a513e45b714a47fdb475"
-      nota: "primera release taggeada"
+      sha: "f1c9f2ef74e6926f183156c807a051c80e7fb60d"
+      nota: "primera release taggeada; H0-H5 cerrados, 14/16 UAT PASS"
     - tag: v0.4.0
       fecha: 2026-09-23
-      sha: "1f1ec2f2ca009b0565e28f3155a8f751752e48d9"
-      nota: "APPLIED marker + show.stage field"
+      sha: "3b26ada0cd7be36ffc877c1a307da13a260de833"
+      nota: "APPLIED marker + show.stage field (h4_slice_3)"
     - tag: v0.4.1
       fecha: 2026-09-23
-      sha: "2262ac47759de0c5ca8ae215e3a73f84936d142a"
+      sha: "92cb092a11b63b7fb772bf6f94cbd06f24108858"
       nota: "portability fixes (REPO_ROOT hardcode + UAT SHA literal)"
     - tag: v0.5.0
       fecha: 2026-09-23
@@ -669,8 +669,56 @@ release:
       nota: "CLI safety en tests/uat_audit.py (read-only default, --write opt-in)"
     - tag: v0.6.0
       fecha: 2026-09-23
-      sha: "92cff4809d9da4f51d442bc3e70d6c20fe8a4d9d"  # HEAD actual tras commits h6+h7+uat
-      nota: "PENDIENTE tag. feat(h6) pack_loader declarativo + feat(h7) promocion idempotente entre bases. Cierra UAT-12 + UAT-13."
+      sha: "fbb5e1c4273364b3e48acd52588c3a5b825818f6"
+      nota: "feat(h6) pack_loader declarativo + feat(h7) promocion idempotente. Cierra UAT-12 + UAT-13. Cierre de iniciativa g-skillgraph-bootstrap."
+    - tag: v0.7.0
+      fecha: 2026-09-24
+      sha: "2ae1bca5d82f59ae257ed300d621368268e7d8a4"
+      nota: "BREAKING: refactor arquitectonico post-cierre (20 shims eliminados + ContextController delega en Storage API). ADR-0014 documenta el cambio. Cobertura context_controller.py 82% -> 85% branch."
+    - tag: v0.7.1
+      fecha: 2026-09-24
+      sha: "8b63db6a8e4cc585e51cdf7da39379f25a60fbc5"
+      nota: "h9-plan-b-atomicity: cierre de grieta atomica B/C/D (Storage._atomic con BEGIN/COMMIT explicito en record_claim; INSERT OR IGNORE preservado en apply)."
+    - tag: v0.7.2
+      fecha: 2026-09-24
+      sha: "6c8a457ad9c79597cbb6180b326e21dfecf702ca"
+      nota: "anchor uat-evidence to v0.7.2 final release. Refuerza la regla 'UAT revision == HEAD real'."
+    - tag: v0.7.3
+      fecha: 2026-09-24
+      sha: "6a536acfa0566ae785fa42a9d72f24e13e973877"
+      nota: "h9-limitacion-7: T19 cubre rollback path del _atomic REAL (limpieza de evidencia en caso de fallo transaccional)."
+    - tag: v0.8.0
+      fecha: 2026-09-24
+      sha: "fe3b343f0a55abb819ef49bc2e1f98cc67b808ad"
+      nota: "Etapa 7 S1: cancel_run + sg runs cancel CLI (RunController.cancel_run). MINOR. Commit feature: a4d749e."
+    - tag: v0.8.1
+      fecha: 2026-09-24
+      sha: "9bc5f61a7a63494485876ec72e16cf5c7bfedbb4"
+      nota: "PATCH refactor _fail_node_with (helpers extraidos). Sin cambio de comportamiento. Commit: 08caacd."
+    - tag: v0.9.0
+      fecha: 2026-09-24
+      sha: "a4d749e9fefad551e4406aa7305e32aac224df08"
+      nota: "MINOR cancel_run + refactors: _transition_run_state_with_event y _is_budget_exhausted. Commit: b4ff317."
+    - tag: v0.10.0
+      fecha: 2026-09-24
+      sha: "c6963f072d6b6e51ab569e396de688633aed2fb2"
+      nota: "MINOR list_runs + show_run + sg runs list/show CLI. Commit: 72152fe."
+    - tag: v0.11.0
+      fecha: 2026-09-24
+      sha: "6ad5789cf6475e3e97d5c8a861cc6d3d9d5f10d8"
+      nota: "MINOR logs_run + sg runs logs CLI. Commit: 6ad5789."
+    - tag: v0.12.0
+      fecha: 2026-09-24
+      sha: "9d9ae093f1729d729ec2c97ea2ec74e744c72d16"
+      nota: "MINOR RunBudget + sg runs budget CLI. Commit: 9d9ae09."
+    - tag: v0.13.0
+      fecha: 2026-09-24
+      sha: "72651ee8a7ee8c6a2c51c5a1a225245b44cd538d"
+      nota: "MINOR RedactionPolicy + sg policy get/set CLI. Commit: 72651ee."
+    - tag: v0.14.0
+      fecha: 2026-09-24
+      sha: "241ccc9f8a13db1bccbe0eaf160e1cbdeab7270a"
+      nota: "MINOR locks concurrentes por run (RunLock + fcntl + RunController lock_mode/lock_timeout_seconds). Commit: 241ccc9. Cierra vector de interleaving que podia saltarse la redaccion (v0.13.0). Cierre de Etapa 7 (S6)."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
@@ -690,18 +738,30 @@ release:
     - h8_cmd_promotion             # post-v0.6.0 (b7619a9) submit/list/reconcile + failpoints
     - h8_e2e_public_paths          # post-v0.6.0 (d220ec2) 5 tests E2E subprocess
     - h8_evidence_append_only      # post-v0.6.0 (e303dda) history/ + flock
+    - refactor_v070_breaking       # v0.7.0 (2751bc8, f2cbb2f) ContextController delega en Storage API; 20 shims eliminados. ADR-0014.
+    - h9_atomicity_grieta_bcd      # v0.7.1 (0b7b3d6) Storage._atomic cierra grieta atomica B/C/D
+    - h9_limitacion_7              # v0.7.3 (T19) rollback path _atomic REAL
+    - etapa7_s1_cancel_run         # v0.8.0 (a4d749e) RunController.cancel_run + sg runs cancel
+    - etapa7_s1_refactor           # v0.8.1 (08caacd) _fail_node_with PATCH
+    - etapa7_s1_more_refactors     # v0.9.0 (b4ff317) _transition_run_state_with_event + _is_budget_exhausted
+    - etapa7_s2_list_show_runs     # v0.10.0 (72152fe) sg runs list/show
+    - etapa7_s3_logs_run           # v0.11.0 (6ad5789) sg runs logs
+    - etapa7_s4_budget             # v0.12.0 (9d9ae09) RunBudget + sg runs budget
+    - etapa7_s5_redaction          # v0.13.0 (72651ee) RedactionPolicy + sg policy
+    - etapa7_s6_locks              # v0.14.0 (241ccc9) RunLock + sg run --lock-mode
+    - refactor_context_controller  # post-v0.14.0 (6c8c17f) helpers puros extraidos; cobertura 82% -> 88%
   uat_al_release:
     PASS: 16
     BLOCKED: 0
     FAIL: 0
   evidencia:
-    CHANGELOG: CHANGELOG.md  # actualizar con v0.6.0 antes de tag
-    tag_sha: "v0.6.0 candidate -> 92cff4809d9da4f51d442bc3e70d6c20fe8a4d9d"
-    tests_pytest: "405 passed in 121s (373 -> 405, delta +28 H6+H6_honor+gap_test=6+12+12+4 ... ver tabla tests.files)"
+    CHANGELOG: CHANGELOG.md  # cubre v0.14.0 (1408 LoC, verificado 2026-09-25)
+    tag_sha: "v0.14.0 -> 241ccc9f8a13db1bccbe0eaf160e1cbdeab7270a"
+    tests_pytest: "772 passed (754 post-v0.14.0 + 18 nuevos en sesion 2026-09-25: 11 evidence_lock + 4 argparse errors + 3 bench smoke)"
     scripts_ci: OK
     ruff: "format+check limpios"
     footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"
     e2e_real_h6: "pack_loader declara Character/StoryArc desde narrative-core.md; valida instancias; shadowing de tipos core y namespaces reservados rechazados"
     e2e_real_h7: "reconcile_after_interruption_completes_pending: IN_PROGRESS dejado por crash -> reconcile_pending aplica apply_fn exactamente 1 vez por propuesta, sin duplicar"
-  push: false   # sin remote; orden operador
+  push: true   # origin/main sincronizado en HEAD = origin/main
 
