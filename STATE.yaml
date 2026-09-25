@@ -125,10 +125,29 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: T_SECURITY_AUDIT_FULL_completo  # Audit exhaustivo 43/43 sitios f-string sin !r trazados, 0 gaps S2/I
-  current_workitem: T-SECURITY-AUDIT-FULL
-  next_workitem: null  # ADR-0015 implementado al 100% para f-strings. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
+  next_milestone_gate: T_WARNINGS_AUDIT_completo  # Audit warnings.warn 3/3 sitios, 0 gaps S2/I
+  current_workitem: T-WARNINGS-AUDIT
+  next_workitem: null  # ADR-0015 implementado al 100% para f-strings + warnings. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
   evolution_v2:
+    T_WARNINGS_AUDIT_completo:
+      fecha: 2026-09-26
+      ciclo: STEWARDSHIP-T-WARNINGS-AUDIT
+      commit: 5cda0c0
+      pushed: 2026-09-26
+      criterios_cumplidos:
+        - "Inventario completo: 3 sitios warnings.warn(...) en src/skillgraph (knowledge_invalidator.py:128, knowledge_controller.py:115, errors.py:125 docstring)"
+        - "Trazabilidad empirica uno-por-uno de los 2 sitios reales (sitio 3 es docstring N/A)"
+        - "0 gaps S2/I reales en los 3 sitios (sitio 1 expone cardinalidad + param caller, sitio 2 expone source_id caller-provided)"
+        - "Verificacion adicional: 0 imports de logging/structlog en src/skillgraph (canal stdout/stderr via print es CLI local caller-provided)"
+        - "Endurecimiento de 3 tests existentes con pytest.warns(match=) que verifican contenido del mensaje, no solo tipo"
+        - "Audit dedicado en audits/warnings-audit-2026-09-26.md (234 LoC, tabla 3 sitios + tracing + limitacion reconocida)"
+        - "855/855 tests PASS (0 regresiones vs baseline 855), ruff check limpio, ruff format limpio en archivos modificados"
+      notas:
+        - "ADR-0015 implementado al 100% para f-strings en raise.*Error (43 sitios, audit 2026-09-25) + warnings.warn (3 sitios, audit 2026-09-26)"
+        - "Autocritica registrada en audit: no audito prints de CLI uno-por-uno ni __repr__ de ADT (trade-off deliberado del proyecto, documentado en limitacion)"
+        - "Proximos pasos derivados opcionales (sin gap actual): re-auditar si se introduce structlog/logging, re-auditar si se introduce caller HTTP/API cross-tenant, re-auditar si cambia signature de register_source"
+        - "Sin bump de release (tests-only + docs, sin cambio de contrato observable)"
+      siguiente: "E1 Adapter real (spec operador), T5 Backups (spec operador), T6 Observabilidad (spec operador), Gap A (H9-Plan-B), Gap C (H9-Plan-B), Refresh UAT-08/09 (housekeeping)"
     T_SECURITY_AUDIT_FULL_completo:
       fecha: 2026-09-25
       ciclo: STEWARDSHIP-T-SECURITY-AUDIT-FULL

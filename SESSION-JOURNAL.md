@@ -5220,3 +5220,75 @@ complementa con:
 
 Sin bump de release (solo docs). HEAD `70e93ea` permanece.
 
+
+---
+
+## 2026-09-26T01:30Z — STEWARDSHIP-T-WARNINGS-AUDIT cerrado (commit `5cda0c0`)
+
+Operador: "continua con tareas roadmap y deuda tecnica a tu criterio"
+(modo AUTO preautorizado, sin gates intermedios).
+
+Sigo el follow-up #2 de `T-SECURITY-AUDIT-FULL`: "Auditar mensajes
+`WARNING` y `INFO`" (este audit fue solo sobre `raise .*Error`).
+
+**Inventario** (`rg warnings.warn src/skillgraph/`):
+- 3 sitios totales en código de producto
+- 2 sitios reales con f-string + 1 docstring (N/A)
+
+**Trazabilidad uno-por-uno**:
+
+| Sitio | Warning | Filtrado | Veredicto |
+|---|---|---|---|
+| `knowledge_invalidator.py:128` | HopLimitExceededWarning | `max_hops` (param caller) + `len(frontier)` (cardinalidad) | NO gap |
+| `knowledge_controller.py:115` | StaleKnowledgeWarning | `source.source_id` (caller-provided mismo tenant) | NO gap |
+| `errors.py:125` | (docstring) | N/A | N/A |
+
+**Asimetría documentada**: `register_source` (sitio 2) expone `source_id`
+porque el caller YA lo pasó al storage (caller-provided mismo tenant).
+`get_source` (línea 134) deliberadamente OMITE `source_id` cuando el
+lookup falla arbitrario (id que caller introdujo sin garantía de
+existencia). Ambos correctos bajo ADR-0015.
+
+**Verificación transversal de exhaustividad**:
+- `rg "import logging|from logging" src/skillgraph/` → **0 matches**.
+- El codebase NO usa `logging` estándar ni `structlog`. Solo `print()`
+  CLI (caller-provided local) y `warnings.warn(...)` (cubierto aquí).
+- Grep de `print(f"...")` con IDs en `cli/runner.py`: 14+ sitios, todos
+  caller-provided local (operador introduce su propio tenant/project
+  en sesión CLI). Documentado en audit §"Verificación adicional: CLI
+  prints".
+
+**Endurecimiento de tests** (parte del ciclo):
+- `tests/test_knowledge_invalidation.py:194` y `:285` →
+  `pytest.warns(HopLimitExceededWarning, match=r"max_hops=1.*frontier")`
+- `tests/test_knowledge_controller.py:307` →
+  `pytest.warns(StaleKnowledgeWarning, match=r"re-registrando source stale:")`
+- 3/3 PASS post-hardening → contenido actual cumple ADR-0015.
+
+**Verificación**:
+- 855/855 tests PASS (mismo baseline que cierre de sesión 2026-09-25).
+- `ruff check src tests` → All checks passed.
+- `ruff format --check tests/test_knowledge_*.py` → 2 files already
+  formatted.
+- Drift de ruff format en otros 15 archivos preexistente, no introducido
+  por este ciclo (verificado con `git status`).
+
+**Commits**: `5cda0c0` (test only, +15/-4 LoC en 2 archivos).
+
+**Audit doc**: `audits/warnings-audit-2026-09-26.md` (234 LoC):
+- Tabla de 3 sitios
+- Tracing empírico uno-por-uno con análisis de contexto
+- Verificación transversal (CLI prints, sin logging)
+- Endurecimiento de tests documentado
+- Limitaciones autocriticas (3 puntos reconocidos honestamente)
+- Próximos pasos derivados (opcionales, sin gap actual)
+
+**Decisión sobre release**: sin bump (tests-only + docs, sin cambio
+de contrato observable para operadores usando la API pública).
+
+**Próximo**: `next_workitem: null` en STATE. ADR-0015 implementado al
+100% para f-strings en `raise.*Error` (43 sitios, audit 2026-09-25) +
+warnings.warn (3 sitios, audit 2026-09-26). Pendientes estructurales
+sin spec operadora (sin cambio): E1 Adapter real, T5 Backups CLI,
+T6 Observabilidad, Gap A (workflow_runs↔runtime_events), Gap C
+(stress N=10).

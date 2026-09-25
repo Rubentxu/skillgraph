@@ -103,6 +103,38 @@ Para reactivar la iniciativa o abrir una nueva:
 - Operador reabre con consigna explicita; el protocolo de
   reapertura esta en `INITIATIVE-CLOSED.md` seccion 8.
 
+## Reactivacion 2026-09-26 — STEWARDSHIP-T-WARNINGS-AUDIT cerrado
+
+Operador reabre con modo AUTO: "continua con tareas roadmap y deuda
+tecnica a tu criterio". Sigo el follow-up explicito de
+`T-SECURITY-AUDIT-FULL`: "Auditar mensajes `WARNING` y `INFO`".
+
+Inventario: 3 sitios `warnings.warn(...)` en `src/skillgraph`:
+- `knowledge/knowledge_invalidator.py:128` (HopLimitExceededWarning):
+  expone `max_hops` (param caller) + `len(frontier)` (cardinalidad).
+  NO gap.
+- `knowledge/knowledge_controller.py:115` (StaleKnowledgeWarning):
+  expone `source.source_id` (caller-provided, mismo tenant, mismo
+  caller que acaba de pasar el `source`). NO gap, mismo principio
+  que `storage.py:446` (uid caller-provided).
+- `core/errors.py:125` docstring (N/A).
+
+Verificacion transversal: **0 imports de logging/structlog** en
+`src/skillgraph`. El codebase no usa logging estandar, solo CLI
+prints (caller-provided) + warnings.warn (cubierto aqui).
+
+Endurecimiento de tests: 3 tests existentes que solo verificaban
+TIPO de warning ahora verifican CONTENIDO con `pytest.warns(match=...)`.
+Esto convierte la cobertura "verifica tipo" en "verifica tipo +
+contenido" y protege contra regresiones futuras.
+
+Commit `5cda0c0 test(security): harden warning content matchers per
+ADR-0015`. Audit doc en `audits/warnings-audit-2026-09-26.md`
+(234 LoC, tabla 3 sitios + tracing + limitacion autocritica).
+
+HEAD `5cda0c0`, 855/855 tests PASS, 0 regresiones vs baseline.
+Sin bump de release (tests-only + docs).
+
 ## Reactivacion 2026-09-25T22:20Z — STEWARDSHIP-T-SECURITY-AUDIT-FULL cerrado
 
 Operador reabre con modo AUTO. Auditoria exhaustiva S2/I (ADR-0015)
