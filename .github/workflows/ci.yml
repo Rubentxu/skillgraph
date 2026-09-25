@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mise
+        uses: jdx/mise-action@v2
+
+      - name: List installed tool versions
+        run: mise list
+
+      - name: Sync dependencies
+        run: mise run sync
+
+      - name: Lint (ruff check)
+        run: mise run lint
+
+      - name: Format gate (ruff format --check)
+        run: mise run format --check
+
+      - name: Smoke test (pytest)
+        run: mise run test
+
+      - name: Lint summary
+        if: always()
+        run: |
+          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Toolchain: $(mise current)" >> $GITHUB_STEP_SUMMARY
+          echo "- Ruff check: ${{ steps.lint.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Format gate: ${{ steps.format.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Pytest: ${{ steps.test.outcome }}" >> $GITHUB_STEP_SUMMARY
