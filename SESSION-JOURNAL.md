@@ -4638,3 +4638,59 @@ composables (evolution-v2).
 **Siguiente**: H13 (Handoff experto desde consultas). Bloqueado por
 H12 (consultas declarativas en ContextRecipe).
 
+
+
+## 2026-09-25 — Sesion continuation: H13 Handoff experto desde consultas
+
+**Trigger**: operador autoriza "continuamos con el siguiente ciclo del
+roadmap con sddk". A-min sobre el siguiente workitem desbloqueado
+tras H12 (H13 evolution-v2).
+
+**Pre-flight**: 804/804 PASS pre-H13. HEAD = 27599ab. Working tree limpio.
+
+**Plan ejecutado**:
+1. Tests rojos en `tests/test_h13_handoff_expert.py` (352 LoC, 8 tests
+   UAT-EVO-09..11).
+2. `src/skillgraph/knowledge/file_handoff.py` (377 LoC) con:
+   - HandoffBlockedError (subclase tipada SkillGraphError): explicito,
+     NUNCA dice 'completado' cuando hay carencia (regla AGENTS §1.2).
+   - ScopeAwareRecipe (frozen, composicion sobre ContextRecipe):
+     NO modifica la Literal cerrada de ObligatorySelector.kind.
+   - CoverageManifest (frozen): signatures, fuentes deducidas del foco,
+     procedencia por firma, cobertura_total, limites (budget/policy/overflow).
+   - Funciones puras: build_coverage_manifest() y should_skip_adapter().
+   - compile_handoff_from_scopes() orquesta: agrega firmas via
+     KnowledgeController (H12, con aislamiento E2E-08), valida
+     cobertura, compila handoff via ContextController (H4) con
+     recipe sintetica.
+3. Iterar hasta 8/8 verde: 4 fallos resueltos en sesion:
+   - Manifest NO se inyectaba como resources al handoff
+     (decisión con criterio propio: el manifest es la verdad, el
+     handoff es válido con obligatory vacío; el caller consume
+     el manifest directamente).
+   - should_skip_adapter keyword-only tras UP037.
+   - signatures_count -> len(manifest.signatures) (era property).
+   - TypeError en _resolve_one_selector(kind='source') con FileSignatures
+     (decisión: usar recipe sintetica con obligatory vacío; las
+     FileSignatures viven en el manifest, no duplicamos en el handoff).
+4. Lint ruff clean (auto-fix + RUF059 rename _handoff).
+5. Full suite: 812/812 PASS en 230s.
+6. Coverage file_handoff.py 80%.
+
+**Decisión con criterio propio clave**: H13 NO incluye las FileSignatures
+como resources individuales en el handoff (eso duplicaría el manifest
+y consumiría budget). El handoff compila OK con obligatory vacío; las
+firmas viven en el manifest, que es la representación canónica. Esto
+mantiene el contrato de ContextController.compile_handoff intacto y
+evita la dependencia mágica con `label` como banderín.
+
+**Commit**: eb4e372 — feat(knowledge): H13 Handoff experto desde
+consultas (evolution-v2).
+
+**Estado H13**: COMPLETO (8/8 UAT-EVO, 5/5 criterios).
+
+**Siguiente**: H14 (Evidencia operativa temporal). Gate operador
+para arrancar H14 (alcance: relacionar eventos/evidencias/revisiones,
+recibo de validación, consulta actual e histórica, invalidación de
+aplicabilidad, incidente vinculado al contrato afectado).
+

@@ -30,11 +30,11 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `7a46e3b` (feat(knowledge): H12 Scopes y consultas composables).
-- Tests: **804/804 PASS** en 305s (`mise exec -- uv run pytest -q`; baseline 796 → 804 con +8 nuevos: test_h12_file_signature_scopes UAT-EVO-05..08).
+- HEAD: `eb4e372` (feat(knowledge): H13 Handoff experto desde consultas).
+- Tests: **812/812 PASS** en 230s (`mise exec -- uv run pytest -q`; baseline 804 → 812 con +8 nuevos: test_h13_handoff_expert UAT-EVO-09..11).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
-- Cobertura núcleo re-medida: **83%** total (3811 stmts, 573 miss, 1028 branches) sobre 30 módulos productivos. Ver `coverage_snapshot_2026-09-25_post_session`. Re-valoraciones: redaction 39%→100% (era cifra heredada del subset T1), runcontroller 89%→96%, context_controller 88%→90%. Modulos H11/H12: file_signature.py 85%, file_scope.py 81%.
+- Cobertura núcleo re-medida: **83%** total (3811 stmts, 573 miss, 1028 branches) sobre 30 módulos productivos. Ver `coverage_snapshot_2026-09-25_post_session`. Re-valoraciones: redaction 39%→100% (era cifra heredada del subset T1), runcontroller 89%→96%, context_controller 88%→90%. Modulos H11/H12/H13: file_signature.py 85%, file_scope.py 81%, file_handoff.py 80%.
 - Working tree limpio. Sin ficheros pendientes.
 - ruff format + ruff check: limpios.
 - HEAD == origin/main (post push FF en este turno).
@@ -43,6 +43,7 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 - **H10 evolution-v2 COMPLETO**: mapa del recorrido real y baseline (audits/h10-recorrido-real-2026-09-25.md 325 LoC).
 - **H11 evolution-v2 COMPLETO**: conocimiento tipado reutilizable (FileSignatures). Ver `src/skillgraph/knowledge/file_signature.py` (ADT cerrada, pure extractor) + `tests/test_h11_file_signature.py` (12 UAT-EVO-01..04 tests). Persistencia via Evidence(kind='file_signature') reusando tabla existente (regla AGENTS §1.5).
 - **H12 evolution-v2 COMPLETO**: scopes y consultas composables (FileScope, ScopeQuery, ScopeResolution, aggregate_signatures). Ver `src/skillgraph/knowledge/file_scope.py` + `tests/test_h12_file_signature_scopes.py` (8 UAT-EVO-05..08 tests). Aislamiento E2E-08 estricto: source-en-otro-proyecto lanza `UnknownSourceError` SIN filtrar el source_id (mensaje generico).
+- **H13 evolution-v2 COMPLETO**: handoff experto desde consultas (ScopeAwareRecipe, CoverageManifest, HandoffBlockedError, compile_handoff_from_scopes). Ver `src/skillgraph/knowledge/file_handoff.py` + `tests/test_h13_handoff_expert.py` (8 UAT-EVO-09..11 tests). Composicion pura sobre ContextRecipe (NO modifica Literal cerrada de ObligatorySelector). should_skip_adapter() decide skip LLM si manifest completo+fresco.
 
 ## Releases post-refactor v0.7.0
 
