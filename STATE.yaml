@@ -107,22 +107,23 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: H14  # evolution-v2/plan/ROADMAP.md H13 cerrado 2026-09-25; gate H14 = evidencia operativa temporal
-  current_workitem: H13-handoff-experto-desde-consultas
-  next_workitem: H14  # evolution-v2/plan/ROADMAP.md H14 = evidencia operativa temporal
+  next_milestone_gate: H15  # evolution-v2/plan/ROADMAP.md H14 cerrado 2026-09-25; gate H15 = evaluacion y automejora acotada
+  current_workitem: H14-evidencia-operativa-temporal
+  next_workitem: H15  # evolution-v2/plan/ROADMAP.md H15 = evaluacion y automejora acotada
   evolution_v2:
-    H13_completado:
+    H14_completado:
       fecha: 2026-09-25
-      commit: eb4e372
+      commit: c5f8a94
       criterios_cumplidos:
-        - HandoffBlockedError (subclase tipada SkillGraphError): NUNCA se presenta como completo cuando hay carencia
-        - ScopeAwareRecipe (frozen, composicion sobre ContextRecipe sin modificar Literal ObligatorySelector.kind)
-        - CoverageManifest (frozen): signatures, fuentes, procedencia, cobertura_total, limites (budget/policy/overflow)
-        - build_coverage_manifest() y should_skip_adapter() puras (sin I/O)
-        - compile_handoff_from_scopes() orquesta via KnowledgeController (H12) + ContextController (H4)
-        - Tests UAT-EVO-09..11 (8 nuevos, 812 total, 100% verde)
-      cobertura_file_handoff: 80%
-      siguiente: H14
+        - ValidationReceipt (frozen): command, revision, timestamp, verdict (Literal cerrada), tests_run, tests_passed, artifact_path, scope, dependency_revisions, extra_metadata
+        - is_receipt_applicable() pura: revision + dependency_revisions determinan aplicabilidad (UAT-EVO-14)
+        - record_validation_receipt() persiste como Evidence(kind='validation_receipt') reusando tabla existente (regla AGENTS §1.5)
+        - list_applicable_receipts() consulta por tenant/project, filtra por kind + aplicabilidad + scope opcional
+        - receipt_id determinista via UUIDv5 sobre (command, revision, timestamp, tests_run) - idempotencia natural
+        - artifact_path validado en disco al persistir (vinculacion real UAT-EVO-12)
+        - Tests UAT-EVO-12..14 (9 nuevos, 821 total, 100% verde)
+      cobertura_governance_receipts: 73%
+      siguiente: H15
 
 python:
   minimum: "3.11"

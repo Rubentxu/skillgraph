@@ -4694,3 +4694,43 @@ para arrancar H14 (alcance: relacionar eventos/evidencias/revisiones,
 recibo de validación, consulta actual e histórica, invalidación de
 aplicabilidad, incidente vinculado al contrato afectado).
 
+
+
+## 2026-09-25 — Sesion continuation: H14 Evidencia operativa temporal
+
+**Trigger**: operador autoriza "continuamos con el siguiente ciclo del
+roadmap con sddk". A-min sobre el siguiente workitem desbloqueado
+tras H13 (H14 evolution-v2).
+
+**Pre-flight**: 812/812 PASS pre-H14. HEAD = dc1ef18. Working tree limpio.
+
+**Plan ejecutado**:
+1. Tests rojos en `tests/test_h14_validation_receipts.py` (280 LoC,
+   9 tests UAT-EVO-12..14).
+2. `src/skillgraph/governance/receipts.py` (420 LoC):
+   - ValidationReceipt (frozen): command, revision, timestamp,
+     verdict (Literal cerrada pass/fail), tests_run, tests_passed,
+     artifact_path, scope, dependency_revisions, extra_metadata.
+   - is_receipt_applicable() pura: revision + dependency_revisions.
+   - record_validation_receipt() persiste como
+     Evidence(kind='validation_receipt') (regla AGENTS §1.5: reuso,
+     no tabla nueva). Crea Source 'validation:<receipt_id>' para FK.
+   - list_applicable_receipts() consulta por tenant/project,
+     filtra por kind + aplicabilidad + scope opcional.
+   - receipt_id determinista via UUIDv5 sobre
+     (command, revision, timestamp, tests_run): idempotencia natural.
+3. Iterar hasta 9/9 verde: 1 fallo resuelto en sesion (Evidence
+   no acepta observed_by_recipe_ref; el dataclass es 5-campos).
+4. Lint ruff clean (UP037 + I001 + RUF059 auto-fix).
+5. Full suite: 821/821 PASS en 198s.
+6. Coverage governance/receipts.py 73% (variantes defensivas).
+
+**Commit**: c5f8a94 — feat(governance): H14 Evidencia operativa
+temporal (evolution-v2).
+
+**Estado H14**: COMPLETO (9/9 UAT-EVO, 7/7 criterios).
+
+**Siguiente**: H15 (Evaluacion y automejora acotada). UAT-EVO-15..18.
+Alcance: detectar omision o extraccion redundante, atribuirla y
+verificar una correccion. Es el ultimo workitem evolution-v2.
+
