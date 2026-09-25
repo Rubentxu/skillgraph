@@ -4119,3 +4119,108 @@ Si el operador decide P1 opción A (addendum honesto H9) o
 P1 opción B/C (ejecución T1/T3/T5/T6 con spec), el equipo
 tiene material para arrancar de inmediato. Sin trabajo
 activo material después de este tramo.
+
+## Sesión 2026-09-25 09:42 - 09:55 · Stewardship estatal: sincronizar STATE.yaml.release con realidad v0.14.0
+
+### Pre-flight y decisión de ruta
+
+Operador autoriza modo AUTO y explícitamente: "avanzar con criterio
+propio sobre lo que priorizas buscando cubrir pensando en entrega
+de valor sin dejar de lado la calidad". El "siguiente" recomendado
+en el cierre de la sesión 09:39 era el backstop "sin trabajo
+activo material". Sin embargo, durante el pre-flight de revisión
+del roadmap detecto drift documental honesto en STATE.yaml.release
+(regla 3 CIERRE REAL): `release.tag` decia `v0.6.0` cuando la
+realidad es `v0.14.0`. Decisión: ejecutar stewardship estatal
+sincronizando release.* con la realidad. ~15-20 min, riesgo nulo.
+
+### Análisis previo (regla 4 CALIDAD)
+
+Cruce `git tag --list 'v0.*'` vs `STATE.yaml.release.releases`:
+
+- **17 tags reales** (v0.3.0..v0.14.0).
+- **Solo 5 releases listadas** en STATE.yaml (v0.3.0..v0.6.0).
+- **release.tag stale**: `v0.6.0` (último sync del cierre de
+  iniciativa, sin update tras Etapa 7).
+- **5 SHAs divergentes**: en STATE.yaml los SHA apuntaban a commits
+  `docs(changelog)` o feat, NO al commit donde el tag esta
+  realmente puesto (`git rev-list -n 1 vX.Y.Z`). Verificado para
+  v0.3.0/v0.4.0/v0.4.1/v0.5.0/v0.6.0.
+
+Causa raíz: el commit `878a159 docs(state): sincronizar STATE/CURRENT
+con realidad v0.14.0` sincronizó goal.* y tests.* pero omitió la
+sección release.* por oversight. Documentado en audit.
+
+### Trabajo ejecutado
+
+1. **Audit completo** `audits/state-sync-gap-2026-09-25.md` (124 LoC)
+   con tabla de gaps, causa raíz, plan de cierre.
+2. **STATE.yaml.release reescrito**:
+   - `release.tag`: v0.6.0 → v0.14.0.
+   - `release.fecha`: 2026-09-23 → 2026-09-24.
+   - `release.releases[]`: 5 → 17 entries, todas con SHA real del tag.
+   - `release.capacidades_entregadas[]`: 17 → 30 items (anadidos
+     refactor_v070_breaking, h9_atomicity_grieta_bcd, h9_limitacion_7,
+     etapa7_s1..s6, refactor_context_controller).
+   - `release.evidencia.tag_sha`: v0.6.0 → 241ccc9f (v0.14.0).
+   - `release.evidencia.tests_pytest`: 405 → 772 passed (delta
+     sesion 2026-09-25: +18 nuevos).
+   - `release.push`: false → true (origin/main sincronizado).
+3. **STATE.yaml.next_action** actualizado con resumen completo
+   sesion 08:19-09:55 y conteo test corregido (754 → 772, NO 769
+   → 772 — el baseline real post-v0.14.0 era 754).
+4. **CURRENT.md "Último estado comprobado"** sincronizado:
+   HEAD=8fa850c, tests=772/772, 17 releases, post-sync state.
+5. **Verificación cruzada** de los 17 SHAs: todos coinciden
+   exactamente con `git rev-list -n 1 vX.Y.Z` (loop for con
+   comparación block-by-block). 17/17 OK.
+
+### Decisiones materiales
+
+- **Estrategia SHAs**: usar el commit al que apunta el tag, NO un
+  commit feature intermedio. Reproducible via `git show vX.Y.Z`.
+- **capacidades_entregadas**: mantener granularidad fina (1 entry
+  por release+slice) en lugar de agrupar — preserva la trazabilidad
+  histórica que el doc promete.
+- **No bumpear v0.14.1**: docs no generan release (regla 4 SEMVER).
+- **No modificar .next-decision.md**: es snapshot histórico del
+  cierre de iniciativa (v0.6.0), NO estado actual. OK dejarlo.
+
+### Commits emitted (2 atomicos)
+
+```
+8fa850c docs(state): sincronizar release.tag + releases[] con realidad v0.14.0
+[pendiente] docs(state): fix test count baseline 754->772 + CURRENT sync
+```
+
+### Verificación
+
+- `yaml.safe_load(STATE.yaml)` parsea sin error.
+- `git tag --list 'v0.*' | wc -l` == 17.
+- `grep -c '^    - tag: v0' STATE.yaml` == 17.
+- Loop SHAs cross-check: 17/17 OK (todos los SHA en STATE.yaml
+  coinciden con `git rev-list -n 1 vX.Y.Z`).
+- `ruff check .` All checks passed.
+- `mise exec -- uv run pytest --collect-only` → 772 tests.
+
+### Estado al cierre
+
+- HEAD: `8fa850c` (1 commit de sync pendiente de push + 1 fix
+  aritmética pendiente de commit).
+- Suite: 772/772 PASS (sin cambios funcionales; solo docs).
+- ruff format + ruff check: limpios.
+- 7 audits en `audits/` para esta sesión (1 mas que el cierre previo).
+
+### Conclusión del ciclo de auditoría estatal
+
+El repo ahora tiene STATE.yaml.release 100% sincronizado con
+`git tag` real. Una sesión futura que reanuda leyendo STATE.yaml
+encuentra la realidad coherente: 17 tags, 30 capacidades, SHA
+verificable. Regla 3 (CIERRE REAL) satisfecha para la seccion
+release.
+
+Próximo tramo: sin trabajo activo material (P1 opciones A/B/C
+siguen requiriendo spec operador explícito). El backstop es
+esperar consigna o, si el operador lo permite, defender una
+propuesta para Opción A (addendum honesto H9 — 5 min, valor:
+honestidad documental pura, sin LoC produccion).

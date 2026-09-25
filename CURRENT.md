@@ -30,14 +30,15 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `f31fa53` (docs(state): stewardship backlog P2 marcado completed).
-- Tests: **765/765 PASS** en 166s (`uv run pytest -q`).
-- 16 releases emitidas: v0.3.0 → v0.14.0.
+- HEAD: `8fa850c` (docs(state): sincronizar release.tag + releases[] con realidad v0.14.0).
+- Tests: **772/772 PASS** en 166s (`uv run pytest -q`; baseline 754 post-v0.14.0 → 772 con +18 nuevos: 11 evidence_lock + 4 argparse + 3 bench smoke).
+- **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
-- Cobertura núcleo ≥85% en todos los módulos.
+- Cobertura núcleo ≥85% en todos los módulos (post-refactor context_controller 88%).
 - Working tree limpio. Sin ficheros pendientes.
 - ruff format + ruff check: limpios.
 - HEAD == origin/main (post push FF en este turno).
+- `STATE.yaml.release` sincronizado con realidad: tag=v0.14.0, 17 releases, 30 capacidades_entregadas, tag_sha=241ccc9f.
 
 ## Releases post-refactor v0.7.0
 
