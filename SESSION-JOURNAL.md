@@ -3519,3 +3519,92 @@ paraguas". SDDK mode `undeclared` por bug externo del binario
 (documentado en STATE.yaml `adoption.blocked_toolchain`); el
 paraguas se mantiene y el trabajo local continúa sin necesidad de
 decidir el modo en esta sesión.
+
+## 2026-09-25 08:50 — auditoría post-Etapa 7 + cierre de ciclo
+
+### Resumen
+
+Sesión de stewardship transversal (opción 3 del menú propuesto al
+operador). Tres actividades encadenadas:
+
+1. **Auditoría profunda de `runtime/RunController`** post-Etapa 7
+   (1367 LoC). Resultado: módulo en buen estado estructural. 6
+   findings rankeados (1 MAYOR, 4 MENOR, 1 OBSERVACIÓN defendible).
+   Artefacto: `audits/runtime-2026-09-25.md` (367 LoC). Verificado:
+   163 tests PASS del ecosistema, ruff format + check limpios,
+   0 LoC producción modificado durante la auditoría.
+
+2. **Aplicación de 5 hallazgos opcionales** identificados en la
+   auditoría. Resultado neto: 2 cambios quirúrgicos aplicados,
+   3 descartados durante implementación.
+   - **F-1 aplicado**: `_snapshot` ahora delega en
+     `Storage.list_events_for_run` en lugar de
+     `EventLog.events_for_run`. Regla "Storage encapsula SQL"
+     uniforme.
+   - **F-2 revertido post-implementación**: `_node_has_execution`
+     y `_count_executed` tienen 2 tests vivos en
+     `test_h9_coverage_runcontroller.py`. La búsqueda original
+     de la auditoría falló por cubrir solo `src/` sin `tests/`.
+     Aprendizaje documentado en el informe.
+   - **F-3 aplicado**: import redundante de `ValidationError`
+     en `cancel_run` eliminado.
+   - **F-4 no ejecutado**: tests existentes blindan el JSON
+     persistido como contrato observable. Cambiar `sort_keys`
+     introduce riesgo por beneficio puramente cosmético.
+   - **F-5 falso positivo**: el helper `_fail_node_with` ya
+     centraliza el formato `"Type: msg"`. Ambos call sites pasan
+     `exc=exc` correctamente.
+
+3. **Push a `origin/main`** (FF limpio, sin force, sin tags).
+   Estado: 2 commits ahead antes del push, working tree limpio
+   después.
+
+Verificación final: 184/184 PASS en suite focal del RunController
+(41s). ruff check limpio.
+
+### Commits
+
+- `31d3086` docs(audit): auditoria profunda runtime/RunController post-Etapa 7
+- `3640a66` chore(runcontroller): 2 hallazgos de auditoria aplicados, 3 descartados
+- (este commit, en preparación) chore(closure): housekeeping post-Etapa 7
+
+### Decisiones tomadas durante AUTO
+
+- **Sin bump de release**: los 2 hallazgos aplicados son refactor sin
+  cambio funcional. Aplicar SEMVER estricto (regla 4) implica no
+  bumpar.
+- **Sin push de tags**: el housekeeping cierra el ciclo a nivel de
+  rama, no de release. v0.14.0 sigue siendo la última release.
+- **F-2 revertido en lugar de reescribir tests**: cuando el
+  descubrimiento contradice la auditoría, revertir el cambio es
+  preferible a reescribir cobertura. El informe documenta la
+  corrección.
+- **F-4 diferido por contrato testeable**: tests existentes blindan
+  el JSON persistido. Cambiar formato es scope creep.
+
+### Cierre de capacidad
+
+El RunController queda con:
+- 0 SQL directo (Storage encapsula).
+- 5 operaciones atómicas estado+evento (`Storage.*_atomically`).
+- 2 helpers privados con cobertura documentada.
+- Inconsistencia `_snapshot` resuelta (F-1).
+- Lint + format limpios.
+
+Iniciativa `g-skillgraph-bootstrap` permanece **COMPLETED** desde
+v0.6.0. Etapa 7 permanece **COMPLETED** desde v0.14.0. La auditoría
+2026-09-25 añade un colofón de verificación post-Etapa 7 sin
+reabrir la iniciativa.
+
+### Siguiente paso
+
+Sin trabajo activo. Estado estable verificado. Esperando consigna
+explícita del operador para:
+- Cerrar la iniciativa formalmente (ya documentada en CURRENT.md).
+- Especificar y arrancar S7+ del blueprint.
+- Otra dirección distinta.
+
+Si en una sesión futura el operador aprueba S7+, el spec del
+operador debe definir la capacidad antes de que el orquestador
+pueda proponer arquitectura.
+

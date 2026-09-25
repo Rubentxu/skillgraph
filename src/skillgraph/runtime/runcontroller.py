@@ -130,20 +130,15 @@ class RunBudget:
             ("max_events", self.max_events),
         ):
             if value is not None and value < 0:
-                raise ValidationError(
-                    f"RunBudget.{name} no puede ser negativo: {value}"
-                )
+                raise ValidationError(f"RunBudget.{name} no puede ser negativo: {value}")
             if value is not None and value == 0:
-                raise ValidationError(
-                    f"RunBudget.{name} debe ser > 0 si se especifica: {value}"
-                )
+                raise ValidationError(f"RunBudget.{name} debe ser > 0 si se especifica: {value}")
 
     @property
     def is_active(self) -> bool:
         """True si al menos un limite esta definido (>0)."""
         return any(
-            v is not None
-            for v in (self.max_visits, self.max_runtime_seconds, self.max_events)
+            v is not None for v in (self.max_visits, self.max_runtime_seconds, self.max_events)
         )
 
 
@@ -271,9 +266,7 @@ class RunController:
         # default seguro "metadata".
         self._events = EventLog(
             storage.conn,
-            policy_resolver=lambda tenant_id: storage.get_policy(
-                tenant_id=tenant_id
-            ),
+            policy_resolver=lambda tenant_id: storage.get_policy(tenant_id=tenant_id),
         )
         # H9-context-in-run: resolver opt-in de recetas de contexto.
         # None (default) preserva el stub `default-empty-recipe/v1`.
@@ -343,9 +336,7 @@ class RunController:
         segunda escritura fallaba.
         """
         run_id = new_run_id()
-        with self._locked_run(
-            tenant_id=tenant_id, project_id=project_id, run_id=run_id
-        ):
+        with self._locked_run(tenant_id=tenant_id, project_id=project_id, run_id=run_id):
             result = self._storage.create_run_atomically(
                 event=EventBuilder(
                     tenant_id=tenant_id,
@@ -384,9 +375,7 @@ class RunController:
         S6: toma el lock por run_id al inicio (si esta configurado)
         para serializar reconciliaciones concurrentes del mismo Run.
         """
-        with self._locked_run(
-            tenant_id=tenant_id, project_id=project_id, run_id=run_id
-        ):
+        with self._locked_run(tenant_id=tenant_id, project_id=project_id, run_id=run_id):
             return self._reconcile_run_locked(
                 tenant_id=tenant_id,
                 project_id=project_id,
@@ -519,13 +508,8 @@ class RunController:
 
         # Chequeo 1: H4 original (max_visits por nodo en self-loop).
         node_prev = plan.node(prev_current)
-        h4_exhausted = (
-            has_self_loop(plan, prev_current)
-            and node_prev.max_visits is not None
-        )
-        existing_prev = self._node_executions_for(
-            tenant_id, project_id, run_id, prev_current
-        )
+        h4_exhausted = has_self_loop(plan, prev_current) and node_prev.max_visits is not None
+        existing_prev = self._node_executions_for(tenant_id, project_id, run_id, prev_current)
         if h4_exhausted and len(existing_prev) >= node_prev.max_visits:
             return True
 
@@ -688,9 +672,7 @@ class RunController:
             ),
         )
 
-    def _count_events(
-        self, *, tenant_id: str, project_id: str, run_id: str
-    ) -> int:
+    def _count_events(self, *, tenant_id: str, project_id: str, run_id: str) -> int:
         """Cuenta eventos asociados a un Run (read-only).
 
         Delega en `Storage.list_events_for_run` (regla "Storage
@@ -784,9 +766,7 @@ class RunController:
         )
         state = run["state"]
         if is_terminal_run_state(state):
-            raise ValidationError(
-                f"Run {run_id!r} ya es terminal ({state}); no se puede cancelar"
-            )
+            raise ValidationError(f"Run {run_id!r} ya es terminal ({state}); no se puede cancelar")
         # H9-run-lifecycle: la transicion a CANCELLED y la emision del
         # evento `RunCompleted(state=CANCELLED)` viven en una sola TX.
         self._transition_run_state_with_event(
@@ -1185,9 +1165,7 @@ class RunController:
                 attempt=attempt,
             )
         )
-        node_started_event = events.node_started(
-            run_id=run_id, node_execution_id=node_execution_id
-        )
+        node_started_event = events.node_started(run_id=run_id, node_execution_id=node_execution_id)
         self._storage.start_node_execution_atomically(
             event=node_started_event,
             node_execution_id=node_execution_id,
