@@ -42,6 +42,48 @@ SI cruza boundary (e.g. el CLI runner acepta input de usuario y
 lo traduce a selector.kind), sera un gap S2/I separado. Por ahora,
 no hay evidencia de tal caso.
 
+### Alcance del grep (autocritica)
+
+`grep -rnE "raise .*Error\\(f" | grep "!r"` SOLO detecta mensajes
+que usan repr (`{x!r}`). NO detecta f-strings con interpolacion
+simple (`{x}`). Una busqueda mas amplia:
+
+```
+$ grep -rnE 'raise .*Error\(f".*\{[^}]+\}.*"' src/skillgraph | grep -v "!r"
+src/skillgraph/runtime/engine.py:196:
+    raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
+src/skillgraph/core/recipe.py:75:
+    raise ValidationError(f"token_budget debe ser positivo: {self.token_budget}")
+src/skillgraph/runtime/storage.py:1757:
+    raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
+... (~20 sitios mas en core/recipe.py, core/workflow.py, etc.)
+```
+
+Estos mensajes interpolan valores sin quotes. **Determinar si
+cruzan boundary tenant requiere tracing** caso por caso:
+
+- `engine.py:196` / `storage.py:1757` (event_id): el event_id es
+  generado internamente por RuntimeEvent (UUID4 determinista); el
+  caller ya lo conoce. **NO es gap S2/I**.
+- `core/recipe.py:75/83` (token_budget, revision): validacion de
+  valores numericos programador-componentes; **NO cruza boundary**.
+- `core/recipe.py:114+` (recipe[].kind/value/label): validacion
+  de programador; **NO cruza boundary**.
+
+El KnowledgeController era el **unico modulo** donde estos mensajes
+son parte del boundary del controller hacia el caller externo
+(garantizado por ADR-0015, modelado en storage.start_node_execution
+y consistente con el resto de mi auditoria). Por tanto, cerrar el
+KnowledgeController es cerrar la superficie S2/I **para este modulo
+en particular**, no garantiza que ningun otro modulo en el repo
+tenga fugas analogas.
+
+**Si en el futuro se quiere garantia exhaustiva**, abrir un
+`STEWARDSHIP-T-SECURITY-AUDIT` que recorra los 20 sitios f-string
+sin !r caso por caso, trace el flujo de cada identificador, y
+clasifique con evidencia. Por ahora este ciclo cierra el modulo
+identificado por ADR-0015 como superficie prioritaria.
+
 ## Cambios
 
 ### `src/skillgraph/knowledge/knowledge_controller.py`
