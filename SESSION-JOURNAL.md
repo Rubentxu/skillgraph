@@ -4968,3 +4968,54 @@ aqui.
 
 `next_workitem` sigue null: ninguno de los 4 pendientes es accionable
 sin spec.
+
+## 2026-09-25 (modo autonomo, ~17:10) — STEWARDSHIP-T3-S2-002 + housekeeping
+
+**Trigger**: operador reabre sesion en modo autonomo ("avanzar con criterio
+propio... evaluá entrega de valor sin dejar calidad"). Sigo bucle continuo.
+
+**Decision de priorizacion** (analisis de backlog):
+- E1/T5/T6: requieren spec operadora (no accionables).
+- Gap A: bloqueado por gate H9-Plan-B.
+- Gap C: stress N=10 no ejecutable sin autorizacion.
+- **Entity filtra entity_id** (descubierto al cerrar S2-001): mismo
+  patron conceptual que source_id, baja complejidad, alto valor
+  seguridad, derivado directo del trabajo reciente → **elegido**.
+- Housekeeping UAT refresh + endurecer test E2E-08 obsoleto:
+  triviales, derivan directamente de los commits previos.
+
+**Sub-trabajos ejecutados (todos en este turno)**:
+
+A. **Housekeeping**: refresh UAT-08/09 revision pointers (176184c)
+
+B. **Endurecer test E2E-08** (473a33f): convertir el KNOWN GAP obsoleto
+   en `test_t3_threat_model_attestation.py:301` en verificacion positiva
+   que exige que ni source_id ni tenant_id crucen el boundary. Blinda
+   contra futura regresion.
+
+C. **STEWARDSHIP-T3-S2-002** (eac6838, 5a88123): cierre del
+   sub-gap entity_id de S2/I (hermano de source_id).
+   - 2 sitios: `knowledge_controller.py:179` (`get_entity`) y
+     `knowledge_controller.py:490` (`record_claim` FK entity path).
+   - 4 tests nuevos en
+     `tests/test_t3_s2_entity_message_no_entity_id.py` (2 attestation +
+     2 chain). Tests rojos iterativos (2 iteraciones de API discovery).
+   - Audit dedicado: `audits/t3-s2-entity-message-redaction-2026-09-25.md`.
+
+D. **State sync** (5a88123): sincroniza STATE.yaml con SHA real.
+
+**Verificacion**: T4 completa 853/853 PASS en 478s, exit 0. 0 regresiones.
+ruff check limpio. Local `5a88123` == origin/main.
+
+**Sin bump de release**: 4 commits pero ninguno cambia contrato externo
+observable (tipo de excepcion, signatures, etc.). Regla del operador
+§6: "agurpa cambios pequenos coherentes; evita micro-releases triviales".
+Sera acumulado a la siguiente release explicita que el operador decida.
+
+**Siguiente**: ninguno accionable sin spec. Sobre el resto del
+universo de identificadores que podrian filtrar (claim_id, evidence_id,
+finding_id, etc.) **NO hice auditoria exhaustiva** — si el operador
+quiere cubrir eso de forma sistematica, lo abordo en un ciclo dedicado
+(probablemente un `STEWARDSHIP-T3-S2-003` con audit completo y refactor
+sistematico). Por ahora no abro ese trabajo porque seria nuevo diseno,
+no derivado directo de evidencia ya capturada.
