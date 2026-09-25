@@ -1,8 +1,9 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-24 22:14 (Europe/Madrid).
+> Última verificación: 2026-09-25 08:44 (Europe/Madrid).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
+> Stewardship backlog P2 (DT-2 lock) **CERRADO** en `f31fa53` (2026-09-25).
 
 ## Goal
 
@@ -29,16 +30,14 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `3e6b1d7` (docs(journal): refactor context_controller helpers puros).
-- Tests: **754/754 PASS** en 161s (`uv run pytest -q`).
+- HEAD: `f31fa53` (docs(state): stewardship backlog P2 marcado completed).
+- Tests: **765/765 PASS** en 166s (`uv run pytest -q`).
 - 16 releases emitidas: v0.3.0 → v0.14.0.
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
-- Cobertura núcleo ≥85% en todos los módulos. Cambios post-v0.7.0:
-  - `runtime/locks.py` (nuevo, S6): 89%.
-  - `runtime/redaction.py` (nuevo, S5): 39% (módulo pequeño, 27 stmts).
-  - `knowledge/context_controller.py`: 82% → **88%** (refactor helpers puros).
+- Cobertura núcleo ≥85% en todos los módulos.
 - Working tree limpio. Sin ficheros pendientes.
 - ruff format + ruff check: limpios.
+- HEAD == origin/main (post push FF en este turno).
 
 ## Releases post-refactor v0.7.0
 
@@ -87,3 +86,33 @@ producción). Resultado: RunController post-Etapa 7 está en buen
 estado. 0 hallazgos materiales, 5 menores (opcionales), 1 deuda
 defendible (transaccional cross-proceso). Sin bump recomendado.
 163 tests PASS verificados en este turno (23s).
+
+## Stewardship backlog P2 (DT-2 lock) — cerrado 2026-09-25 08:44
+
+3 commits (9889ee8, 8bebaf3, 984d739 + docs en f31fa53) cierran
+DT-2 (lock preventivo `tests/uat-evidence/`):
+
+- **9889ee8** `style(format)`: cerrar drift de ruff format (CI gate
+  desbloqueado) + SIM117 nested-with en `test_locks.py`. 10 archivos,
+  100% cosmetico, 765/765 PASS post-fix.
+- **8bebaf3** `feat(tests)`: helper `tests/_evidence_lock.py` (162 LoC)
+  + 11 tests en `tests/test_evidence_lock.py` que cubren escritura
+  simple, dir auto-creacion, 8 escritores concurrentes al mismo
+  uat_id (exactamente 1 payload), 6 a uat_ids distintos (locking
+  granular), `history_keep` True/False, fallback Windows, payload
+  no serializable, 4-thread barrier sync.
+- **984d739** `refactor(tests)`: callers (`_save_evidence` en
+  `uat_audit.py`, `_emit_uat_08/09_evidence` en
+  `test_h4_expansion_cli.py`) usan el helper. DRY: -18 LoC. Fixtures
+  UAT-08/09.json reescritas con HEAD `b53de0d3`.
+
+Suite final: **765/765 PASS** en 166s, ruff limpio, 3 commits
+pushados FF a origin/main.
+
+Pendientes stewardship backlog:
+- P1: spec S7+ del operador (4 opciones: A Adapter real, B grieta
+  transaccional, C cert. concurrencia, D multi-tenancy).
+- P3: auditoria `src/skillgraph/runtime/redaction.py` (cifra heredada
+  39% vs gaps reales).
+- P4: cobertura `cli/runner.py` 55% → 70%+.
+- P5: ejecucion S7+ (depende P1).
