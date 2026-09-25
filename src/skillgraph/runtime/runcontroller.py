@@ -776,8 +776,6 @@ class RunController:
           nodo. El siguiente reconcile_run no las re-ejecuta
           porque detecta el estado terminal del Run al inicio.
         """
-        from skillgraph.core.errors import ValidationError
-
         # `Storage.load_run` lanza NotFoundError si el run no existe.
         run = self._storage.load_run(
             tenant_id=tenant_id,
@@ -1344,7 +1342,7 @@ class RunController:
             current_node=run["current_node"],
             executed_nodes=self._executed_node_names(tenant_id, project_id, run_id),
             events_emitted=len(
-                self._events.events_for_run(
+                self._storage.list_events_for_run(
                     tenant_id=tenant_id,
                     project_id=project_id,
                     run_id=run_id,
