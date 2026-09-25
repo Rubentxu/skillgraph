@@ -30,11 +30,11 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `c5f8a94` (feat(governance): H14 Evidencia operativa temporal).
-- Tests: **821/821 PASS** en 198s (`mise exec -- uv run pytest -q`; baseline 812 → 821 con +9 nuevos: test_h14_validation_receipts UAT-EVO-12..14).
-- **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6).
+- HEAD: `pending_commit` (feat(governance): H15 Evaluación y automejora acotada).
+- Tests: **830/830 PASS** en 189s (`mise exec -- uv run pytest -q`; baseline 821 → 830 con +9 nuevos: test_h15_improvement UAT-EVO-15..18).
+- **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
-- Cobertura núcleo re-medida: **83%** total (3811 stmts, 573 miss, 1028 branches) sobre 30 módulos productivos. Ver `coverage_snapshot_2026-09-25_post_session`. Re-valoraciones: redaction 39%→100% (era cifra heredada del subset T1), runcontroller 89%→96%, context_controller 88%→90%. Modulos H11/H12/H13/H14: file_signature.py 85%, file_scope.py 81%, file_handoff.py 80%, governance/receipts.py 73%.
+- Cobertura núcleo re-medida: **83%** total. Modulos H11/H12/H13/H14/H15: file_signature.py 85%, file_scope.py 81%, file_handoff.py 80%, governance/receipts.py 73%, governance/improvement.py 84%.
 - Working tree limpio. Sin ficheros pendientes.
 - ruff format + ruff check: limpios.
 - HEAD == origin/main (post push FF en este turno).
@@ -45,6 +45,8 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 - **H12 evolution-v2 COMPLETO**: scopes y consultas composables (FileScope, ScopeQuery, ScopeResolution, aggregate_signatures). Ver `src/skillgraph/knowledge/file_scope.py` + `tests/test_h12_file_signature_scopes.py` (8 UAT-EVO-05..08 tests). Aislamiento E2E-08 estricto: source-en-otro-proyecto lanza `UnknownSourceError` SIN filtrar el source_id (mensaje generico).
 - **H13 evolution-v2 COMPLETO**: handoff experto desde consultas (ScopeAwareRecipe, CoverageManifest, HandoffBlockedError, compile_handoff_from_scopes). Ver `src/skillgraph/knowledge/file_handoff.py` + `tests/test_h13_handoff_expert.py` (8 UAT-EVO-09..11 tests). Composicion pura sobre ContextRecipe (NO modifica Literal cerrada de ObligatorySelector). should_skip_adapter() decide skip LLM si manifest completo+fresco.
 - **H14 evolution-v2 COMPLETO**: evidencia operativa temporal (ValidationReceipt, is_receipt_applicable, record_validation_receipt, list_applicable_receipts). Ver `src/skillgraph/governance/receipts.py` + `tests/test_h14_validation_receipts.py` (9 UAT-EVO-12..14 tests). Persistencia via Evidence(kind='validation_receipt') reusando tabla existente (regla AGENTS §1.5). is_receipt_applicable() pura: revision + dependency_revisions determinan aplicabilidad (UAT-EVO-14: recibo de A NO es validacion automatica de B).
+- **H15 evolution-v2 COMPLETO**: evaluación y automejora acotada (ImprovementCandidate, detect_redundant_extraction, localize_omission, compare_recipes, promote_candidate, rollback_candidate). Ver `src/skillgraph/governance/improvement.py` + `tests/test_h15_improvement.py` (9 UAT-EVO-15..18 tests). Persistencia via Evidence(kind='promotion_decision'|'rollback') reusando tabla existente (regla AGENTS §1.5). UAT-EVO-18: promote_candidate() EXIGE human_approved=True, sin autocertificacion (SelfCertificationBlockedError tipado).
+- **EVOLUTION-V2 COMPLETO** (H0..H15): roadmap evolution-v2 cerrado al 100%. 5 nuevos modulos (file_signature, file_scope, file_handoff, governance/receipts, governance/improvement), +58 tests nuevos UAT-EVO.
 
 ## Releases post-refactor v0.7.0
 

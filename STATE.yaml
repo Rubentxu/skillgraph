@@ -107,10 +107,25 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: H15  # evolution-v2/plan/ROADMAP.md H14 cerrado 2026-09-25; gate H15 = evaluacion y automejora acotada
-  current_workitem: H14-evidencia-operativa-temporal
-  next_workitem: H15  # evolution-v2/plan/ROADMAP.md H15 = evaluacion y automejora acotada
+  next_milestone_gate: closed  # H15 cerrado 2026-09-25; evolution-v2 completo (H0..H15)
+  current_workitem: H15-evaluacion-automejora-cerrado
+  next_workitem: null  # evolution-v2 cerrado. Siguiente requiere spec del operador (prioridad_5_s7plus)
   evolution_v2:
+    H15_completado:
+      fecha: 2026-09-25
+      commit: pending_commit
+      criterios_cumplidos:
+        - ImprovementCandidate (frozen) + ImprovementKind Literal cerrada (regla AGENTS §2.1)
+        - detect_redundant_extraction() detecta firmas stale para re-extraccion (UAT-EVO-15)
+        - localize_omission() atribuye omisiones a context_selection (UAT-EVO-16), NO propone nueva rama
+        - compare_recipes() evalua correccion, cobertura y trabajo redundante; is_b_improvement declarativo (UAT-EVO-17)
+        - promote_candidate() EXIGE human_approved=True (UAT-EVO-18: sin autocertificacion). SelfCertificationBlockedError tipado
+        - rollback_candidate() con RollbackPolicy Literal (automatic/manual/blocked)
+        - Persistencia via Evidence(kind='promotion_decision'|'rollback') reusando tabla existente (regla AGENTS §1.5)
+        - Tests UAT-EVO-15..18 (9 nuevos, 830 total, 100% verde)
+      cobertura_governance_improvement: 84%
+      siguiente: evolution_v2 cerrado
+
     H14_completado:
       fecha: 2026-09-25
       commit: c5f8a94
