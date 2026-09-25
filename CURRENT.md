@@ -79,3 +79,11 @@ Refactor sin bump: `6c8c17f` (extract pure helpers from ContextController).
 
 Mientras tanto, el repo está en estado estable con checkpoint sincronizado
 en este turno.
+
+## Auditoría 2026-09-25
+
+Producido `audits/runtime-2026-09-25.md` (367 LoC, 0 modificado en
+producción). Resultado: RunController post-Etapa 7 está en buen
+estado. 0 hallazgos materiales, 5 menores (opcionales), 1 deuda
+defendible (transaccional cross-proceso). Sin bump recomendado.
+163 tests PASS verificados en este turno (23s).
