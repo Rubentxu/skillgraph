@@ -4005,3 +4005,117 @@ esperar, la opción D (T8 benchmark contexto/consultas) es
 **el único trabajo defendible sin spec**: ~50-100 LoC,
 read-only sobre el código, output medible (tabla CSV).
 Coste ~1-2h.
+
+## Sesión 2026-09-25 09:15 - 09:37 · Stewardship P1 Opción D (T8 benchmark suite)
+
+### Pre-flight y decisión de ruta
+
+Tras el research memo H9 (sesión anterior), Opción D se confirma
+como la única acción defendible sin spec operador. Decisión:
+ejecutar T8 con criterio propio, documentando todo para revisión
+posterior.
+
+### Análisis previo (regla 4 CALIDAD)
+
+- Verificado `bench/` no existe en repo → 0 riesgo de duplicación.
+- Verificado `time.perf_counter()` ya usado en codebase
+  (`tests/test_s1_sqlite.py:216`) → patrón coherente.
+- Inspeccionado `tests/test_context_controller.py` (676 LoC, 30+
+  tests de correctness) → benchmark es complementario, no duplica.
+- API investigada: `ContextController(knowledge=ctl)` (sin storage),
+  `ContextRecipe(recipe_ref, obligatory, optional, token_budget,
+  freshness_policy, revision=1)`, `ObligatorySelector(kind, value)`
+  con kinds válidos `{entity, predicate, source}` y 7 predicados
+  canónicos en `CLAIM_PREDICATES`.
+- Smoke test rápido reveló gotcha: claims duplican con mismo
+  `(subject, predicate, source, revision)` por `INSERT OR IGNORE`
+  → bench debe usar múltiples predicates (los 7 canónicos rotando).
+
+### Trabajo ejecutado
+
+1. **TDD-investigación**: probe compile_handoff con N=10/100/1000.
+   Resultado: ~30 µs/claim, lineal. cold ≈ warm.
+2. **`bench/__init__.py`** (16 LoC): package marker + convenciones.
+3. **`bench/bench_context.py`** (322 LoC):
+   - `BenchRow` + `BenchReport` (dataclasses frozen+slots).
+   - `_build_corpus(n)`: corpus sintetico (ceil(N/7) sources, 7
+     claims/source rotando predicates).
+   - `_measure_compile` + `_measure_refresh`: time.perf_counter_ns,
+     mediana de 3 warm samples.
+   - `run_bench(sizes)`: pipeline completo, devuelve BenchReport.
+   - `main()` con argparse: `--sizes`, `--json`, exit codes.
+4. **`bench/README.md`** (104 LoC): filosofía, uso, interpretación,
+   reglas de pulgar para regresiones.
+5. **`tests/test_bench_smoke.py`** (78 LoC): 3 tests subprocess
+   (exit 0, JSON schema, custom sizes).
+6. **`audits/bench/baseline-2026-09-25.json`**: snapshot primera
+   corrida canónica (10/100/1000).
+7. **`audits/t8-benchmark-2026-09-25.md`** (132 LoC): auditoría
+   completa de entrega (alcance, baseline, decisiones, NO
+   entregado).
+
+### Decisiones materiales
+
+- **Fuera de `src/skillgraph/`**: bench es observabilidad, no
+  producto. Vive en `bench/` (top-level) para que pytest-cov no
+  lo cuente como cobertura productiva.
+- **Tests subprocess**: pytest-cov no rastrea subprocess child
+  processes (gap estructural documentado en
+  `audits/runner-coverage-2026-09-25.md`). Mismo patrón.
+- **Sin dependencias nuevas**: solo stdlib + skillgraph. No
+  pytest-benchmark ni asv.
+- **Mediana, no media**: suaviza JIT/GC sin statistic libs.
+- **Schema versionado**: `"skillgraph.bench.v1"` permite cambiar
+  forma sin romper parsers.
+
+### Commits emitted (3 atómicos)
+
+```
+3b4dc7d feat(bench): add compile_handoff/refresh_handoff benchmark suite
+ee00a9f test(bench): add smoke tests for bench_context suite
+cd51732 docs(bench): T8 audit + baseline snapshot + UAT evidence refresh
+```
+
+### Baseline canónico 2026-09-25
+
+| claims | src | compile_cold(ms) | compile_warm(ms) | refresh_warm(ms) |
+| ---    | --- | ---              | ---              | ---              |
+| 10     | 2   | 0.526            | 0.310            | 0.318            |
+| 100    | 15  | 2.667            | 2.368            | 2.489            |
+| 1000   | 143 | 34.245           | 31.985           | 33.323           |
+
+Conclusiones: linealidad (~30 µs/claim), refresh sin cache
+(oportunidad de optimización), cold ≈ warm (sin warm-up
+patológico).
+
+### Verificación
+
+- `mise exec -- uv run pytest` — **772/772 PASS** (769 → 772;
+  +3 nuevos de `test_bench_smoke.py`).
+- `mise exec -- uv run ruff check .` — All checks passed.
+- `python -m bench.bench_context` — exit 0, salida formateada.
+
+### Estado al cierre
+
+- HEAD: `cd51732`, working tree clean, pendientes push FF a
+  origin/main.
+- Suite: 772/772 PASS.
+- ruff format + ruff check: limpios.
+- 16/16 UAT PASS (fixtures UAT-08/09 refrescadas con HEAD actual).
+- 6 audits en `audits/` para esta sesión.
+- Sin bump: T8 no es capacidad observable para el usuario final;
+  es observabilidad interna.
+
+### Pendientes del stewardship backlog tras este tramo
+
+- **P1 opciones A/B/C**: Adapter real / grieta transaccional /
+  certificación de concurrencia — siguen requiriendo spec
+  operador explícito.
+- **P5**: depende de P1.
+- **No hay más trabajo defendible sin spec** en el backlog
+  actual de P1.
+
+Si el operador decide P1 opción A (addendum honesto H9) o
+P1 opción B/C (ejecución T1/T3/T5/T6 con spec), el equipo
+tiene material para arrancar de inmediato. Sin trabajo
+activo material después de este tramo.

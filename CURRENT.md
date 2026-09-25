@@ -1,9 +1,9 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-25 08:44 (Europe/Madrid).
+> Última verificación: 2026-09-25 09:37 (Europe/Madrid).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
-> Stewardship backlog P2 (DT-2 lock) **CERRADO** en `f31fa53` (2026-09-25).
+> Stewardship backlog P1 Opción D (T8 benchmark) **CERRADO** en `cd51732` (2026-09-25).
 
 ## Goal
 
@@ -153,3 +153,54 @@ Pendientes stewardship backlog:
   (NO suben cifra: argparse eleva SystemExit antes del main()).
 - Sin acción adicional posible sin refactor mayor (subprocess-coverage
   plugin, 2-3h, frágil).
+
+## Stewardship backlog P1 Opción D (T8 benchmark) — cerrado 2026-09-25 09:37
+
+3 commits cierran la Opción D de P1 (suite mínima de benchmarks,
+ejecutable sin spec del operador):
+
+- **3b4dc7d** `feat(bench)`: `bench/__init__.py` (16 LoC) +
+  `bench/bench_context.py` (322 LoC) + `bench/README.md` (104 LoC).
+  Mide `compile_handoff` y `refresh_handoff` sobre corpus sintetico
+  (Storage SQLite en tempdir). 3 fases por tamaño: `compile_cold`,
+  `compile_warm` (mediana de 3), `refresh_warm` (mediana de 3).
+  Salida humana (tabla Markdown) o JSON con schema
+  `skillgraph.bench.v1`.
+- **ee00a9f** `test(bench)`: 3 smoke tests subprocess en
+  `tests/test_bench_smoke.py` (78 LoC). Subprocess (NO pytest-cov
+  in-process) por el gap estructural documentado en
+  `audits/runner-coverage-2026-09-25.md`.
+- **cd51732** `docs(bench)`: `audits/t8-benchmark-2026-09-25.md`
+  (132 LoC, auditoría de entrega) + `audits/bench/baseline-2026-09-25.json`
+  (snapshot primera corrida) + refresh UAT-08/09 con HEAD actual.
+
+### Baseline 2026-09-25
+
+| claims | src | compile_cold(ms) | compile_warm(ms) | refresh_warm(ms) |
+| ---    | --- | ---              | ---              | ---              |
+| 10     | 2   | 0.526            | 0.310            | 0.318            |
+| 100    | 15  | 2.667            | 2.368            | 2.489            |
+| 1000   | 143 | 34.245           | 31.985           | 33.323           |
+
+Conclusiones:
+
+- **Linealidad**: ~30 µs/claim en `compile_warm`.
+- **Sin cache en refresh**: `refresh_warm ≈ compile_warm`. Hoy
+  `refresh_handoff` SIEMPRE recompila aunque no haya cambios
+  (oportunidad de optimización documentada).
+- **Cold ≈ warm**: gap < 2x en todos los tamaños (sin warm-up patológico).
+
+### Verificación final
+
+- `mise exec -- uv run pytest` — **772/772 PASS** (769 → 772; +3 nuevos).
+- `mise exec -- uv run ruff check .` — All checks passed.
+- HEAD: `cd51732` (3b4dc7d + ee00a9f + cd51732 pendientes de push).
+
+## Pendientes post-T8
+
+- **P1 opciones A/B/C** (Adapter real / grieta transaccional /
+  certificación de concurrencia) — siguen requiriendo spec operador
+  explícito. D (T8) ya cerrada.
+- **No bump**: T8 no introduce breaking change ni capacidad nueva
+  observable para el usuario. Es observabilidad interna. No genera
+  release.
