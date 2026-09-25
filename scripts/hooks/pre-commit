@@ -1,0 +1,69 @@
+#!/usr/bin/env sh
+# Pre-commit hook for SkillGraph.
+#
+# Enforces:
+#   1. `ruff check src tests`        (lint)
+#   2. `ruff format --check src tests` (format gate)
+#   3. `pytest -q` smoke              (only if .py files staged)
+#
+# Bypass for emergency or doc-only commits:
+#   git commit --no-verify
+#   HOOK_SKIP_TESTS=1 git commit
+#
+# Set up: this file is copied to .git/hooks/pre-commit (chmod +x) by the
+# `scripts/install-hooks.sh` script. The hook itself is committed to
+# the repo so it travels with the source.
+
+set -e
+
+# -------------------------------------------------------------------
+# Toolchain dispatch: prefer `mise exec` if available (project pinned),
+# fall back to `uv run` directly.
+# -------------------------------------------------------------------
+run_in_toolchain() {
+    if command -v mise >/dev/null 2>&1; then
+        mise exec -- uv "$@"
+    else
+        uv "$@"
+    fi
+}
+
+# -------------------------------------------------------------------
+# 1. Ruff check (lint) — catches E/F/I/B/UP/SIM/RUF violations.
+# -------------------------------------------------------------------
+echo "[pre-commit] ruff check src tests..."
+run_in_toolchain run ruff check src tests || {
+    echo ""
+    echo "ERROR: ruff check failed."
+    echo "Fix: uv run ruff check --fix src tests"
+    exit 1
+}
+
+# -------------------------------------------------------------------
+# 2. Ruff format check — enforces line-length=100 and docstring-code-format.
+# -------------------------------------------------------------------
+echo "[pre-commit] ruff format --check src tests..."
+run_in_toolchain run ruff format --check src tests || {
+    echo ""
+    echo "ERROR: ruff format --check failed."
+    echo "Fix: uv run ruff format src tests"
+    exit 1
+}
+
+# -------------------------------------------------------------------
+# 3. Smoke pytest — only if .py files staged.
+# -------------------------------------------------------------------
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '\.py$' || true)
+
+if [ -n "$STAGED_PY" ] && [ "${HOOK_SKIP_TESTS:-0}" != "1" ]; then
+    echo "[pre-commit] pytest -q (smoke, $(echo "$STAGED_PY" | wc -l) files staged)..."
+    run_in_toolchain run pytest -q 2>&1 | tail -30 || {
+        echo ""
+        echo "ERROR: pytest failed."
+        echo "Bypass for doc-only commits: HOOK_SKIP_TESTS=1 git commit"
+        echo "Bypass always: git commit --no-verify"
+        exit 1
+    }
+fi
+
+echo "[pre-commit] OK"
