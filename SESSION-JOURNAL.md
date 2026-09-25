@@ -5086,3 +5086,69 @@ de usuario que filtra selector.kind), se abordara con el mismo patron.
 Por ahora, **S2/I de KnowledgeController esta cerrado y esa superficie
 no admite mas trabajo derivado** sin spec operadora para algo
 nuevo.
+
+## 2026-09-25 (modo autonomo, ~17:50) — STEWARDSHIP-T-SECURITY-AUDIT (mini-auditoria enfocada)
+
+**Trigger**: operador reabre modo autonomo. La seccion 'siguiente'
+del turn anterior incluyo la propuesta explicita de
+'STEWARDSHIP-T-SECURITY-AUDIT' como trabajo derivado del propio
+17d4811 (autocritica sobre el alcance del grep).
+
+**Decision de priorizacion**: tenia 3 opciones accionables:
+
+1. STEWARDSHIP-T-SECURITY-AUDIT (1-3h si exhaustivo; 1h enfocado)
+2. STEWARDSHIP-T-SECURITY-AUDIT (los 5 sitios mas prometedores)
+3. Esperar spec operadora para E1/T5/T6
+
+Opte por variante **enfocada**: 5 sitios prioritarios (los mas
+prometedores para S2/I) trazados empiricamente con 1h real.
+Decision: TESTING QUIRUGICO + ENTREGA DE VALOR sobre CALIDAD de
+hacerlo exhaustivo sin evidencia de necesidad.
+
+**Sub-trabajos ejecutados**:
+
+A. **Tracing empírico** de los 5 sitios prioritarios:
+   1. `runtime/engine.py:196` + `runtime/storage.py:1757`
+      (event.event_id): generado internamente por el engine
+      (new_event_id() en l.296). Caller ya lo conoce. **NO gap**.
+   2. `core/recipe.py:75/83/114+` (token_budget, revision,
+      recipe[].kind): dataclass __post_init__ con valores
+      provistos internamente (file_handoff.py:347), unico caller
+      de from_dict es cli/runner.py (local). **NO gap**.
+   3. `runtime/runcontroller.py:133/135` (RunBudget.{name}):
+      dataclass field validation programador. **NO gap**.
+   4. `runtime/agent.py:120` (fixture path): validation local
+      del codebase del operador. **NO gap**.
+   5. `resources/plan_loader.py` + `parser.py` (path, exc): CLI
+      loader local (runner.py:1646), input del propio usuario
+      en su maquina. **NO gap**.
+
+B. **Resultado del mini-audit**: 0 gaps S2/I reales.
+
+C. **Audit**: `audits/t-security-audit-2026-09-25.md` documenta
+   el tracing de cada sitio con conclusion explicita.
+
+D. **Housekeeping**:
+   - `.coverage` borrado (gitignored por .gitignore, FS-local).
+   - `tests/uat-evidence/*.lock` NO borrados (verificado:
+     mecanismo de coordinacion intencional, patron heredado de
+     runtime/locks.py, ver tests/_evidence_lock.py docstring;
+     git ls-files confirma que estan trackeados).
+
+**Verificacion**: subset S2/I (test_t3_s2_* + test_t3_threat_model +
+test_knowledge_controller) **42/42 PASS en 11s**, ruff limpio.
+T4 completa ya validada en turn previo (855/855 PASS).
+
+**Sin bump de release**: solo docs/audits/housekeeping, sin
+cambio en contrato observable.
+
+**Resultado final**: la superficie S2/I validada al nivel de
+confianza razonable. El codigo del repo es coherente con los
+6 cierres previos (KnowledgeController S2/I cerrado al 100%).
+Modelo de amenaza de ADR-0015 (Information Disclosure entre
+tenants) NO se satisface en ninguno de los 5 sitios auditados.
+
+**Siguiente**: `next_workitem: null` en STATE. 15 sitios f-string
+sin !r adicionales disponibles para audit exhaustivo (+1h) si
+el operador lo requiere. Mientras tanto, los pendientes
+estructurales (E1/T5/T6) siguen requiriendo spec operadora.

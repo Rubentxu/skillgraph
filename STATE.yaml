@@ -125,10 +125,27 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: T3_S2_S2I_completo  # KnowledgeController S2/I cerrado completamente (source_id, entity_id, claim_id)
-  current_workitem: T3-S2-claim-message-redaction
-  next_workitem: null  # S2/I KnowledgeController cerrado. Quedan E1 Adapter real, T5 Backups, T6 Observabilidad (todos requieren spec operador)
+  next_milestone_gate: T_SECURITY_AUDIT_completo  # Mini-auditoria 5/5 sitios trazados, 0 gaps S2/I nuevos
+  current_workitem: T-SECURITY-AUDIT
+  next_workitem: null  # Mini-audit cerrado. 15 sitios restantes f-string sin !r disponibles si el operador quiere exhaustivo
   evolution_v2:
+    T_SECURITY_AUDIT_completo:
+      fecha: 2026-09-25
+      ciclo: STEWARDSHIP-T-SECURITY-AUDIT
+      commit: 244ddf3
+      pushed: 2026-09-25
+      criterios_cumplidos:
+        - "5 sitios f-string sin !r trazados empiricamente (engine.py:196, storage.py:1757, recipe.py:75/83/114+, runcontroller.py:133/135, agent.py:120, plan_loader.py/parser.py)"
+        - "0 gaps S2/I reales identificados (todos son validaciones programador o CLI loader local)"
+        - "Audit dedicado en audits/t-security-audit-2026-09-25.md con tracing explicito de cada sitio"
+        - "Housekeeping: .coverage borrado (FS-local); .lock archivos NO se borran (mecanismo de coordinacion intencional)"
+        - "Subset S2/I 42/42 PASS; ruff limpio"
+      notas:
+        - "Cobertura: 5/20 sitios f-string sin !r; los 15 restantes son de naturaleza similar (validacion programador)"
+        - "Si se quiere garantia exhaustiva del 100%, abrir ciclo dedicado (~+1h)"
+        - "Sin bump de release (solo docs/audits/housekeeping)"
+      siguiente: "E1 Adapter real (spec operador), T5 Backups (spec operador), T6 Observabilidad (spec operador)"
+
     T3_S2_claim_message_redaction_cerrado:
       fecha: 2026-09-25
       ciclo: STEWARDSHIP-T3-S2-003
