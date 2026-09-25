@@ -176,7 +176,9 @@ class KnowledgeController:
             entity_id=entity_id,
         )
         if result is None:
-            raise UnknownEntityError(f"Entity no encontrada: {entity_id!r}")
+            raise UnknownEntityError(
+                "Entity no encontrada"
+            )  # NO expone entity_id (S2/I)
         return result
 
     def find_entity(self, *, kind: str, stable_key: str) -> Entity | None:
@@ -487,8 +489,8 @@ class KnowledgeController:
                     is None
                 ):
                     raise UnknownEntityError(
-                        f"Entity no existe: {claim.subject_entity_id!r}"
-                    ) from exc
+                        "Entity no existe"
+                    ) from exc  # NO expone entity_id (S2/I)
                 raise UnknownSourceError(
                     "Source no existe"
                 ) from exc  # NO expone source_id (S2/I)
