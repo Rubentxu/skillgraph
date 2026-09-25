@@ -5152,3 +5152,48 @@ tenants) NO se satisface en ninguno de los 5 sitios auditados.
 sin !r adicionales disponibles para audit exhaustivo (+1h) si
 el operador lo requiere. Mientras tanto, los pendientes
 estructurales (E1/T5/T6) siguen requiriendo spec operadora.
+
+---
+
+## 2026-09-25T22:24Z — STEWARDSHIP-T-SECURITY-AUDIT-FULL cerrado (commit `21a096d`)
+
+**Trigger**: Operador reabre modo AUTO 22:20Z. Sigo la recomendación
+del cierre anterior ("15 sitios f-string sin !r disponibles si el
+operador quiere exhaustivo").
+
+**Acción**: Audit exhaustivo S2/I (ADR-0015) de los 38 sitios restantes
+f-string sin `!r` en `src/skillgraph`. Inventario total: 43 sitios
+(5 ya auditados en mini-audit `244ddf3` + 38 trazados en este commit).
+
+**Tracing empírico**:
+- 4 sitios CRITICAL con tracing uno-por-uno:
+  - `storage.py:446` (IdentityConflictError uid): caller-provided, no gap
+  - `storage.py:1265/1405` (NotFoundError run_id): caller-provided, no gap
+  - `graph_expansion.py:103` (RuntimeError reason): API misuse, no gap
+  - `context_controller.py:92` (StaleKnowledgeError count): filtra conteo, no ID, no gap
+- 26 sitios triviales con grep transversal: callers CLI local o
+  field validation programador, no gap
+
+**Resultado**: 0 gaps S2/I en los 38 sitios restantes. ADR-0015
+implementado al 100% para identificadores filtrables en excepciones
+de dominio.
+
+**Verificación**: ruff clean (no requiere tests nuevos — es audit
+documentado, no código).
+
+**Commits**: `21a096d` (audit + state sync atómico).
+
+**Decisión sobre release**: sin bump (solo `docs(audit)`; la release
+0.14.0 sigue siendo la vigente por el historial — sin breaking change
+ni capacidad nueva a nivel de release).
+
+**Limitaciones publicadas en el audit**:
+1. Re-auditar tras cualquier cambio de schema Storage (Gap D trigger).
+2. Auditar mensajes `WARNING` y `INFO` (este audit fue solo sobre
+   `raise .*Error`).
+3. Auditar logs estructurados (structlog, logging.*) — fuera del
+   scope S2/I del ADR-0015.
+
+**Próximo**: `next_workitem: null` en STATE. Pendientes estructurales
+sin spec operadora: E1 Adapter real, T5 Backups CLI, T6 Observabilidad,
+Gap A (workflow_runs↔runtime_events), Gap C (stress N=10).

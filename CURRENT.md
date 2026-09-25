@@ -103,6 +103,26 @@ Para reactivar la iniciativa o abrir una nueva:
 - Operador reabre con consigna explicita; el protocolo de
   reapertura esta en `INITIATIVE-CLOSED.md` seccion 8.
 
+## Reactivacion 2026-09-25T22:20Z — STEWARDSHIP-T-SECURITY-AUDIT-FULL cerrado
+
+Operador reabre con modo AUTO. Auditoria exhaustiva S2/I (ADR-0015)
+de los 38 sitios f-string sin `!r` restantes tras mini-audit
+previo (244ddf3, 5 sitios). Inventario total: 43 sitios.
+
+Resultado: **0 gaps S2/I** en los 38 sitios restantes.
+
+Trazabilidad uno-por-uno:
+- `platform/storage.py:446` (IdentityConflictError uid): caller-provided
+- `platform/storage.py:1265/1405` (NotFoundError run_id): caller-provided
+- `governance/graph_expansion.py:103` (RuntimeError reason): API misuse
+- `knowledge/context_controller.py:92` (StaleKnowledgeError count): cuenta, no ID
+
++ 26 sitios triviales (path filesystem, source nombre, field validation
+  programador): grep transversal confirma callers CLI local o programador.
+
+HEAD `21a096d` == origin/main, working dir limpio. ADR-0015
+implementado al 100% para f-strings con identificadores.
+
 Mientras tanto, el repo esta en estado estable con checkpoint
 sincronizado en `f1b92ff` (HEAD terminal) y certificado de cierre
 en `INITIATIVE-CLOSED.md`.

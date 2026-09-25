@@ -125,10 +125,28 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: T_SECURITY_AUDIT_completo  # Mini-auditoria 5/5 sitios trazados, 0 gaps S2/I nuevos
-  current_workitem: T-SECURITY-AUDIT
-  next_workitem: null  # Mini-audit cerrado. 15 sitios restantes f-string sin !r disponibles si el operador quiere exhaustivo
+  next_milestone_gate: T_SECURITY_AUDIT_FULL_completo  # Audit exhaustivo 43/43 sitios f-string sin !r trazados, 0 gaps S2/I
+  current_workitem: T-SECURITY-AUDIT-FULL
+  next_workitem: null  # ADR-0015 implementado al 100% para f-strings. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
   evolution_v2:
+    T_SECURITY_AUDIT_FULL_completo:
+      fecha: 2026-09-25
+      ciclo: STEWARDSHIP-T-SECURITY-AUDIT-FULL
+      commit: 21a096d
+      pushed: 2026-09-25
+      criterios_cumplidos:
+        - "Inventario completo: 43 sitios raise .*Error(f...{identificador}...) sin !r en src/skillgraph"
+        - "5 sitios ya auditados (mini-audit 244ddf3): engine.py:196, storage.py:1757, recipe.py:75/83/114+, runcontroller.py:133/135, agent.py:120, plan_loader.py/parser.py"
+        - "38 sitios restantes trazados (este commit): 4 CRITICAL con tracing uno-por-uno, 26 triviales con grep transversal"
+        - "0 gaps S2/I reales en los 38 sitios (todos caller-provided, CLI loader local, o field validation programador)"
+        - "Audit dedicado en audits/t-security-audit-full-2026-09-25.md con tabla de 43 sitios + tracing explicito de los 4 CRITICAL"
+        - "ruff clean"
+      notas:
+        - "ADR-0015 implementado al 100% para identificadores cross-tenant en excepciones de dominio"
+        - "Proximos pasos derivados opcionales (sin gap actual): re-auditar tras cambio schema Storage, auditar WARNING/INFO, auditar structlog/logging"
+        - "Sin bump de release (solo docs/audits)"
+      siguiente: "E1 Adapter real (spec operador), T5 Backups (spec operador), T6 Observabilidad (spec operador), Gap A (H9-Plan-B), Gap C (H9-Plan-B)"
+
     T_SECURITY_AUDIT_completo:
       fecha: 2026-09-25
       ciclo: STEWARDSHIP-T-SECURITY-AUDIT
