@@ -11,9 +11,11 @@ en subpaquetes:
   workflow.
 - skillgraph.domain: skill_importer, pack_loader, dsl.
 - skillgraph.knowledge: knowledge, knowledge_controller,
-  knowledge_invalidator, context_controller, git_source.
+  knowledge_invalidator, context_controller, git_source,
+  file_signature (H11), file_scope (H12), file_handoff (H13).
 - skillgraph.runtime: engine, agent, handoff, runcontroller.
-- skillgraph.governance: graph_expansion, promotion.
+- skillgraph.governance: graph_expansion, promotion,
+  receipts (H14), improvement (H15).
 - skillgraph.platform: paths, storage.
 - skillgraph.cli: runner (entry point CLI).
 

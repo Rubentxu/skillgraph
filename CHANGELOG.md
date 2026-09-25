@@ -12,6 +12,26 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [Unreleased — evolution-v2 (H0..H15)] — 2026-09-25
+
+**Resumen**: roadmap `external/evolution-v2/plan/ROADMAP.md` cerrado al 100%. 5 nuevos modulos, 58 tests UAT-EVO nuevos (suite 830/830 PASS). NO bump de release: los workitems añaden superficie de conocimiento/governance sin capacidad observable nueva a nivel de API CLI (no hay comandos ni flags nuevos).
+
+### Added (evolution-v2)
+
+- **H0–H1 (foundation)**: cobertura del recorrido real y caracterización de gates (audits/h10-recorrido-real-2026-09-25.md).
+- **H11 — Conocimiento tipado reutilizable** (`skillgraph.knowledge.file_signature`): `FileSignature`, `SignatureProcedencia`, `SignatureVigencia`, `ExtractionState`. Pure extractor regex_def. Persistencia via `Evidence(kind='file_signature')` reusando tabla existente.
+- **H12 — Scopes y consultas composables** (`skillgraph.knowledge.file_scope`): `FileScope` Literal, `ScopeQuery`, `ScopeResolution`, `AggregatedSignatures`, `aggregate_signatures()` puro. Aislamiento E2E-08 estricto.
+- **H13 — Handoff experto desde consultas** (`skillgraph.knowledge.file_handoff`): `ScopeAwareRecipe` (composicion sobre `ContextRecipe`), `CoverageManifest`, `HandoffBlockedError`, `compile_handoff_from_scopes()`. Manifest como representación canónica; handoff compila OK con `obligatory=()`.
+- **H14 — Evidencia operativa temporal** (`skillgraph.governance.receipts`): `ValidationReceipt` (frozen, verdict Literal), `is_receipt_applicable()` puro, `record_validation_receipt()`, `list_applicable_receipts()`. Persistencia via `Evidence(kind='validation_receipt')`.
+- **H15 — Evaluación y automejora acotada** (`skillgraph.governance.improvement`): `ImprovementCandidate` + `ImprovementKind` Literal cerrada, `detect_redundant_extraction()`, `localize_omission()`, `compare_recipes()`, `promote_candidate()` exige `human_approved=True` (UAT-EVO-18 sin autocertificacion, `SelfCertificationBlockedError` tipado), `rollback_candidate()` con `RollbackPolicy` Literal.
+
+### Notes
+
+- Persistencia H11–H15: ninguna tabla nueva. Todos los nuevos tipos se almacenan via `Evidence(kind=...)` reusando la tabla `evidence` existente (regla AGENTS §1.5).
+- ADT cerradas: `ExtractionState`, `FileScope`, `ImprovementKind`, `RollbackPolicy`, `ReceiptVerdict` via `Literal[...]` (regla AGENTS §2.1).
+- Errores tipados: `HandoffBlockedError`, `SelfCertificationBlockedError` (subclases de `SkillGraphError`, regla AGENTS §1.2).
+- Tests UAT-EVO: 4 + 12 + 8 + 8 + 9 + 9 = 50 nuevos (H0–H1 + H11–H15).
+
 ## [0.7.0] — 2026-09-24
 
 **Resumen**: refactor arquitectónico con **BREAKING CHANGE** en la
