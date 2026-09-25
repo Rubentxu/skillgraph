@@ -295,21 +295,21 @@ class TestS2CrossTenantLookupRejected:
         )
 
         # controller_a NO debe ver "secret-source".
-        # Verificamos que lanza SkillGraphError (UnknownSourceError).
+        # Verificamos que lanza SkillGraphError (UnknownSourceError) Y que el
+        # mensaje NO filtra ni tenant_id ni source_id del tenant atacado
+        # (gap S2/I cerrado en STEWARDSHIP-T3-S2-001, dcbf81a; ver
+        # audits/t3-s2-message-redaction-2026-09-25.md).
         with pytest.raises((UnknownSourceError, NotFoundError, SkillGraphError)):
             controller_a.get_source(source_id="secret-source")
-        # KNOWN GAP (ADR-0015 S2 / pending): get_source de KnowledgeController
-        # filtra source_id en el mensaje de error. NO cumple strict E2E-08.
-        # Documentado en audits/t3-threat-model-2026-09-25.md.
-        # El test actual acepta la fuga del source_id en el mensaje; el
-        # fix requiere refactor del controller para retornar error generico.
         try:
             controller_a.get_source(source_id="secret-source")
         except (UnknownSourceError, NotFoundError, SkillGraphError) as e:
-            # Verificar que al menos el tenant_id NO aparece (defensa
-            # minima esperada).
-            assert "tB" not in str(e), (
+            msg = str(e)
+            assert "tB" not in msg, (
                 f"mensaje filtra tenant_id del source: {e!r}"
+            )
+            assert "secret-source" not in msg, (
+                f"mensaje filtra source_id del source: {e!r}"
             )
 
 
