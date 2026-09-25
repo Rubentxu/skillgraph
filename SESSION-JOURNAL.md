@@ -3608,3 +3608,146 @@ Si en una sesión futura el operador aprueba S7+, el spec del
 operador debe definir la capacidad antes de que el orquestador
 pueda proponer arquitectura.
 
+
+## Sesión 2026-09-25 08:19 - 08:45 · Stewardship transversal P2
+
+**Consigna**: operador aprobó modo AUTO con 6 reglas (testing quirúrgico,
+valor, cierre real, calidad, convencional commits, trazabilidad SDDK).
+Sesión centrada en ejecutar el item P2 del stewardship backlog
+(DT-2 lock preventivo `tests/uat-evidence/`) y de paso cerrar el drift
+de ruff format que bloqueaba el CI gate `scripts/ci.sh`.
+
+### Pre-flight + decisión de ruta
+
+- SDDK mode: undeclared (toolchain bloquea adopcion, ya conocido).
+- HEAD al empezar: `b53de0d` (post-etapa 7 + stewardship backlog
+  registrado en `b53de0d`).
+- Working tree: limpio. Sin ficheros pendientes.
+- 765/765 tests PASS (754 + 11 nuevos del helper `_evidence_lock`).
+
+### Trabajo ejecutado
+
+1. **Helper centralizado `tests/_evidence_lock.py` (162 LoC)**.
+   - `save_with_lock(evidence_dir, uat_id, payload, *, history_keep=False)`:
+     `fcntl.flock` exclusivo + escritura atómica `os.replace` +
+     auto-creacion del directorio. Fallback Windows via `_HAS_FCNTL`
+     (mismo patrón que `runtime/locks.py`).
+   - `evidence_lock(evidence_dir, uat_id)`: context manager para
+     multiples ops bajo el mismo lock (sin escritura automatica).
+   - `_archive_previous`: archiva la version previa en
+     `history/<uat_id>/<timestamp>-<status>.json` cuando
+     `history_keep=True` (mismo patron que H8).
+
+2. **11 tests en `tests/test_evidence_lock.py`** cubriendo:
+   - Escritura simple + `.lock` file presente.
+   - Auto-creacion del directorio `evidence_dir`.
+   - **8 escritores concurrentes al mismo uat_id** → exactamente 1
+     payload (test de coherencia bajo concurrencia, sin pérdida
+     ni corrupción).
+   - 6 escritores concurrentes a uat_ids distintos → locking
+     granular verificado.
+   - `history_keep=True` archiva el previo, `False` lo sobreescribe.
+   - Liberacion del lock via context manager (no leak).
+   - Fallback Windows via `monkeypatch.setattr("_HAS_FCNTL", False)`.
+   - Payload no serializable → `TypeError` sin corromper el
+     archivo previo.
+   - 4 threads con `threading.Barrier(N)` caso realista.
+
+3. **Refactor de 3 callers** que ahora delegan en el helper:
+   - `tests/uat_audit.py::_save_evidence` (DRY: -12 LoC).
+   - `tests/test_h4_expansion_cli.py::_emit_uat_08_evidence`
+     (SIN lock antes, ahora con lock — cierre real de DT-2).
+   - `tests/test_h4_expansion_cli.py::_emit_uat_09_evidence`
+     (idem).
+   - Eliminada duplicación de flock + .tmp + os.replace en 2 sitios
+     que antes lo hacían a mano.
+
+### Desviación del plan original
+
+Antes de empezar la sesión tenía previsto ejecutar P2 + reordenar
+el formato cosmético de las UAT fixtures por separado. La realidad
+fue distinta:
+
+- El CI gate `scripts/ci.sh` fallaba con `ruff format --check`
+  porque 10 ficheros tenían drift de wrapping (líneas que cabían
+  en 88 cols pero estaban envueltas). No era opcional: bloqueaba
+  el gate. Decisión: **emitir como commit sibling** (`9889ee8`)
+  con scope único = limpieza de format + SIM117 en `test_locks.py`.
+- Las fixtures `tests/uat-evidence/UAT-{08,09}.json` se
+  reescribieron al re-ejecutarse la suite porque el helper escribe
+  en orden de inserción de dict (Python 3.7+), no en el orden
+  legado del snapshot original. Análisis honesto: el JSON original
+  en disco data de `9d9ae09` (HEAD antes de los 4 commits del
+  audit+stewardship) y tenía el orden de inserción de una versión
+  **anterior** de la función `_emit_uat_08_evidence`. La versión
+  **actual** de la función construye el dict en un orden distinto,
+  y el helper ahora escribe fielmente ese orden. Diff en `git diff`
+  mostraba: `revision` actualizada a HEAD honesta (`b53de0d3`),
+  campos sin cambios semánticos, orden de claves reordenado
+  cosméticamente. Decisión: aceptar el refresh cosmético en el
+  mismo commit del refactor, **NO bit-fidelity**.
+
+### Commits emitted
+
+```
+9889ee8 style(format): cerrar drift de ruff format + SIM117 nested-with en test_locks
+8bebaf3 feat(tests): helper _evidence_lock con flock + escritura atomica
+984d739 refactor(tests): callers de evidencia UAT usan _evidence_lock
+f31fa53 docs(state): stewardship backlog P2 (DT-2 lock) marcado completed
+a3fe52c docs(current): cierre P2 (DT-2 lock uat-evidence) + sync refs
+```
+
+5 commits, todos pushed FF a origin/main. Net diff: +371 LoC helper
++ tests, -18 LoC duplicación en callers, -184 LoC format drift
+(lineas condensadas a 88 cols). 765/765 tests verde, ruff check +
+format limpios. CI gate `scripts/ci.sh` desbloqueado.
+
+### Decisiones materiales
+
+- **DT-2 cerrado de verdad, no solo "documentado"**: antes, los
+  tests de UAT escribían sin lock. Ahora todos los que usan
+  `tests/uat-evidence/` lo hacen bajo `fcntl.flock`. Probado
+  empíricamente con 8 writers concurrentes.
+- **No se abrio nueva abstracción**: el helper es un modulo
+  plano, no una clase. `save_with_lock()` cubre el 99% de uso;
+  `evidence_lock()` es para casos raros. No hay jerarquía forzada.
+- **Cero cambios en API pública**: el helper vive solo en
+  `tests/_evidence_lock.py`, solo lo importan 3 callers internos.
+  Compatible con futuros tests.
+- **Windows fallback honesto**: si no hay `fcntl` (Windows), el
+  lock cae a no-op silencioso. Esto NO elimina la concurrencia
+  en Windows pero mantiene consistencia POSIX donde sí corre el
+  CI. Documentado en docstring.
+- **Pre-autorización de gates AUTO respetada**: la regla
+  "ENTREGA DE VALOR + CIERRE REAL + TRAZABILIDAD SDDK" del
+  operador se cumplió: el gate (CI format) que estaba bloqueado
+  se resolvió investigando causa raíz (drift), no bypaseando.
+
+### Estado al cierre
+
+- HEAD: `a3fe52c`, HEAD == origin/main (post push FF este turno).
+- 765/765 tests PASS (`uv run pytest -q` en 166s).
+- ruff format + ruff check: All checks passed!
+- 16/16 UAT PASS (invariantes al avance).
+- STATE.yaml `stewardship_backlog.prioridad_2_dt2_lock_uat_evidence`
+  marcado `estado: completed` con commits referenciados y racional
+  documentado.
+- CURRENT.md actualizado con seccion "Stewardship backlog P2 cerrado".
+- scripts/ci.sh ahora pasa limpio (gate format desbloqueado).
+
+### Resto del stewardship backlog
+
+- **P1**: spec S7+ del operador (4 opciones defendibles en
+  STATE.yaml — Adapter real / grieta transaccional / cert.
+  concurrencia / multi-tenancy). Bloquea P5.
+- **P3**: auditar `src/skillgraph/runtime/redaction.py` para
+  distinguir cifra heredada (suite de 4 ficheros → 39%) de gaps
+  reales. Sin release si es solo heredada; +tests focalizados si
+  hay gaps.
+- **P4**: cobertura `cli/runner.py` 55% → 70%+ con
+  `click.testing.CliRunner` para comandos críticos. ~60 min.
+- **P5**: ejecución S7+ (depende de P1).
+
+Sin trabajo activo material. Sesión cerrada en checkpoint
+durable (STATE.yaml + CURRENT.md + SESSION-JOURNAL.md
+sincronizados, HEAD == origin/main).
