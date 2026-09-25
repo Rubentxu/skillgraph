@@ -70,7 +70,7 @@ Refactor sin bump: `6c8c17f` (extract pure helpers from ContextController).
 ## Próxima acción concreta
 
 - Esperar consigna explícita del operador sobre si:
-  1. Cerrar la iniciativa con Etapa 7 documentada (defendible: 754 tests,
+  1. Cerrar la iniciativa con Etapa 7 documentada (defendible: 769 tests,
      16/16 UAT, blueprint + Etapa 7 cerrados al 100%).
   2. Especificar y arrancar S7+ (nuevo goal).
   3. Otro trabajo distinto (audit transversal, stewardship cli.py,
@@ -116,3 +116,40 @@ Pendientes stewardship backlog:
   39% vs gaps reales).
 - P4: cobertura `cli/runner.py` 55% → 70%+.
 - P5: ejecucion S7+ (depende P1).
+
+## Stewardship backlog P3 + P4 (audit redaction + runner) — cerrado 2026-09-25 09:04
+
+3 commits cierran P3 y P4 del stewardship backlog:
+
+- **32197db** `feat(tests)`: 4 tests argparse errors InProcess en
+  `tests/test_cli_branches.py` (TestCliArgparseErrors). Cierran el
+  contrato observable del parser ante invocaciones inválidas:
+  `--bogus-flag`, subcommand inválido, positional extra, `--help`.
+- **5de1717** `docs(audit)`: 2 auditorías nuevas
+  (`audits/redaction-2026-09-25.md` 170 LoC +
+  `audits/runner-coverage-2026-09-25.md` 270 LoC).
+- **cda56fa** `docs(state)`: P3 y P4 marcados completed.
+
+### P3 verdict (redaction.py)
+
+- Cifra 39% en STATE.yaml era **heredada** del snapshot T1
+  (subset focal de 4 ficheros).
+- Re-medido con suite completa: **100% real** (27/27 stmts, 14/14
+  branches, 0 miss).
+- Módulo puro (sin I/O, sin globales, sin reloj).
+- 21 tests en 8 clases cubren cada contrato observable.
+- 0 LoC producción modificados, 0 tests nuevos, **sin gaps**.
+
+### P4 verdict (cli/runner.py)
+
+- Cifra 55% en STATE.yaml era **heredada** del subset T1.
+- Re-medido con suite completa: **49% real** (1077 stmts, 501 miss).
+- Gap **estructural**, no de tests: pytest-cov NO rastrea código
+  ejecutado en proceso hijo. 24 comandos cubiertos por subprocess
+  (acceptance real) + 6 InProcess.
+- Subir cifra sin duplicar subprocess tests violaría CALIDAD §4
+  (no duplicar acceptance).
+- 4 tests argparse errors aplicados cierran **contrato** de argparse
+  (NO suben cifra: argparse eleva SystemExit antes del main()).
+- Sin acción adicional posible sin refactor mayor (subprocess-coverage
+  plugin, 2-3h, frágil).
