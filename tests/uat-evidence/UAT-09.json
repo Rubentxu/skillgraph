@@ -1,6 +1,6 @@
 {
   "uat_id": "UAT-09",
-  "revision": "df91dbfa7adb27c8b4ac4ad7e9c94c8ddd55c23d",
+  "revision": "17d48114d4ea039727b002cdff3bc2fe260120e9",
   "timestamp": "2026-09-23T11:00:00Z",
   "scenario": "Dada una propuesta que solicita nuevas capacidades, cuando no existe autorizacion, entonces el motor no incorpora la ampliacion. Debe conservarse evidencia de su rechazo o de su estado de espera.",
   "expected": "apply rc=10; expansion_rejections/*.json con reason=I3",
