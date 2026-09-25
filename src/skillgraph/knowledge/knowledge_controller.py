@@ -34,6 +34,7 @@ from skillgraph.core.errors import (
     UnknownEntityError,
     UnknownSourceError,
 )
+from skillgraph.knowledge.file_signature import FileSignature
 from skillgraph.knowledge.graph import (
     Claim,
     ClaimID,
@@ -223,6 +224,121 @@ class KnowledgeController:
             project_id=self.project_id,
             claim_id=claim_id,
         )
+
+    # ----- FileSignatures (H11 evolution-v2) -----
+
+    def record_evidence_for_file_signature(
+        self,
+        *,
+        source_id: SourceID,
+        file_signature: FileSignature,
+        evidence_id: EvidenceID = "",  # placeholder; generado si vacio
+    ) -> EvidenceID:
+        """Persiste una ``FileSignature`` como ``Evidence`` (kind='file_signature').
+
+        H11: el contrato externo es un payload logico (FileSignature
+        inmutable con foco, contrato, cobertura, procedencia y
+        vigencia). El storage concreto es una Evidence de kind
+        especial para evitar una migracion de schema (regla
+        AGENTS §1.5: no crear abstracciones nuevas si las
+        existentes cubren el requisito).
+
+        Args:
+            source_id: source al que pertenece la signature.
+            file_signature: dataclass inmutable con el payload.
+            evidence_id: opcional, generado si vacio.
+
+        Returns:
+            El ``EvidenceID`` asignado.
+        """
+        if not isinstance(file_signature, FileSignature):
+            raise TypeError(
+                f"file_signature debe ser FileSignature, recibio {type(file_signature).__name__}"
+            )
+
+        # Generar evidence_id si vacio (UUIDv5 determinista por contenido).
+        if not evidence_id:
+            import json as _json
+
+            payload = file_signature.to_dict()
+            evidence_id = make_evidence_id(
+                source_id=source_id,
+                content_repr=_json.dumps(payload, sort_keys=True),
+            )
+
+        # Wrap en Evidence con kind='file_signature' y content=dict serializado.
+        # Storage.record_evidence serializa dict|str; pasar dict deja una
+        # sola capa de json.dumps (no doble encoding).
+        evidence = Evidence(
+            evidence_id=evidence_id,
+            kind="file_signature",
+            content=file_signature.to_dict(),
+            source_id=source_id,
+            observed_at=file_signature.vigencia.checked_at_revision or "h11",
+        )
+        return self.record_evidence(evidence=evidence)
+
+    def list_file_signatures_for_source(
+        self,
+        *,
+        source_id: SourceID,
+        only_stale: bool = False,
+    ) -> tuple[FileSignature, ...]:
+        """Lee las FileSignatures persistidas para un source.
+
+        Args:
+            source_id: source a consultar.
+            only_stale: si True, filtra las signatures con
+                ``vigencia.stale=True`` (estado frozen al persistir)
+                O cuya source tiene ``freshness="stale"`` (cambio
+                upstream detectado tras la extraccion). Esto
+                modela la regla H11 "stale al cambiar source".
+
+        Returns:
+            Tupla de FileSignatures deserializadas. Vacía si no hay.
+        """
+        import json as _json
+
+        from skillgraph.knowledge.file_signature import (
+            FileSignature,
+            SignatureProcedencia,
+            SignatureVigencia,
+        )
+
+        # Si only_stale=True, comprobar el freshness del source primero.
+        source_is_stale = False
+        if only_stale:
+            try:
+                src = self.get_source(source_id=source_id)
+                source_is_stale = src.freshness == "stale"
+            except UnknownSourceError:
+                source_is_stale = False
+
+        evidences = self.storage.list_evidences_for_source(
+            source_id=source_id,
+        )
+        sigs: list[FileSignature] = []
+        for e in evidences:
+            if e.get("kind") != "file_signature":
+                continue
+            content_json = e.get("content_json")
+            if not isinstance(content_json, str):
+                continue
+            payload = _json.loads(content_json)
+            sig = FileSignature(
+                foco=payload["foco"],
+                contrato=payload["contrato"],
+                cobertura=payload["cobertura"],
+                procedencia=SignatureProcedencia(**payload["procedencia"]),
+                vigencia=SignatureVigencia(**payload["vigencia"]),
+                metadata=payload.get("metadata", {}),
+            )
+            # Stale por signature O por source (regla H11).
+            is_stale = sig.vigencia.stale or source_is_stale
+            if only_stale and not is_stale:
+                continue
+            sigs.append(sig)
+        return tuple(sigs)
 
     # ----- Claims -----
 
