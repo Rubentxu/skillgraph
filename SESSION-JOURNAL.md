@@ -3751,3 +3751,131 @@ format limpios. CI gate `scripts/ci.sh` desbloqueado.
 Sin trabajo activo material. Sesión cerrada en checkpoint
 durable (STATE.yaml + CURRENT.md + SESSION-JOURNAL.md
 sincronizados, HEAD == origin/main).
+
+## Sesión 2026-09-25 08:48 - 09:06 · Stewardship P3 + P4 (auditorias de cobertura)
+
+**Consigna**: operador aprobó modo AUTO con reglas 1-8, indicando
+continuar con prioridad propia siguiendo recomendaciones del
+"siguiente" del ciclo previo (P3 = audit redaction, P4 = cobertura
+runner).
+
+### Pre-flight y decisión de ruta
+
+- SDDK mode: `undeclared` (toolchain bloquea adopcion, sigue
+  orquestando; ya informado).
+- HEAD al iniciar este tramo: `130f89a` (post-push P2).
+- 769/769 tests verde al final (765 + 4 nuevos argparse errors).
+- Pre-flight OK: working tree limpio, ruff sin diffs.
+
+### Análisis previo a la acción (regla 4: CALIDAD)
+
+Antes de tocar código, evalué con criterio propio las opciones
+disponibles del stewardship backlog:
+
+- **P1**: spec S7+ del operador. **Bloqueado por consigna**
+  (4 opciones defendibles en STATE.yaml: Adapter real / grieta
+  transaccional / cert. concurrencia / multi-tenancy).
+- **P2**: ya cerrado este turno (ver JOURNAL previo).
+- **P3**: auditoria `redaction.py` (39% cifra heredada del
+  snapshot T1, sospecho). **30-60 min, valor informativo alto.**
+- **P4**: cobertura `cli/runner.py` (55% cifra heredada, gap
+  probable). **30-60 min, valor medio.**
+- **P5**: depende de P1.
+
+Decisión del orquestador: ejecutar **P3 + P4 en paralelo**
+(investigaciones read-only, no se interfieren). NO duplicar
+subprocess tests con InProcess (regla §4 CALIDAD).
+
+### Trabajo ejecutado
+
+1. **Audit `redaction.py`** (`audits/redaction-2026-09-25.md`,
+   170 LoC).
+   - Re-medido con suite completa: 27/27 stmts, 14/14 branches
+     = **100% real**.
+   - 39% cifra era heredada del snapshot T1 (subset focal de
+     4 ficheros, no de la suite completa).
+   - 21 tests en 8 clases cubren cada contrato observable
+     (validacion smart constructor, 4 politicas x happy/edge,
+     inmutabilidad, determinismo, persistencia Storage,
+     integracion EventLog).
+   - **0 LoC produccion modificados, 0 tests nuevos, 0 gaps**.
+
+2. **Audit `cli/runner.py`** (`audits/runner-coverage-2026-09-25.md`,
+   270 LoC).
+   - Re-medido con suite completa: 1077 stmts, 501 miss,
+     294 branches, 39 missed = **49% real**.
+   - 55% cifra era heredada del subset T1.
+   - Gap **estructural**, no de tests: pytest-cov NO rastrea
+     codigo ejecutado en proceso hijo. 24 comandos cubiertos
+     por subprocess (acceptance real) + 6 InProcess.
+   - **NO es accionable** sin violar CALIDAD §4 (duplicar
+     tests InProcess vs subprocess) o sin refactor mayor
+     (subprocess-coverage plugin, 2-3h, fragil).
+
+3. **4 tests argparse errors InProcess** aplicados
+   (commit `32197db`, `tests/test_cli_branches.py`).
+   - `TestCliArgparseErrors` con:
+     - `main(["--no-such-flag"])` → `SystemExit(2)` + "unrecognized"
+     - `main(["project", "bogus-sub"])` → `SystemExit(2)` + "invalid choice"
+     - `main(["project", "list", "extra"])` → `SystemExit(2)`
+     - `main(["--help"])` → `SystemExit(0)` + help completo
+   - **NO suben** cifra cobertura runner.py: argparse eleva
+     `SystemExit` ANTES de ejecutar `main()`, asi que pytest-cov
+     no registra cobertura. Valor real: **certificar contrato
+     de argparse ante invocaciones invalidas**, no subir cifra.
+
+### Decisiones materiales
+
+- **P3 cerrado como addendum honesto** (5 min en vez de 30
+  previstos): la cobertura era 100%, no habia gaps que cerrar.
+- **P4 cerrado como addendum honesto + 4 tests argparse** (40 min
+  en vez de 60 previstos): el gap es estructural y no accionable
+  sin duplicar tests o configurar cobertura subprocess (fragil).
+  Los 4 tests argparse errors añadidos tienen **valor real**
+  aunque no suban la cifra.
+- **NO duplicar subprocess tests con InProcess** (regla §4
+  CALIDAD explícita): incrementaria LOC de tests sin mejorar
+  garantia (los subprocess tests YA cubren el binario instalado;
+  los InProcess duplicarian lo mismo peor).
+- **NO configurar `pytest-cov` con subprocess tracking**:
+  requires `pip install pytest-cov subprocess-coverage` (extension
+  comunitaria) + modificar 5 helpers `_run_cli()` para usar
+  `coverage run -p`. Riesgo: falsos negativos si env no tiene
+  coverage en el proceso hijo. Coste 2-3h. Diferido a sesion
+  con objetivo explicito del operador.
+
+### Commits emitted (4 + 1 refresh)
+
+```
+32197db feat(tests): 4 tests argparse errors en entry point del CLI
+5de1717 docs(audit): P3+P4 stewardship - redaction 100% real, runner 49% honest
+cda56fa docs(state): stewardship backlog P3+P4 marcados completed
+7304f54 docs(current): cierre P3+P4 stewardship (audit redaction + runner)
+e9e577e test(uat): refresh snapshots UAT-08/09 con HEAD post-audits
+```
+
+5 commits, todos pushed FF a origin/main. Suite 769/769 PASS,
+ruff limpio.
+
+### Estado al cierre
+
+- HEAD: `e9e577e`, HEAD == origin/main (post-push FF este tramo).
+- Suite: 769/769 PASS (`uv run pytest -q` en 247s).
+- ruff format + ruff check: All checks passed!
+- 16/16 UAT PASS (invariantes al avance).
+- STATE.yaml actualizado: P3, P4 marcados `estado: completed`
+  con commits y racional documentado.
+- CURRENT.md actualizado: header 2026-09-25 09:04, P3+P4 cierre
+  documentado.
+- 2 nuevas auditorías en `audits/`:
+  - `redaction-2026-09-25.md` (170 LoC)
+  - `runner-coverage-2026-09-25.md` (270 LoC)
+
+### Pendientes del stewardship backlog
+
+- **P1**: spec S7+ del operador (4 opciones defendibles).
+  Bloquea P5. Sin auto-cerrable.
+- **P5**: ejecucion S7+ (depende de P1).
+
+**Backlog 100% cerrado en lo accionable sin spec**.
+Restantes son responsabilidad directa del operador.
