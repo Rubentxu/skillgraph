@@ -191,7 +191,9 @@ def test_invalidate_respects_max_hops(tmp_path: Path) -> None:
     )
 
     # max_hops=1: c1, c2 son alcanzables (hops 0 y 1). c3 queda fuera (hop 2).
-    with pytest.warns(HopLimitExceededWarning):
+    # S2/I (ADR-0015): mensaje expone cardinalidad (count de frontier) + el
+    # parametro caller-provided `max_hops`, NO identificadores cross-tenant.
+    with pytest.warns(HopLimitExceededWarning, match=r"max_hops=1.*frontier"):
         invalidated = ctl.invalidate_from_source(
             source_id="local:a",
             max_hops=1,
@@ -282,7 +284,9 @@ def test_hop_limit_exceeded_emits_warning(tmp_path: Path) -> None:
         revision="r1",
         evidence_ids=("ev1",),
     )
-    with pytest.warns(HopLimitExceededWarning):
+    # S2/I (ADR-0015): mensaje expone cardinalidad + parametro caller-provided,
+    # NO identificadores cross-tenant (no claim_id, no entity_id, no source_id).
+    with pytest.warns(HopLimitExceededWarning, match=r"max_hops=1.*frontier"):
         ctl.invalidate_from_source(source_id="local:a", max_hops=1)
 
 

@@ -301,10 +301,17 @@ def test_controller_isolates_tenants(tmp_path: Path) -> None:
 
 
 def test_register_stale_source_emits_warning(tmp_path: Path) -> None:
-    """Re-registrar source con freshness != 'fresh' emite StaleKnowledgeWarning."""
+    """Re-registrar source con freshness != 'fresh' emite StaleKnowledgeWarning.
+
+    S2/I (ADR-0015): el caller YA conocia el `source_id` que esta
+    registrando (lo acaba de pasar en `source.source_id`). NO es leak
+    cross-tenant porque el caller introdujo ese identificador en su scope.
+    El mensaje lo expone para que el operador sepa que esta re-registrando
+    el mismo source con un estado stale.
+    """
     ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src(freshness="stale"))
-    with pytest.warns(StaleKnowledgeWarning):
+    with pytest.warns(StaleKnowledgeWarning, match=r"re-registrando source stale:"):
         ctl.register_source(source=_src(freshness="stale"))
 
 
