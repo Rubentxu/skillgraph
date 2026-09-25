@@ -4339,3 +4339,46 @@ necesario. Sin trabajo activo material despues de este tramo.
 
 Próximo tramo sin trabajo activo material a la espera de
 consigna. El proyecto queda en estado estable y verificable.
+
+## Sesion 2026-09-25 10:14 - 10:17 · Stewardship cobertura: sincronizar STATE.yaml con realidad post-session
+
+**Contexto**: tras las sesiones de state-sync (9:42) y H9 addendum
+(9:55), se detecto drift importante en `coverage_snapshot_2026-09-24_post_v140`
+vs realidad: (a) redaction.py declarada 39% (cifra heredada del subset T1
+auditado, ya estaba en 100%); (b) runcontroller.py declarada 89% (subset T1,
+real 96%); (c) context_controller.py declarada 88% (anterior al refactor
+h9_bslice4, real 90%); (d) storage.py declarada 97% (rama defensiva no
+cubierta, real 96%); (e) 7 modulos productivos no listados en snapshot
+previo (governance/promotion, knowledge/handoff, resources/catalog+parser+
+plan_loader, cli/__init__, __main__).
+
+**Acciones ejecutadas**:
+
+1. Re-medicion: `mise exec -- uv run pytest --cov=src/skillgraph
+   --cov-report=term-missing --cov-branch -q` (170s, 772/772 PASS).
+   Resultado: 3811 stmts, 573 miss, 1028 branches, **83% total** sobre 30
+   modulos productivos.
+
+2. Audit `audits/coverage-fresh-2026-09-25.md` (180 LoC) con tabla
+   completa de los 30 modulos y notas sobre gaps estructurales
+   (__main__ 0%, cli/runner 49%, paths.py 81% rama Windows).
+
+3. STATE.yaml:
+   - Anadido `coverage_snapshot_2026-09-25_post_session` (vigente) con
+     30 modulos y 83% total.
+   - Marcado `coverage_snapshot_2026-09-24_post_v140` como
+     `superseded_by_2026_09_25`.
+   - `tests.total`: 754 -> 772 (real con +18 nuevos: 11 evidence_lock
+     + 4 argparse + 3 bench smoke).
+   - `tests.duration_s`: 161 -> 170 (re-medido hoy).
+
+4. CURRENT.md actualizado: HEAD y cobertura con cifras reales.
+
+**Verificacion**: `python3 -c "yaml.safe_load(open('STATE.yaml'))"` parsea
+limpio. `ruff check .` All checks passed.
+
+**Resultado**: la documentacion del proyecto refleja por primera vez la
+cobertura real medida con la suite completa, no cifras heredadas de
+subsets. No se reabre iniciativa. Sin deuda abierta.
+
+**Commits**: este tramo cierra el stewardship de cobertura del dia.

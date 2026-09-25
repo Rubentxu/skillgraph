@@ -292,9 +292,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 754
-  passed: 754
-  duration_s: 161   # re-medido con scripts/ci.sh el 2026-09-24 (post-Etapa 7 v0.14.0)
+  total: 772
+  passed: 772
+  duration_s: 170   # re-medido con pytest --cov el 2026-09-25 (post-session, 754 baseline + 18 nuevos: 11 evidence_lock + 4 argparse + 3 bench smoke)
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"
@@ -383,7 +383,67 @@ tests:
     - tests/test_h9_coverage_runcontroller.py: 3   # H9-Coverage-8: cobertura runtime/runcontroller.py (94%->96%)
     - tests/test_h9_coverage_knowledge_controller.py: 5   # H9-Coverage-9: cobertura knowledge/knowledge_controller.py (93%->96%)
     - tests/test_h9_coverage_bricks.py: 2   # H9-Coverage-10: cobertura resources/bricks.py (91%->100%)
+  coverage_snapshot_2026-09-25_post_session:
+    estado: vigente
+    fecha: 2026-09-25
+    hora: "10:14"
+    metodo: "mise exec -- uv run pytest --cov=src/skillgraph --cov-report=term-missing --cov-branch -q"
+    tests_ejecutados: 772   # 754 baseline post-v0.14.0 + 18 nuevos (11 evidence_lock + 4 argparse + 3 bench smoke)
+    duracion_s: 170
+    suite_passing: 772
+    suite_failing: 0
+    total_stmts: 3811
+    total_miss: 573
+    total_branches: 1028
+    total_brpart: 85
+    total_cover: 83%
+    modulos:
+      src/skillgraph/__main__.py: 0%   # gap estructural (3 lineas, entry-point CLI; subprocess tests ejercitan main() pero pytest-cov no rastrea subprocess child processes)
+      src/skillgraph/cli/__init__.py: 100%   # trivial re-export
+      src/skillgraph/cli/runner.py: 49%   # gap estructural (24 subprocess + 6 InProcess + 4 argparse; pytest-cov no rastrea subprocess). Audit en audits/runner-coverage-2026-09-25.md.
+      src/skillgraph/core/errors.py: 100%
+      src/skillgraph/core/recipe.py: 100%
+      src/skillgraph/core/runtime_types.py: 97%
+      src/skillgraph/domain/dsl.py: 97%
+      src/skillgraph/domain/pack_loader.py: 97%
+      src/skillgraph/domain/skill_importer.py: 98%
+      src/skillgraph/governance/graph_expansion.py: 98%
+      src/skillgraph/governance/promotion.py: 100%   # NO listado en snapshot previo; anadido en este snapshot
+      src/skillgraph/knowledge/context_controller.py: 90%   # refactor sin bump: 88% -> 90% (+2 del refactor + branch coverage adicional)
+      src/skillgraph/knowledge/git_source.py: 95%
+      src/skillgraph/knowledge/graph.py: 96%
+      src/skillgraph/knowledge/knowledge_controller.py: 96%
+      src/skillgraph/knowledge/knowledge_invalidator.py: 97%
+      src/skillgraph/platform/paths.py: 81%   # lineas 26-31 (rama Windows nt) inalcanzables en CI Linux
+      src/skillgraph/platform/storage.py: 96%   # -1 respecto al snapshot previo (rama defensiva)
+      src/skillgraph/resources/bricks.py: 100%
+      src/skillgraph/resources/catalog.py: 100%   # NO listado en snapshot previo; anadido en este snapshot
+      src/skillgraph/resources/parser.py: 100%   # NO listado en snapshot previo; anadido en este snapshot
+      src/skillgraph/resources/plan_loader.py: 100%   # NO listado en snapshot previo; anadido en este snapshot
+      src/skillgraph/resources/registry.py: 95%
+      src/skillgraph/resources/workflow.py: 100%
+      src/skillgraph/runtime/agent.py: 97%
+      src/skillgraph/runtime/engine.py: 100%
+      src/skillgraph/runtime/handoff.py: 95%   # NO listado en snapshot previo; anadido en este snapshot
+      src/skillgraph/runtime/locks.py: 89%
+      src/skillgraph/runtime/redaction.py: 100%   # cifra heredada falsa (39%) corregida; audit en audits/redaction-2026-09-25.md
+      src/skillgraph/runtime/runcontroller.py: 96%   # cifra heredada falsa (89%) corregida; audit en audits/runtime-2026-09-25.md
+    nota_cobertura_post_session: >
+      Re-medido con suite completa de 772 tests el 2026-09-25 10:14.
+      Hallazgos vs snapshot 2026-09-24: (1) redaction 39% -> 100%
+      (cifra heredada del subset T1; ya auditada); (2)
+      runcontroller 89% -> 96% (subset T1; cifra real con suite
+      completa); (3) context_controller 88% -> 90% (refactor
+      sin bump); (4) storage 97% -> 96% (rama defensiva no
+      cubierta por test adicional). Total real: 83% (3811
+      stmts, 573 miss, 1028 branches). 30 modulos productivos
+      (vs 23 listados en snapshot previo; 7 anadidos).
+    audit_referencia: audits/coverage-fresh-2026-09-25.md
   coverage_snapshot_2026-09-24_post_v140:
+    estado: superseded_by_2026_09_25
+    superseded_por: coverage_snapshot_2026-09-25_post_session
+    superseded_en_sesion: "2026-09-25 10:14"
+    superseded_audit: audits/coverage-fresh-2026-09-25.md
     # Modulos con cobertura real (medida con `pytest --cov=skillgraph`).
     # Snapshot re-medido el 2026-09-24 tras commit 3e6b1d7 (fin de Etapa 7 v0.14.0
     # + refactor context_controller.py). Modulos nuevos en runtime/:
