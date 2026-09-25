@@ -67,11 +67,7 @@ def _collect_stale_obligatory_claims(
     items: Sequence[CompiledResource],
 ) -> tuple[CompiledResource, ...]:
     """Devuelve los CompiledResource de tipo claim con body['stale']=True."""
-    return tuple(
-        it
-        for it in items
-        if it.resource_kind == "claim" and it.body.get("stale") is True
-    )
+    return tuple(it for it in items if it.resource_kind == "claim" and it.body.get("stale") is True)
 
 
 def enforce_strict_freshness(
@@ -93,9 +89,7 @@ def enforce_strict_freshness(
         return
     stale = _collect_stale_obligatory_claims(items)
     if stale:
-        raise StaleKnowledgeError(
-            f"{len(stale)} obligatory Claim(s) stale y policy=strict"
-        )
+        raise StaleKnowledgeError(f"{len(stale)} obligatory Claim(s) stale y policy=strict")
 
 
 def apply_budget(
@@ -132,8 +126,7 @@ def apply_budget(
             continue
         if overflow_strategy == "fail":
             raise TokenBudgetExceededError(
-                f"obligatory+opcional no caben en budget "
-                f"{budget_chars} (acumulado {total_chars})"
+                f"obligatory+opcional no caben en budget {budget_chars} (acumulado {total_chars})"
             )
         # drop_optional o truncate_finding: paramos sin incluir el opt.
         break
@@ -305,9 +298,7 @@ class ContextController:
         )
 
         # Paso 2: freshness estricta sobre obligatorios.
-        enforce_strict_freshness(
-            obligatory_items, policy=recipe.freshness_policy
-        )
+        enforce_strict_freshness(obligatory_items, policy=recipe.freshness_policy)
 
         # Paso 3: aplicar budget.
         included, _total_chars = apply_budget(
@@ -320,9 +311,7 @@ class ContextController:
         # ya queda registrado en `HandoffExecution.budget`.
 
         # Capabilities segun freshness aplicada.
-        capabilities = build_capabilities(
-            included, policy=recipe.freshness_policy
-        )
+        capabilities = build_capabilities(included, policy=recipe.freshness_policy)
 
         identity = HandoffIdentity(
             tenant_id=self.knowledge.tenant_id,  # type: ignore[attr-defined]
@@ -482,9 +471,7 @@ class ContextController:
         claims = ctrl.list_claims_for_source(  # type: ignore[attr-defined]
             source_id=src.source_id
         )
-        out: list[CompiledResource] = [
-            claim_to_resource(c, value) for c in claims
-        ]
+        out: list[CompiledResource] = [claim_to_resource(c, value) for c in claims]
         if label:
             # Encontrar evidence para esa source.
             # H9-Coverage-11: delega en Storage.list_evidences_for_source.

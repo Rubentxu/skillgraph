@@ -42,6 +42,7 @@ def fixture_setup(tmp_path: Path) -> tuple[Storage, FakeAgentAdapter, sqlite3.Co
     conn = storage._conn  # type: ignore[attr-defined]
     return storage, adapter, conn
 
+
 def _node(name: str, **overrides: object) -> WorkflowNode:
     base: dict[str, object] = dict(
         name=name,
@@ -440,6 +441,7 @@ class TestFailNodeWithHelper:
         # helper tenga fila que actualizar.
         node_execution_id = "ne-x"
         from skillgraph.runtime.engine import EventBuilder
+
         event = EventBuilder(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -501,9 +503,7 @@ class TestCancelRun:
             outcome="ok",
         )
         ctl = RunController(storage=storage, adapter=adapter)
-        run_id = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.cancel_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -511,9 +511,7 @@ class TestCancelRun:
         )
         assert snap.state == "CANCELLED"
         # DB consistente
-        row = conn.execute(
-            "SELECT state FROM workflow_runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        row = conn.execute("SELECT state FROM workflow_runs WHERE run_id = ?", (run_id,)).fetchone()
         assert row["state"] == "CANCELLED"
 
     def test_cancel_emits_run_completed_event(
@@ -531,9 +529,7 @@ class TestCancelRun:
             outcome="ok",
         )
         ctl = RunController(storage=storage, adapter=adapter)
-        run_id = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.cancel_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -569,16 +565,10 @@ class TestCancelRun:
             outcome="ok",
         )
         ctl = RunController(storage=storage, adapter=adapter)
-        run_id = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # Reconciliar hasta COMPLETED
-        ctl.reconcile_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
-        ctl.reconcile_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
+        ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         snap = ctl._snapshot(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap.state == "COMPLETED"
         with pytest.raises(ValidationError):
@@ -619,9 +609,7 @@ class TestCancelRun:
             outcome="ok",
         )
         ctl = RunController(storage=storage, adapter=adapter)
-        run_id = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.cancel_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -633,9 +621,7 @@ class TestCancelRun:
             "SELECT COUNT(*) AS n FROM runtime_events WHERE run_id = ?",
             (run_id,),
         ).fetchone()["n"]
-        snap = ctl.reconcile_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap.state == "CANCELLED"
         events_after = conn.execute(
             "SELECT COUNT(*) AS n FROM runtime_events WHERE run_id = ?",
@@ -670,15 +656,9 @@ class TestListAndShowRun:
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
         ctl = RunController(storage=storage, adapter=adapter)
-        rid1 = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
-        rid2 = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
-        rid3 = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
+        rid1 = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        rid2 = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        rid3 = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         rows = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT)
         ids = tuple(r.run_id for r in rows)
         assert ids == (rid3, rid2, rid1)
@@ -692,12 +672,8 @@ class TestListAndShowRun:
         plan = _plan((_node("a"),))
         ctl = RunController(storage=storage, adapter=adapter)
         for _ in range(5):
-            ctl.create_run(
-                tenant_id=TENANT, project_id=PROJECT, plan=plan
-            )
-        rows = ctl.list_runs(
-            tenant_id=TENANT, project_id=PROJECT, limit=2
-        )
+            ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        rows = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT, limit=2)
         assert len(rows) == 2
 
     def test_list_runs_filters_by_state(
@@ -709,18 +685,12 @@ class TestListAndShowRun:
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
         ctl = RunController(storage=storage, adapter=adapter)
-        rid = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
+        rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # El run recien creado esta en CREATED.
-        rows_created = ctl.list_runs(
-            tenant_id=TENANT, project_id=PROJECT, state="CREATED"
-        )
+        rows_created = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT, state="CREATED")
         assert rid in tuple(r.run_id for r in rows_created)
         # Filtrar por COMPLETED no debe devolver nada.
-        rows_completed = ctl.list_runs(
-            tenant_id=TENANT, project_id=PROJECT, state="COMPLETED"
-        )
+        rows_completed = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT, state="COMPLETED")
         assert rows_completed == ()
 
     def test_show_run_returns_snapshot(
@@ -731,12 +701,8 @@ class TestListAndShowRun:
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
         ctl = RunController(storage=storage, adapter=adapter)
-        rid = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
-        snap = ctl.show_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=rid
-        )
+        rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        snap = ctl.show_run(tenant_id=TENANT, project_id=PROJECT, run_id=rid)
         assert snap.run_id == rid
         assert snap.state == "CREATED"
 
@@ -791,12 +757,8 @@ class TestLogsRun:
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
         ctl = RunController(storage=storage, adapter=adapter)
-        run_id = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
-        events = ctl.logs_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        events = ctl.logs_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         kinds = tuple(e.event.event_kind for e in events)
         # Como minimo: RunCreated.
         assert "RunCreated" in kinds
@@ -820,12 +782,8 @@ class TestLogsRun:
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
         ctl = RunController(storage=storage, adapter=adapter)
-        run_id = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
-        events = ctl.logs_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        events = ctl.logs_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert len(events) > 0
         ev = events[0]
         assert isinstance(ev, RuntimeEventLog)
@@ -842,8 +800,6 @@ class TestLogsRun:
             "EvidenceProduced",
             "RunCompleted",
         }
-
-
 
 
 class TestRunBudgetDataclass:
@@ -870,9 +826,7 @@ class TestRunBudgetDataclass:
         """RunBudget con limites positivos es valido."""
         from skillgraph.runtime.runcontroller import RunBudget
 
-        budget = RunBudget(
-            max_visits=10, max_runtime_seconds=300, max_events=1000
-        )
+        budget = RunBudget(max_visits=10, max_runtime_seconds=300, max_events=1000)
         assert budget.is_active is True
 
     def test_run_budget_rejects_negative(self) -> None:
@@ -922,9 +876,7 @@ class TestStorageBudget:
             max_runtime_seconds=300,
             max_events=1000,
         )
-        row = storage.get_budget(
-            tenant_id=TENANT, project_id=PROJECT, run_id="r1"
-        )
+        row = storage.get_budget(tenant_id=TENANT, project_id=PROJECT, run_id="r1")
         assert row is not None
         assert row["max_visits"] == 10
         assert row["max_runtime_seconds"] == 300
@@ -944,9 +896,7 @@ class TestStorageBudget:
             max_runtime_seconds=None,
             max_events=None,
         )
-        row = storage.get_budget(
-            tenant_id=TENANT, project_id=PROJECT, run_id="r2"
-        )
+        row = storage.get_budget(tenant_id=TENANT, project_id=PROJECT, run_id="r2")
         assert row is not None
         assert row["max_visits"] is None
         assert row["max_runtime_seconds"] is None
@@ -958,9 +908,7 @@ class TestStorageBudget:
 
         storage, _adapter, _conn = fixture_setup
         assert isinstance(storage, Storage)
-        row = storage.get_budget(
-            tenant_id=TENANT, project_id=PROJECT, run_id="no-bud"
-        )
+        row = storage.get_budget(tenant_id=TENANT, project_id=PROJECT, run_id="no-bud")
         assert row is None
 
     def test_upsert_is_idempotent_on_repeated_call(self, fixture_setup) -> None:
@@ -978,18 +926,14 @@ class TestStorageBudget:
                 max_runtime_seconds=None,
                 max_events=None,
             )
-        row = storage.get_budget(
-            tenant_id=TENANT, project_id=PROJECT, run_id="r3"
-        )
+        row = storage.get_budget(tenant_id=TENANT, project_id=PROJECT, run_id="r3")
         assert row["max_visits"] == 5
 
 
 class TestCreateRunWithBudget:
     """Tests para RunController.create_run con RunBudget (Etapa 7 S4)."""
 
-    def test_create_run_persists_budget_when_provided(
-        self, fixture_setup
-    ) -> None:
+    def test_create_run_persists_budget_when_provided(self, fixture_setup) -> None:
         """create_run con budget= lo persiste en Storage."""
         from skillgraph.runtime.runcontroller import RunBudget
 
@@ -1002,35 +946,25 @@ class TestCreateRunWithBudget:
             plan=plan,
             budget=RunBudget(max_visits=5, max_runtime_seconds=60),
         )
-        row = storage.get_budget(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        row = storage.get_budget(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert row is not None
         assert row["max_visits"] == 5
         assert row["max_runtime_seconds"] == 60
         assert row["max_events"] is None
 
-    def test_create_run_without_budget_persists_none(
-        self, fixture_setup
-    ) -> None:
+    def test_create_run_without_budget_persists_none(self, fixture_setup) -> None:
         """create_run sin budget no escribe en run_budgets."""
         from skillgraph.runtime.runcontroller import RunBudget
 
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
         ctl = RunController(storage=storage, adapter=adapter)
-        run_id = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
-        row = storage.get_budget(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        row = storage.get_budget(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert row is None
         _ = RunBudget  # import-only sanity check
 
-    def test_create_run_with_inactive_budget_skips_persistence(
-        self, fixture_setup
-    ) -> None:
+    def test_create_run_with_inactive_budget_skips_persistence(self, fixture_setup) -> None:
         """create_run con budget sin limites activos (todos None) no persiste.
 
         Optimizacion: no escribimos una fila de budget si todos los
@@ -1049,9 +983,7 @@ class TestCreateRunWithBudget:
             plan=plan,
             budget=RunBudget(),  # todos None, is_active=False
         )
-        row = storage.get_budget(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        row = storage.get_budget(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert row is None
 
 
@@ -1064,9 +996,7 @@ class TestBudgetEnforcement:
     - Sin budget: comportamiento sin cambios.
     """
 
-    def test_reconcile_emits_budget_exceeded_when_visits_exhausted(
-        self, fixture_setup
-    ) -> None:
+    def test_reconcile_emits_budget_exceeded_when_visits_exhausted(self, fixture_setup) -> None:
         """Plan con self-loop y max_visits=1 -> segundo pase emite BudgetExceeded."""
         from skillgraph.resources.workflow import (
             WorkflowNode,
@@ -1091,9 +1021,7 @@ class TestBudgetEnforcement:
             transitions=(WorkflowTransition(source="a", outcome="ok", target="a"),),
         )
         # Sembrar fixture para el FakeAgentAdapter (self-loop re-ejecuta).
-        _seed_fixtures_for_plan(
-            adapter._root, plan, outcome_for={"a": "ok"}
-        )
+        _seed_fixtures_for_plan(adapter._root, plan, outcome_for={"a": "ok"})
         ctl = RunController(storage=storage, adapter=adapter)
         run_id = ctl.create_run(
             tenant_id=TENANT,
@@ -1102,30 +1030,23 @@ class TestBudgetEnforcement:
             budget=RunBudget(max_visits=1),
         )
         # Primer pase: ejecuta "a" (SUCCEEDED).
-        ctl.reconcile_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         # Segundo pase: self-loop + max_visits=1 agotado -> BudgetExceeded.
-        snap2 = ctl.reconcile_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        snap2 = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap2.state == "FAILED"
         # Verifica que se emitio el evento BudgetExceeded.
-        rows = storage.list_events_for_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        rows = storage.list_events_for_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         kinds = [r["event_kind"] for r in rows]
         assert "BudgetExceeded" in kinds
         budget_event = next(r for r in rows if r["event_kind"] == "BudgetExceeded")
         import json as _json
+
         payload = _json.loads(budget_event["payload_json"])
         assert payload["kind"] == "visits"
         assert payload["limit"] == 1
         assert payload["observed"] >= 1
 
-    def test_reconcile_without_budget_does_not_enforce(
-        self, fixture_setup
-    ) -> None:
+    def test_reconcile_without_budget_does_not_enforce(self, fixture_setup) -> None:
         """Sin budget, un DAG lineal no se aborta por max_visits."""
         from skillgraph.resources.workflow import (
             WorkflowNode,
@@ -1145,16 +1066,10 @@ class TestBudgetEnforcement:
         )
         plan = WorkflowPlan(initial="a", nodes=(a,), transitions=())
         # Sembrar fixture para que el FakeAgentAdapter no falle.
-        _seed_fixtures_for_plan(
-            fixtures_root, plan, outcome_for={"a": "ok"}
-        )
+        _seed_fixtures_for_plan(fixtures_root, plan, outcome_for={"a": "ok"})
         ctl = RunController(storage=storage, adapter=adapter)
-        run_id = ctl.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
-        snap = ctl.reconcile_run(
-            tenant_id=TENANT, project_id=PROJECT, run_id=run_id
-        )
+        run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
+        snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         # Plan lineal sin budget: COMPLETED (nodo terminal ejecutado).
         assert snap.state == "COMPLETED"
 
@@ -1167,25 +1082,17 @@ class TestBudgetKindValidation:
         from skillgraph.core.errors import ValidationError
         from skillgraph.runtime.engine import EventBuilder
 
-        eb = EventBuilder(
-            tenant_id="t", project_id="p", correlation_id="c"
-        )
+        eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         with pytest.raises(ValidationError):
-            eb.budget_exceeded(
-                run_id="r", kind="invalid", limit=1, observed=2
-            )
+            eb.budget_exceeded(run_id="r", kind="invalid", limit=1, observed=2)
 
     def test_budget_exceeded_accepts_known_kinds(self) -> None:
         """budget_exceeded acepta visits|runtime|events."""
         from skillgraph.runtime.engine import EventBuilder
 
-        eb = EventBuilder(
-            tenant_id="t", project_id="p", correlation_id="c"
-        )
+        eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         for k in ("visits", "runtime", "events"):
-            ev = eb.budget_exceeded(
-                run_id="r", kind=k, limit=10, observed=11
-            )
+            ev = eb.budget_exceeded(run_id="r", kind=k, limit=10, observed=11)
             assert ev.payload["kind"] == k
             assert ev.payload["limit"] == 10
             assert ev.payload["observed"] == 11

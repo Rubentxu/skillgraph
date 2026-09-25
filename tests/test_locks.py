@@ -25,34 +25,24 @@ class TestRunLockTakeRelease:
 
     def test_take_in_mode_none_is_noop(self, tmp_path: Path) -> None:
         """`mode='none'` no toca el filesystem."""
-        lock = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
+        lock = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
         with lock.take(mode="none"):
             pass
         # No se creo el archivo.
         assert not any(tmp_path.iterdir())
 
-    def test_take_in_mode_advisory_creates_then_removes_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_take_in_mode_advisory_creates_then_removes_file(self, tmp_path: Path) -> None:
         """`mode='advisory'` crea el archivo dentro del with, lo elimina al salir."""
-        lock = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
+        lock = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
         with lock.take(mode="advisory", timeout_seconds=1):
             # Dentro: el archivo de lock existe.
             assert any(tmp_path.iterdir())
         # Fuera: el archivo se elimino (no leak).
         assert not any(tmp_path.iterdir())
 
-    def test_take_in_mode_fail_fast_succeeds_when_free(
-        self, tmp_path: Path
-    ) -> None:
+    def test_take_in_mode_fail_fast_succeeds_when_free(self, tmp_path: Path) -> None:
         """`mode='fail-fast'` toma el lock si esta libre."""
-        lock = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
+        lock = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
         with lock.take(mode="fail-fast"):
             pass  # ok, libre
         assert not any(tmp_path.iterdir())
@@ -61,20 +51,16 @@ class TestRunLockTakeRelease:
 class TestRunLockConflict:
     """Conflictos entre dos `RunLock` con la misma key."""
 
-    def test_fail_fast_raises_when_lock_held_by_other_process(
-        self, tmp_path: Path
-    ) -> None:
+    def test_fail_fast_raises_when_lock_held_by_other_process(self, tmp_path: Path) -> None:
         """`mode='fail-fast'` eleva LockUnavailable si el lock esta tomado."""
-        lock_a = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
-        lock_b = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
-        with lock_a.take(mode="advisory", timeout_seconds=1):
-            with pytest.raises(LockUnavailable):
-                with lock_b.take(mode="fail-fast"):
-                    pass
+        lock_a = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
+        lock_b = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
+        with (
+            lock_a.take(mode="advisory", timeout_seconds=1),
+            pytest.raises(LockUnavailable),
+            lock_b.take(mode="fail-fast"),
+        ):
+            pass
 
     def test_advisory_waits_and_then_succeeds(self, tmp_path: Path) -> None:
         """`mode='advisory'` espera a que el otro libere el lock."""
@@ -84,9 +70,7 @@ class TestRunLockConflict:
         release = threading.Event()
 
         def holder() -> None:
-            lock = RunLock(
-                lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-            )
+            lock = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
             with lock.take(mode="advisory", timeout_seconds=1):
                 order.append("holder-start")
                 release.wait(timeout=2)
@@ -95,9 +79,7 @@ class TestRunLockConflict:
         def waiter() -> None:
             # Espera a que el holder tome el lock.
             time.sleep(0.1)
-            lock = RunLock(
-                lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-            )
+            lock = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
             with lock.take(mode="advisory", timeout_seconds=5):
                 order.append("waiter-in")
                 order.append("waiter-out")
@@ -120,16 +102,14 @@ class TestRunLockConflict:
 
     def test_advisory_timeout_raises(self, tmp_path: Path) -> None:
         """`mode='advisory'` con timeout corto + lock tomado -> LockUnavailable."""
-        lock_a = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
-        lock_b = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
-        with lock_a.take(mode="advisory", timeout_seconds=1):
-            with pytest.raises(LockUnavailable):
-                with lock_b.take(mode="advisory", timeout_seconds=0.1):
-                    pass
+        lock_a = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
+        lock_b = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
+        with (
+            lock_a.take(mode="advisory", timeout_seconds=1),
+            pytest.raises(LockUnavailable),
+            lock_b.take(mode="advisory", timeout_seconds=0.1),
+        ):
+            pass
 
 
 class TestRunLockReleasesOnException:
@@ -137,9 +117,7 @@ class TestRunLockReleasesOnException:
 
     def test_lock_released_when_body_raises(self, tmp_path: Path) -> None:
         """Tras una excepcion dentro del `with`, el lock se libera."""
-        lock = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
+        lock = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
         with pytest.raises(RuntimeError), lock.take(mode="advisory", timeout_seconds=1):
             # Dentro: archivo existe.
             assert any(tmp_path.iterdir())
@@ -147,13 +125,9 @@ class TestRunLockReleasesOnException:
         # Fuera: archivo eliminado (no leak).
         assert not any(tmp_path.iterdir())
 
-    def test_lock_can_be_reacquired_after_exception(
-        self, tmp_path: Path
-    ) -> None:
+    def test_lock_can_be_reacquired_after_exception(self, tmp_path: Path) -> None:
         """Tras una excepcion, el lock puede ser retomado."""
-        lock = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
+        lock = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
         try:
             with lock.take(mode="advisory", timeout_seconds=1):
                 raise ValueError("x")
@@ -185,21 +159,15 @@ class TestRunLockKey:
 class TestRunLockAcrossProcesses:
     """Concurrencia cross-process (cubre uso real: dos CLI `sg run`)."""
 
-    def test_two_processes_share_same_lockfile(
-        self, tmp_path: Path
-    ) -> None:
+    def test_two_processes_share_same_lockfile(self, tmp_path: Path) -> None:
         """Dos procesos (mismo lock_dir + misma key) se serializan."""
         # Lo cubrimos con dos instancias de RunLock en el mismo proceso
         # (simula dos PIDs porque fcntl.flock distingue por fd, no por PID).
         # Aun asi, garantiza exclusividad dentro del proceso.
         results: list[str] = []
 
-        lock1 = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
-        lock2 = RunLock(
-            lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1")
-        )
+        lock1 = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
+        lock2 = RunLock(lock_dir=tmp_path, key=RunLockKey("t", "p", "r-1"))
 
         def critical(label: str) -> None:
             with lock1.take(mode="advisory", timeout_seconds=2):
@@ -220,15 +188,12 @@ class TestRunLockAcrossProcesses:
         # Las dos secciones no se solapan (orden estricto o inverse).
         joined = "|".join(results)
         assert (
-            "a-start|a-end|other-start|other-end"
-            in joined
+            "a-start|a-end|other-start|other-end" in joined
             or "other-start|other-end|a-start|a-end" in joined
         ), joined
 
 
-@pytest.mark.skipif(
-    os.name == "nt", reason="fcntl no es portable a Windows"
-)
+@pytest.mark.skipif(os.name == "nt", reason="fcntl no es portable a Windows")
 def test_runlock_unavailable_has_sg_code() -> None:
     """LockUnavailable expone un code estable para el dispatcher CLI."""
     err = LockUnavailable("x")
@@ -238,9 +203,7 @@ def test_runlock_unavailable_has_sg_code() -> None:
 class TestRunControllerLockIntegration:
     """RunController con lock_mode='advisory' serializa reconcile_run."""
 
-    def test_concurrent_reconciles_serialize_on_same_run(
-        self, tmp_path: Path
-    ) -> None:
+    def test_concurrent_reconciles_serialize_on_same_run(self, tmp_path: Path) -> None:
         """Dos hilos reconciliando el mismo Run: el segundo espera."""
         import threading as _th
 
@@ -256,9 +219,7 @@ class TestRunControllerLockIntegration:
         fixtures_root.mkdir()
         adapter = FakeAgentAdapter(fixtures_root)
         plan = _plan(("a",))
-        _seed_fixtures_for_plan(
-            fixtures_root, plan, outcome_for={"a": "ok"}
-        )
+        _seed_fixtures_for_plan(fixtures_root, plan, outcome_for={"a": "ok"})
 
         lock_dir = tmp_path / "locks"
         ctl1 = RunController(
@@ -275,9 +236,7 @@ class TestRunControllerLockIntegration:
             lock_mode="advisory",
             lock_timeout_seconds=5,
         )
-        run_id = ctl1.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
+        run_id = ctl1.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
 
         snaps: list[object] = []
         barrier = _th.Barrier(2)
@@ -311,9 +270,7 @@ class TestRunControllerLockIntegration:
 class TestRunControllerLockFailFast:
     """`fail-fast` eleva LockUnavailable si el lock esta tomado."""
 
-    def test_fail_fast_raises_when_other_process_holds(
-        self, tmp_path: Path
-    ) -> None:
+    def test_fail_fast_raises_when_other_process_holds(self, tmp_path: Path) -> None:
         """Un reconcile_run en fail-fast con lock tomado -> LockUnavailable."""
         import threading as _th
 
@@ -327,9 +284,7 @@ class TestRunControllerLockFailFast:
         fixtures_root.mkdir()
         adapter = FakeAgentAdapter(fixtures_root)
         plan = _plan(("a",))
-        _seed_fixtures_for_plan(
-            fixtures_root, plan, outcome_for={"a": "ok"}
-        )
+        _seed_fixtures_for_plan(fixtures_root, plan, outcome_for={"a": "ok"})
         lock_dir = tmp_path / "locks-failfast"
 
         ctl_hold = RunController(
@@ -346,9 +301,7 @@ class TestRunControllerLockFailFast:
             lock_mode="fail-fast",
             lock_timeout_seconds=5,
         )
-        run_id = ctl_hold.create_run(
-            tenant_id=TENANT, project_id=PROJECT, plan=plan
-        )
+        run_id = ctl_hold.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
 
         result: dict[str, object] = {}
 
@@ -414,6 +367,7 @@ def _seed_fixtures_for_plan(
 ) -> None:
     """Sembrar fixture JSON para cada nodo del plan."""
     import json as _json
+
     for n in plan.nodes:
         p = fixtures_root / TENANT / PROJECT / f"{n.name}.json"
         p.parent.mkdir(parents=True, exist_ok=True)

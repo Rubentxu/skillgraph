@@ -220,9 +220,7 @@ class TestIsBudgetExhaustedHelper:
         )
         assert result is False
 
-    def test_self_loop_with_max_visits_below_threshold_returns_false(
-        self, tmp_path: Path
-    ) -> None:
+    def test_self_loop_with_max_visits_below_threshold_returns_false(self, tmp_path: Path) -> None:
         a = _node("a", metadata={"max_visits": 3})
         plan = WorkflowPlan(
             nodes=(a,),

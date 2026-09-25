@@ -903,10 +903,7 @@ def cmd_runs_list(args: argparse.Namespace) -> int:
     if not runs:
         print("(sin runs)")
         return EXIT_OK
-    print(
-        f"{'run_id':<40} {'state':<11} {'current_node':<20} "
-        f"{'executed':<10} {'events':<8}"
-    )
+    print(f"{'run_id':<40} {'state':<11} {'current_node':<20} {'executed':<10} {'events':<8}")
     for r in runs:
         print(
             f"{r.run_id:<40} {r.state:<11} "
@@ -978,13 +975,8 @@ def cmd_runs_logs(args: argparse.Namespace) -> int:
     print(f"{'seq':<6} {'event_kind':<22} {'timestamp':<26} payload")
     for entry in logs:
         # Resumen corto del payload (primer nivel clave=valor).
-        kv = ",".join(
-            f"{k}={v!s:.40}" for k, v in entry.event.payload.items()
-        )
-        print(
-            f"{entry.sequence:<6} {entry.event.event_kind:<22} "
-            f"{entry.event.timestamp:<26} {kv}"
-        )
+        kv = ",".join(f"{k}={v!s:.40}" for k, v in entry.event.payload.items())
+        print(f"{entry.sequence:<6} {entry.event.event_kind:<22} {entry.event.timestamp:<26} {kv}")
     return EXIT_OK
 
 
@@ -1056,10 +1048,7 @@ def cmd_runs_budget(args: argparse.Namespace) -> int:
         "max_runtime_seconds="
         f"{row['max_runtime_seconds'] if row['max_runtime_seconds'] is not None else '-'}"
     )
-    print(
-        "max_events="
-        f"{row['max_events'] if row['max_events'] is not None else '-'}"
-    )
+    print(f"max_events={row['max_events'] if row['max_events'] is not None else '-'}")
     return EXIT_OK
 
 
@@ -1102,9 +1091,7 @@ def cmd_policy_set(args: argparse.Namespace) -> int:
         return err
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, _ = resolver.lookup(args.project)
-    storage.upsert_policy(
-        tenant_id=project["tenant_id"], policy=args.redact_policy
-    )
+    storage.upsert_policy(tenant_id=project["tenant_id"], policy=args.redact_policy)
     print(f"tenant_id={project['tenant_id']} policy={args.redact_policy}")
     return EXIT_OK
 

@@ -114,9 +114,7 @@ class RunLock:
         return self._lock_dir
 
     @contextlib.contextmanager
-    def take(
-        self, *, mode: LockMode, timeout_seconds: float = 30.0
-    ) -> Iterator[None]:
+    def take(self, *, mode: LockMode, timeout_seconds: float = 30.0) -> Iterator[None]:
         """Toma el lock. Libera al salir del bloque `with`.
 
         Args:
@@ -129,9 +127,7 @@ class RunLock:
             ValueError: mode desconocido.
         """
         if mode not in ("none", "advisory", "fail-fast"):
-            raise ValueError(
-                f"lock mode invalido: {mode!r} (esperado none|advisory|fail-fast)"
-            )
+            raise ValueError(f"lock mode invalido: {mode!r} (esperado none|advisory|fail-fast)")
         self._mode = mode
         self._timeout = timeout_seconds
         if mode == "none":
@@ -142,9 +138,7 @@ class RunLock:
         try:
             self._lock_dir.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            raise LockUnavailable(
-                f"no se puede crear lock_dir={self._lock_dir}: {exc}"
-            ) from exc
+            raise LockUnavailable(f"no se puede crear lock_dir={self._lock_dir}: {exc}") from exc
         lock_path = self._lock_dir / self._key.to_filename()
         try:
             self._fd = os.open(
@@ -153,9 +147,7 @@ class RunLock:
                 0o644,
             )
         except OSError as exc:
-            raise LockUnavailable(
-                f"no se puede abrir lock file={lock_path}: {exc}"
-            ) from exc
+            raise LockUnavailable(f"no se puede abrir lock file={lock_path}: {exc}") from exc
         try:
             if mode == "advisory":
                 deadline = time.monotonic() + timeout_seconds
@@ -166,19 +158,14 @@ class RunLock:
                     except OSError:
                         if time.monotonic() >= deadline:
                             raise LockUnavailable(
-                                f"timeout esperando lock {lock_path} "
-                                f"(>{timeout_seconds}s)"
+                                f"timeout esperando lock {lock_path} (>{timeout_seconds}s)"
                             ) from None
                         time.sleep(0.05)  # poll suave
             elif mode == "fail-fast":
                 try:
-                    fcntl.flock(
-                        self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB
-                    )
+                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except OSError as exc:
-                    raise LockUnavailable(
-                        f"lock {lock_path} ya esta tomado"
-                    ) from exc
+                    raise LockUnavailable(f"lock {lock_path} ya esta tomado") from exc
             yield
         finally:
             if self._fd is not None:

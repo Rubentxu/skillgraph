@@ -197,9 +197,7 @@ class TestStoragePolicyPersistence:
 class TestEventLogRedaction:
     """Integracion EventLog + policy_resolver (S5 Etapa 7)."""
 
-    def test_eventlog_redacts_payload_when_resolver_returns_metadata(
-        self, tmp_path
-    ) -> None:
+    def test_eventlog_redacts_payload_when_resolver_returns_metadata(self, tmp_path) -> None:
         """Resolver explicito 'metadata': claves conservadas, valores [REDACTED]."""
         import json as _json
 
@@ -209,9 +207,7 @@ class TestEventLogRedaction:
             _open_conn(tmp_path),
             policy_resolver=lambda _tenant: "metadata",
         )
-        eb = EventBuilder(
-            tenant_id="t", project_id="p", correlation_id="c"
-        )
+        eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         ev = eb.run_created(run_id="r", initial_node="a")
         log.append(ev)
         conn = log._conn  # type: ignore[attr-defined]
@@ -221,9 +217,7 @@ class TestEventLogRedaction:
         ).fetchone()
         persisted = _json.loads(row["payload_json"])
         # metadata: claves conservadas, valores [REDACTED].
-        assert all(
-            v == REDACTED_MARKER for v in persisted.values()
-        ), persisted
+        assert all(v == REDACTED_MARKER for v in persisted.values()), persisted
 
     def test_eventlog_passes_through_by_default(self, tmp_path) -> None:
         """Sin resolver -> default 'none': payload integro en disco."""
@@ -232,9 +226,7 @@ class TestEventLogRedaction:
         from skillgraph.runtime.engine import EventBuilder, EventLog
 
         log = EventLog(_open_conn(tmp_path), policy_resolver=None)
-        eb = EventBuilder(
-            tenant_id="t", project_id="p", correlation_id="c"
-        )
+        eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         ev = eb.run_created(run_id="r", initial_node="a")
         log.append(ev)
         conn = log._conn  # type: ignore[attr-defined]
@@ -256,9 +248,7 @@ class TestEventLogRedaction:
             _open_conn(tmp_path),
             policy_resolver=lambda _tenant: "payload",
         )
-        eb = EventBuilder(
-            tenant_id="t", project_id="p", correlation_id="c"
-        )
+        eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         ev = eb.node_started(run_id="r", node_execution_id="ne-1")
         log.append(ev)
         conn = log._conn  # type: ignore[attr-defined]
@@ -282,9 +272,7 @@ class TestEventLogRedaction:
             _open_conn(tmp_path),
             policy_resolver=lambda _tenant: "none",
         )
-        eb = EventBuilder(
-            tenant_id="t", project_id="p", correlation_id="c"
-        )
+        eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         ev = eb.run_created(run_id="r", initial_node="a")
         log.append(ev)
         conn = log._conn  # type: ignore[attr-defined]

@@ -108,9 +108,7 @@ def _latest_run_id(db: sqlite3.Connection) -> str:
 
 
 class TestRunsInspectCli:
-    def test_cancel_active_run_via_cli_marks_cancelled(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cancel_active_run_via_cli_marks_cancelled(self, tmp_path: Path) -> None:
         """`sg runs cancel <project> <run_id>` cancela un run ACTIVE.
 
         Setup: plan lineal de 3 nodos; sembramos fixture para el primero
@@ -149,8 +147,12 @@ class TestRunsInspectCli:
             db.close()
 
         result = _run_cli(
-            "runs", "cancel", "demo", "run-cli-test",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "cancel",
+            "demo",
+            "run-cli-test",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 0, f"stderr: {result.stderr}\nstdout: {result.stdout}"
         assert "state=CANCELLED" in result.stdout
@@ -174,37 +176,37 @@ class TestRunsInspectCli:
         finally:
             db.close()
 
-    def test_cancel_unknown_run_via_cli_returns_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cancel_unknown_run_via_cli_returns_error(self, tmp_path: Path) -> None:
         """Cancelar un run inexistente -> EXIT_DOMAIN (error tipado)."""
         data_root = _init_project(tmp_path)
         result = _run_cli(
-            "runs", "cancel", "demo", "run-que-no-existe",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "cancel",
+            "demo",
+            "run-que-no-existe",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         # NotFoundError es subclase de SkillGraphError -> el dispatcher
         # principal traduce a EXIT_DOMAIN (10).
         assert result.returncode != 0, (
-            f"esperaba rc != 0; stdout: {result.stdout}\n"
-            f"stderr: {result.stderr}"
+            f"esperaba rc != 0; stdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
-    def test_list_runs_via_cli_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_runs_via_cli_empty(self, tmp_path: Path) -> None:
         """`sg runs list <project>` con proyecto vacio -> '(sin runs)'."""
         data_root = _init_project(tmp_path)
         result = _run_cli(
-            "runs", "list", "demo",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "list",
+            "demo",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 0, result.stderr
         assert "(sin runs)" in result.stdout
 
-    def test_list_runs_via_cli_shows_recent_first(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_runs_via_cli_shows_recent_first(self, tmp_path: Path) -> None:
         """`sg runs list` muestra los runs en orden mas reciente primero."""
         data_root = _init_project(tmp_path)
         db_path = _project_db_path(data_root)
@@ -228,8 +230,11 @@ class TestRunsInspectCli:
             db.close()
 
         result = _run_cli(
-            "runs", "list", "demo",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "list",
+            "demo",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 0, result.stderr
         # run-3 (mas reciente) debe aparecer antes que run-1.
@@ -237,13 +242,9 @@ class TestRunsInspectCli:
         idx_1 = result.stdout.find("run-1")
         assert idx_3 != -1
         assert idx_1 != -1
-        assert idx_3 < idx_1, (
-            f"esperaba run-3 antes que run-1; stdout: {result.stdout}"
-        )
+        assert idx_3 < idx_1, f"esperaba run-3 antes que run-1; stdout: {result.stdout}"
 
-    def test_show_run_via_cli_outputs_snapshot(
-        self, tmp_path: Path
-    ) -> None:
+    def test_show_run_via_cli_outputs_snapshot(self, tmp_path: Path) -> None:
         """`sg runs show <project> <run_id>` imprime key=value snapshot."""
         data_root = _init_project(tmp_path)
         db_path = _project_db_path(data_root)
@@ -263,17 +264,19 @@ class TestRunsInspectCli:
             db.close()
 
         result = _run_cli(
-            "runs", "show", "demo", "run-show",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "show",
+            "demo",
+            "run-show",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 0, result.stderr
         assert "run_id=run-show" in result.stdout
         assert "state=CREATED" in result.stdout
         assert "current_node=a" in result.stdout
 
-    def test_logs_run_via_cli_outputs_event_timeline(
-        self, tmp_path: Path
-    ) -> None:
+    def test_logs_run_via_cli_outputs_event_timeline(self, tmp_path: Path) -> None:
         """`sg runs logs <project> <run_id>` imprime el timeline de eventos."""
         data_root = _init_project(tmp_path)
         db_path = _project_db_path(data_root)
@@ -305,8 +308,12 @@ class TestRunsInspectCli:
             db.close()
 
         result = _run_cli(
-            "runs", "logs", "demo", "run-logs",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "logs",
+            "demo",
+            "run-logs",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 0, result.stderr
         # Cabecera + 1 linea de evento con sequence + event_kind + payload.
@@ -315,14 +322,16 @@ class TestRunsInspectCli:
         assert "plan_id=p1" in result.stdout
         assert "trigger=manual" in result.stdout
 
-    def test_logs_run_via_cli_unknown_run_returns_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_logs_run_via_cli_unknown_run_returns_error(self, tmp_path: Path) -> None:
         """`sg runs logs` con run desconocido -> exit code de dominio (10)."""
         data_root = _init_project(tmp_path)
         result = _run_cli(
-            "runs", "logs", "demo", "no-existe",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "logs",
+            "demo",
+            "no-existe",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 10, result.stderr
         assert "no encontrado" in result.stderr or "NotFound" in result.stderr
@@ -337,9 +346,7 @@ class TestRunsBudgetCli:
     - Run desconocido -> exit 10 (EXIT_DOMAIN) + stderr.
     """
 
-    def test_budget_run_via_cli_no_budget_prints_marker(
-        self, tmp_path: Path
-    ) -> None:
+    def test_budget_run_via_cli_no_budget_prints_marker(self, tmp_path: Path) -> None:
         """`sg runs budget` sobre Run sin budget -> '(sin budget)'."""
         data_root = _init_project(tmp_path)
         db_path = _project_db_path(data_root)
@@ -359,15 +366,17 @@ class TestRunsBudgetCli:
             db.close()
 
         result = _run_cli(
-            "runs", "budget", "demo", "run-no-bud",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "budget",
+            "demo",
+            "run-no-bud",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 0, result.stderr
         assert "(sin budget)" in result.stdout
 
-    def test_budget_run_via_cli_with_budget_outputs_keyvalue(
-        self, tmp_path: Path
-    ) -> None:
+    def test_budget_run_via_cli_with_budget_outputs_keyvalue(self, tmp_path: Path) -> None:
         """`sg runs budget` sobre Run con budget -> key=value."""
         data_root = _init_project(tmp_path)
         db_path = _project_db_path(data_root)
@@ -395,8 +404,12 @@ class TestRunsBudgetCli:
             db.close()
 
         result = _run_cli(
-            "runs", "budget", "demo", "run-bud",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "budget",
+            "demo",
+            "run-bud",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 0, result.stderr
         assert "run_id=run-bud" in result.stdout
@@ -404,14 +417,16 @@ class TestRunsBudgetCli:
         assert "max_runtime_seconds=60" in result.stdout
         assert "max_events=100" in result.stdout
 
-    def test_budget_run_via_cli_unknown_run_returns_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_budget_run_via_cli_unknown_run_returns_error(self, tmp_path: Path) -> None:
         """`sg runs budget` con run desconocido -> exit 10."""
         data_root = _init_project(tmp_path)
         result = _run_cli(
-            "runs", "budget", "demo", "no-existe",
-            cwd=tmp_path, data_root=data_root,
+            "runs",
+            "budget",
+            "demo",
+            "no-existe",
+            cwd=tmp_path,
+            data_root=data_root,
         )
         assert result.returncode == 10, result.stderr
         assert "no encontrado" in result.stderr or "NotFound" in result.stderr

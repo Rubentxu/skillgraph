@@ -29,9 +29,7 @@ from skillgraph.core.errors import ValidationError
 RedactionPolicy = Literal["none", "metadata", "payload", "full"]
 
 #: Conjunto canonico exportado para validacion runtime.
-_REDACTION_POLICIES: Final[frozenset[str]] = frozenset(
-    {"none", "metadata", "payload", "full"}
-)
+_REDACTION_POLICIES: Final[frozenset[str]] = frozenset({"none", "metadata", "payload", "full"})
 
 #: Marcador de redaccion. Constante para que el caller pueda
 #: detectar y formatear en UIs.
@@ -46,16 +44,13 @@ def validate_policy(policy: str) -> RedactionPolicy:
     """
     if policy not in _REDACTION_POLICIES:
         raise ValidationError(
-            f"redaction_policy invalida: {policy!r} "
-            f"(esperado una de {sorted(_REDACTION_POLICIES)})"
+            f"redaction_policy invalida: {policy!r} (esperado una de {sorted(_REDACTION_POLICIES)})"
         )
     # El check `in _REDACTION_POLICIES` ya valida la pertenencia.
     return policy  # type: ignore[return-value]
 
 
-def redact_payload(
-    payload: dict[str, Any], policy: RedactionPolicy
-) -> dict[str, Any]:
+def redact_payload(payload: dict[str, Any], policy: RedactionPolicy) -> dict[str, Any]:
     """Aplica la politica de redaccion al payload.
 
     Politicas (todas son funciones puras):
