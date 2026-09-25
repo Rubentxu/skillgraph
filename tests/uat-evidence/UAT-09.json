@@ -1,37 +1,37 @@
 {
-  "artifacts": [],
-  "expected": "apply rc=10; expansion_rejections/*.json con reason=I3",
-  "notes": "UAT-09 cierra: la propuesta con capability 'fantasma_xyz' viola I3 (capability no registrada en el registry). El CLI rechaza (rc=10 EXIT_DOMAIN) y persiste la evidencia JSON en expansion_rejections/<proposal_id>.json con reason, violated_invariants, rejected_by, rejected_at. NO se incluye path absoluto del scratch de pytest porque cambia entre ejecuciones; el proposal_id SI es reproducible.",
-  "observed": "apply_rc=10; rejection_proposal_id=prop-1888f59d4e4d; reason='I3 violated'; violations=['I3']; policy_violations=[]",
-  "revision": "9d9ae093f1729d729ec2c97ea2ec74e744c72d16",
+  "uat_id": "UAT-09",
+  "revision": "b53de0d3bc109f0ccaec17e058edf332850d98f8",
+  "timestamp": "2026-09-23T11:00:00Z",
   "scenario": "Dada una propuesta que solicita nuevas capacidades, cuando no existe autorizacion, entonces el motor no incorpora la ampliacion. Debe conservarse evidencia de su rechazo o de su estado de espera.",
-  "status": "PASS",
+  "expected": "apply rc=10; expansion_rejections/*.json con reason=I3",
+  "observed": "apply_rc=10; rejection_proposal_id=prop-1888f59d4e4d; reason='I3 violated'; violations=['I3']; policy_violations=[]",
   "steps": [
     {
       "cmd": "init",
       "returncode": "0",
-      "stderr": "",
-      "stdout": "(omitido)"
+      "stdout": "(omitido)",
+      "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stderr": "",
-      "stdout": "(omitido)"
+      "stdout": "(omitido)",
+      "stderr": ""
     },
     {
       "cmd": "brick register lint-brick",
       "returncode": "0",
-      "stderr": "",
-      "stdout": "(omitido)"
+      "stdout": "(omitido)",
+      "stderr": ""
     },
     {
       "cmd": "expansion apply demo --proposal prop.json",
       "returncode": "10",
-      "stderr": "(omitido; contiene path absoluto de pytest scratch, no reproducible)",
-      "stdout": ""
+      "stdout": "",
+      "stderr": "(omitido; contiene path absoluto de pytest scratch, no reproducible)"
     }
   ],
-  "timestamp": "2026-09-23T11:00:00Z",
-  "uat_id": "UAT-09"
+  "artifacts": [],
+  "status": "PASS",
+  "notes": "UAT-09 cierra: la propuesta con capability 'fantasma_xyz' viola I3 (capability no registrada en el registry). El CLI rechaza (rc=10 EXIT_DOMAIN) y persiste la evidencia JSON en expansion_rejections/<proposal_id>.json con reason, violated_invariants, rejected_by, rejected_at. NO se incluye path absoluto del scratch de pytest porque cambia entre ejecuciones; el proposal_id SI es reproducible."
 }

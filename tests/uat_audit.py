@@ -31,6 +31,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EVIDENCE_DIR = REPO_ROOT / "tests" / "uat-evidence"
 
+# Import del helper compartido de lock. `tests/uat_audit.py` se ejecuta
+# tambien como script standalone (`python tests/uat_audit.py`); por
+# tanto el padre `tests/` debe estar en sys.path para que el import
+# `tests._evidence_lock` resuelva.
+_TESTS_DIR = Path(__file__).resolve().parent
+if str(_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))
+from tests._evidence_lock import save_with_lock  # noqa: E402
+
 
 @dataclass(frozen=True)
 class Evidence:
@@ -92,38 +101,18 @@ def _save_evidence(ev: Evidence) -> Path:
     - El reemplazo final es atomico via `os.replace` bajo lock exclusivo
       `fcntl.flock` sobre `<uat_id>.lock`, evitando carreras si la suite
       se ejecuta en paralelo (pytest-xdist).
+
+    Implementacion delegada en `tests._evidence_lock.save_with_lock`
+    (DRY: mismo patron que `_emit_uat_08/09_evidence` en
+    `test_h4_expansion_cli.py`).
     """
-    import fcntl
-    import os
-
     data = asdict(ev) if isinstance(ev, Evidence) else dict(ev)
-
-    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-    out = EVIDENCE_DIR / f"{data['uat_id']}.json"
-    lock_path = EVIDENCE_DIR / f"{data['uat_id']}.lock"
-    content = json.dumps(data, indent=2, ensure_ascii=False)
-
-    with lock_path.open("w") as lock_fd:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-        try:
-            if out.exists():
-                hist_dir = EVIDENCE_DIR / "history" / data["uat_id"]
-                hist_dir.mkdir(parents=True, exist_ok=True)
-                try:
-                    prev = json.loads(out.read_text(encoding="utf-8"))
-                    stamp = prev.get("verified_at") or prev.get("timestamp") or _now()
-                    prev_status = prev.get("status", "UNKNOWN")
-                except (ValueError, TypeError):
-                    stamp, prev_status = _now(), "UNKNOWN"
-                arch = hist_dir / f"{stamp.replace(':', '')}-{prev_status}.json"
-                if not arch.exists():
-                    arch.write_text(out.read_text(encoding="utf-8"), encoding="utf-8")
-            tmp = out.with_suffix(".json.tmp")
-            tmp.write_text(content, encoding="utf-8")
-            os.replace(tmp, out)
-        finally:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-    return out
+    return save_with_lock(
+        EVIDENCE_DIR,
+        data["uat_id"],
+        data,
+        history_keep=True,
+    )
 
 
 # ---------------------------------------------------------------------------

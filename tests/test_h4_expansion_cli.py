@@ -254,15 +254,14 @@ def _emit_uat_08_evidence(
     Es invocada por test_uat_08_authorized_applied tras verificar el
     happy path. Asi no hay 'tests que retornan dict' ni doble ejecucion
     del CLI.
-    """
-    import sys
-    from pathlib import Path as _Path
 
-    # Localizar tests/uat-evidence/ desde la raiz de tests/.
-    repo_root = _Path(__file__).parent.parent
+    Escritura protegida con lock (`tests._evidence_lock`) para soportar
+    pytest-xdist sin corromper el archivo (ver DT-2 stewardship backlog).
+    """
+    from tests._evidence_lock import save_with_lock
+
+    repo_root = Path(__file__).parent.parent
     evidence_dir = repo_root / "tests" / "uat-evidence"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    target = evidence_dir / "UAT-08.json"
 
     plan_after = json.loads(plan_file.read_text())
     nodes_after = {n["name"] for n in plan_after["nodes"]}
@@ -321,10 +320,10 @@ def _emit_uat_08_evidence(
             "patch opera a nivel de plan, no de ejecuciones."
         ),
     }
-    target.write_text(json.dumps(evidence, indent=2, sort_keys=True))
-    assert target.is_file()
+    save_with_lock(evidence_dir, "UAT-08", evidence)
+    assert (evidence_dir / "UAT-08.json").is_file()
     # Limpieza del tmp_path: pytest lo borra, no necesitamos hacer nada.
-    del tmp_path, data_root, sys
+    del tmp_path, data_root
 
 
 def _emit_uat_09_evidence(
@@ -336,13 +335,15 @@ def _emit_uat_09_evidence(
     proposal: Path,
     rejection_files: list[Path],
 ) -> None:
-    """Helper para UAT-09 evidence JSON."""
-    from pathlib import Path as _Path
+    """Helper para UAT-09 evidence JSON.
 
-    repo_root = _Path(__file__).parent.parent
+    Escritura protegida con lock (`tests._evidence_lock`) para soportar
+    pytest-xdist sin corromper el archivo (ver DT-2 stewardship backlog).
+    """
+    from tests._evidence_lock import save_with_lock
+
+    repo_root = Path(__file__).parent.parent
     evidence_dir = repo_root / "tests" / "uat-evidence"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    target = evidence_dir / "UAT-09.json"
 
     payload = json.loads(rejection_files[0].read_text())
 
@@ -404,8 +405,8 @@ def _emit_uat_09_evidence(
             "cambia entre ejecuciones; el proposal_id SI es reproducible."
         ),
     }
-    target.write_text(json.dumps(evidence, indent=2, sort_keys=True))
-    assert target.is_file()
+    save_with_lock(evidence_dir, "UAT-09", evidence)
+    assert (evidence_dir / "UAT-09.json").is_file()
     del tmp_path, data_root
 
 

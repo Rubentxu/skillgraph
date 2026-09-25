@@ -1,37 +1,37 @@
 {
-  "artifacts": [],
-  "expected": "apply rc=0; plan.nodes contiene nuevo nodo 'extra'; originales intactos",
-  "notes": "H4 Slice 1 implementado. UAT-08 cumple 'incorpora unicamente el cambio solicitado' + 'nodos completados mantienen revisiones y resultados originales'. apply devuelve plan NUEVO (inmutable); el original no se toca. Las revisiones de completados viven en node_executions (H2 slice 4+) y el patch opera a nivel de plan, no de ejecuciones.",
-  "observed": "apply_rc=0; nodes_after=['child', 'extra', 'root']; added=True",
-  "revision": "9d9ae093f1729d729ec2c97ea2ec74e744c72d16",
+  "uat_id": "UAT-08",
+  "revision": "b53de0d3bc109f0ccaec17e058edf332850d98f8",
+  "timestamp": "2026-09-23T11:00:00Z",
   "scenario": "Dada una problematica no contemplada, cuando se propone un subgrafo valido y autorizado, entonces se incorpora unicamente el cambio solicitado. Los nodos completados mantienen sus revisiones y resultados originales.",
-  "status": "PASS",
+  "expected": "apply rc=0; plan.nodes contiene nuevo nodo 'extra'; originales intactos",
+  "observed": "apply_rc=0; nodes_after=['child', 'extra', 'root']; added=True",
   "steps": [
     {
       "cmd": "init",
       "returncode": "0",
-      "stderr": "",
-      "stdout": "(omitido)"
+      "stdout": "(omitido)",
+      "stderr": ""
     },
     {
       "cmd": "project create demo",
       "returncode": "0",
-      "stderr": "",
-      "stdout": "(omitido)"
+      "stdout": "(omitido)",
+      "stderr": ""
     },
     {
       "cmd": "brick register lint-brick",
       "returncode": "0",
-      "stderr": "",
-      "stdout": "(omitido)"
+      "stdout": "(omitido)",
+      "stderr": ""
     },
     {
       "cmd": "expansion apply demo --proposal prop.json --plan-file plan.json",
       "returncode": "0",
-      "stderr": "",
-      "stdout": "(omitido; contiene path absoluto de pytest scratch, no reproducible)"
+      "stdout": "(omitido; contiene path absoluto de pytest scratch, no reproducible)",
+      "stderr": ""
     }
   ],
-  "timestamp": "2026-09-23T11:00:00Z",
-  "uat_id": "UAT-08"
+  "artifacts": [],
+  "status": "PASS",
+  "notes": "H4 Slice 1 implementado. UAT-08 cumple 'incorpora unicamente el cambio solicitado' + 'nodos completados mantienen revisiones y resultados originales'. apply devuelve plan NUEVO (inmutable); el original no se toca. Las revisiones de completados viven en node_executions (H2 slice 4+) y el patch opera a nivel de plan, no de ejecuciones."
 }
