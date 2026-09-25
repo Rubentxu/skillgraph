@@ -132,7 +132,8 @@ roadmap:
     T3_S2_message_redaction_cerrado:
       fecha: 2026-09-25
       ciclo: STEWARDSHIP-T3-S2-001
-      commit: pending
+      commit: fdc1ab4
+      pushed: 2026-09-25
       criterios_cumplidos:
         - "Gap S2/I de ADR-0015 cerrado: 3 sitios que filtran source_id ahora opacos al client (lines 135, 216, 488 de knowledge_controller.py)"
         - "5 tests nuevos en tests/test_t3_s2_message_no_source_id.py (3 attestation + 2 chain)"
