@@ -505,7 +505,9 @@ class KnowledgeController:
             claim_id=claim_id,
         )
         if result is None:
-            raise UnknownClaimError(f"Claim no encontrado: {claim_id!r}")
+            raise UnknownClaimError(
+                "Claim no encontrado"
+            )  # NO expone claim_id (S2/I)
         return result
 
     def list_claims_for_source(self, *, source_id: SourceID) -> list[Claim]:
