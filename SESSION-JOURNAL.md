@@ -4507,3 +4507,62 @@ consigna.
 **Proximo**: sin trabajo accionable sin spec operador. P1 Opciones B/C
 siguen requiriendo consigna (grieta transaccional, multi-tenancy,
 Adapter real).
+
+## Sesion 2026-09-25 12:09 - 12:18 · H10 evolution-v2 (Mapa del recorrido real)
+
+**Contexto**: operador pide "siguiente ciclo del roadmap con sddk".
+Tras revisar el roadmap evolution-v2 (H9..H15), identifico H10 como
+primer workitem accionable SIN spec operador: research deliverable
+sobre APIs, contratos, recorrido E2E, fixtures y seleccion de
+proveedor determinista.
+
+**Workflow SDDK aplicado**: A-min (research + doc, sin codigo de
+produccion, sin release).
+
+**Acciones ejecutadas**:
+
+1. Pre-flight: 784/784 PASS OK; rama limpia; H10 no requiere cambios
+   en nucleo.
+
+2. Inventory (seccion 2 del audit):
+   - 38 modulos productivos en 9 bounded contexts.
+   - 57 APIs publicas en Storage (96% cobertura).
+   - 30 CLI commands.
+   - 784 tests en 73 ficheros.
+   - 2 implementaciones de AgentAdapter (Protocol): FakeAgentAdapter
+     + RecordingAdapter (sin Adapter real; gap H9 E1).
+
+3. Trace E2E (seccion 3): el caso `sg run plan.yaml` recorre 13
+   etapas desde CLI hasta persistencia del evento final, pasando
+   por PlanLoader -> Storage.create_run -> EventLog.append -> 
+   RunController.reconcile_run -> ContextController.compile_handoff
+   -> Storage.start_node_execution -> adapter.invoke (FakeAgent)
+   -> Storage.complete_node_execution -> EventLog.NodeCompleted
+   -> siguiente nodo o terminal.
+
+4. Decisiones duplicadas (seccion 4): tras analisis de 5 candidatos
+   (Storage vs Catalog, list_events_for_run, time vs datetime,
+   NewTypes vs strings, Knowledge vs Context), conclusion es
+   que NO hay duplicacion real. Storage vs Catalog es defensa en
+   profundidad intencional; los demas son composicion explicita.
+
+5. Fixtures (seccion 5): tests/conftest, _evidence_lock, UAT-{01..16},
+   bench corpora sinteticos. Suficientemente diversificados para
+   que H11 no necesite fixtures nuevas inicialmente.
+
+6. Primer proveedor determinista (seccion 6): FakeAgentAdapter
+   seleccionado. Justificacion: existe, es testeable, deterministic;
+   el Adapter real HTTP queda fuera de alcance (H9 E1 + spec
+   pendiente).
+
+7. Riesgos: H9 E1 sigue como blocker pre-existente pero no afecta
+   H11-H15 si se usan proveedores deterministas. La grieta
+   transaccional Storage↔EventLog puede reaparecer en H14.
+
+8. Siguiente propuesto: H11 (Conocimiento tipado reutilizable).
+
+**Deliverable**: audits/h10-recorrido-real-2026-09-25.md (325 LoC)
+con todos los criterios de salida de H10 cumplidos. Sin codigo de
+produccion, sin tests nuevos, sin release (research deliverable).
+
+**Estado H10**: COMPLETO.

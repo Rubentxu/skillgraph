@@ -30,7 +30,7 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `fde185d` (refactor: extraer primitivas compartidas a bench/_common.py).
+- HEAD: `30a1756` (test: refresh snapshots UAT-08/09 con HEAD post-refactor DRY).
 - Tests: **784/784 PASS** en 230s (`mise exec -- uv run pytest -q`; baseline 775 → 784 con +9 nuevos: test_bench_common).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
@@ -40,6 +40,7 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 - HEAD == origin/main (post push FF en este turno).
 - `STATE.yaml.release` sincronizado con realidad: tag=v0.14.0, 17 releases, 30 capacidades_entregadas, tag_sha=241ccc9f.
 - **H9 addendum honesto**: 4/5 entregables cumplidos por conformance (E1 Adapter real PENDIENTE, E2 Seguridad CUMPLIDA_PARCIAL, E3-E5 CUMPLIDAS). Ver `audits/h9-addendum-2026-09-25.md`.
+- **H10 evolution-v2 COMPLETO**: mapa del recorrido real y baseline (audits/h10-recorrido-real-2026-09-25.md 325 LoC). Próximo workitem propuesto: H11 (Conocimiento tipado reutilizable).
 
 ## Releases post-refactor v0.7.0
 

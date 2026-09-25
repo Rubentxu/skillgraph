@@ -107,9 +107,16 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: ~  # Etapa 7 cerrada (v0.14.0); pendiente S7+ no especificado en blueprint v1
-  current_workitem: ~
-  next_workitem: ~  # sin spec operador explicita; deuda tecnica context_controller.py (ahora 88%) cerrada
+  next_milestone_gate: H11-conocimiento-tipado-reutilizable  # evolution-v2/plan/ROADMAP.md H10 cerrado 2026-09-25; gate H11 requiere atencion a FileSignatures con foco, contrato, cobertura, procedencia y vigencia
+  current_workitem: H10-mapa-del-recorrido-real-y-baseline
+  next_workitem: H11-conocimiento-tipado-reutilizable
+  evolution_v2:
+    H10_completado:
+      fecha: 2026-09-25
+      audit: audits/h10-recorrido-real-2026-09-25.md
+      criterios_cumplidos: 5/5 (inventario APIs, caso E2E, decisiones duplicadas, fixtures, proveedor determinista)
+      proveedor_determinista_seleccionado: FakeAgentAdapter
+      siguiente: H11
 
 python:
   minimum: "3.11"
