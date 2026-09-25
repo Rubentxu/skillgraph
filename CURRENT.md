@@ -224,11 +224,33 @@ Conclusiones:
 - `mise exec -- uv run ruff check .` — All checks passed.
 - HEAD: `cd51732` (3b4dc7d + ee00a9f + cd51732 pendientes de push).
 
+### Verificación T3 Threat model (2026-09-25 ~16:25)
+
+- HEAD post-ciclo: `fdb2398` (`a25e8f9` + state sync), push OK.
+- 14/14 tests PASS en `tests/test_t3_threat_model_attestation.py` (0.97s).
+- 167/167 tests PASS en T2 (t3 + redaction + locks + storage + runcontroller + graph_expansion).
+- ADR-0015 vive en filesystem local (`external/` gitignored por diseno).
+- Audit dedicado: `audits/t3-threat-model-2026-09-25.md`.
+
+### Verificación T3-S2 gap cierre (2026-09-25 ~17:00)
+
+- HEAD post-ciclo: pendiente (commit en este mismo turno).
+- 5/5 tests nuevos PASS en `tests/test_t3_s2_message_no_source_id.py` (0.83s).
+- 789/789 tests PASS en suite completa (T2; 195s) — 0 regresiones.
+- ruff check limpio.
+- Audit dedicado: `audits/t3-s2-message-redaction-2026-09-25.md`.
+- 3 sitios en `knowledge_controller.py` corregidos (l.135, l.216, l.488).
+- Sin bump de release (regla SEMVER: fix sin breaking en contrato observable, acumulado a proxima release).
+
 ## Pendientes post-T8
 
 - **P1 opciones A/B/C** (Adapter real / grieta transaccional /
   certificación de concurrencia) — siguen requiriendo spec operador
   explícito. D (T8) ya cerrada.
+- **Gap S2/I** (mensaje filtra source_id): **CERRADO** en `STEWARDSHIP-T3-S2-001` (mensaje opaco al client, chain preservado).
+- Quedan: E1 Adapter real (spec: proveedor, prompts, timeouts, credenciales),
+  T5 Backups CLI (spec: formato + retención), T6 Observabilidad (spec: sinks + retención),
+  Gap A (grieta workflow_runs↔runtime_events, bloqueado por H9-Plan-B).
 - **No bump**: T8 no introduce breaking change ni capacidad nueva
   observable para el usuario. Es observabilidad interna. No genera
   release.

@@ -4923,3 +4923,48 @@ agrupa cambios pequenos coherentes; evita micro-releases triviales".
 **Siguiente**: trabajo autonomo cerrado. Siguiente requiere
 spec operador (gap S2, E1 Adapter, T5, T6) o consigna de
 priorizacion nueva.
+
+## 2026-09-25 (continuacion ~17:00) — Reactivacion autonoma: ciclo STEWARDSHIP-T3-S2-001 (cierre gap S2/I)
+
+**Trigger**: operador responde "A tu criterio" tras cierre de T3.
+Sigo la regla de "Bucle de ejecucion continua" del prompt global:
+selecciono siguiente trabajo desbloqueado. Los 4 pendientes E1/T5/T6/
+gap A requieren spec operador (decisiones arquitectonicas). El **gap
+S2/I** (mensaje de error filtra source_id) es accionable sin spec, es
+derivado directo de T3, y honra "cierre real" del gaps abiertos que
+T3 registro honestamente.
+
+**Workflow STEWARDSHIP-T3-S2-001** (creado dinamicamente para este ciclo):
+- F1: localizar el codigo que filtra source_id -> 3 sitios:
+    - `knowledge_controller.py:135` (`get_source`): f"Source no encontrada: {source_id!r}"
+    - `knowledge_controller.py:216` (`record_evidence` FK path): f"Source no existe: {evidence.source_id!r}"
+    - `knowledge_controller.py:488` (`record_claim` FK source path): f"Source no existe: {claim.source_id!r}"
+- F2: tests rojos. `tests/test_t3_s2_message_no_source_id.py` (197 LoC, 5 tests).
+  Iteraciones:
+    - V1: 0/5 PASS (firma import mal). Aprende: KnowledgeController en
+      `skillgraph.knowledge.knowledge_controller`, no `skillgraph.knowledge.controller`.
+    - V2: 0/5 PASS (Claim no acepta `recorded_at`).
+    - V3: 0/5 PASS (`relates_to` no esta en CLAIM_PREDICATES).
+    - V4: 3/5 rojo + 2/5 verde (chain preservado ya pasaba).
+- F3: fix. 3 mensajes cambiados a forma opaca al source_id, conservando
+  `UnknownSourceError` y `from exc`. NO se toco l.116 (warning interno
+  StaleKnowledgeWarning opera sobre mismo tenant, no cruza boundary).
+- F4: verde. 5/5 PASS en 0.83s. Suite completa 789/789 PASS en 195s.
+  ruff check limpio. 0 regresiones.
+
+**Sin bump de release**: regla SEMVER derivada del historial — el fix
+es `fix(security)` (cierre de fuga). Sin embargo, dado que el contrato
+externo observable (tipo de excepcion, signatures) NO cambia, lo mas
+seguro es **dejar el bump para una release acumulada** (siguiente
+ciclo o trabajo que decida el operador). No se hace bump ceremonial
+aqui.
+
+**Siguiente**: gap S2/I cerrado. Quedan:
+- E1 Adapter real (spec operador: proveedor, prompts, timeouts, credenciales)
+- T5 Backups CLI (spec operador: formato de export, politica de retencion)
+- T6 Observabilidad (spec operador: sinks de metricas, politicas de retencion)
+- Gap A (grieta workflow_runs<->runtime_events): bloqueado por H9-Plan-B
+- Gap C (stress concurrencia N=10): futura corrida de stress
+
+`next_workitem` sigue null: ninguno de los 4 pendientes es accionable
+sin spec.

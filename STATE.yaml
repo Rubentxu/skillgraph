@@ -125,12 +125,29 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: T3_cerrado  # T3 Threat model cerrado 2026-09-25; ciclo STEWARDSHIP-T3-001
-  current_workitem: T3-threat-model-cerrado
-  next_workitem: null  # T3 cerrado. Siguiente requiere spec operador (gap S2, E1 Adapter, T5 Backups, T6 Observabilidad)
+  next_milestone_gate: T3_S2_gap_cerrado  # Cierre del gap S2/I de ADR-0015 (mensaje filtra source_id)
+  current_workitem: T3-S2-message-redaction
+  next_workitem: null  # T3-S2 cerrado. Quedan E1 Adapter real, T5 Backups, T6 Observabilidad (todos requieren spec operador)
   evolution_v2:
+    T3_S2_message_redaction_cerrado:
+      fecha: 2026-09-25
+      ciclo: STEWARDSHIP-T3-S2-001
+      commit: pending
+      criterios_cumplidos:
+        - "Gap S2/I de ADR-0015 cerrado: 3 sitios que filtran source_id ahora opacos al client (lines 135, 216, 488 de knowledge_controller.py)"
+        - "5 tests nuevos en tests/test_t3_s2_message_no_source_id.py (3 attestation + 2 chain)"
+        - "Audit dedicado en audits/t3-s2-message-redaction-2026-09-25.md"
+        - "Suite completa: 789/789 PASS (T2), 0 regresiones"
+        - "ruff check limpio"
+      notas:
+        - "Tipo de excepcion invariante (UnknownSourceError se sigue lanzando)"
+        - "Chain __cause__ preservado (logs internos siguen diagnostico)"
+        - "Sin bump de release (regla SEMVER: fix sin breaking en contrato observable, se acumula en proxima release)"
+      siguiente: "E1 Adapter real (spec operador), T5 Backups (spec operador), T6 Observabilidad (spec operador)"
+
     T3_threat_model_cerrado:
       fecha: 2026-09-25
+      ciclo: STEWARDSHIP-T3-001
       commit: a25e8f9
       pushed: 2026-09-25
       criterios_cumplidos:

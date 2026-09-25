@@ -132,7 +132,9 @@ class KnowledgeController:
             source_id=source_id,
         )
         if result is None:
-            raise UnknownSourceError(f"Source no encontrada: {source_id!r}")
+            raise UnknownSourceError(
+                "Source no encontrada"
+            )  # NO expone source_id (S2/I)
         return result
 
     def mark_source_stale(self, *, source_id: SourceID) -> None:
@@ -213,7 +215,9 @@ class KnowledgeController:
         except Exception as exc:
             msg = str(exc)
             if "FOREIGN KEY" in msg:
-                raise UnknownSourceError(f"Source no existe: {evidence.source_id!r}") from exc
+                raise UnknownSourceError(
+                    "Source no existe"
+                ) from exc  # NO expone source_id (S2/I)
             raise
         return evidence.evidence_id
 
@@ -485,7 +489,9 @@ class KnowledgeController:
                     raise UnknownEntityError(
                         f"Entity no existe: {claim.subject_entity_id!r}"
                     ) from exc
-                raise UnknownSourceError(f"Source no existe: {claim.source_id!r}") from exc
+                raise UnknownSourceError(
+                    "Source no existe"
+                ) from exc  # NO expone source_id (S2/I)
             raise
         return claim_to_record.claim_id
 
