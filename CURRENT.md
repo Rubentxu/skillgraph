@@ -1,9 +1,9 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-25 09:37 (Europe/Madrid).
+> Última verificación: 2026-09-25 10:08 (Europe/Madrid).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
-> Stewardship backlog P1 Opción D (T8 benchmark) **CERRADO** en `cd51732` (2026-09-25).
+> Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
 
 ## Goal
 
@@ -30,7 +30,7 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `8fa850c` (docs(state): sincronizar release.tag + releases[] con realidad v0.14.0).
+- HEAD: `327a913` (docs(state): addendum honesto H9 (Release candidate) - 4/5 conformance).
 - Tests: **772/772 PASS** en 166s (`uv run pytest -q`; baseline 754 post-v0.14.0 → 772 con +18 nuevos: 11 evidence_lock + 4 argparse + 3 bench smoke).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
@@ -39,6 +39,7 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 - ruff format + ruff check: limpios.
 - HEAD == origin/main (post push FF en este turno).
 - `STATE.yaml.release` sincronizado con realidad: tag=v0.14.0, 17 releases, 30 capacidades_entregadas, tag_sha=241ccc9f.
+- **H9 addendum honesto**: 4/5 entregables cumplidos por conformance (E1 Adapter real PENDIENTE, E2 Seguridad CUMPLIDA_PARCIAL, E3-E5 CUMPLIDAS). Ver `audits/h9-addendum-2026-09-25.md`.
 
 ## Releases post-refactor v0.7.0
 

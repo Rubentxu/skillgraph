@@ -100,7 +100,7 @@ goal:
     cerrado_por: addendum_honesto
     fecha: 2026-09-25
     commits_atomicos:
-      - "pendiente: docs(state): addendum honesto H9"
+      - "327a913 docs(state): addendum honesto H9 (Release candidate) - 4/5 conformance"
 
 
 roadmap:
@@ -610,7 +610,7 @@ stewardship_backlog:
         valor: "honestidad"
         estado: completed
         cerrado_en_sesion: "2026-09-25 10:08"
-        commits: ["[pendiente hash]"]
+        commits: ["327a913"]
         implementacion: >
           Addendum completo en goal.h9_addendum_2026_09_25 (STATE.yaml)
           con los 5 Entregables de H9 (Release candidate original,
