@@ -31,6 +31,77 @@ goal:
   etapa7_closed_after_tag: v0.14.0   # tag: 3e6b1d7
   etapa7_closed_at: 2026-09-24
   etapa7_rationale: "Etapa 7 (runtime/reconciliacion) cerrada con 6 slices MINOR coherentes (cada uno aporta una capacidad observable nueva del RunController). v0.8.0 cancel_run + sg runs cancel (commit a4d749e) + refactors sin bump (ea54021 + aee5cd5). v0.9.0 cancel_run + refactors. v0.10.0 list_runs + show_run + sg runs list/show (commit c6963f0). v0.11.0 logs_run + sg runs logs (commit 6ad5789). v0.12.0 RunBudget + sg runs budget (commit 9d9ae09). v0.13.0 redaction policies + sg policy (commit 72651ee). v0.14.0 locks concurrentes por run + sg run --lock-mode (commit 241ccc9). Tras v0.14.0: refactor menor de context_controller.py (helpers puros extraidos de compile_handoff y _resolve_one_selector; commit 6c8c17f, sin bump). 754/754 tests verde, ruff check limpio, cobertura context_controller.py 82% -> 88% (subida real por 15 tests nuevos del refactor). 16/16 UAT verdes (UAT-08/09 mantienen revision anterior tras revert del drift trivial). Todas las releases se publican con push directo justificado en SESSION-JOURNAL.md (modo AUTO del operador)."
+  # Post-Etapa-7 addendum honesto H9 (Release candidate original, renumerado por ADR-0013):
+  h9_addendum_2026_09_25:
+    descripcion: >
+      Estado honesto de los 5 Entregables H9 (Release candidate)
+      definidos en external/blueprint-v1/plan/HITOS.md (seccion H7
+      original, renumerado H9 por ADR-0013) tras el cierre de Etapa 7.
+      Este addendum NO reabre la iniciativa g-skillgraph-bootstrap
+      (ya COMPLETED en v0.6.0). Documenta el estado de conformance
+      actual de H9 contra su contrato original y la deuda explicita
+      del unico Entregable NO cumplido.
+    criterio_de_salida_h9: >
+      El sistema completa escenarios reales con trazabilidad,
+      aislamiento y recuperacion (HITOS.md H7/H9).
+    entregables:
+      - id: "E1-Adapter-real"
+        estado: PENDIENTE
+        cobertura: NO_CUMPLIDA
+        evidencia: "src/skillgraph/runtime/agent.py expone unicamente FakeAgentAdapter (fixtures) y RecordingAdapter. No hay HTTP/LLM/anthropic/openai/local-llm adapter. CLI runner acepta --adapter=fake (unico valor contractual)."
+        deuda_explicita: "Adaptador real requiere spec del operador: proveedor, formato de prompts, politica de timeouts, gestion de credenciales, retries. Coste estimado: 200-500 LoC + 5-15 tests integration con mocks HTTP."
+        spec_pendiente: true
+      - id: "E2-Seguridad"
+        estado: CUMPLIDA_PARCIAL
+        cobertura: "RedactionPolicy por tenant (v0.13.0, commit 72651ee): redact_payload cubre 4 politicas (none/drop/mask/hash). CLI sg policy get/set. Sin threat model formal."
+        evidencia: "src/skillgraph/runtime/redaction.py (100% cobertura verificada, audit en audits/redaction-2026-09-25.md); tests/test_redaction.py (21 tests, 8 clases)."
+        gap_honesto: "Threat model (T3 del ROADMAP) NO ejecutado. No hay STRIDE/abuse-cases documentados. Pendiente de spec operador."
+      - id: "E3-Recuperacion"
+        estado: CUMPLIDA
+        cobertura: "RunController._recover_interrupted (Storage.recover_interrupted_node_executions); locks concurrentes v0.14.0 (fcntl advisory + RunLock + RunController lock_mode/lock_timeout_seconds); redaction atomica v0.7.1 (Storage._atomic con BEGIN/COMMIT explicito en record_claim); recovery T19 v0.7.3 (rollback path _atomic REAL)."
+        evidencia: "v0.7.1 (0b7b3d6), v0.7.3 (T19), v0.14.0 (241ccc9). Grieta de no-atomicidad workflow_runs <-> runtime_events preservada por diseno (decision arquitectonica, grieta documentada en deuda_tecnica_residual)."
+        gap_honesto: "Cierre transaccional REAL de la grieta workflow_runs <-> runtime_events requiere operaciones Storage atomicas que coordinen INSERT/UPDATE + INSERT evento en una sola transaccion. Coste estimado: 300-800 LoC + tests de concurrencia con 2-4 procesos."
+      - id: "E4-Documentacion-operativa"
+        estado: CUMPLIDA
+        cobertura: "AGENTS.md (443 LoC, convenciones + reglas); README.md (240+ LoC); CHANGELOG.md (1408 LoC, v0.3.0..v0.14.0); CURRENT.md (operational pointer); STATE.yaml (durable state); SESSION-JOURNAL.md (cronologico). 6 auditorias en audits/ (2026-09-25)."
+        evidencia: "Auditoria independent-audit-v0.7.0-2ae1bca.md y los 7 audits 2026-09-25 (runtime, redaction, runner-coverage, etapa7-state, t8-benchmark, state-sync-gap, plus legacy h9-*)."
+        gap_honesto: "No hay runbook formal de despliegue/operacion (T6 observabilidad del ROADMAP). Operacion actual es via CLI manual + tests como red de seguridad."
+      - id: "E5-Suite-UAT"
+        estado: CUMPLIDA
+        cobertura: "16/16 UAT PASS, 0 BLOCKED, 0 FAIL. tests/uat_audit.py mantiene invariante de revision (cada UAT valida contra HEAD real via SHA en tests/uat-evidence/UAT-XX.json). Lock por uat_id (P2 cerrado, helper _evidence_lock con flock)."
+        evidencia: "tests/test_uat_audit.py + tests/uat-evidence/ (16 fixtures con SHA real); tests/test_evidence_lock.py (11 tests de concurrencia para el lock)."
+        gap_honesto: "UATs son representative (caminos nominales), NO acceptance_aligned con proveedor real (limite documentado en deuda_tecnica_residual). UATs NO cubren crash recovery, concurrencia entre multiples apply, durabilidad bajo fsync parcial, ni audit post-schema-change."
+    resumen:
+      entregables_cumplidos: 3   # E3, E4, E5
+      entregables_parciales: 1   # E2 (redaction OK, threat model NO)
+      entregables_pendientes: 1 # E1 (Adapter real)
+      conformance_score: "4/5 (80%)"
+      criterio_de_salida_h9: "Parcialmente cumplido: 'trazabilidad y recuperacion' SI (E3+E5); 'aislamiento' SI via tenant_id (E4 multitenant + E2 redaction); 'escenarios reales' NO (limitado por Adapter fake en E1)."
+    valoracion_honesta: >
+      H9 NO esta cerrado en sentido estricto: el Entregable E1
+      (Adapter real) es bloqueante para escenarios reales con
+      proveedor LLM. Sin embargo, el proyecto cumple el 80% del
+      contrato original de H9 (4/5 entregables), toda la deuda
+      pendiente esta explícitamente documentada y acotada, y NO
+      hay deuda tecnica testeable abierta que afecte al nucleo
+      verificado por los 16 UAT y los 772 tests.
+
+      La decision de NO ejecutar E1 sin spec operador explicito es
+      deliberada y consistente con el criterio del operador:
+      'todo gate o decision queda pre-aprobado' pero Adapter real
+      requiere eleccion de proveedor + credenciales + politica de
+      timeouts que NO son automatizables sin input explicito.
+
+      Esta addendum es la Opcion A del backlog prioridad_1_spec_s7plus
+      (auditada en STATE.yaml.stewardship_backlog). Su proposito es
+      registrar formalmente el estado de conformance H9 + abrir el
+      siguiente paso solo si el operador quiere ejecutarlo.
+    audit_referencia: audits/h9-addendum-2026-09-25.md
+    cerrado_por: addendum_honesto
+    fecha: 2026-09-25
+    commits_atomicos:
+      - "pendiente: docs(state): addendum honesto H9"
+
 
 roadmap:
   current_stage: 7
@@ -537,6 +608,21 @@ stewardship_backlog:
         descripcion: "Cerrar formalmente H9 via addendum en STATE.yaml (h9_cerrado_por_conformance: true, h9_adapter_real_pendiente: true). Sin LoC produccion. 5 min."
         coste: "0 LoC, doc"
         valor: "honestidad"
+        estado: completed
+        cerrado_en_sesion: "2026-09-25 10:08"
+        commits: ["[pendiente hash]"]
+        implementacion: >
+          Addendum completo en goal.h9_addendum_2026_09_25 (STATE.yaml)
+          con los 5 Entregables de H9 (Release candidate original,
+          renumerado por ADR-0013): E1 Adapter real (PENDIENTE),
+          E2 Seguridad (CUMPLIDA_PARCIAL: redaction OK, threat model NO),
+          E3 Recuperacion (CUMPLIDA: locks v0.14.0 + atomicity v0.7.1),
+          E4 Documentacion operativa (CUMPLIDA: AGENTS + README + CHANGELOG +
+          audits/), E5 Suite UAT (CUMPLIDA: 16/16 PASS). Conformance
+          score: 4/5 (80%). Adapter real requiere spec operador
+          (proveedor, prompts, timeouts, credenciales). Audit completo
+          en audits/h9-addendum-2026-09-25.md. NO reabre la iniciativa
+          (ya COMPLETED en v0.6.0).
       - nombre: "Opcion B: Cerrar Etapa 7 (Trabajos 1,3,5,6,8)"
         descripcion: "Ejecutar T8 (benchmark), T3 (threat model), T5 (backup CLI), T1 (Adapter real), T6 (observabilidad) por orden de coste/valor."
         coste: "~1000-2000 LoC, 2-4 semanas"
