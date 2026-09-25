@@ -39,9 +39,7 @@ from skillgraph.knowledge.file_signature import FileSignature
 
 FileScope = Literal["file", "directory", "package", "bounded_context"]
 
-FILE_SCOPES: frozenset[str] = frozenset(
-    {"file", "directory", "package", "bounded_context"}
-)
+FILE_SCOPES: frozenset[str] = frozenset({"file", "directory", "package", "bounded_context"})
 
 
 # --- Validators (smart constructors) --------------------------------
@@ -82,8 +80,7 @@ class ScopeQuery:
     def __post_init__(self) -> None:
         if self.scope_kind not in FILE_SCOPES:
             raise ValidationError(
-                f"scope_kind invalido: {self.scope_kind!r} "
-                f"(esperaba uno de {sorted(FILE_SCOPES)})"
+                f"scope_kind invalido: {self.scope_kind!r} (esperaba uno de {sorted(FILE_SCOPES)})"
             )
         if not self.target:
             raise ValidationError("ScopeQuery.target no puede estar vacio")
@@ -111,16 +108,12 @@ class ScopeResolution:
 
     def __post_init__(self) -> None:
         if self.scope_kind not in FILE_SCOPES:
-            raise ValidationError(
-                f"scope_kind invalido: {self.scope_kind!r}"
-            )
+            raise ValidationError(f"scope_kind invalido: {self.scope_kind!r}")
         if not self.target:
             raise ValidationError("ScopeResolution.target no puede estar vacio")
         # member_source_ids no vacio: un scope sin miembros no es un scope.
         if not self.member_source_ids:
-            raise ValidationError(
-                f"ScopeResolution sin miembros (target={self.target!r})"
-            )
+            raise ValidationError(f"ScopeResolution sin miembros (target={self.target!r})")
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,9 +163,7 @@ def resolve_directory_scope(
     if not directory_path:
         raise ValidationError("directory_path no puede estar vacio")
     if not member_paths:
-        raise ValidationError(
-            f"directorio {directory_path!r} sin miembros declarados"
-        )
+        raise ValidationError(f"directorio {directory_path!r} sin miembros declarados")
     return ScopeResolution(
         scope_kind="directory",
         target=directory_path,
@@ -208,16 +199,13 @@ def resolve_package_scope(
     """
     validate_package_name(package_name)
     if not declared_members:
-        raise ValidationError(
-            f"paquete {package_name!r} sin miembros declarados"
-        )
+        raise ValidationError(f"paquete {package_name!r} sin miembros declarados")
     # Verificacion defensiva: todos los miembros declarados
     # viven bajo el prefix (no es filtrado, es sanity check).
     for member in declared_members:
         if not member.startswith(prefix):
             raise ValidationError(
-                f"miembro {member!r} del paquete {package_name!r} "
-                f"no vive bajo prefix={prefix!r}"
+                f"miembro {member!r} del paquete {package_name!r} no vive bajo prefix={prefix!r}"
             )
     return ScopeResolution(
         scope_kind="package",
@@ -244,9 +232,7 @@ def resolve_bounded_context_scope(
     """
     validate_bounded_context_name(context_name)
     if not member_source_ids:
-        raise ValidationError(
-            f"bounded_context {context_name!r} sin miembros declarados"
-        )
+        raise ValidationError(f"bounded_context {context_name!r} sin miembros declarados")
     return ScopeResolution(
         scope_kind="bounded_context",
         target=context_name,

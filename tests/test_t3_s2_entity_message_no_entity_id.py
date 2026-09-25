@@ -86,9 +86,7 @@ def test_get_entity_message_does_not_leak_entity_id(tmp_path: Path) -> None:
         ctl.get_entity(entity_id=leaked)
 
     msg = str(exc_info.value)
-    assert leaked not in msg, (
-        f"get_entity filtra entity_id en mensaje: {msg!r}"
-    )
+    assert leaked not in msg, f"get_entity filtra entity_id en mensaje: {msg!r}"
     assert isinstance(exc_info.value, UnknownEntityError)
 
 
@@ -111,9 +109,7 @@ def test_record_claim_fk_entity_message_does_not_leak_entity_id(tmp_path: Path) 
         )
 
     msg = str(exc_info.value)
-    assert leaked not in msg, (
-        f"record_claim FK entity filtra entity_id en mensaje: {msg!r}"
-    )
+    assert leaked not in msg, f"record_claim FK entity filtra entity_id en mensaje: {msg!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +144,4 @@ def test_get_entity_no_cause_chain(tmp_path: Path) -> None:
         ctl.get_entity(entity_id="missing-entity")
 
     # Lookup directo: no hay excepcion interna que chain-ar.
-    assert exc_info.value.__cause__ is None, (
-        "get_entity no deberia preservar chain (no es path FK)"
-    )
+    assert exc_info.value.__cause__ is None, "get_entity no deberia preservar chain (no es path FK)"

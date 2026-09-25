@@ -71,14 +71,7 @@ class TestUatEvo01ExtractAndPersist:
     def test_extract_python_file_yields_signatures(self) -> None:
         """Extractor determinista produce FileSignatures con foco/contrato/cobertura."""
         content = (
-            "import os\n"
-            "import sys\n"
-            "\n"
-            "def foo():\n"
-            "    return 1\n"
-            "\n"
-            "def bar(x):\n"
-            "    return x + 1\n"
+            "import os\nimport sys\n\ndef foo():\n    return 1\n\ndef bar(x):\n    return x + 1\n"
         )
         sigs = extract_file_signatures(
             file_path="src/example.py",
@@ -116,9 +109,7 @@ class TestUatEvo01ExtractAndPersist:
             source_id="src/example.py",
         )
         # Debe haber exactamente len(sigs) evidences kind='file_signature'.
-        file_sig_evidences = [
-            e for e in evidences if e.get("kind") == "file_signature"
-        ]
+        file_sig_evidences = [e for e in evidences if e.get("kind") == "file_signature"]
         assert len(file_sig_evidences) == len(sigs)
         # Cada evidence tiene el dict del FileSignature en content_json.
         for e in file_sig_evidences:
@@ -131,9 +122,7 @@ class TestUatEvo01ExtractAndPersist:
 class TestUatEvo02ReuseAcrossProcesses:
     """UAT-EVO-02: reutilizar FileSignatures entre procesos."""
 
-    def test_signatures_persist_across_storage_instances(
-        self, tmp_path: Path
-    ) -> None:
+    def test_signatures_persist_across_storage_instances(self, tmp_path: Path) -> None:
         """Storage cerrada y reabierta conserva las FileSignatures."""
         # Proceso 1: extraer y persistir.
         s1 = Storage(str(tmp_path / "h11.sqlite"))
@@ -153,9 +142,7 @@ class TestUatEvo02ReuseAcrossProcesses:
         evidences = s2.list_evidences_for_source(
             source_id="src/example.py",
         )
-        file_sig_evidences = [
-            e for e in evidences if e.get("kind") == "file_signature"
-        ]
+        file_sig_evidences = [e for e in evidences if e.get("kind") == "file_signature"]
         assert len(file_sig_evidences) == len(sigs)
         s2.close()
 
@@ -219,9 +206,7 @@ class TestUatEvo04VigenciaStale:
         _register_source(controller, "src/example.py")
         # Extraer y persistir v1.
         v1_content = "def foo(): return 1\n"
-        sigs_v1 = extract_file_signatures(
-            file_path="src/example.py", content=v1_content
-        )
+        sigs_v1 = extract_file_signatures(file_path="src/example.py", content=v1_content)
         for sig in sigs_v1:
             controller.record_evidence_for_file_signature(
                 source_id="src/example.py", file_signature=sig
@@ -262,9 +247,7 @@ class TestUatEvo04VigenciaStale:
         )
         assert len(all_sigs) == len(stale_sigs)
 
-    def test_signature_fresh_after_reextraction(
-        self, controller: KnowledgeController
-    ) -> None:
+    def test_signature_fresh_after_reextraction(self, controller: KnowledgeController) -> None:
         """Re-extraer tras el cambio genera signatures fresh."""
         _register_source(controller, "src/example.py")
         # v1 stale

@@ -71,9 +71,7 @@ from skillgraph.runtime.redaction import (
 class TestS1StorageMultiTenancy:
     """S1/Spoofing: queries filtran por tenant_id + project_id."""
 
-    def test_tenant_a_cannot_read_tenant_b_evidence(
-        self, tmp_path: Path
-    ) -> None:
+    def test_tenant_a_cannot_read_tenant_b_evidence(self, tmp_path: Path) -> None:
         """Un tenant NO ve evidences de otro tenant (aislamiento por DB)."""
         # SkillGraph aísla por tenant en bases separadas por defecto.
         # Verificamos que el aislamiento por tenant_id es respetado
@@ -94,7 +92,7 @@ class TestS1StorageMultiTenancy:
                 working_tree_status=None,
                 checked_at="2026-01-01T00:00:00Z",
                 freshness="fresh",
-            )
+            ),
         )
         # Source solo de tenant B.
         storage.register_source(
@@ -110,27 +108,21 @@ class TestS1StorageMultiTenancy:
                 working_tree_status=None,
                 checked_at="2026-01-01T00:00:00Z",
                 freshness="fresh",
-            )
+            ),
         )
 
         # Tenant A consulta su source.
-        found_a = storage.get_source(
-            tenant_id="tA", project_id="p1", source_id="src-shared"
-        )
+        found_a = storage.get_source(tenant_id="tA", project_id="p1", source_id="src-shared")
         assert found_a is not None
         assert found_a.content_hash == "hA"
 
         # Tenant B consulta su propio source.
-        found_b = storage.get_source(
-            tenant_id="tB", project_id="p1", source_id="src-b-only"
-        )
+        found_b = storage.get_source(tenant_id="tB", project_id="p1", source_id="src-b-only")
         assert found_b is not None
         assert found_b.content_hash == "hB"
 
         # Tenant A NO ve el source de tenant B (filtrado por tenant_id).
-        not_found = storage.get_source(
-            tenant_id="tA", project_id="p1", source_id="src-b-only"
-        )
+        not_found = storage.get_source(tenant_id="tA", project_id="p1", source_id="src-b-only")
         assert not_found is None
 
     def test_evidence_query_isolated_by_tenant(self, tmp_path: Path) -> None:
@@ -156,7 +148,7 @@ class TestS1StorageMultiTenancy:
                 working_tree_status=None,
                 checked_at="2026-01-01T00:00:00Z",
                 freshness="fresh",
-            )
+            ),
         )
         # 1 evidencia en tenant tA.
         ev_a = Evidence(
@@ -166,9 +158,7 @@ class TestS1StorageMultiTenancy:
             content={"k": "vA"},
             observed_at="2026-01-01T00:00:00Z",
         )
-        storage.record_evidence(
-            tenant_id="tA", project_id="p1", evidence=ev_a
-        )
+        storage.record_evidence(tenant_id="tA", project_id="p1", evidence=ev_a)
         # El API list_evidences_for_source(source_id=...) es
         # source-scoped, no tenant-scoped. Esto es esperado porque
         # el aislamiento entre tenants se garantiza porque cada
@@ -185,9 +175,7 @@ class TestS1StorageMultiTenancy:
 class TestS1AtomicityGrietasBCD:
     """S1/Tampering: *_atomically cierra grietas B/C/D (nodo+evento)."""
 
-    def test_start_node_execution_atomically_idempotent(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_node_execution_atomically_idempotent(self, tmp_path: Path) -> None:
         """start_node_execution_atomically cierra grieta B con UNIQUE(event_id).
 
         Verifica que la API atomica cierra la grieta B/C/D
@@ -221,7 +209,7 @@ class TestS1AtomicityGrietasBCD:
                 working_tree_status=None,
                 checked_at="2026-01-01T00:00:00Z",
                 freshness="fresh",
-            )
+            ),
         )
 
         # Llamar la API atomica: crea node_execution en RUNNING + emite
@@ -251,9 +239,7 @@ class TestS1AtomicityGrietasBCD:
         )
 
         # Verificar idempotencia: el evento aparece UNA sola vez.
-        events = storage.list_events_for_run(
-            tenant_id="t1", project_id="p1", run_id=run_id
-        )
+        events = storage.list_events_for_run(tenant_id="t1", project_id="p1", run_id=run_id)
         matching = [e for e in events if e["event_id"] == event_id]
         assert len(matching) == 1, (
             f"event_id {event_id!r} aparece {len(matching)} veces, "
@@ -267,19 +253,13 @@ class TestS1AtomicityGrietasBCD:
 class TestS2CrossTenantLookupRejected:
     """S2/Information Disclosure: cross-tenant lookup falla con error generico."""
 
-    def test_knowledge_controller_unknown_source_for_cross_tenant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_knowledge_controller_unknown_source_for_cross_tenant(self, tmp_path: Path) -> None:
         """KnowledgeController en tenant A NO ve source de tenant B."""
         storage = Storage(str(tmp_path / "cross.sqlite"))
-        controller_a = KnowledgeController(
-            storage=storage, tenant_id="tA", project_id="p1"
-        )
+        controller_a = KnowledgeController(storage=storage, tenant_id="tA", project_id="p1")
 
         # Registrar source bajo tenant B usando un controller con tenant B.
-        controller_b = KnowledgeController(
-            storage=storage, tenant_id="tB", project_id="p1"
-        )
+        controller_b = KnowledgeController(storage=storage, tenant_id="tB", project_id="p1")
         controller_b.register_source(
             source=Source(
                 source_id="secret-source",
@@ -305,12 +285,8 @@ class TestS2CrossTenantLookupRejected:
             controller_a.get_source(source_id="secret-source")
         except (UnknownSourceError, NotFoundError, SkillGraphError) as e:
             msg = str(e)
-            assert "tB" not in msg, (
-                f"mensaje filtra tenant_id del source: {e!r}"
-            )
-            assert "secret-source" not in msg, (
-                f"mensaje filtra source_id del source: {e!r}"
-            )
+            assert "tB" not in msg, f"mensaje filtra tenant_id del source: {e!r}"
+            assert "secret-source" not in msg, f"mensaje filtra source_id del source: {e!r}"
 
 
 # ---------- S3 Locks ------------------------------------------------
@@ -415,9 +391,7 @@ class TestS5AdapterIsDeterministic:
         adapter = FakeAgentAdapter(fixtures_root=tmp_path)
         # Verificar que NO tiene atributos que sugieran red.
         for attr in ("http", "url", "endpoint", "api_key", "session"):
-            assert not hasattr(adapter, attr), (
-                f"FakeAgentAdapter expone atributo de red: {attr}"
-            )
+            assert not hasattr(adapter, attr), f"FakeAgentAdapter expone atributo de red: {attr}"
 
 
 # ---------- S6 Promotion --------------------------------------------
@@ -465,7 +439,6 @@ class TestS7CLIInputValidation:
         from skillgraph.cli import runner as runner_mod
 
         # Buscar un builder de parser conocido.
-        assert hasattr(runner_mod, "build_parser") or hasattr(
-            runner_mod, "main"
-        ), "runner.py no expone build_parser ni main"
-
+        assert hasattr(runner_mod, "build_parser") or hasattr(runner_mod, "main"), (
+            "runner.py no expone build_parser ni main"
+        )

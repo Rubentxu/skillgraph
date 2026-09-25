@@ -315,6 +315,7 @@ def compare_recipes(
         vigentes disponibles). Esto refleja 'correccion bajo el
         estado actual', no 'correccion teorica maxima'.
     """
+
     def _metrics(source_ids: tuple[str, ...]) -> tuple[int, int, bool]:
         coverage = 0
         work = len(source_ids)

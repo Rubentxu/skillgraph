@@ -134,14 +134,20 @@ class TestUatEvo05DirectoryScope:
         assert res.member_source_ids == ("src/a.py", "src/b.py", "src/c.py")
         assert res.target == "src/"
 
-    def test_aggregate_directory_signatures_no_duplicates(self, controller_p1: KnowledgeController) -> None:
+    def test_aggregate_directory_signatures_no_duplicates(
+        self, controller_p1: KnowledgeController
+    ) -> None:
         """Agregacion de N ficheros del mismo directorio sin duplicar simbolos."""
         _register_source(controller_p1, "src/a.py")
         _register_source(controller_p1, "src/b.py")
         sigs_a = (_sig(foco="src/a.py::def::foo"),)
         sigs_b = (_sig(foco="src/b.py::def::bar"),)
-        controller_p1.record_evidence_for_file_signature(source_id="src/a.py", file_signature=sigs_a[0])
-        controller_p1.record_evidence_for_file_signature(source_id="src/b.py", file_signature=sigs_b[0])
+        controller_p1.record_evidence_for_file_signature(
+            source_id="src/a.py", file_signature=sigs_a[0]
+        )
+        controller_p1.record_evidence_for_file_signature(
+            source_id="src/b.py", file_signature=sigs_b[0]
+        )
 
         # Agregar.
         agg = controller_p1.aggregate_file_signatures(
@@ -276,7 +282,9 @@ class TestUatEvo08ProjectIsolation:
         # p1 registra source + signature.
         _register_source(controller_p1, "src/secret.py")
         sig = _sig(foco="src/secret.py::def::internal")
-        controller_p1.record_evidence_for_file_signature(source_id="src/secret.py", file_signature=sig)
+        controller_p1.record_evidence_for_file_signature(
+            source_id="src/secret.py", file_signature=sig
+        )
 
         # p2 intenta agregar firmas del source de p1: rechazo explicito.
         with pytest.raises(SkillGraphError) as exc_info:

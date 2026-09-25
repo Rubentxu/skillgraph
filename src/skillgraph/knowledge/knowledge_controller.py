@@ -132,9 +132,7 @@ class KnowledgeController:
             source_id=source_id,
         )
         if result is None:
-            raise UnknownSourceError(
-                "Source no encontrada"
-            )  # NO expone source_id (S2/I)
+            raise UnknownSourceError("Source no encontrada")  # NO expone source_id (S2/I)
         return result
 
     def mark_source_stale(self, *, source_id: SourceID) -> None:
@@ -176,9 +174,7 @@ class KnowledgeController:
             entity_id=entity_id,
         )
         if result is None:
-            raise UnknownEntityError(
-                "Entity no encontrada"
-            )  # NO expone entity_id (S2/I)
+            raise UnknownEntityError("Entity no encontrada")  # NO expone entity_id (S2/I)
         return result
 
     def find_entity(self, *, kind: str, stable_key: str) -> Entity | None:
@@ -217,9 +213,7 @@ class KnowledgeController:
         except Exception as exc:
             msg = str(exc)
             if "FOREIGN KEY" in msg:
-                raise UnknownSourceError(
-                    "Source no existe"
-                ) from exc  # NO expone source_id (S2/I)
+                raise UnknownSourceError("Source no existe") from exc  # NO expone source_id (S2/I)
             raise
         return evidence.evidence_id
 
@@ -491,9 +485,7 @@ class KnowledgeController:
                     raise UnknownEntityError(
                         "Entity no existe"
                     ) from exc  # NO expone entity_id (S2/I)
-                raise UnknownSourceError(
-                    "Source no existe"
-                ) from exc  # NO expone source_id (S2/I)
+                raise UnknownSourceError("Source no existe") from exc  # NO expone source_id (S2/I)
             raise
         return claim_to_record.claim_id
 
@@ -505,9 +497,7 @@ class KnowledgeController:
             claim_id=claim_id,
         )
         if result is None:
-            raise UnknownClaimError(
-                "Claim no encontrado"
-            )  # NO expone claim_id (S2/I)
+            raise UnknownClaimError("Claim no encontrado")  # NO expone claim_id (S2/I)
         return result
 
     def list_claims_for_source(self, *, source_id: SourceID) -> list[Claim]:

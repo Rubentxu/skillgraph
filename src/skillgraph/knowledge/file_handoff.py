@@ -273,8 +273,7 @@ def compile_handoff_from_scopes(
         )
     if not isinstance(scope_recipe, ScopeAwareRecipe):
         raise TypeError(
-            f"scope_recipe debe ser ScopeAwareRecipe, recibio "
-            f"{type(scope_recipe).__name__}"
+            f"scope_recipe debe ser ScopeAwareRecipe, recibio {type(scope_recipe).__name__}"
         )
 
     knowledge = context_controller.knowledge  # KnowledgeController
@@ -294,9 +293,7 @@ def compile_handoff_from_scopes(
         )
     scope_query = scope_recipe.scope_queries[0]
     if not isinstance(scope_query, ScopeQuery):
-        raise TypeError(
-            f"scope_query debe ser ScopeQuery, recibio {type(scope_query).__name__}"
-        )
+        raise TypeError(f"scope_query debe ser ScopeQuery, recibio {type(scope_query).__name__}")
 
     # Aggregate via KnowledgeController (reusa H12).
     aggregated = knowledge.aggregate_file_signatures(
@@ -326,9 +323,7 @@ def compile_handoff_from_scopes(
         missing_sources = tuple(
             s for s in scope_recipe.member_source_ids if s not in sources_con_firma
         )
-        missing_signatures = tuple(
-            s.foco for s in aggregated.signatures if not s.vigencia.fresh
-        )
+        missing_signatures = tuple(s.foco for s in aggregated.signatures if not s.vigencia.fresh)
         if missing_sources or missing_signatures or not manifest.is_complete:
             raise HandoffBlockedError(
                 recipe_ref=scope_recipe.base_recipe.recipe_ref,

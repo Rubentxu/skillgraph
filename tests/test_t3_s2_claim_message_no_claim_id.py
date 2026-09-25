@@ -64,9 +64,7 @@ def test_get_claim_message_does_not_leak_claim_id(tmp_path: Path) -> None:
         ctl.get_claim(claim_id=leaked)
 
     msg = str(exc_info.value)
-    assert leaked not in msg, (
-        f"get_claim filtra claim_id en mensaje: {msg!r}"
-    )
+    assert leaked not in msg, f"get_claim filtra claim_id en mensaje: {msg!r}"
     assert isinstance(exc_info.value, UnknownClaimError)
 
 
@@ -78,6 +76,4 @@ def test_get_claim_no_cause_chain(tmp_path: Path) -> None:
         ctl.get_claim(claim_id="missing-claim")
 
     # Lookup directo: no hay excepcion interna que chain-ar.
-    assert exc_info.value.__cause__ is None, (
-        "get_claim no deberia preservar chain (no es path FK)"
-    )
+    assert exc_info.value.__cause__ is None, "get_claim no deberia preservar chain (no es path FK)"

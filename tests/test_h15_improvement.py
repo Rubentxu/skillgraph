@@ -107,9 +107,7 @@ def _register_source(controller: KnowledgeController, source_id: str) -> None:
 class TestUatEvo15RedundantExtraction:
     """UAT-EVO-15: detecta reutilizacion posible y NO repite extraccion."""
 
-    def test_redundant_extraction_detected_when_signature_fresh(
-        self, tmp_path: Path
-    ) -> None:
+    def test_redundant_extraction_detected_when_signature_fresh(self, tmp_path: Path) -> None:
         """Si la firma es fresh, NO hay redundancia: ya esta disponible."""
         storage = _storage(tmp_path)
         controller = _controller(storage)
@@ -133,9 +131,7 @@ class TestUatEvo15RedundantExtraction:
         # 'redundant_extraction' (el sistema avisa que ya esta).
         assert all(c.kind != "redundant_extraction" for c in candidates)
 
-    def test_redundant_extraction_flagged_when_signature_stale(
-        self, tmp_path: Path
-    ) -> None:
+    def test_redundant_extraction_flagged_when_signature_stale(self, tmp_path: Path) -> None:
         """Si la firma es stale, SI hay candidato a re-extraccion."""
         storage = _storage(tmp_path)
         controller = _controller(storage)
@@ -160,9 +156,7 @@ class TestUatEvo15RedundantExtraction:
 class TestUatEvo16LocalizedDefect:
     """UAT-EVO-16: el defecto se atribuye a la seleccion de contexto."""
 
-    def test_localize_omission_flags_missing_obligatory_refs(
-        self, tmp_path: Path
-    ) -> None:
+    def test_localize_omission_flags_missing_obligatory_refs(self, tmp_path: Path) -> None:
         """Si un handoff omitio una ref obligatoria, se localiza."""
         storage = _storage(tmp_path)
         controller = _controller(storage)
@@ -222,9 +216,7 @@ class TestUatEvo17ComparedImprovement:
         assert comp.work_units_a == 2
         assert comp.work_units_b == 2
 
-    def test_b_is_improvement_only_when_reduces_work_and_maintains(
-        self, tmp_path: Path
-    ) -> None:
+    def test_b_is_improvement_only_when_reduces_work_and_maintains(self, tmp_path: Path) -> None:
         """B es mejora solo si reduce trabajo redundante Y mantiene cobertura."""
         storage = _storage(tmp_path)
         controller = _controller(storage)
@@ -298,9 +290,7 @@ class TestUatEvo18NoSelfCertification:
                 human_approved=False,
             )
 
-    def test_promote_candidate_succeeds_with_human_approval(
-        self, tmp_path: Path
-    ) -> None:
+    def test_promote_candidate_succeeds_with_human_approval(self, tmp_path: Path) -> None:
         """Con human_approved=True, la promocion emite una decision."""
         storage = _storage(tmp_path)
         controller = _controller(storage)

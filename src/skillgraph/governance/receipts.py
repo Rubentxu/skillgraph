@@ -266,9 +266,7 @@ def record_validation_receipt(
         raise ValidationError("scope vacio")
     # artifact_path debe existir en disco (UAT-EVO-12 "vinculado al artefacto").
     if not Path(artifact_path).exists():
-        raise ValidationError(
-            f"artifact_path no existe en disco: {artifact_path!r}"
-        )
+        raise ValidationError(f"artifact_path no existe en disco: {artifact_path!r}")
 
     ts = timestamp or _utc_now_iso()
     rid = receipt_id or _make_receipt_id(

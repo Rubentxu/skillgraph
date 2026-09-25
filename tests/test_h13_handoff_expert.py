@@ -149,9 +149,7 @@ class TestUatEvo09HandoffExpert:
 
         recipe = ScopeAwareRecipe(
             base_recipe=ContextRecipe(recipe_ref="node-foo"),
-            scope_queries=(
-                ScopeQuery(scope_kind="directory", target="src/"),
-            ),
+            scope_queries=(ScopeQuery(scope_kind="directory", target="src/"),),
             member_source_ids=("src/a.py", "src/b.py", "src/c.py"),
         )
 

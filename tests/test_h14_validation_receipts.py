@@ -53,9 +53,7 @@ def _controller(storage: Storage) -> KnowledgeController:
 class TestUatEvo12RealReceipt:
     """UAT-EVO-12: un recibo persistido tras ejecutar una suite."""
 
-    def test_receipt_persists_command_revision_result_artifact(
-        self, tmp_path: Path
-    ) -> None:
+    def test_receipt_persists_command_revision_result_artifact(self, tmp_path: Path) -> None:
         """El recibo incluye los 4 campos vinculantes: cmd, revision, result, artifact."""
         storage = _storage(tmp_path)
         ctrl = _controller(storage)
@@ -186,11 +184,14 @@ class TestUatEvo14HistoryAndApplicability:
             dependency_revisions={"dep-1": "sha-dep-1"},
             extra_metadata={},
         )
-        assert is_receipt_applicable(
-            receipt=r,
-            current_revision="rev-a",
-            dependency_revisions={"dep-1": "sha-dep-1"},
-        ) is True
+        assert (
+            is_receipt_applicable(
+                receipt=r,
+                current_revision="rev-a",
+                dependency_revisions={"dep-1": "sha-dep-1"},
+            )
+            is True
+        )
 
     def test_receipt_not_applicable_when_revision_changed(self) -> None:
         """receipt.revision != current_revision -> NO aplicable (UAT-EVO-14)."""
@@ -208,11 +209,14 @@ class TestUatEvo14HistoryAndApplicability:
             extra_metadata={},
         )
         # Cambio la revision HEAD: el recibo de A NO aplica a B.
-        assert is_receipt_applicable(
-            receipt=r,
-            current_revision="rev-b",
-            dependency_revisions={},
-        ) is False
+        assert (
+            is_receipt_applicable(
+                receipt=r,
+                current_revision="rev-b",
+                dependency_revisions={},
+            )
+            is False
+        )
 
     def test_receipt_not_applicable_when_dependency_changed(self) -> None:
         """Si una dependencia cambio de revision -> NO aplicable."""
@@ -230,11 +234,14 @@ class TestUatEvo14HistoryAndApplicability:
             extra_metadata={},
         )
         # dep-1 cambio de sha.
-        assert is_receipt_applicable(
-            receipt=r,
-            current_revision="rev-a",
-            dependency_revisions={"dep-1": "sha-new"},
-        ) is False
+        assert (
+            is_receipt_applicable(
+                receipt=r,
+                current_revision="rev-a",
+                dependency_revisions={"dep-1": "sha-new"},
+            )
+            is False
+        )
 
     def test_historical_receipts_remain_consultable(self, tmp_path: Path) -> None:
         """Aunque un recibo no aplique, sigue consultable historicamente."""

@@ -97,9 +97,7 @@ def test_get_source_message_does_not_leak_source_id(tmp_path: Path) -> None:
         ctl.get_source(source_id=leaked)
 
     msg = str(exc_info.value)
-    assert leaked not in msg, (
-        f"get_source filtra source_id en mensaje: {msg!r}"
-    )
+    assert leaked not in msg, f"get_source filtra source_id en mensaje: {msg!r}"
     assert isinstance(exc_info.value, UnknownSourceError)
 
 
@@ -121,9 +119,7 @@ def test_record_evidence_fk_message_does_not_leak_source_id(tmp_path: Path) -> N
         )
 
     msg = str(exc_info.value)
-    assert leaked not in msg, (
-        f"record_evidence FK filtra source_id en mensaje: {msg!r}"
-    )
+    assert leaked not in msg, f"record_evidence FK filtra source_id en mensaje: {msg!r}"
 
 
 def test_record_claim_fk_message_does_not_leak_source_id(tmp_path: Path) -> None:
@@ -146,9 +142,7 @@ def test_record_claim_fk_message_does_not_leak_source_id(tmp_path: Path) -> None
         )
 
     msg = str(exc_info.value)
-    assert leaked not in msg, (
-        f"record_claim FK source filtra source_id en mensaje: {msg!r}"
-    )
+    assert leaked not in msg, f"record_claim FK source filtra source_id en mensaje: {msg!r}"
 
 
 # ---------------------------------------------------------------------------

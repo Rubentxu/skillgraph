@@ -30,9 +30,7 @@ from typing import Any, Literal
 
 ExtractionState = Literal["empty", "absent", "partial", "complete", "stale"]
 
-EXTRACTION_STATES: frozenset[str] = frozenset(
-    {"empty", "absent", "partial", "complete", "stale"}
-)
+EXTRACTION_STATES: frozenset[str] = frozenset({"empty", "absent", "partial", "complete", "stale"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,9 +137,7 @@ _RE_IMPORT = re.compile(r"^\s*(?:from\s+(\S+)\s+)?import\s+(\S+)")
 _RE_DEF = re.compile(r"^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 
-def extract_file_signatures(
-    *, file_path: str, content: str
-) -> tuple[FileSignature, ...]:
+def extract_file_signatures(*, file_path: str, content: str) -> tuple[FileSignature, ...]:
     """Extrae FileSignatures deterministas de un fichero.
 
     Args:
