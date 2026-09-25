@@ -107,21 +107,22 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: H12  # evolution-v2/plan/ROADMAP.md H11 cerrado 2026-09-25; gate H12 pendiente definicion
-  current_workitem: H11-conocimiento-tipado-reutilizable
-  next_workitem: H12  # evolution-v2/plan/ROADMAP.md H12 = siguiente despues de H11
+  next_milestone_gate: H13  # evolution-v2/plan/ROADMAP.md H12 cerrado 2026-09-25; gate H13 = handoff experto desde consultas
+  current_workitem: H12-scopes-y-consultas-composables
+  next_workitem: H13  # evolution-v2/plan/ROADMAP.md H13 = handoff experto desde consultas
   evolution_v2:
-    H11_completado:
+    H12_completado:
       fecha: 2026-09-25
-      commit: 5c52750
+      commit: 7a46e3b
       criterios_cumplidos:
-        - FileSignature ADT cerrada (foco, contrato, cobertura, procedencia, vigencia)
-        - Pure function extract_file_signatures() sin I/O con heuristicas regex
-        - Persistencia via Evidence(kind='file_signature') (reuso, sin tabla nueva)
-        - list_file_signatures_for_source() con filtro stale por source + signature
-        - Tests UAT-EVO-01..04 (12 nuevos, 796 total, 100% verde)
-      cobertura_file_signature: 85%
-      siguiente: H12
+        - FileScope ADT cerrada: file | directory | package | bounded_context
+        - ScopeQuery/ScopeResolution (frozen, slots=True) con smart constructors
+        - Resolvers puros: directory (explicit listing), package (declared membership + prefix sanity), bounded_context (cross-package libre)
+        - aggregate_signatures() pura sin I/O, deduplica por foco, suma cobertura, preserva procedencia
+        - KnowledgeController.aggregate_file_signatures() con aislamiento E2E-08 (rechazo explicito cross-tenant sin filtrar source_id)
+        - Tests UAT-EVO-05..08 (8 nuevos, 804 total, 100% verde)
+      cobertura_file_scope: 81%
+      siguiente: H13
 
 python:
   minimum: "3.11"

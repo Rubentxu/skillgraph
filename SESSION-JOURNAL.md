@@ -4600,3 +4600,41 @@ sobre knowledge/ + knowledge_controller.py acotado.
 **Siguiente**: H12 (sin definicion explicita en external/evolution-v2/
 plan/ROADMAP.md mas alla del titulo; pendiente gate operador).
 
+
+
+## 2026-09-25 — Sesion continuation: H12 Scopes y consultas composables
+
+**Trigger**: operador autoriza "avanzar con criterio propio". A-min
+sobre el siguiente workitem desbloqueado tras H11 (H12 evolution-v2).
+
+**Pre-flight**: 796/796 PASS pre-H12. HEAD = aef9581.
+
+**Plan ejecutado**:
+1. Tests rojos en `tests/test_h12_file_signature_scopes.py` (310 LoC,
+   8 tests UAT-EVO-05..08).
+2. `src/skillgraph/knowledge/file_scope.py` (316 LoC) con ADT cerradas:
+   FileScope Literal, ScopeQuery, ScopeResolution, AggregatedSignatures
+   (frozen dataclasses, slots=True), smart constructors para
+   package_name y bounded_context_name, resolvers puros sin I/O
+   (directory, package, bounded_context) y aggregator puro.
+3. `KnowledgeController.aggregate_file_signatures()` con aislamiento
+   E2E-08 estricto: source-en-otro-proyecto lanza
+   `UnknownSourceError` SIN filtrar el source_id (mensaje
+   generico para no leakear contenido). Source-inexistente se
+   omite silenciosamente.
+4. Iterar hasta 8/8 verde: 2 fallos resueltos en sesion (distinguir
+   cross-tenant vs no-existe via storage._conn; refactor para
+   evitar doble get_source; mensaje sin source_id para no leakear).
+5. Lint ruff clean (UP037 + I001 auto-fix, F821 resuelto con
+   `object` forward ref).
+6. Full suite: 804/804 PASS en 305s.
+7. Coverage file_scope.py 81%.
+
+**Commit**: 7a46e3b — feat(knowledge): H12 Scopes y consultas
+composables (evolution-v2).
+
+**Estado H12**: COMPLETO (8/8 UAT-EVO, 5/5 criterios).
+
+**Siguiente**: H13 (Handoff experto desde consultas). Bloqueado por
+H12 (consultas declarativas en ContextRecipe).
+
