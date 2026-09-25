@@ -56,13 +56,13 @@ FreshnessState = Literal["fresh", "stale", "archived"]
 
 # Claim predicates iniciales (H3 cubre estos; otros vendrán en H5 con Domain Packs)
 ClaimPredicate = Literal[
-    "line_count",         # int (LOC)
-    "function_count",     # int
-    "imports_module",     # module name (str)
-    "defines_symbol",     # qualified name (str)
-    "test_passes",        # bool
-    "file_exists",        # bool
-    "spec_revision",      # int
+    "line_count",  # int (LOC)
+    "function_count",  # int
+    "imports_module",  # module name (str)
+    "defines_symbol",  # qualified name (str)
+    "test_passes",  # bool
+    "file_exists",  # bool
+    "spec_revision",  # int
 ]
 
 # Finding results
@@ -100,8 +100,12 @@ from datetime import datetime
 from typing import Any, NewType, Literal, NamedTuple
 
 from skillgraph.runtime_types import (
-    SourceKind, FreshnessState, ClaimPredicate, FindingResult,
-    TraceKind, RuleRef,
+    SourceKind,
+    FreshnessState,
+    ClaimPredicate,
+    FindingResult,
+    TraceKind,
+    RuleRef,
 )
 
 SourceID = NewType("SourceID", str)
@@ -118,11 +122,10 @@ def source_id(raw: str) -> SourceID:
         raise InvalidSourceIDError("source_id no puede estar vacío")
     return SourceID(raw.strip())
 
+
 def entity_id(raw: str) -> EntityID:
     if not raw or ":" not in raw:
-        raise InvalidEntityIDError(
-            f"entity_id debe tener formato 'kind:key' (recibido {raw!r})"
-        )
+        raise InvalidEntityIDError(f"entity_id debe tener formato 'kind:key' (recibido {raw!r})")
     return EntityID(raw)
 
 
@@ -131,11 +134,11 @@ class Source:
     source_id: SourceID
     kind: SourceKind
     content_hash: str
-    locator: dict[str, Any]          # paths, urls, etc.; JSON estable
+    locator: dict[str, Any]  # paths, urls, etc.; JSON estable
     git_commit_sha: str | None
     git_tree_sha: str | None
     working_tree_status: dict[str, Any] | None
-    checked_at: str                 # ISO-8601 UTC
+    checked_at: str  # ISO-8601 UTC
     freshness: FreshnessState
 
     def __post_init__(self) -> None:
@@ -150,17 +153,17 @@ class Source:
 @dataclass(frozen=True, slots=True)
 class Entity:
     entity_id: EntityID
-    kind: str                       # "file", "function", "module", "contract", ...
-    stable_key: str                 # path relativo o qualified name
+    kind: str  # "file", "function", "module", "contract", ...
+    stable_key: str  # path relativo o qualified name
 
 
 @dataclass(frozen=True, slots=True)
 class Evidence:
     evidence_id: EvidenceID
-    kind: str                       # "metric", "snippet", "log_line", "commit_message"
+    kind: str  # "metric", "snippet", "log_line", "commit_message"
     content: dict[str, Any] | str
     source_id: SourceID
-    observed_at: str                # ISO-8601 o commit SHA
+    observed_at: str  # ISO-8601 o commit SHA
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,12 +171,12 @@ class Claim:
     claim_id: ClaimID
     subject_entity_id: EntityID
     predicate: ClaimPredicate
-    object_literal: Any             # int, str, bool; depende del predicate
+    object_literal: Any  # int, str, bool; depende del predicate
     source_id: SourceID
     evidence_ids: tuple[EvidenceID, ...] = field(default_factory=tuple)
-    extraction_method: str          # "static_analysis", "git_log", "manual"
-    extractor_version: str          # "skillgraph/0.1.0"
-    checked_at_revision: str        # commit SHA, ISO timestamp, o version semver
+    extraction_method: str  # "static_analysis", "git_log", "manual"
+    extractor_version: str  # "skillgraph/0.1.0"
+    checked_at_revision: str  # commit SHA, ISO timestamp, o version semver
     stale: bool = False
 
 
@@ -181,9 +184,9 @@ class Claim:
 class Finding:
     finding_id: FindingID
     entity_id: EntityID
-    observation: str                # human-readable
+    observation: str  # human-readable
     rule_ref: RuleRef
-    rule_version: str               # "skillgraph-rules/0.1.0"
+    rule_version: str  # "skillgraph-rules/0.1.0"
     evidence_ids: tuple[EvidenceID, ...]
     result: FindingResult
     valid_until_revision: str | None
@@ -345,10 +348,20 @@ Cada método:
 ## 6. Errores nuevos en `errors.py`
 
 ```python
-class InvalidSourceIDError(SkillGraphError):     code = "sg_invalid_source_id"
-class InvalidEntityIDError(SkillGraphError):     code = "sg_invalid_entity_id"
-class InvalidSourceError(SkillGraphError):       code = "sg_invalid_source"
-class UnknownClaimPredicateError(SkillGraphError): code = "sg_unknown_predicate"
+class InvalidSourceIDError(SkillGraphError):
+    code = "sg_invalid_source_id"
+
+
+class InvalidEntityIDError(SkillGraphError):
+    code = "sg_invalid_entity_id"
+
+
+class InvalidSourceError(SkillGraphError):
+    code = "sg_invalid_source"
+
+
+class UnknownClaimPredicateError(SkillGraphError):
+    code = "sg_unknown_predicate"
 ```
 
 ## 7. Tests (`tests/test_knowledge_storage.py`)

@@ -36,10 +36,13 @@ Slice 1 (`register_source`, `record_claim`, etc.) y añade:
 
 ```python
 import uuid
+
 NAMESPACE_KNOWLEDGE = uuid.UUID("...")  # constante de proyecto
 
-def make_claim_id(*, subject_entity_id: EntityID, predicate: str,
-                  source_id: SourceID, checked_at_revision: str) -> ClaimID:
+
+def make_claim_id(
+    *, subject_entity_id: EntityID, predicate: str, source_id: SourceID, checked_at_revision: str
+) -> ClaimID:
     seed = f"{subject_entity_id}|{predicate}|{source_id}|{checked_at_revision}"
     return ClaimID(f"claim-{uuid.uuid5(NAMESPACE_KNOWLEDGE, seed)}")
 ```
@@ -127,10 +130,20 @@ class KnowledgeController:
 Slice 2 añade:
 
 ```python
-class UnknownSourceError(SkillGraphError):           code = "sg_unknown_source"
-class UnknownEntityError(SkillGraphError):           code = "sg_unknown_entity"
-class UnknownClaimError(SkillGraphError):            code = "sg_unknown_claim"
-class StaleKnowledgeWarning(SkillGraphWarning):      code = "sg_stale_knowledge"
+class UnknownSourceError(SkillGraphError):
+    code = "sg_unknown_source"
+
+
+class UnknownEntityError(SkillGraphError):
+    code = "sg_unknown_entity"
+
+
+class UnknownClaimError(SkillGraphError):
+    code = "sg_unknown_claim"
+
+
+class StaleKnowledgeWarning(SkillGraphWarning):
+    code = "sg_stale_knowledge"
 ```
 
 `SkillGraphWarning` es una clase base nueva en `errors.py` para

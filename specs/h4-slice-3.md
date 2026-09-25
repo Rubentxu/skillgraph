@@ -69,8 +69,8 @@ El registry check basico ("capability existe en brick") no captura:
 @dataclass(frozen=True, slots=True)
 class ProposalStage:
     """Estado del ciclo de vida de una propuesta."""
-    stage: Literal["PROPOSED", "EVALUATED", "AUTHORIZED",
-                   "APPLIED", "REJECTED", "ARCHIVED"]
+
+    stage: Literal["PROPOSED", "EVALUATED", "AUTHORIZED", "APPLIED", "REJECTED", "ARCHIVED"]
     entered_at: str  # ISO-8601 UTC
     entered_by: str  # "validator-cli" | "policy-engine"
     note: str = ""
@@ -79,6 +79,7 @@ class ProposalStage:
 @dataclass(frozen=True, slots=True)
 class StoredProposal:
     """Propuesta + metadata de persistencia en storage."""
+
     proposal: GraphExpansionProposal
     stage: ProposalStage
     created_at: str
@@ -94,6 +95,7 @@ class StoredProposal:
 @dataclass(frozen=True, slots=True)
 class PolicyDecision:
     """Decision del policy engine sobre una propuesta."""
+
     accepted: bool
     reason: str
     violated_rules: tuple[str, ...] = ()  # P1..P5 (ver §2.3)
@@ -163,6 +165,7 @@ INSERT OR IGNORE INTO expansion_proposals (...)
 @dataclass(frozen=True, slots=True)
 class PolicyContext:
     """Contexto para que el policy engine decida."""
+
     proposal: GraphExpansionProposal
     plan: WorkflowPlan
     registry: Mapping[str, str]
@@ -184,14 +187,17 @@ class DefaultPolicyEngine:
 
         # P1: max operations per proposal (settings: max_ops_per_proposal).
         if len(ctx.proposal.operations) > self._max_ops(ctx):
-            violations.append(f"P1: {len(ctx.proposal.operations)} ops > "
-                              f"max_ops_per_proposal={self._max_ops(ctx)}")
+            violations.append(
+                f"P1: {len(ctx.proposal.operations)} ops > "
+                f"max_ops_per_proposal={self._max_ops(ctx)}"
+            )
 
         # P2: no concurrent proposals on same attachment_point.
         for other in ctx.concurrent_proposals:
-            if (other.proposal.attachment_point ==
-                    ctx.proposal.attachment_point and
-                    other.stage.stage in ("PROPOSED", "EVALUATED", "AUTHORIZED")):
+            if (
+                other.proposal.attachment_point == ctx.proposal.attachment_point
+                and other.stage.stage in ("PROPOSED", "EVALUATED", "AUTHORIZED")
+            ):
                 violations.append(
                     f"P2: concurrent proposal {other.proposal.proposal_id} "
                     f"on attachment_point={ctx.proposal.attachment_point}"
@@ -199,8 +205,9 @@ class DefaultPolicyEngine:
 
         # P3: scope restrictions (settings: allowed_scopes).
         if self._allowed_scopes() and ctx.proposal.scope not in self._allowed_scopes():
-            violations.append(f"P3: scope={ctx.proposal.scope} not in "
-                              f"allowed_scopes={self._allowed_scopes()}")
+            violations.append(
+                f"P3: scope={ctx.proposal.scope} not in allowed_scopes={self._allowed_scopes()}"
+            )
 
         # P4: blacklist de operations (settings: forbidden_ops).
         # Coherente con H4 ciclos y decision: RemoveNode NO es PatchOp
@@ -209,17 +216,17 @@ class DefaultPolicyEngine:
         forbidden = self._forbidden_ops()
         for op in ctx.proposal.operations:
             if type(op).__name__ in forbidden:
-                violations.append(f"P4: op={type(op).__name__} in "
-                                  f"forbidden_ops={forbidden}")
+                violations.append(f"P4: op={type(op).__name__} in forbidden_ops={forbidden}")
 
         # P5: budget cap (settings: max_nodes_per_project).
-        projected_node_count = (
-            len(ctx.plan.nodes) +
-            sum(1 for op in ctx.proposal.operations if isinstance(op, AddNode))
+        projected_node_count = len(ctx.plan.nodes) + sum(
+            1 for op in ctx.proposal.operations if isinstance(op, AddNode)
         )
         if projected_node_count > self._max_nodes():
-            violations.append(f"P5: projected_nodes={projected_node_count} > "
-                              f"max_nodes_per_project={self._max_nodes()}")
+            violations.append(
+                f"P5: projected_nodes={projected_node_count} > "
+                f"max_nodes_per_project={self._max_nodes()}"
+            )
 
         return PolicyDecision(
             accepted=not violations,

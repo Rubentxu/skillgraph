@@ -105,9 +105,16 @@ class KnowledgeController:
 ## 4. Errores nuevos
 
 ```python
-class CyclicDependencyError(SkillGraphError):  code = "sg_cyclic_dependency"
-class RefreshFailedError(SkillGraphError):     code = "sg_refresh_failed"
-class HopLimitExceededError(SkillGraphWarning): code = "sg_hop_limit_exceeded"
+class CyclicDependencyError(SkillGraphError):
+    code = "sg_cyclic_dependency"
+
+
+class RefreshFailedError(SkillGraphError):
+    code = "sg_refresh_failed"
+
+
+class HopLimitExceededError(SkillGraphWarning):
+    code = "sg_hop_limit_exceeded"
 ```
 
 `HopLimitExceededError` indica que se alcanzó `max_hops` sin

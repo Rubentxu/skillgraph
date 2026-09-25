@@ -89,9 +89,8 @@ Para dominios cerrados (estados, kinds, eventos), usar
 from typing import Literal
 
 NodeKind = Literal["DecisionNode", "ActionNode"]
-RunState = Literal["CREATED", "ACTIVE", "WAITING",
-                   "COMPLETED", "FAILED", "CANCELLED"]
-EventKind = Literal["RunCreated", "NodeScheduled", ...]   # runtime.py
+RunState = Literal["CREATED", "ACTIVE", "WAITING", "COMPLETED", "FAILED", "CANCELLED"]
+EventKind = Literal["RunCreated", "NodeScheduled", ...]  # runtime.py
 ```
 
 Anadir un valor nuevo es un cambio de **contrato** del blueprint;
@@ -105,6 +104,7 @@ tienen semántica propia, usar `NewType`:
 
 ```python
 from typing import NewType
+
 NodeName = NewType("NodeName", str)
 OutcomeLabel = NewType("OutcomeLabel", str)
 RevisionNumber = NewType("RevisionNumber", int)
@@ -212,7 +212,7 @@ Si creas un DSL (ver `skillgraph.dsl.PlanBuilder` como referencia):
 Si algo puede ser dos tipos, declararlo:
 
 ```python
-def _parse_node(data: Any) -> WorkflowNode: ...   # I/O: Any permitido
+def _parse_node(data: Any) -> WorkflowNode: ...  # I/O: Any permitido
 def successors(self, node: NodeName, outcome: OutcomeLabel) -> NodeName | None: ...
 ```
 
@@ -405,10 +405,12 @@ puede substituirse por su valor sin cambiar el programa.
 # BIEN: el resultado es substituido sin cambiar el comportamiento
 hash_a = handoff_a.context_hash
 hash_b = handoff_b.context_hash
-if hash_a == hash_b: ...
+if hash_a == hash_b:
+    ...
 
 # MAL: el resultado depende de estado oculto (orden de lectura, reloj)
-if Path(file).stat().st_mtime > some_timestamp: ...
+if Path(file).stat().st_mtime > some_timestamp:
+    ...
 ```
 
 Reglas:
@@ -433,8 +435,10 @@ En Python lo escribimos con generadores o con `functools.reduce`:
 ```python
 from functools import reduce
 
+
 def pipeline(value, *funcs):
     return reduce(lambda v, f: f(v), funcs, value)
+
 
 # Uso:
 plan = pipeline(raw_dict, parse_frontmatter, validate_plan, freeze)
@@ -462,9 +466,12 @@ cerradas, no con `Any`:
 
 ```python
 match outcome:
-    case "ok": ...
-    case "no": ...
-    case _: raise OutcomeInvalidError(outcome)
+    case "ok":
+        ...
+    case "no":
+        ...
+    case _:
+        raise OutcomeInvalidError(outcome)
 ```
 
 Reglas:
@@ -500,8 +507,10 @@ Reglas:
   class Result(Generic[T, E]):
       value: T | None
       error: E | None
+
       @property
-      def is_ok(self) -> bool: return self.error is None
+      def is_ok(self) -> bool:
+          return self.error is None
   ```
 
   O más simple: una tupla `(T | None, str | None)` con un
@@ -522,10 +531,16 @@ data AppError
 En SkillGraph, esto YA está modelado con jerarquía de excepciones:
 
 ```python
-class SkillGraphError(Exception): ...           # raiz
-class ValidationError(SkillGraphError): ...     # subtipo
+class SkillGraphError(Exception): ...  # raiz
+
+
+class ValidationError(SkillGraphError): ...  # subtipo
+
+
 class ParseError(SkillGraphError): ...
-class UnknownKindError(ValidationError): ...    # sub-subtipo
+
+
+class UnknownKindError(ValidationError): ...  # sub-subtipo
 ```
 
 Reglas:
@@ -551,6 +566,7 @@ En Python con `Result`:
 ```python
 def parse(text: str) -> Result[WorkflowPlan, ParseError]: ...
 def validate(plan: WorkflowPlan) -> Result[WorkflowPlan, ValidationError]: ...
+
 
 plan = parse(text).bind(validate)
 ```
@@ -580,8 +596,10 @@ node_names = tuple(n.name for n in plan.nodes)
 # MEJOR con HOF:
 from functools import reduce
 
+
 def compose2(f, g):
     return lambda x: f(g(x))
+
 
 # La regla es: si usas un patron `for` que solo acumula,
 # sustituir por comprehension, reduce, o itertools.
@@ -602,7 +620,7 @@ pero **el patrón sí** y el GC ayuda.
 
 ```python
 # BIEN: el builder nuevo comparte _initial con el viejo si no cambia
-new_builder = old_builder.starts_at(name)   # copy-on-write manual
+new_builder = old_builder.starts_at(name)  # copy-on-write manual
 ```
 
 Reglas:
@@ -628,7 +646,9 @@ En Python con `functools.partial`:
 ```python
 from functools import partial
 
+
 def make_event(kind: str, tenant: str, project: str, payload: dict) -> RuntimeEvent: ...
+
 
 make_node_event = partial(make_event, kind="NodeScheduled")
 ```
@@ -670,6 +690,7 @@ En Python con `hypothesis`:
 
 ```python
 from hypothesis import given, strategies as st
+
 
 @given(st.integers(min_value=1))
 def test_revision_never_negative(n: int) -> None:

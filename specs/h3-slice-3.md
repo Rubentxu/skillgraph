@@ -34,6 +34,7 @@ Los usuarios que no usen Git fingerprinting NO necesitan instalar
 ```python
 try:
     from dulwich.repo import Repo
+
     HAS_DULWICH = True
 except ImportError:
     HAS_DULWICH = False

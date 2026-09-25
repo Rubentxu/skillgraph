@@ -23,17 +23,17 @@ DISCOVER -> PROPOSE -> VALIDATE -> AUTHORIZE -> APPLY -> EXECUTE -> EVALUATE
 ```python
 @dataclass(frozen=True, slots=True)
 class GraphExpansionProposal:
-    proposal_id: ProposalID            # uuid5 estable
-    base_revision: str                 # revision sobre la que se aplica
+    proposal_id: ProposalID  # uuid5 estable
+    base_revision: str  # revision sobre la que se aplica
     problem_observed: str
     evidence: tuple[EvidenceRef, ...]  # (claim_id|evidence_id|relation_id)
-    operations: tuple[PatchOp, ...]    # ops minimas solicitadas
+    operations: tuple[PatchOp, ...]  # ops minimas solicitadas
     new_dependencies: tuple[str, ...]  # refs obligatorias
     capabilities_needed: tuple[str, ...]
     scope: Scope = Scope.NODE  # NODE | TRANSITION | SUBGRAPH
-    attachment_point: str              # nombre del nodo
-    rollback_plan: tuple[PatchOp, ...] # ops inversas para reversibilidad
-    authorization: Authorization       # tipo + cuando
+    attachment_point: str  # nombre del nodo
+    rollback_plan: tuple[PatchOp, ...]  # ops inversas para reversibilidad
+    authorization: Authorization  # tipo + cuando
     created_at: str  # ISO-8601 UTC
     author: str  # quien lo propuso
 ```
@@ -48,14 +48,17 @@ trazabilidad (id, created_at, author).
 class AddNode:
     node: WorkflowNode
 
+
 @dataclass(frozen=True, slots=True)
 class AddTransition:
     transition: WorkflowTransition
+
 
 @dataclass(frozen=True, slots=True)
 class RemoveTransition:
     from_node: str
     outcome: str
+
 
 PatchOp = AddNode | AddTransition | RemoveTransition
 ```
@@ -130,8 +133,10 @@ se registra en un `PendingProposal` con `status="rejected"`,
 class InvalidExpansionError(SkillGraphError):
     """Una propuesta de expansion viola una invariante del blueprint §6."""
 
+
 class UnauthorizedExpansionError(SkillGraphError):
     """Expansion sin autorizacion explicita valida."""
+
 
 class ExpansionOnObsoleteRevisionError(SkillGraphError):
     """La base_revision declarada no coincide con la revision actual del plan."""
@@ -164,6 +169,7 @@ def propose(
     author: str,
 ) -> GraphExpansionProposal: ...
 
+
 def validate(
     proposal: GraphExpansionProposal,
     *,
@@ -173,6 +179,7 @@ def validate(
     active_nodes: frozenset[str] = frozenset(),
 ) -> ValidationResult: ...
 
+
 def apply_expansion(
     proposal: GraphExpansionProposal,
     plan: WorkflowPlan,
@@ -181,6 +188,7 @@ def apply_expansion(
     completed_nodes: frozenset[str] = frozenset(),
     active_nodes: frozenset[str] = frozenset(),
 ) -> Result[WorkflowPlan, InvalidProposal]: ...
+
 
 def record_rejection(
     proposal: GraphExpansionProposal, reason: str

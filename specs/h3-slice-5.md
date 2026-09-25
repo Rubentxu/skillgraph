@@ -32,7 +32,9 @@ Introducir:
 ```python
 @validate_spec
 def _validate_context_recipe(spec: dict) -> None:
-    _require_keys(spec, ("obligatory", "freshness_policy", "token_budget"), ctx="ContextRecipe.spec")
+    _require_keys(
+        spec, ("obligatory", "freshness_policy", "token_budget"), ctx="ContextRecipe.spec"
+    )
     if not isinstance(spec.get("obligatory"), list):
         raise ValidationError("ContextRecipe.spec.obligatory debe ser lista")
     if spec.get("freshness_policy") not in {"strict", "best_effort"}:
@@ -137,10 +139,20 @@ class OutcomeTracer:
 ## 4. Errores nuevos
 
 ```python
-class StaleKnowledgeError(SkillGraphError):    code = "sg_stale_knowledge"
-class MissingObligatoryError(SkillGraphError): code = "sg_missing_obligatory"
-class TokenBudgetExceededError(SkillGraphError): code = "sg_token_budget_exceeded"
-class RecipeNotFoundError(SkillGraphError):    code = "sg_recipe_not_found"
+class StaleKnowledgeError(SkillGraphError):
+    code = "sg_stale_knowledge"
+
+
+class MissingObligatoryError(SkillGraphError):
+    code = "sg_missing_obligatory"
+
+
+class TokenBudgetExceededError(SkillGraphError):
+    code = "sg_token_budget_exceeded"
+
+
+class RecipeNotFoundError(SkillGraphError):
+    code = "sg_recipe_not_found"
 ```
 
 ## 5. Tests (`tests/test_context_controller.py`)

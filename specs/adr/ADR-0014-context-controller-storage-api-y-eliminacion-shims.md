@@ -66,13 +66,17 @@ def list_claims_by_predicate(
 ) -> tuple[dict[str, object], ...]:
     """SELECT * FROM claims WHERE tenant_id=? AND project_id=? AND predicate=?"""
 
-def list_evidences_for_source(
-    self, *, source_id: str
-) -> tuple[dict[str, object], ...]:
+
+def list_evidences_for_source(self, *, source_id: str) -> tuple[dict[str, object], ...]:
     """SELECT * FROM evidences WHERE source_id=?"""
 
+
 def list_resource_refs_for_run(
-    self, *, tenant_id: str, project_id: str, run_id: str,
+    self,
+    *,
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
     kind: Literal["claim", "evidence"],
 ) -> tuple[str, ...]:
     """SELECT DISTINCT resource_ref FROM runtime_events

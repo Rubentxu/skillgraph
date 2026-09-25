@@ -218,37 +218,41 @@ runner):
 class TestCliArgparseErrors:
     """Ramas de error del parser argparse (main() entry point)."""
 
-    def test_main_project_invalid_subcommand_returns_2(
-        self, tmp_path, capsys
-    ) -> None:
-        rc = main([
-            "--data-root", str(tmp_path / "data"),
-            "project", "bogus-subcommand",
-        ])
+    def test_main_project_invalid_subcommand_returns_2(self, tmp_path, capsys) -> None:
+        rc = main(
+            [
+                "--data-root",
+                str(tmp_path / "data"),
+                "project",
+                "bogus-subcommand",
+            ]
+        )
         assert rc == 2
 
-    def test_main_unknown_flag_returns_2(
-        self, tmp_path, capsys
-    ) -> None:
-        rc = main([
-            "--data-root", str(tmp_path / "data"),
-            "--bogus-flag",
-            "init",
-        ])
+    def test_main_unknown_flag_returns_2(self, tmp_path, capsys) -> None:
+        rc = main(
+            [
+                "--data-root",
+                str(tmp_path / "data"),
+                "--bogus-flag",
+                "init",
+            ]
+        )
         assert rc == 2
 
-    def test_main_command_with_bad_choice_returns_2(
-        self, tmp_path, capsys
-    ) -> None:
-        rc = main([
-            "--data-root", str(tmp_path / "data"),
-            "project", "list", "extra-arg-not-allowed",
-        ])
+    def test_main_command_with_bad_choice_returns_2(self, tmp_path, capsys) -> None:
+        rc = main(
+            [
+                "--data-root",
+                str(tmp_path / "data"),
+                "project",
+                "list",
+                "extra-arg-not-allowed",
+            ]
+        )
         assert rc == 2
 
-    def test_main_help_full_returns_0(
-        self, tmp_path, capsys
-    ) -> None:
+    def test_main_help_full_returns_0(self, tmp_path, capsys) -> None:
         rc = main(["--help"])
         assert rc == 0
         out = capsys.readouterr().out
