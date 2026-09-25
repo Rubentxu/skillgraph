@@ -4734,3 +4734,73 @@ temporal (evolution-v2).
 Alcance: detectar omision o extraccion redundante, atribuirla y
 verificar una correccion. Es el ultimo workitem evolution-v2.
 
+
+## 2026-09-25 — Sesion continuation: H15 Evaluación y automejora acotada
+
+**Decision con criterio** (rationale operador "A tu criterio" en
+turno anterior): arranco H15 directamente sin explorar el alcance,
+siguiendo la A-min workflow aplicada a H11..H14 (single apply, scope
+acotado a governance/ + knowledge/, contrato UAT-EVO-15..18).
+
+**Plan ejecutado**:
+1. Tests rojos en `tests/test_h15_improvement.py` (362 LoC, 9 tests
+   UAT-EVO-15..18).
+2. `src/skillgraph/governance/improvement.py` (501 LoC):
+   - ImprovementCandidate (frozen) + ImprovementKind Literal cerrada
+     (regla AGENTS §2.1) (redundant_extraction | omitted_reference
+     | recipe_swap).
+   - detect_redundant_extraction(): si TODAS las firmas de la source
+     son fresh, no emite candidato; si alguna es stale, emite
+     `ImprovementCandidate(kind='redundant_extraction')` (UAT-EVO-15).
+   - localize_omission(): para cada source esperado NO incluido pero
+     con firma vigente, emite candidato `omitted_reference` con
+     `evidence_refs=(source_id,)` y `metrics.attribution='context_selection'`.
+     NO propone nueva rama de comportamiento (UAT-EVO-16).
+   - compare_recipes(): evalua coverage (firmas fresh), work_units
+     (sources tocadas) y `is_b_improvement` declarativo:
+     `correction_b and correction_a and coverage_b >= coverage_a and
+     work_units_b < work_units_a` (UAT-EVO-17).
+   - promote_candidate(): EXIGE `human_approved=True`. Si False,
+     lanza `SelfCertificationBlockedError` (subclase tipada de
+     `SkillGraphError`). Si True con approver, persiste
+     `Evidence(kind='promotion_decision')` (regla AGENTS §1.5: reuso,
+     no tabla nueva) (UAT-EVO-18: sin autocertificacion).
+   - rollback_candidate(): RollbackPolicy Literal
+     (automatic | manual | blocked). `blocked` lanza
+     `ValidationError`; `automatic` aplica y persiste;
+     `manual` encola pero no aplica.
+
+3. Iterar hasta 9/9 verde: 3 fallos resueltos en sesion.
+   - `evidence_refs` debe apuntar al source_id de la firma vigente
+     (no tuple vacia) cuando es candidato de omision.
+   - `correccion_a/b` -> `correction_a/b` (API en ingles).
+   - `RollbackPolicy.AUTOMATIC` -> `"automatic"` (Literal type,
+     no enum class).
+
+4. Lint ruff clean (auto-fix removio 10 imports no usados).
+
+5. Suite completa: **830/830 PASS en 189s** (baseline 821 → 830 con
+   +9 nuevos test_h15_improvement).
+6. Coverage governance/improvement.py 84%.
+
+**Decision UAT-EVO-18**: el sistema NUNCA se autocertifica. Para
+promover una politica de validacion, `human_approved=True` +
+`approver` son obligatorios. El error tipado `SelfCertificationBlockedError`
+lleva `candidate_id` y `reason` en atributos, con mensaje claro que
+cita UAT-EVO-18.
+
+**Commit**: 116a2b5 — feat(governance): H15 Evaluación y automejora
+acotada (evolution-v2). DOCS siguen en commit separado.
+
+**Estado H15**: COMPLETO (9/9 UAT-EVO, criterios cumplidos).
+
+**Estado evolution-v2**: CERRADO (H0..H15 = 100%).
+- 5 nuevos modulos: file_signature, file_scope, file_handoff,
+  governance/receipts, governance/improvement.
+- 58 tests nuevos UAT-EVO (12 + 8 + 8 + 9 + 9).
+- Suite total: 830/830 PASS.
+- Cobertura de los nuevos modulos: 73%..85%.
+
+**Siguiente**: SPEC DEL OPERADOR (prioridad_5_s7plus_ejecucion
+explicitamente bloqueado por spec). No hay workitems autonomos
+pendientes.

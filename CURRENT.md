@@ -30,7 +30,7 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `pending_commit` (feat(governance): H15 Evaluación y automejora acotada).
+- HEAD: `116a2b5` (feat(governance): H15 Evaluación y automejora acotada).
 - Tests: **830/830 PASS** en 189s (`mise exec -- uv run pytest -q`; baseline 821 → 830 con +9 nuevos: test_h15_improvement UAT-EVO-15..18).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).

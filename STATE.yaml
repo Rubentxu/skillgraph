@@ -113,7 +113,7 @@ roadmap:
   evolution_v2:
     H15_completado:
       fecha: 2026-09-25
-      commit: pending_commit
+      commit: 116a2b5
       criterios_cumplidos:
         - ImprovementCandidate (frozen) + ImprovementKind Literal cerrada (regla AGENTS §2.1)
         - detect_redundant_extraction() detecta firmas stale para re-extraccion (UAT-EVO-15)
