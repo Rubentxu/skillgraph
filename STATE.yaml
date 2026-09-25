@@ -529,15 +529,30 @@ next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLET
 # las prioridades 1 y 5 dependen de consigna explicita.
 stewardship_backlog:
   prioridad_1_spec_s7plus:
-    descripcion: "Operador define capacidad objetivo para S7+ del blueprint (no definido en ROADMAP.md canonico)."
+    descripcion: "Operador define capacidad objetivo para 'S7+'. Tras re-investigacion del blueprint v1 + ADR-0013 (audits/etapa7-state-2026-09-25.md 2026-09-25), se confirma que 'S7+' se corresponde con H9 · Release candidate (renumeracion de H7 original tras divergencia documentada por ADR-0013). Alcance real del backlog: 5 Entregables H9 + 5 Trabajos pendientes de Etapa 7 (ROADMAP)."
     bloquea: [prioridad_5]
-    opciones_documentadas:
-      - "S7-A: Adapter real (LLM real, no Fake) - vector de estres realista"
-      - "S7-B: Cerrar grieta transaccional workflow_runs<->runtime_events (F-6 auditoria, ver h9-plan-b-atomicity-characterization.md)"
-      - "S7-C: Certificar concurrencia cross-proceso con carga real (locks S6 v0.14.0 mitigan interleaving, falta certificacion)"
-      - "S7-D: Multi-tenancy operativo (aislamiento, cuotas)"
-    accion_requerida: "operador elige 1 opcion y aporta spec minimo (1 parrafo)"
-    coste: "0 LoC; tiempo de pensar del operador"
+    opciones_documentadas: []
+    opciones_reales_tras_adr0013:
+      - nombre: "Opcion A: Addendum honesto H9"
+        descripcion: "Cerrar formalmente H9 via addendum en STATE.yaml (h9_cerrado_por_conformance: true, h9_adapter_real_pendiente: true). Sin LoC produccion. 5 min."
+        coste: "0 LoC, doc"
+        valor: "honestidad"
+      - nombre: "Opcion B: Cerrar Etapa 7 (Trabajos 1,3,5,6,8)"
+        descripcion: "Ejecutar T8 (benchmark), T3 (threat model), T5 (backup CLI), T1 (Adapter real), T6 (observabilidad) por orden de coste/valor."
+        coste: "~1000-2000 LoC, 2-4 semanas"
+        valor: "cumplir blueprint v1 al 100%"
+        riesgo: "elecciones arquitectonicas requieren spec operador"
+      - nombre: "Opcion C: Cerrar P3 (orden prioridades)"
+        descripcion: "Abrir iniciativa g-skillgraph-p3 con alcance 'extensiones avanzadas, multiples proveedores, optimizaciones'."
+        coste: "1-2 semanas por sub-trabajo"
+        valor: "ejecucion literal del blueprint"
+      - nombre: "Opcion D: Stewardship menor (T8 benchmark)"
+        descripcion: "Empezar por T8 (benchmark contexto/consultas). 50-100 LoC, 1-2h, sin eleccion arquitectonica."
+        coste: "50-100 LoC, 1-2h"
+        valor: "metrica medible + desbloquea decisiones B/C"
+    accion_requerida: "operador elige entre A/B/C/D y aporta spec minimo si va por B o C (1 parrafo). D es ejecutable sin spec."
+    coste: "0 LoC; tiempo de pensar del operador (o 1-2h si D)"
+    audit_referencia: audits/etapa7-state-2026-09-25.md
   prioridad_2_dt2_lock_uat_evidence:
     descripcion: "Anadir flock (mismo patron que S6 locks) sobre tests/uat-evidence/ para prevenir race condition cuando pytest-xdist se active. Limite actual: _emit_uat_0X_evidence escribe sin lock."
     archivos_afectados: ["tests/uat_audit.py", "tests/uat-evidence/ (side effect)"]
