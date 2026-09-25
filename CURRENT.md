@@ -103,6 +103,36 @@ Para reactivar la iniciativa o abrir una nueva:
 - Operador reabre con consigna explicita; el protocolo de
   reapertura esta en `INITIATIVE-CLOSED.md` seccion 8.
 
+## Reactivacion 2026-09-26 — STEWARDSHIP-DT-FORMAT-DRIFT cerrado
+
+Inspeccion de salud del repo al iniciar sesion detecta **drift de
+ruff format en 15 archivos** introducido por los commits H11-H15
+evolution-v2 (5c52750 + dc1ef18 + c5f8a94 + 116a2b5) + t3/t3-s2.
+El CI gate `format/format --check` estaba **roto**.
+
+Drift puramente cosmetico: collapse de f-strings multilinea,
+reorganizacion de kwargs, reordenamiento de tuplas en fixtures.
+0 cambios semanticos. Aplicar `ruff format` cierra el gap sin
+regresiones.
+
+Verificacion:
+- `ruff format src tests` -> 15 files reformatted, 122 unchanged.
+- `ruff check src tests` -> All checks passed.
+- `ruff format --check src tests` -> 137 files already formatted.
+- `pytest -q` -> 855/855 PASS en 251s.
+
+Resultado: **-91 LoC netos** (97 insertions, 188 deletions). CI
+gate `format/format --check` desbloqueado.
+
+Commit `3031795 style(format)`. Audit doc en
+`audits/format-drift-2026-09-26.md` (117 LoC, tabla 15 archivos
++ trazabilidad origen + derivado pre-commit hook).
+
+Sin bump de release (style/format). HEAD `3031795`.
+
+Recomendacion derivada (futuro ciclo, sin accion ahora): pre-commit
+hook + CI workflow para evitar regresion. Coste ~30 min.
+
 ## Reactivacion 2026-09-26 — STEWARDSHIP-T-WARNINGS-AUDIT cerrado
 
 Operador reabre con modo AUTO: "continua con tareas roadmap y deuda

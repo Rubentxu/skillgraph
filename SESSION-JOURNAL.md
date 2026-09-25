@@ -5292,3 +5292,54 @@ warnings.warn (3 sitios, audit 2026-09-26). Pendientes estructurales
 sin spec operadora (sin cambio): E1 Adapter real, T5 Backups CLI,
 T6 Observabilidad, Gap A (workflow_runs↔runtime_events), Gap C
 (stress N=10).
+
+---
+
+## 2026-09-26T01:42Z — STEWARDSHIP-DT-FORMAT-DRIFT cerrado (commit `3031795`)
+
+Operador: "continua con tareas roadmap y deuda tecnica a tu criterio"
+(modo AUTO preautorizado).
+
+Inspeccion de salud del repo detecta **drift de ruff format en 15
+archivos** (6 src + 9 tests). El CI gate `format/format --check`
+estaba roto desde los commits H11-H15 evolution-v2.
+
+**Origen del drift**: commits `5c52750` (H11), `dc1ef18` (H13),
+`c5f8a94` (H14), `116a2b5` (H15) + tests t3/t3-s2 introducidos
+sin re-correr `ruff format` antes del commit. AGENTS.md §6 no
+obliga a format pre-commit.
+
+**Naturaleza del drift** (verificada leyendo diffs uno-por-uno):
+- Collapse de f-strings multilinea a single-line (5 sitios)
+- Reorganizacion de llamadas con kwargs (8 sitios)
+- Reordenamiento de tuplas/listas en fixtures (12 sitios)
+
+**Verificacion**:
+- `mise exec -- uv run ruff format src tests` -> 15 files
+  reformatted, 122 unchanged.
+- `mise exec -- uv run ruff check src tests` -> All checks passed.
+- `mise exec -- uv run ruff format --check src tests` ->
+  137 files already formatted.
+- `mise exec -- uv run pytest -q` -> 855/855 PASS en 251s,
+  0 regresiones vs baseline.
+
+**Cambios**: -91 LoC netos (97 insertions, 188 deletions). 0
+cambios semanticos. CI gate `format/format --check` desbloqueado.
+
+**Audit doc**: `audits/format-drift-2026-09-26.md` (117 LoC):
+- Tabla 15 archivos con LoC delta
+- Naturaleza del drift categorizada en 3 tipos
+- Trazabilidad inversa al origen (commits H11-H15)
+- Verificacion post-fix (ruff + pytest)
+- Derivado recomendado: pre-commit hook + CI workflow (~30 min)
+
+**Decision sobre release**: sin bump (style/format, sin cambio
+de contrato observable).
+
+**Commits**: `3031795` (style: cerrar drift ruff format + state
+sync).
+
+**Proximo**: backlog pendiente sin cambio (sin spec operadora):
+E1 Adapter real, T5 Backups CLI, T6 Observabilidad, Gap A
+(workflow_runs<->runtime_events), Gap C (stress N=10). Derivado
+accionable sin spec: pre-commit hook + audit advisories upstream.

@@ -125,10 +125,28 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: T_WARNINGS_AUDIT_completo  # Audit warnings.warn 3/3 sitios, 0 gaps S2/I
-  current_workitem: T-WARNINGS-AUDIT
-  next_workitem: null  # ADR-0015 implementado al 100% para f-strings + warnings. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
+  next_milestone_gate: DT_FORMAT_DRIFT_cerrado  # CI gate format/format --check desbloqueado, 15 archivos reformat, 0 regresiones
+  current_workitem: DT-FORMAT-DRIFT
+  next_workitem: null  # ADR-0015 implementado al 100% + format drift cerrado. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
   evolution_v2:
+    DT_FORMAT_DRIFT_cerrado:
+      fecha: 2026-09-26
+      ciclo: STEWARDSHIP-DT-FORMAT-DRIFT
+      commit: 3031795
+      pushed: 2026-09-26
+      criterios_cumplidos:
+        - "Drift identificado: 15 archivos sin formatear (6 src + 9 tests) introducidos por H11-H15 evolution-v2 + t3/t3-s2"
+        - "ruff format aplicado: 137 files already formatted (post-fix)"
+        - "ruff check post-fix: All checks passed"
+        - "855/855 tests PASS post-fix (0 regresiones vs baseline 855)"
+        - "Verificacion empirica: -91 LoC netos (97 insertions, 188 deletions), 0 cambios semanticos"
+        - "Audit dedicado en audits/format-drift-2026-09-26.md con tabla 15 archivos + naturaleza del drift + trazabilidad origen"
+      notas:
+        - "Origen del drift: commits H11-H15 (5c52750, dc1ef18, c5f8a94, 116a2b5) + t3/t3-s2 introducidos sin re-correr ruff format pre-commit"
+        - "AGENTS.md §6 no obliga a format pre-commit, pero el CI gate format/format --check queda roto tras cada feature sin format"
+        - "Derivado recomendado (sin accion ahora): pre-commit hook + CI workflow (~30 min total)"
+        - "Sin bump de release (style/format, sin cambio de contrato observable)"
+      siguiente: "Pre-commit hook (recomendado), audit advisories upstream, E1 Adapter real (spec operador), T5 Backups, T6 Observabilidad"
     T_WARNINGS_AUDIT_completo:
       fecha: 2026-09-26
       ciclo: STEWARDSHIP-T-WARNINGS-AUDIT
