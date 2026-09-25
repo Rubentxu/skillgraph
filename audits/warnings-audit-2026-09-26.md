@@ -151,6 +151,37 @@ su propio tenant/project/run_id/source_id en su sesión interactiva). Igual
 que en `T-SECURITY-AUDIT-FULL` §"Sitios secundarios — verificación
 transversal", se considera caller-provided y por tanto NO gap.
 
+## Verificación adicional: sitios adyacentes que filtran IDs (NO mensajes, NO warnings)
+
+Para eliminar complacencia, un grep exhaustivo
+(`grep -rn -E 'f["\x27][^"\x27]*\{(source_id|entity_id|claim_id|event_id|run_id|proposal_id|evidence_id|finding_id|trace_id)' src/skillgraph/ --include='*.py'`)
+arroja **16 sitios** con f-strings que contienen IDs cross-tenant. **3 son
+los warnings auditados arriba; 13 son adyacentes**:
+
+| Sitio | Naturaleza | Veredicto |
+|---|---|---|
+| `runtime/engine.py:311/418/450` `resource_ref=f"run/{run_id}"` | Campo de RuntimeEvent persistido en `runtime_events` (datos estructurados, NO mensaje) | NO gap — run_id propio del tenant, persistido para replay |
+| `cli/runner.py:1478/1746/2217` `print(f"Propuesta registrada: {proposal_id}")` | CLI local print (cubierto arriba) | NO gap — caller-provided |
+| `knowledge/context_controller.py:537` `tid = trace_id or f"tr-{run_id}-{_now_iso()}"` | Construcción determinista de ID | NO gap — ID propio del tenant, NO mensaje |
+| `knowledge/knowledge_controller.py:69/75/86` `seed = f"{...}"` | Seeds para hashing UUIDv5 (generan ClaimID/EvidenceID/FindingID) | NO gap — NO es mensaje, NO es output al caller |
+
+Los 13 sitios adyacentes caen en 3 categorías que ADR-0015 explícitamente
+excluye del alcance S2/I:
+
+1. **Campos de eventos persistidos** (`resource_ref`): son datos
+   estructurados en SQLite, no mensajes de error. El operador los lee
+   vía `sg runs logs` (CLI local) — mismo tenant scope.
+2. **Construcción de IDs deterministas** (`seed = ...`, `tid = ...`):
+   son inputs a `uuid.uuid5()`, no outputs. Nunca llegan al caller
+   como mensaje.
+3. **CLI prints** (cubierto arriba).
+
+El inventario del audit cubre los **3 canales de output aditivo** que
+ADR-0015 define como alcance (`raise .*Error(f"...")` y `warnings.warn(f"...")`).
+Si en el futuro se introduce otro canal (e.g. `logging.warning`,
+`structlog`, `telegram.send_message`), reabrir este audit con el nuevo
+canal.
+
 ## Endurecimiento de tests (parte del ciclo)
 
 Los 3 tests que ya verificaban los warnings (solo el TIPO, no el contenido)
