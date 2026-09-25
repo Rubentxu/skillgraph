@@ -107,16 +107,21 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: H11-conocimiento-tipado-reutilizable  # evolution-v2/plan/ROADMAP.md H10 cerrado 2026-09-25; gate H11 requiere atencion a FileSignatures con foco, contrato, cobertura, procedencia y vigencia
-  current_workitem: H10-mapa-del-recorrido-real-y-baseline
-  next_workitem: H11-conocimiento-tipado-reutilizable
+  next_milestone_gate: H12  # evolution-v2/plan/ROADMAP.md H11 cerrado 2026-09-25; gate H12 pendiente definicion
+  current_workitem: H11-conocimiento-tipado-reutilizable
+  next_workitem: H12  # evolution-v2/plan/ROADMAP.md H12 = siguiente despues de H11
   evolution_v2:
-    H10_completado:
+    H11_completado:
       fecha: 2026-09-25
-      audit: audits/h10-recorrido-real-2026-09-25.md
-      criterios_cumplidos: 5/5 (inventario APIs, caso E2E, decisiones duplicadas, fixtures, proveedor determinista)
-      proveedor_determinista_seleccionado: FakeAgentAdapter
-      siguiente: H11
+      commit: 5c52750
+      criterios_cumplidos:
+        - FileSignature ADT cerrada (foco, contrato, cobertura, procedencia, vigencia)
+        - Pure function extract_file_signatures() sin I/O con heuristicas regex
+        - Persistencia via Evidence(kind='file_signature') (reuso, sin tabla nueva)
+        - list_file_signatures_for_source() con filtro stale por source + signature
+        - Tests UAT-EVO-01..04 (12 nuevos, 796 total, 100% verde)
+      cobertura_file_signature: 85%
+      siguiente: H12
 
 python:
   minimum: "3.11"

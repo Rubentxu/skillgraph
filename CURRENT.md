@@ -30,17 +30,18 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 
 ## Último estado comprobado
 
-- HEAD: `30a1756` (test: refresh snapshots UAT-08/09 con HEAD post-refactor DRY).
-- Tests: **784/784 PASS** en 230s (`mise exec -- uv run pytest -q`; baseline 775 → 784 con +9 nuevos: test_bench_common).
+- HEAD: `5c52750` (feat(knowledge): H11 FileSignatures reutilizables).
+- Tests: **796/796 PASS** en 218s (`mise exec -- uv run pytest -q`; baseline 784 → 796 con +12 nuevos: test_h11_file_signature UAT-EVO-01..04).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
-- Cobertura núcleo re-medida: **83%** total (3811 stmts, 573 miss, 1028 branches) sobre 30 módulos productivos. Ver `coverage_snapshot_2026-09-25_post_session`. Re-valoraciones: redaction 39%→100% (era cifra heredada del subset T1), runcontroller 89%→96%, context_controller 88%→90%.
+- Cobertura núcleo re-medida: **83%** total (3811 stmts, 573 miss, 1028 branches) sobre 30 módulos productivos. Ver `coverage_snapshot_2026-09-25_post_session`. Re-valoraciones: redaction 39%→100% (era cifra heredada del subset T1), runcontroller 89%→96%, context_controller 88%→90%. Nuevo modulo H11 `file_signature.py` 85% (variantes empty/absent/partial ya documentadas).
 - Working tree limpio. Sin ficheros pendientes.
 - ruff format + ruff check: limpios.
 - HEAD == origin/main (post push FF en este turno).
 - `STATE.yaml.release` sincronizado con realidad: tag=v0.14.0, 17 releases, 30 capacidades_entregadas, tag_sha=241ccc9f.
 - **H9 addendum honesto**: 4/5 entregables cumplidos por conformance (E1 Adapter real PENDIENTE, E2 Seguridad CUMPLIDA_PARCIAL, E3-E5 CUMPLIDAS). Ver `audits/h9-addendum-2026-09-25.md`.
-- **H10 evolution-v2 COMPLETO**: mapa del recorrido real y baseline (audits/h10-recorrido-real-2026-09-25.md 325 LoC). Próximo workitem propuesto: H11 (Conocimiento tipado reutilizable).
+- **H10 evolution-v2 COMPLETO**: mapa del recorrido real y baseline (audits/h10-recorrido-real-2026-09-25.md 325 LoC).
+- **H11 evolution-v2 COMPLETO**: conocimiento tipado reutilizable (FileSignatures). Ver `src/skillgraph/knowledge/file_signature.py` (ADT cerrada, pure extractor) + `tests/test_h11_file_signature.py` (12 UAT-EVO-01..04 tests). Persistencia via Evidence(kind='file_signature') reusando tabla existente (regla AGENTS §1.5).
 
 ## Releases post-refactor v0.7.0
 

@@ -4566,3 +4566,37 @@ con todos los criterios de salida de H10 cumplidos. Sin codigo de
 produccion, sin tests nuevos, sin release (research deliverable).
 
 **Estado H10**: COMPLETO.
+
+
+## 2026-09-25 — Sesion continuation: H11 Conocimiento tipado reutilizable
+
+**Trigger**: operador autoriza "continuamos" → trabajo autonomo sobre
+siguiente workitem desbloqueado tras H10 cerrado. A-min: single apply
+sobre knowledge/ + knowledge_controller.py acotado.
+
+**Pre-flight**: 784/784 PASS pre-H11. HEAD = 30a1756.
+
+**Plan ejecutado**:
+1. Crear `tests/test_h11_file_signature.py` con 12 tests cubriendo
+   UAT-EVO-01..04 (extraccion, persistencia, vigencia fresh, stale).
+2. Crear `src/skillgraph/knowledge/file_signature.py` (ADT cerrada:
+   FileSignature + SignatureProcedencia + SignatureVigencia + pure
+   function `extract_file_signatures`).
+3. Anadir `KnowledgeController.record_evidence_for_file_signature()`
+   + `list_file_signatures_for_source()` reutilizando tabla Evidence
+   existente (regla AGENTS §1.5: no tabla nueva).
+4. Iterar hasta 12/12 verde: 5 fallos resueltos en sesion (doble
+   encoding JSON, content_json en Storage, vigencia coherencia,
+   marca stale por source + signature).
+5. Lint ruff clean (UP037 + I001 auto-fix, F821 resuelto con
+   import directo de FileSignature).
+6. Full suite: 796/796 PASS en 218s.
+7. Coverage file_signature.py 85%, knowledge_controller.py 92%.
+
+**Commit**: 5c52750 — feat(knowledge): H11 FileSignatures reutilizables.
+
+**Estado H11**: COMPLETO (12/12 UAT-EVO, 5/5 criterios).
+
+**Siguiente**: H12 (sin definicion explicita en external/evolution-v2/
+plan/ROADMAP.md mas alla del titulo; pendiente gate operador).
+
