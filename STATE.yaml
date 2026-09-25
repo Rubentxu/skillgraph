@@ -487,6 +487,7 @@ nota_honesta_revision: >
   g-skillgraph-bootstrap COMPLETED en v0.6.0, sin trabajo activo.
 
 deuda_tecnica_residual:
+  # ---- Deudas ya cerradas documentadas (no son deuda abierta) ----
   - "H9-BSlice3-S4 cerrado (recuperacion sin evento): API Storage.recover_interrupted_node_executions(int) que ejecuta UNA sola UPDATE masiva en lugar del bucle que abria una tx por fila en el original. RunController._recover_interrupted queda como shim trivial. Escritura sin evento (no toca atomicidad de S3/S5/S6/S7). +8 tests (6 contrato observable + 1 atomicidad interna verificada con MagicMock sobre Storage._conn + 1 introspeccion no-regresion). 487/487 verde. SIN release (refactor sin bump)."
   - "H9-BSlice3 cerrado completo (S1-S9): los 10 SQL sites del RunController identificados en la caracterizacion inicial estan cerrados. Storage encapsula las 7 mutaciones (create_run, transition_run_state, recover_interrupted, start_node_execution, complete_node_execution, mark_node_failed, y las 3 lecturas puras en S1-reads); el RunController queda como shim trivial en cada caso y orquesta los eventos con la grieta de no-atomicidad Estado<->Eventos preservada por construccion (decision del 2026-09-23 18:24). El constructor RunController.__init__ pasa de 3 params (storage, adapter, conn) a 2 (storage, adapter): Storage.conn es la nueva API publica que mantiene la identidad (no un wrapper) para que las mutaciones de Storage sean visibles desde EventLog. 41 callsites actualizados (1 CLI + 40 tests). +37 tests en este round (S3=+7, S5=+5, S6=+6, S7=+6, S1-create_run=+7, S8+S9=+6). 524/524 verde en 103s. SIN release (refactor sin bump). Grieta de no-atomicidad sigue abierta como punto de recuperacion futuro: requiere operaciones transaccionales de Storage que coordinen INSERT/UPDATE workflow_runs|node_executions con INSERT runtime_events en una sola transaccion."
   - "H9-BSlice3-S1 cerrado: 3 lecturas puras migradas de SQL directo en RunController a APIs publicas de Storage (load_run, list_node_executions, list_executed_node_names). RunController sigue dependiendo de sqlite3.Connection para S3..S7 (escrituras mixtas con EventLog): siguen acopladas, pero el siguiente slice abordara storage.create_run_atomic + storage.start_node_execution_atomic que requieren decision arquitectonica sobre donde vive la transaccion. RunController NO se ha reducido mas alla de las lecturas en S1. +12 tests (9 API + 3 introspeccion no-regresion). 479/479 verde. SIN release (refactor sin bump)."
@@ -520,7 +521,50 @@ deuda_tecnica_residual:
 
 blockers: []
 
-next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 16 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 754/754 tests, blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sin trabajo activo material. Sesion cerrada 2026-09-24 22:33 con checkpoint durable (STATE.yaml + CURRENT.md + SESSION-JOURNAL.md sincronizados). Pendientes sin spec operador: (1) S7+ del blueprint no definido; (2) grieta de no-atomicidad workflow_runs<->runtime_events preservada por construccion (locks S6 v0.14.0 mitigan interleaving pero no cierran la transaccional); (3) concurrencia real con proveedor real no certificada. Reanudar sesion 2026-09-25: leer CURRENT.md, confirmar HEAD=878a159, esperar consigna operador."
+next_action: "INICIATIVA COMPLETED (2026-09-23 tras tag v0.6.0). ETAPA 7 COMPLETED (2026-09-24 tras tag v0.14.0). 16 releases (v0.3.0..v0.14.0), 16/16 UAT PASS, 754/754 tests, blueprint v1 + Etapa 7 (runtime/reconciliacion) COMPLETOS al 100% segun contrato. Sesion 2026-09-25 cerro con auditoria post-Etapa 7 (audits/runtime-2026-09-25.md), 2 hallazgos aplicados (F-1 + F-3), 3 descartados (F-2 revertido por tests, F-4 diferido por contrato, F-5 falso positivo), housekeeping final + push FF a origin/main. Stewardship backlog priorizado para futuras sesiones (ver stewardship_backlog al final): P1=spec S7+ (operador), P2=lock preventivo uat-evidence (mio, accionable), P3=auditoria redaction.py (mio, accionable), P4=cli runner cobertura 70%+ (mio, accionable), P5=ejecucion S7+ (depende P1). Sin trabajo activo hasta proxima consigna. Reanudar sesion futura: leer STATE.yaml.stewardship_backlog y CURRENT.md.Auditoria 2026-09-25."
+
+# ---- Backlog priorizado de stewardship (2026-09-25 08:19) ----
+# Orden de ejecucion recomendado para futuras sesiones. Cada item tiene
+# coste, riesgo y valor explicitados. Sin spec del operador para S7+,
+# las prioridades 1 y 5 dependen de consigna explicita.
+stewardship_backlog:
+  prioridad_1_spec_s7plus:
+    descripcion: "Operador define capacidad objetivo para S7+ del blueprint (no definido en ROADMAP.md canonico)."
+    bloquea: [prioridad_5]
+    opciones_documentadas:
+      - "S7-A: Adapter real (LLM real, no Fake) - vector de estres realista"
+      - "S7-B: Cerrar grieta transaccional workflow_runs<->runtime_events (F-6 auditoria, ver h9-plan-b-atomicity-characterization.md)"
+      - "S7-C: Certificar concurrencia cross-proceso con carga real (locks S6 v0.14.0 mitigan interleaving, falta certificacion)"
+      - "S7-D: Multi-tenancy operativo (aislamiento, cuotas)"
+    accion_requerida: "operador elige 1 opcion y aporta spec minimo (1 parrafo)"
+    coste: "0 LoC; tiempo de pensar del operador"
+  prioridad_2_dt2_lock_uat_evidence:
+    descripcion: "Anadir flock (mismo patron que S6 locks) sobre tests/uat-evidence/ para prevenir race condition cuando pytest-xdist se active. Limite actual: _emit_uat_0X_evidence escribe sin lock."
+    archivos_afectados: ["tests/uat_audit.py", "tests/uat-evidence/ (side effect)"]
+    coste: "~10-15 LoC + 1 test de concurrencia"
+    riesgo: "nulo (preventivo)"
+    valor: "medio (evita reabrir si xdist llega)"
+    accionable_sin_spec: true
+  prioridad_3_audit_redaction:
+    descripcion: "Auditar src/skillgraph/runtime/redaction.py (39% cobertura reportada, 107 LoC, 21 tests existentes). Determinar si 39% es cifra heredada (suite de 4 ficheros) o si hay gaps reales. Cerrar gaps si los hay."
+    archivos_afectados: ["src/skillgraph/runtime/redaction.py", "tests/test_redaction.py"]
+    coste: "~30 min si gaps; ~5 min + addendum si cifra heredada"
+    riesgo: "nulo (auditoria + tests aditivos)"
+    valor: "medio (cierra outlier de cobertura)"
+    accionable_sin_spec: true
+  prioridad_4_cli_runner_coverage:
+    descripcion: "Subir src/skillgraph/cli/runner.py de 55% a 70%+ mediante tests in-process con click.testing.CliRunner para comandos criticos (sg run, sg knowledge, sg expansion show)."
+    archivos_afectados: ["src/skillgraph/cli/runner.py", "tests/test_cli_branches.py"]
+    coste: "~60 min, ~15 tests"
+    riesgo: "bajo (aditivo)"
+    valor: "medio (uniforma perfil pytest-cov)"
+    accionable_sin_spec: true
+  prioridad_5_s7plus_ejecucion:
+    descripcion: "Ejecutar el slice S7+ una vez priorizado (prioridad_1)."
+    bloqueado_por: [prioridad_1_spec_s7plus]
+    coste: "variable segun opcion (S7-A ~300-500 LoC, S7-B ~200-500 LoC, S7-C ~1-2 dias stress, S7-D variable)"
+    riesgo: "medio-alto (cambia contratos o requiere proveedor real)"
+    valor: "alto (cierra capacidad post-Etapa 7)"
 
 
 release:
