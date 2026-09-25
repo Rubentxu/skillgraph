@@ -3879,3 +3879,129 @@ ruff limpio.
 
 **Backlog 100% cerrado en lo accionable sin spec**.
 Restantes son responsabilidad directa del operador.
+
+## Sesión 2026-09-25 09:07 - 09:15 · Investigación read-only: estado real de H9 vs "S7+"
+
+**Consigna**: operador continúa modo AUTO (reglas 1-8 + regla 8
+explícita sobre workflow SDDK); "siguiente" priorizado en la
+respuesta anterior es P1 (spec S7+ del operador).
+
+### Análisis previo (regla 4 CALIDAD)
+
+Antes de inventar trabajo, hice un repaso de deuda técnica
+residual + roadmap canónico. Hallazgo crítico:
+
+- **STATE.yaml.stewardship_backlog.prioridad_1** proponía 4
+  opciones abstractas ("A Adapter real" / "B grieta transaccional"
+  / "C cert. concurrencia" / "D multi-tenancy").
+- Esa nomenclatura "S7+" era **heredada**, sin base en blueprint
+  fresco.
+
+Verifiqué leyendo los blueprints canónicos:
+
+- `external/blueprint-v1/plan/ROADMAP.md` define "Etapa 7 —
+  Endurecimiento" con **8 Trabajos** explícitos. No es "sin
+  definir".
+- `external/blueprint-v1/plan/HITOS.md` define "H7 — Release
+  candidate" con 5 Entregables.
+- `external/blueprint-v1/adr/ADR-0013-divergencia-h7-y-rectificacion-v060.md`
+  **renumera H7 → H9** explícitamente: "el endurecimiento del
+  H7 original se ejecutará como H9 · Release candidate. El
+  hueco biblioteca→producto se cierra en H8".
+
+Esto **reformula el problema del operador**:
+- "S7+" no es huérfano: es H9 (renumeración documentada).
+- "Etapa 7" tiene 8 Trabajos: 5+ pendientes.
+- "P3" del orden de prioridades tampoco está cerrado.
+
+### Trabajo ejecutado (read-only, 0 LoC producción)
+
+1. **Investigation memo** (`audits/etapa7-state-2026-09-25.md`,
+   417 LoC). Caracterización honesta contra blueprint + código:
+   - 8 Trabajos de Etapa 7 caracterizados uno a uno.
+   - 5 Entregables de H9 caracterizados (4 cerrados o
+     parciales, 1 no cumplido: Adaptador real).
+   - P0..P3 del orden de prioridades mapeado al estado.
+   - 4 opciones derivadas para que el operador elija:
+     - A: Addendum honesto (5 min, 0 LoC).
+     - B: Cerrar Etapa 7 (1-4 sem, ~1000-2000 LoC).
+     - C: Cerrar P3 (nueva iniciativa, 1-2 sem por sub).
+     - D: Stewardship menor T8 benchmark (1-2h, 50-100 LoC).
+
+2. **Reformulación del backlog** en STATE.yaml:
+   - `prioridad_1_spec_s7plus.descripcion` cita el audit y
+     la renumeración H7→H9.
+   - `opciones_documentadas: []` (las 4 heredadas eran ruido).
+   - `opciones_reales_tras_adr0013: 4 caminos defendibles`.
+   - `accion_requerida: operador elige A/B/C/D`.
+   - `audit_referencia: audits/etapa7-state-2026-09-25.md`.
+
+3. **NO** se ejecutó feature alguno (T1 Adapter real, T5
+   backup CLI, T6 observabilidad, T8 benchmark). Justificación:
+   la regla 3 (CIERRE REAL) y la regla 4 (CALIDAD) prohíben
+   inventar trabajo sin spec del operador.
+
+### Decisión con criterio propio del orquestador
+
+Ante la falta de spec del operador sobre S7+, elegí **el camino
+de menor daño**: producir material estructurado (research memo
++ addendum honesto al backlog) que **NO** toma decisiones
+ejecutivas. Las opciones A/B/C/D las decide el operador. La
+Opción D (T8 benchmark, 50-100 LoC) es la única ejecutable
+ahora sin spec, pero **NO** la ejecuté yo solo: depende de
+que el operador apruebe la dirección. Esto es coherente con
+la regla 4 de CALIDAD y con la regla 3 (CIERRE REAL: cada
+acción contra criterio original del operador).
+
+### Trabajo **NO** ejecutado por decisión consciente
+
+- **No** comencé T1 (Adapter real) sin spec del operador.
+  Razones: (a) requiere proveedor (Anthropic/OpenAI/local),
+  decisión arquitectónica no cubierta por mis reglas; (b)
+  "tiktoken solo si H4+ exige Adapter real" dice el propio
+  STATE.yaml deuda, lo cual es decisión del operador.
+- **No** comencé T5 (backup CLI) sin spec. Razón: feature
+  pequeña pero requiere decisiones (formato backup, qué
+  incluye knowledge/evidence/promotion_outbox).
+- **No** comencé T6 (observabilidad). Razón: feature mayor
+  (>300 LoC) con decisiones de formato (CLI/HTML/OpenTelemetry).
+- **No** comencé T8 (benchmark). Razón: aunque es el más barato
+  (50-100 LoC) y desbloqueador, requiere alineación con qué
+  pregunta el operador quiere medir. Si el operador decide
+  opción B sin T8 primero, hacer T8 ahora sería desperdicio.
+
+### Commits emitted
+
+```
+8dcbe40 docs(audit): research memo estado real de Etapa 7 + H9 · Release candidate
+fd3f189 docs(state): reformular prioridad_1_spec_s7plus con hallazgos del audit
+dea05bc test(uat): refresh snapshots UAT-08/09 con HEAD post-audit H9
+```
+
+3 commits, todos pushed FF a origin/main. Suite 769/769 PASS.
+ruff limpio.
+
+### Pendientes del stewardship backlog tras este tramo
+
+- **P1**: 4 opciones reales (A addendum, B Etapa 7, C P3, D
+  T8 benchmark) esperan **decisión del operador**. D es la
+  única ejecutable sin spec.
+- **P5**: depende de P1 (ejecución del H9 / Etapa 7 / P3).
+
+### Estado al cierre
+
+- HEAD: `dea05bc`, HEAD == origin/main (post-push FF este
+  tramo).
+- Suite: 769/769 PASS (`uv run pytest -q` en 136s).
+- ruff format + ruff check: limpios.
+- 16/16 UAT PASS (fixtures refrescadas con HEAD honesta).
+- 3 documents de audit nuevos este turno + 2 de P3+P4 = 5
+  audits en `audits/` para esta sesión.
+- Sin trabajo activo material: el siguiente paso requiere
+  decisión del operador.
+
+Si el operador quiere que avance con criterio propio sin
+esperar, la opción D (T8 benchmark contexto/consultas) es
+**el único trabajo defendible sin spec**: ~50-100 LoC,
+read-only sobre el código, output medible (tabla CSV).
+Coste ~1-2h.
