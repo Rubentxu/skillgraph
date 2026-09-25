@@ -103,6 +103,53 @@ Para reactivar la iniciativa o abrir una nueva:
 - Operador reabre con consigna explicita; el protocolo de
   reapertura esta en `INITIATIVE-CLOSED.md` seccion 8.
 
+## Reactivacion 2026-09-26 — STEWARDSHIP-DT-HOOKS-CI cerrado
+
+Implementa el derivado #1 del audit `format-drift-2026-09-26.md`:
+pre-commit hook + CI workflow para evitar regresion del drift de
+ruff format. **Defensa en profundidad en 3 capas**:
+
+1. **Pre-commit hook local** (`scripts/hooks/pre-commit`, 69 LoC):
+   ejecuta `ruff check` + `ruff format --check` + `pytest -q` (cuando
+   hay `.py` staged). Toolchain-aware (mise si disponible, fallback
+   uv). Bypass via `HOOK_SKIP_TESTS=1` o `--no-verify`.
+
+2. **Installer** (`scripts/install-hooks.sh`, 26 LoC): copia hooks a
+   `.git/hooks/`, idempotente, chmod +x automatico.
+
+3. **CI workflow** (`.github/workflows/ci.yml`, 43 LoC): corre en
+   push y pull_request a main con `actions/checkout@v4` +
+   `jdx/mise-action@v2` + `mise run sync/lint/format/test`. Protege
+   incluso si el dev local no instala los hooks.
+
+**Tests** (`tests/test_hooks_system.py`, 165 LoC): 22 tests en 4
+clases que verifican presencia + ejecutabilidad + contenido +
+contrato del sistema. 22/22 PASS en 0.07s.
+
+**Verificacion e2e del hook**:
+- Caso exito: ruff check OK, format OK, pytest 855/855 PASS,
+  commit procede.
+- Caso negativo: format roto -> error claro con diff sugerido +
+  commit abortado.
+
+**Suite completa post-cambios**: **877/877 PASS** en 186s (855
+baseline + 22 nuevos), 0 regresiones.
+
+**Limitaciones** (autocritica en audit):
+- El agente usa `core.hooksPath=/home/rubentxu/.git-hooks/`
+  globalmente, asi que en mi entorno instale un wrapper NO
+  commiteable que delega al hook local.
+- CI sin cache de uv (~1-2 min extra) y sin cobertura.
+- Sin pre-push hook completo (suite lenta vs smoke).
+
+**Commits**: `c7118ef feat(hooks)` (scripts + tests, +246 LoC) +
+`d949e33 ci:` (workflow, +45 LoC).
+
+**Audit doc**: `audits/hooks-ci-2026-09-26.md` (172 LoC) con 3
+capas + 4 limitaciones + 3 derivados opcionales.
+
+Sin bump de release (dev-infra).
+
 ## Reactivacion 2026-09-26 — STEWARDSHIP-DT-FORMAT-DRIFT cerrado
 
 Inspeccion de salud del repo al iniciar sesion detecta **drift de

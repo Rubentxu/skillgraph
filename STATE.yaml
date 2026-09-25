@@ -125,10 +125,29 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: DT_FORMAT_DRIFT_cerrado  # CI gate format/format --check desbloqueado, 15 archivos reformat, 0 regresiones
-  current_workitem: DT-FORMAT-DRIFT
-  next_workitem: null  # ADR-0015 implementado al 100% + format drift cerrado. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
+  next_milestone_gate: DT_HOOKS_CI_cerrado  # Pre-commit hook + CI workflow instalados, 877/877 PASS
+  current_workitem: DT-HOOKS-CI
+  next_workitem: null  # ADR-0015 + format drift + hooks/CI cerrados. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
   evolution_v2:
+    DT_HOOKS_CI_cerrado:
+      fecha: 2026-09-26
+      ciclo: STEWARDSHIP-DT-HOOKS-CI
+      commits: [c7118ef, d949e33]
+      pushed: 2026-09-26
+      criterios_cumplidos:
+        - "Pre-commit hook (scripts/hooks/pre-commit, 69 LoC): ruff check + format --check + pytest -q"
+        - "Installer (scripts/install-hooks.sh, 26 LoC): copia hooks a .git/hooks/, idempotente"
+        - "CI workflow (.github/workflows/ci.yml, 43 LoC): checkout + mise-action + sync + lint + format + pytest en push/PR a main"
+        - "22 tests nuevos (tests/test_hooks_system.py, 165 LoC) verifican presencia + ejecutabilidad + contenido + contrato"
+        - "877/877 tests PASS post-cambios (855 baseline + 22 nuevos), 0 regresiones"
+        - "Verificacion e2e del hook: ejecuta lint+format+pytest (~3 min) y aborta con error claro si falla format"
+        - "Audit dedicado en audits/hooks-ci-2026-09-26.md (172 LoC): 3 capas de defensa + 4 limitaciones reconocidas + 3 derivados opcionales"
+      notas:
+        - "Defensa en profundidad: hook local (desarrollo) + CI workflow (remoto, post-push)"
+        - "Limitacion del entorno del agente: core.hooksPath=/home/rubentxu/.git-hooks/ globalmente. Workaround: wrapper NO commiteable que delega al hook local"
+        - "CI workflow sin cache de uv (~1-2 min extra por run) y sin cobertura (pytest-cov). Derivados opcionales documentados"
+        - "Sin bump de release (dev-infra, sin cambio de contrato observable)"
+      siguiente: "Cache uv en CI (~5 min), cobertura en CI (~5 min), pre-push hook completo (~20 min), audit advisories upstream, E1 Adapter real (spec operador)"
     DT_FORMAT_DRIFT_cerrado:
       fecha: 2026-09-26
       ciclo: STEWARDSHIP-DT-FORMAT-DRIFT

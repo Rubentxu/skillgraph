@@ -5343,3 +5343,63 @@ sync).
 E1 Adapter real, T5 Backups CLI, T6 Observabilidad, Gap A
 (workflow_runs<->runtime_events), Gap C (stress N=10). Derivado
 accionable sin spec: pre-commit hook + audit advisories upstream.
+
+---
+
+## 2026-09-26T01:52Z — STEWARDSHIP-DT-HOOKS-CI cerrado (commits `c7118ef` + `d949e33`)
+
+Operador: "continua con tareas roadmap y deuda tecnica a tu criterio".
+
+Implementa el derivado #1 del audit `format-drift-2026-09-26.md`:
+pre-commit hook + CI workflow para evitar regresion del drift de
+ruff format. **Defensa en profundidad en 3 capas**:
+
+1. **scripts/hooks/pre-commit** (69 LoC sh): ruff check + format
+   --check + pytest -q (cuando hay .py staged). Toolchain-aware
+   via `mise exec` con fallback a `uv run`. Bypass via
+   `HOOK_SKIP_TESTS=1` o `--no-verify`.
+2. **scripts/install-hooks.sh** (26 LoC bash): copia hooks a
+   `.git/hooks/`, idempotente, chmod +x.
+3. **.github/workflows/ci.yml** (43 LoC YAML): corre en push y PR
+   a main. Steps: checkout + mise-action + sync + lint + format +
+   pytest. Step summary con outcome de cada gate.
+
+**Tests** (`tests/test_hooks_system.py`, 165 LoC): 22 tests en 4
+clases:
+- TestPreCommitHook (7): existencia + bit +x + shebang + 5
+  invariantes de contenido.
+- TestInstallHooksScript (5): existencia + bit +x + 3 invariantes.
+- TestCIWorkflow (6): existencia + 6 invariantes de estructura.
+- TestMiseTasksContract (4): tareas [lint|format|test|sync] en
+  mise.toml.
+
+22/22 PASS en 0.07s. Suite completa: 877/877 PASS (855 baseline +
+22 nuevos), 0 regresiones.
+
+**Verificacion e2e del hook**:
+- Hook ejecutado en commit real: ruff check OK, format OK,
+  pytest 855/855 PASS en 175s, commit procede.
+- Hook abortando con format roto: error claro con diff sugerido.
+
+**Limitaciones publicadas** (autocritica en audit):
+1. core.hooksPath=/home/rubentxu/.git-hooks/ del agente globalmente
+   ignora .git/hooks/. Workaround: wrapper NO commiteable en
+   `~/.git-hooks/pre-commit` que delega al hook local.
+2. CI sin cache uv (~1-2 min extra por run).
+3. CI sin cobertura (pytest-cov).
+4. Sin pre-push hook completo (suite lenta vs smoke).
+
+**Derivados opcionales** (futuro ciclo, sin spec):
+- Cache uv en CI (~5 min).
+- Cobertura en CI (~5 min).
+- Pre-push hook completo (~20 min).
+- Audit advisories upstream (siguiente backlog).
+
+**Commits**:
+- `c7118ef feat(hooks)`: pre-commit + installer + tests (3 files,
+  +246 LoC).
+- `d949e33 ci`: GitHub Actions workflow (3 files, +45 LoC).
+
+**Audit doc**: `audits/hooks-ci-2026-09-26.md` (172 LoC).
+
+Sin bump de release (dev-infra). HEAD tras push: d949e33.
