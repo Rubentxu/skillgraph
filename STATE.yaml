@@ -125,10 +125,25 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: T3_S2_gap_cerrado  # Cierre del gap S2/I de ADR-0015 (mensaje filtra source_id)
-  current_workitem: T3-S2-message-redaction
-  next_workitem: null  # T3-S2 cerrado. Quedan E1 Adapter real, T5 Backups, T6 Observabilidad (todos requieren spec operador)
+  next_milestone_gate: T3_S2_entity_gap_cerrado  # Cierre del sub-gap entity_id de S2/I (ADR-0015)
+  current_workitem: T3-S2-entity-message-redaction
+  next_workitem: null  # T3-S2-002 cerrado. Quedan E1 Adapter real, T5 Backups, T6 Observabilidad (todos requieren spec operador)
   evolution_v2:
+    T3_S2_entity_message_redaction_cerrado:
+      fecha: 2026-09-25
+      ciclo: STEWARDSHIP-T3-S2-002
+      commit: eac6838
+      pushed: 2026-09-25
+      criterios_cumplidos:
+        - "Sub-gap entity_id de S2/I (hermano del source_id) cerrado: 2 sitios en knowledge_controller.py (l.179 get_entity + l.490 record_claim FK entity)"
+        - "4 tests nuevos en tests/test_t3_s2_entity_message_no_entity_id.py (2 attestation + 2 chain)"
+        - "Audit dedicado en audits/t3-s2-entity-message-redaction-2026-09-25.md"
+      notas:
+        - "Tipo de excepcion invariante (UnknownEntityError se sigue lanzando)"
+        - "Chain __cause__ preservado solo en paths FK (get_entity lookup directo no debe preservar)"
+        - "Sin bump de release (acumulado a la siguiente release que decida el operador)"
+      siguiente: "E1 Adapter real (spec operador), T5 Backups (spec operador), T6 Observabilidad (spec operador)"
+
     T3_S2_message_redaction_cerrado:
       fecha: 2026-09-25
       ciclo: STEWARDSHIP-T3-S2-001
