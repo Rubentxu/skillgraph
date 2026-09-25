@@ -125,10 +125,24 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: closed  # H15 cerrado 2026-09-25; evolution-v2 completo (H0..H15)
-  current_workitem: H15-evaluacion-automejora-cerrado
-  next_workitem: null  # evolution-v2 cerrado. Siguiente requiere spec del operador (prioridad_5_s7plus)
+  next_milestone_gate: T3_cerrado  # T3 Threat model cerrado 2026-09-25; ciclo STEWARDSHIP-T3-001
+  current_workitem: T3-threat-model-cerrado
+  next_workitem: null  # T3 cerrado. Siguiente requiere spec operador (gap S2, E1 Adapter, T5 Backups, T6 Observabilidad)
   evolution_v2:
+    T3_threat_model_cerrado:
+      fecha: 2026-09-25
+      commit: pending
+      criterios_cumplidos:
+        - ADR-0015 con 7 superficies (S1..S7) y 4 perfiles de atacante (A1..A4) (filesystem local, no trackeado en git por .gitignore de external/)
+        - 14 tests de attestation en tests/test_t3_threat_model_attestation.py (trackeados en git)
+        - 4 gaps abiertos registrados (grieta A, mensaje filtra source_id, stress concurrencia, audit post-schema-change)
+        - Audit dedicado en audits/t3-threat-model-2026-09-25.md (trackeado en git)
+      hallazgos_nuevos:
+        - KnowledgeController.get_source filtra source_id en mensaje de error (gap S2/I, no documentado previamente)
+        - list_evidences_for_source es source-scoped (NO tenant-scoped); aislamiento se garantiza por FK sources
+      cobertura_no_aplica: T3 es trabajo de docs + tests de attestation, no introduce modulo nuevo
+      siguiente: cerrar gap S2 (mensaje filtra source_id, ~30 min) si operador lo prioriza; E1 Adapter real sigue bloqueado por spec
+
     H15_completado:
       fecha: 2026-09-25
       commit: 116a2b5

@@ -33,13 +33,19 @@ Detalle completo de rationale y criterios en `.next-decision.md` y
 **Initiative g-skillgraph-bootstrap cerrada formalmente** (segundo
 acto, sesion 2026-09-25T15:37:08Z por consigna del operador "1").
 HEAD terminal: `f1b92ff`. Certificado completo en
-`INITIATIVE-CLOSED.md`. Sin trabajo autonomo pendiente; 4 Trabajos
-de Etapa 7 (E1 Adapter, T3 Threat, T5 Backups, T6 Observabilidad)
-requieren spec operador para reabrir.
+`INITIATIVE-CLOSED.md`.
+
+## Reactivacion autonoma 2026-09-25T16:07:01Z
+
+Operador reabre con modo AUTO: "avanza con criterio propio buscando
+entrega de valor sin dejar la calidad". Workflow STEWARDSHIP-T3-001
+aplicado: T3 Threat model (ADR-0015 + tests de attestation + audit).
+
+**HEAD terminal T3**: pendiente commit. 14/14 tests PASS.
 
 ## Ultimo estado comprobado
 
-- HEAD: `f1b92ff` (docs(drift): cerrar drift API publica y CHANGELOG post-evolution-v2). HEAD terminal del goal cerrado.
+- HEAD: `ffa03e9` (test(evidence): refresh UAT-08/09). HEAD anterior a T3.
 - Tests: **830/830 PASS** en 189s (`mise exec -- uv run pytest -q`; baseline 821 → 830 con +9 nuevos: test_h15_improvement UAT-EVO-15..18).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).

@@ -4851,3 +4851,75 @@ spec del operador y estan registrados como backlog explicito.
 **Siguiente**: SIN trabajo autonomo. Reapertura requiere
 consigna operador + spec. Protocolo documentado en
 INITIATIVE-CLOSED.md seccion 8.
+
+## 2026-09-25 — Reactivacion autonoma: ciclo STEWARDSHIP-T3-001 (T3 Threat model)
+
+**Consigna operador** (2026-09-25T16:07:01Z): "Modo ejecucion
+autonoma. Revisa roadmap, deuda tecnica y prioriza. Autorizo
+avanzar con criterio propio buscando entrega de valor sin dejar
+la calidad. Todo gate o decision queda pre-aprobado."
+
+**Decision con criterio**: la opcion "2 - trabajar uno de los 4
+Trabajos pendientes de Etapa 7" con criterio autonomo requiere
+seleccionar uno. Los 4 candidatos:
+- E1 Adapter real: requiere spec externa (proveedor + credenciales + timeouts).
+- T3 Threat model: trabajo defensivo + docs + tests, NO requiere spec externa.
+- T5 Backups CLI: requiere spec de formato/periodicidad/retencion.
+- T6 Observabilidad: requiere spec de metricas/sinks/retencion.
+
+**T3 es el unico** que puedo ejecutar con criterio propio sin
+inventar capacidad. Es el menos acopado a proveedor externo.
+
+**Workflow STEWARDSHIP-T3-001** (creado para este ciclo):
+- Fase 1: inventariar superficies atacables.
+- Fase 2: STRIDE por superficie.
+- Fase 3: mitigaciones existentes + gaps.
+- Fase 4: tests de attestation.
+- Fase 5: ADR-0015 + audit.
+- Fase 6: sync + commit + push.
+
+**Plan ejecutado**:
+1. `external/blueprint-v1/adr/ADR-0015-threat-model-stride.md`
+   (173 LoC): 7 superficies (S1 Storage, S2 multi-tenant, S3 locks,
+   S4 redaction, S5 Adapter, S6 promotion, S7 CLI runner) +
+   4 perfiles de atacante (A1 externo sin credenciales, A2 local
+   no autenticado, A3 cross-tenant, A4 con shell) + 4 gaps
+   abiertos.
+2. `tests/test_t3_threat_model_attestation.py` (~385 LoC, 14 tests):
+   tests de las **consecuencias testeables** del modelo, no del
+   modelo en si.
+3. `audits/t3-threat-model-2026-09-25.md` (91 LoC): resultado
+   verificable con tabla de cobertura por superficie.
+4. STATE.yaml + CURRENT.md sincronizados.
+
+**Cifras**:
+- 14/14 tests PASS en 0.97s
+- 167/167 en suite afectada (T3 + redaccion + locks + storage + runcontroller + graph_expansion)
+- ruff check limpio
+
+**Hallazgos nuevos** (no documentados previamente en deuda_tecnica_residual):
+1. **KnowledgeController.get_source filtra source_id en el mensaje
+   de error** (S2/I): el controller retorna
+   `UnknownSourceError(f"Source no encontrada: {source_id!r}")`
+   con el source_id textual. NO cumple strict E2E-08 (que requiere
+   mensaje generico). Coste estimado para fix: ~10 LoC + 1 test.
+2. **list_evidences_for_source es source-scoped (no tenant-scoped)**:
+   el aislamiento entre tenants con misma source_id se garantiza
+   porque cada tenant registra sus propias sources (PK compuesta),
+   no por el filtro del list_evidences. Documentado en el audit.
+
+**Gaps abiertos registrados** (ADR-0015 §Gaps):
+1. Grieta A workflow_runs↔runtime_events (NO cerrada por H9-Plan-B).
+2. KnowledgeController filtra source_id en mensaje (hallazgo nuevo).
+3. Certificacion stress concurrencia (probada con 2 procesos).
+4. Audit post-schema-change NO formalizado.
+
+**Sin bump de release** (regla SEMVER): T3 es docs + tests, sin
+capacidad observable nueva. Las propiedades defensivas ya estaban
+implementadas; lo que se anadio es su DOCUMENTACION y RED DE
+TESTS. Sigue la regla §6 del operador: "Cadencia inteligente;
+agrupa cambios pequenos coherentes; evita micro-releases triviales".
+
+**Siguiente**: trabajo autonomo cerrado. Siguiente requiere
+spec operador (gap S2, E1 Adapter, T5, T6) o consigna de
+priorizacion nueva.
