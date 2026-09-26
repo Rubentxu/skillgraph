@@ -63,6 +63,62 @@ class InvalidationResult:
     truncated: bool  # True si se emitio HopLimitExceededWarning
 
 
+def _seed_hop_zero(
+    controller: KnowledgeController,
+    source_id: SourceID,
+) -> tuple[list[ClaimID], dict[ClaimID, int], set[ClaimID]]:
+    """Claim directas que referencian source_id + estado inicial del traversal."""
+    direct_claims = controller.list_claims_for_source(source_id=source_id)
+    visited_claims: set[ClaimID] = set()
+    frontier: list[ClaimID] = []
+    hop_dist: dict[ClaimID, int] = {}
+    for c in direct_claims:
+        if c.claim_id not in visited_claims:
+            visited_claims.add(c.claim_id)
+            hop_dist[c.claim_id] = 0
+            frontier.append(c.claim_id)
+    return frontier, hop_dist, visited_claims
+
+
+def _expand_one_hop(
+    frontier_in: list[ClaimID],
+    *,
+    visited_claims: set[ClaimID],
+    visited_evidence: set[str],
+    controller: KnowledgeController,
+) -> list[ClaimID]:
+    """Expande un hop: claims vecinas via evidencia compartida. Devuelve new frontier."""
+    next_frontier: list[ClaimID] = []
+    for claim_id in frontier_in:
+        try:
+            controller.get_claim(claim_id=claim_id)
+        except Exception:
+            continue
+        for evidence in controller.get_evidences_for_claim(claim_id=claim_id):
+            if evidence.evidence_id in visited_evidence:
+                continue
+            visited_evidence.add(evidence.evidence_id)
+            for other in _claims_using_evidence(controller, evidence.evidence_id):
+                if other in visited_claims:
+                    continue
+                visited_claims.add(other)
+                next_frontier.append(other)
+    return next_frontier
+
+
+def _warn_if_truncated(frontier: list[ClaimID], *, hop: int, max_hops: int) -> bool:
+    """Emite HopLimitExceededWarning si frontier no vacia tras el ultimo hop."""
+    if hop == max_hops and frontier:
+        warnings.warn(
+            f"max_hops={max_hops} alcanzado con frontier no vacia: "
+            f"{len(frontier)} claims sin explorar",
+            HopLimitExceededWarning,
+            stacklevel=2,
+        )
+        return True
+    return False
+
+
 def traverse_invalidations(
     *,
     controller: KnowledgeController,
@@ -80,57 +136,25 @@ def traverse_invalidations(
     Devuelve InvalidationResult SIN mutar el Storage; el caller decide
     si marcar stale o no.
     """
-    visited_claims: set[ClaimID] = set()
     visited_evidence: set[str] = set()
-    hop_distribution: dict[ClaimID, int] = {}
     truncated = False
-    current_frontier: list[ClaimID] = []
+    current_frontier, hop_distribution, visited_claims = _seed_hop_zero(controller, source_id)
 
-    # Hop 0: claims directos que referencian source_id.
-    direct_claims = controller.list_claims_for_source(source_id=source_id)
-    for c in direct_claims:
-        if c.claim_id not in visited_claims:
-            visited_claims.add(c.claim_id)
-            hop_distribution[c.claim_id] = 0
-            current_frontier.append(c.claim_id)
-
-    # Iterar hops.
     for hop in range(1, max_hops + 1):
         if not current_frontier:
             break
         next_frontier: list[ClaimID] = []
-        for claim_id in current_frontier:
-            try:
-                _claim = controller.get_claim(claim_id=claim_id)
-            except Exception:
-                continue
-            for evidence in controller.get_evidences_for_claim(
-                claim_id=claim_id,
-            ):
-                if evidence.evidence_id in visited_evidence:
-                    continue
-                visited_evidence.add(evidence.evidence_id)
-                for other in _claims_using_evidence(
-                    controller,
-                    evidence.evidence_id,
-                ):
-                    if other in visited_claims:
-                        # Revisita: el ciclo ya fue visitado.
-                        # No es un error: el traversal es robusto
-                        # porque `visited_claims` evita loops.
-                        continue
-                    visited_claims.add(other)
-                    hop_distribution[other] = hop
-                    next_frontier.append(other)
+        for new_claim in _expand_one_hop(
+            current_frontier,
+            visited_claims=visited_claims,
+            visited_evidence=visited_evidence,
+            controller=controller,
+        ):
+            hop_distribution[new_claim] = hop
+            next_frontier.append(new_claim)
         current_frontier = next_frontier
-        if hop == max_hops and current_frontier:
+        if _warn_if_truncated(current_frontier, hop=hop, max_hops=max_hops):
             truncated = True
-            warnings.warn(
-                f"max_hops={max_hops} alcanzado con frontier no vacia: "
-                f"{len(current_frontier)} claims sin explorar",
-                HopLimitExceededWarning,
-                stacklevel=2,
-            )
 
     return InvalidationResult(
         invalidated_claim_ids=tuple(visited_claims),
