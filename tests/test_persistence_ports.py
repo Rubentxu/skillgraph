@@ -100,3 +100,41 @@ def test_event_store_runtime_checkable() -> None:
         assert isinstance(s, EventStore)
     finally:
         s.close()
+
+
+def test_knowledge_repository_has_wi02b_methods() -> None:
+    """WI-02b: nuevos metodos del Protocol para eliminar `_conn` en KC/KI."""
+    expected = {
+        "find_entity",
+        "source_exists_anywhere",
+        "list_claims_for_subject",
+    }
+    proto_methods = set(_protocol_methods(KnowledgeRepository))
+    missing = expected - proto_methods
+    assert not missing, f"KnowledgeRepository no declara {sorted(missing)}"
+    # Storage los implementa estructuralmente (duck typing).
+    storage_methods = set(_public_methods(Storage))
+    assert expected <= storage_methods, (
+        f"Storage no implementa {sorted(expected - storage_methods)}"
+    )
+    s = Storage(":memory:")
+    try:
+        s.find_entity(tenant_id="t", project_id="p", kind="k", stable_key="sk")
+        s.source_exists_anywhere(source_id="s")
+        s.list_claims_for_subject(tenant_id="t", project_id="p", subject_entity_id="e")
+    finally:
+        s.close()
+
+
+def test_event_store_has_ensure_schema() -> None:
+    """WI-02b: EventStore expone ensure_schema() idempotente."""
+    proto_methods = set(_protocol_methods(EventStore))
+    assert "ensure_schema" in proto_methods
+    storage_methods = set(_public_methods(Storage))
+    assert "ensure_schema" in storage_methods
+    s = Storage(":memory:")
+    try:
+        s.ensure_schema()  # idempotente: 2da llamada no raise.
+        s.ensure_schema()
+    finally:
+        s.close()

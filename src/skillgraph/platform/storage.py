@@ -642,6 +642,18 @@ class Storage:
                 (freshness, source_id, tenant_id, project_id),
             )
 
+    def source_exists_anywhere(self, *, source_id: str) -> bool:
+        """True si el ``source_id`` existe en cualquier tenant/project.
+
+        WI-02b: distingue typo de source vs pertenencia a otro proyecto
+        (regla de leakage cross-tenant ADR-0015).
+        """
+        row = self._conn.execute(
+            "SELECT 1 FROM sources WHERE source_id = ? LIMIT 1",
+            (source_id,),
+        ).fetchone()
+        return row is not None
+
     # ---- Entities
 
     def upsert_entity(
@@ -678,6 +690,36 @@ class Storage:
         row = self._conn.execute(
             "SELECT * FROM entities WHERE entity_id = ? AND tenant_id = ? AND project_id = ?",
             (entity_id, tenant_id, project_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return Entity(
+            entity_id=row["entity_id"],
+            kind=row["kind"],
+            stable_key=row["stable_key"],
+        )
+
+    def find_entity(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        kind: str,
+        stable_key: str,
+    ) -> Entity | None:
+        """Busca una Entity por (kind, stable_key). None si no existe.
+
+        WI-02b: nuevo metodo del ``KnowledgeRepository`` Protocol que
+        elimina el acceso directo a ``storage._conn`` que hacia
+        ``KnowledgeController.find_entity``.
+        """
+        row = self._conn.execute(
+            """
+            SELECT * FROM entities
+            WHERE tenant_id = ? AND project_id = ?
+              AND kind = ? AND stable_key = ?
+            """,
+            (tenant_id, project_id, kind, stable_key),
         ).fetchone()
         if row is None:
             return None
@@ -814,6 +856,59 @@ class Storage:
             (claim_id,),
         ).fetchall()
         return _row_to_claim(row, [r["evidence_id"] for r in ev_rows], json)
+
+    def list_claims_for_subject(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+    ) -> list[Claim]:
+        """Lista Claims cuyo ``subject_entity_id`` coincide, con evidence_ids pre-cargados.
+
+        WI-02b: sustituye el patron N+1 que hacia antes ``KnowledgeController.
+        list_claims_for_subject`` con dos queries separadas (claims +
+        claim_evidence dentro de un bucle por row). Aqui se hace una sola
+        query con LEFT JOIN para que el adapter SQLite sea responsable de
+        la atomicidad del join, no el caller.
+        """
+        import json
+
+        rows = self._conn.execute(
+            """
+            SELECT c.claim_id, c.subject_entity_id, c.predicate,
+                   c.object_literal_json, c.source_id,
+                   c.extraction_method, c.extractor_version,
+                   c.checked_at_revision, c.stale,
+                   GROUP_CONCAT(ce.evidence_id) AS evidence_ids_csv
+            FROM claims c
+            LEFT JOIN claim_evidence ce ON ce.claim_id = c.claim_id
+            WHERE c.tenant_id = ? AND c.project_id = ?
+              AND c.subject_entity_id = ?
+            GROUP BY c.claim_id
+            ORDER BY c.checked_at_revision DESC
+            """,
+            (tenant_id, project_id, subject_entity_id),
+        ).fetchall()
+        out: list[Claim] = []
+        for row in rows:
+            ev_csv = row["evidence_ids_csv"] or ""
+            ev_ids = tuple(ev_csv.split(",")) if ev_csv else ()
+            out.append(
+                Claim(
+                    claim_id=row["claim_id"],
+                    subject_entity_id=row["subject_entity_id"],
+                    predicate=row["predicate"],
+                    object_literal=json.loads(row["object_literal_json"]),
+                    source_id=row["source_id"],
+                    evidence_ids=ev_ids,
+                    extraction_method=row["extraction_method"],
+                    extractor_version=row["extractor_version"],
+                    checked_at_revision=row["checked_at_revision"],
+                    stale=bool(row["stale"]),
+                )
+            )
+        return out
 
     def list_claims_for_source(
         self,
@@ -1318,6 +1413,19 @@ class Storage:
             "ORDER BY sequence ASC",
             (tenant_id, project_id, run_id),
         ).fetchall()
+
+    def ensure_schema(self) -> None:
+        """Idempotente: aplica el schema de ``runtime_events``.
+
+        WI-02b: ``EventLog`` ya no toca la conexion directamente; delega
+        en este metodo del ``EventStore`` Protocol. La migracion ocurre
+        en el ``__init__`` de ``Storage`` (``migrate()`` ya invoca
+        ``_SCHEMA_SSQL`` sobre ``runtime_events``), por lo que aqui
+        simplemente ejecutamos ``executescript`` reentrante (los
+        ``CREATE TABLE IF NOT EXISTS`` son idempotentes).
+        """
+        with self._tx() as cur:
+            cur.executescript(_SCHEMA_SQL)
 
     # ----- presupuestos por Run (S4 Etapa 7) -----
 

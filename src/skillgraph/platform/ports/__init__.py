@@ -209,6 +209,13 @@ class EventStore(Protocol):
 
     def list_events_for_run(self, *, tenant_id: str, project_id: str, run_id: str) -> list[Any]: ...
 
+    def ensure_schema(self) -> None:
+        """Idempotente: aplica la migracion del schema de ``runtime_events``.
+
+        Llamado por :class:`EventLog` en su ``__init__``. Si el schema
+        ya existe (caso comun tras primera invocacion), no hace nada.
+        """
+
     # append() con un objeto RuntimeEvent se expone en WI-02b.
 
 
@@ -226,6 +233,42 @@ class KnowledgeRepository(Protocol):
     ) -> None: ...
     def upsert_entity(self, *, tenant_id: str, project_id: str, entity: Any) -> None: ...
     def get_entity(self, *, tenant_id: str, project_id: str, entity_id: str) -> Any | None: ...
+    def find_entity(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        kind: str,
+        stable_key: str,
+    ) -> Any | None:
+        """Busca una Entity por (kind, stable_key). None si no existe.
+
+        Reemplaza el acceso directo a ``storage._conn`` que hacia
+        ``KnowledgeController.find_entity`` antes de WI-02b.
+        """
+
+    def source_exists_anywhere(self, *, source_id: str) -> bool:
+        """True si el ``source_id`` existe en cualquier tenant/project.
+
+        Usado por ``KnowledgeController`` para distinguir
+        ``UnknownSourceError`` por typo vs por pertenencia a otro
+        proyecto (regla de leakage cross-tenant ADR-0015).
+        """
+
+    def list_claims_for_subject(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+    ) -> list[Any]:
+        """Lista Claims de un sujeto, con evidence_ids pre-cargados.
+
+        Reemplaza el patron N+1 de ``KnowledgeController.
+        list_claims_for_subject`` que iteraba row por row haciendo
+        una query adicional a ``claim_evidence``.
+        """
+
     def record_evidence(self, *, tenant_id: str, project_id: str, evidence: Any) -> None: ...
     def get_evidences_for_claim(
         self, *, tenant_id: str, project_id: str, claim_id: str
