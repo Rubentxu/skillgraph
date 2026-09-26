@@ -16,10 +16,12 @@ Implementacion:
   `<data-root>/locks`). El archivo se crea al tomar el lock; se
   elimina al liberarlo. Asi no quedan locks zombie tras un crash
   normal.
-- En Windows `fcntl` no existe: importamos `msvcrt` solo cuando
-  el modulo se ejecuta alli. El comportamiento en Windows es NOOP
-  con un warning (regla: el sistema debe ser operativo aunque
-  sin proteccion full).
+- **Windows NO soportado**: `import fcntl` es top-level, asi que
+  el modulo falla con ImportError si se importa en Windows. Tests
+  usan `@pytest.mark.skipif(os.name == "nt", ...)`. Esto refleja
+  la realidad: el proyecto solo se testea en Linux/macOS. Si en
+  el futuro hay que soportar Windows, hay que hacer lazy import
+  de `fcntl` (e implementar fallback `msvcrt`). Hoy no hace falta.
 
 Reglas:
 - Sin estado global mutable: el lock se identifica por run_id, lo
@@ -27,6 +29,7 @@ Reglas:
 - Errores tipados: `LockUnavailable` cuando el modo es `fail-fast`
   y el lock esta tomado por otro proceso.
 - Sin reloj: la espera usa `fcntl` (kernel-level), no polling.
+- Sin I/O oculto: `lock_dir` se inyecta explicitamente.
 """
 
 from __future__ import annotations

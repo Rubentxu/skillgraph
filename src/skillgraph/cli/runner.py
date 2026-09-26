@@ -299,11 +299,20 @@ def _find_active_run_id(storage: Storage, *, tenant_id: str, project_id: str) ->
 
 
 def _open_known_project(args: argparse.Namespace, project: str) -> tuple[str, str, Storage]:
-    """Wrapper que valida que el proyecto existe antes de continuar."""
+    """Wrapper que valida que el proyecto existe antes de continuar.
+
+    Raises:
+        FileNotFoundError: si el proyecto no esta registrado en el
+            catalog (con mensaje legible para el operador).
+    """
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     p, err = resolver.lookup(project)
     if err is not None:
-        return "", "", _DummyStorage()
+        raise FileNotFoundError(
+            f"proyecto {project!r} no encontrado en el catalog "
+            f"(tenant={resolver.tenant_id!r}, data_root={resolver.data_root}); "
+            f"crealo primero con 'sg project create <name>'"
+        )
     return p["tenant_id"], project, Storage(Path(p["db_path"]))
 
 
@@ -421,14 +430,6 @@ def cmd_knowledge_trace(args: argparse.Namespace) -> int:
         )
     )
     return EXIT_OK
-
-
-class _DummyStorage:
-    """Placeholder cuando el proyecto no existe; evita imports fragiles."""
-
-    def __getattr__(self, name: str) -> object:
-        msg = "proyecto no encontrado"
-        raise FileNotFoundError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -897,6 +898,11 @@ def main(argv: list[str] | None = None) -> int:
     except SkillGraphError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
         return EXIT_DOMAIN
+    except FileNotFoundError as exc:
+        # Caso comun: el proyecto pasado a _open_known_project no existe.
+        # Mensaje legible + exit code canonico (EXIT_PROJECT_NOT_FOUND = 4).
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return EXIT_PROJECT_NOT_FOUND
 
     parser.print_help()
     return EXIT_USAGE

@@ -47,49 +47,51 @@ def _make_schema_validator(kind: str, schema: dict[str, Any]) -> SpecValidator:
     required = list(schema.get("required", []))
     fields = dict(schema.get("fields", {}))
 
-    def _validate(spec: dict[str, Any]) -> None:
+    def _check_required(spec: dict[str, Any]) -> None:
         for key in required:
             if key not in spec:
                 raise ValidationError(f"{kind}.spec.{key}: campo obligatorio ausente")
+
+    def _check_primitive(field_name: str, field_schema: str, value: object) -> None:
+        if field_schema == "string" and not isinstance(value, str):
+            raise ValidationError(
+                f"{kind}.spec.{field_name}: esperaba string, recibio {type(value).__name__}"
+            )
+        if field_schema == "integer" and not isinstance(value, int):
+            raise ValidationError(
+                f"{kind}.spec.{field_name}: esperaba integer, recibio {type(value).__name__}"
+            )
+        if field_schema == "number" and not isinstance(value, (int, float)):
+            raise ValidationError(
+                f"{kind}.spec.{field_name}: esperaba number, recibio {type(value).__name__}"
+            )
+        if field_schema == "boolean" and not isinstance(value, bool):
+            raise ValidationError(
+                f"{kind}.spec.{field_name}: esperaba boolean, recibio {type(value).__name__}"
+            )
+
+    def _check_list(field_name: str, field_schema: dict[str, Any], value: object) -> None:
+        if not isinstance(value, list):
+            raise ValidationError(
+                f"{kind}.spec.{field_name}: esperaba lista, recibio {type(value).__name__}"
+            )
+        elem_type = field_schema["list_of"]
+        if elem_type in _PRIMITIVE_TYPES:
+            for i, elem in enumerate(value):
+                if elem_type == "string" and not isinstance(elem, str):
+                    raise ValidationError(f"{kind}.spec.{field_name}[{i}]: esperaba string")
+
+    def _validate(spec: dict[str, Any]) -> None:
+        _check_required(spec)
         for field_name, field_schema in fields.items():
             if field_name not in spec:
                 continue  # Solo validamos presencia si esta en required
             value = spec[field_name]
             if isinstance(field_schema, str):
-                # Tipo primitivo
-                if field_schema == "string" and not isinstance(value, str):
-                    raise ValidationError(
-                        f"{kind}.spec.{field_name}: esperaba string, recibio {type(value).__name__}"
-                    )
-                if field_schema == "integer" and not isinstance(value, int):
-                    raise ValidationError(
-                        f"{kind}.spec.{field_name}: esperaba integer, recibio "
-                        f"{type(value).__name__}"
-                    )
-                if field_schema == "number" and not isinstance(value, (int, float)):
-                    raise ValidationError(
-                        f"{kind}.spec.{field_name}: esperaba number, recibio {type(value).__name__}"
-                    )
-                if field_schema == "boolean" and not isinstance(value, bool):
-                    raise ValidationError(
-                        f"{kind}.spec.{field_name}: esperaba boolean, recibio "
-                        f"{type(value).__name__}"
-                    )
+                _check_primitive(field_name, field_schema, value)
             elif isinstance(field_schema, dict):
-                # Forma compuesta: {list_of: tipo} | {refs: [kind, ...]}
                 if "list_of" in field_schema:
-                    if not isinstance(value, list):
-                        raise ValidationError(
-                            f"{kind}.spec.{field_name}: esperaba lista, recibio "
-                            f"{type(value).__name__}"
-                        )
-                    elem_type = field_schema["list_of"]
-                    if elem_type in _PRIMITIVE_TYPES:
-                        for i, elem in enumerate(value):
-                            if elem_type == "string" and not isinstance(elem, str):
-                                raise ValidationError(
-                                    f"{kind}.spec.{field_name}[{i}]: esperaba string"
-                                )
+                    _check_list(field_name, field_schema, value)
                 elif "refs" in field_schema:
                     # Validacion estructural: el campo es lista o string
                     # con nombre de instancia; NO verificamos FK aqui

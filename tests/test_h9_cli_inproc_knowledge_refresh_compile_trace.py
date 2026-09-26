@@ -186,24 +186,17 @@ class TestKnowledgeRefresh:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Proyecto inexistente: ``_DummyStorage`` lanza ``FileNotFoundError``.
+        """Proyecto inexistente: ``_open_known_project`` lanza ``FileNotFoundError``.
 
-        ``_open_known_project`` devuelve ``_DummyStorage`` cuando
-        el proyecto no se encuentra. Cualquier llamada posterior
-        a ``self.storage.<attr>`` dispara ``__getattr__`` que
-        lanza ``FileNotFoundError`` con mensaje 'proyecto no
-        encontrado'. ``cmd_knowledge_refresh`` NO captura esta
-        excepcion; se propaga al caller.
-
-        Esto es un bug menor de UX conocido (igual que
-        ``cmd_knowledge_invalidate`` con source ghost): el
-        wrapper deberia capturar FileNotFoundError y devolver
-        rc=4 (EXIT_NOTFOUND) con mensaje legible. Mientras
-        tanto, documentamos el comportamiento real.
+        Tras WI-20 (H-05 _DummyStorage eliminado), el wrapper RAISE
+        directo con mensaje legible que incluye el nombre del proyecto
+        y la sugerencia de 'sg project create'. El caller en main()
+        captura FileNotFoundError globalmente y devuelve
+        EXIT_PROJECT_NOT_FOUND = 4 con el mensaje.
         """
         data_root = _bootstrap(tmp_path, project="k1")
 
-        with pytest.raises(FileNotFoundError, match="proyecto no encontrado"):
+        with pytest.raises(FileNotFoundError, match="proyecto 'missing' no encontrado"):
             cmd_knowledge_refresh(
                 argparse.Namespace(
                     data_root=data_root, project="missing", source="src-1", revision=1
@@ -424,16 +417,13 @@ class TestKnowledgeTrace:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Proyecto inexistente: ``_DummyStorage`` lanza ``FileNotFoundError``.
+        """Proyecto inexistente: ``_open_known_project`` lanza ``FileNotFoundError``.
 
-        Igual que ``cmd_knowledge_refresh``: el wrapper no captura
-        esta excepcion. ``OutcomeTracer.from_run`` accede a
-        ``ctrl.storage._conn`` lo cual dispara ``__getattr__`` del
-        DummyStorage.
+        Tras WI-20 (H-05), el wrapper RAISE directo (igual que refresh).
         """
         data_root = _bootstrap(tmp_path, project="k1")
 
-        with pytest.raises(FileNotFoundError, match="proyecto no encontrado"):
+        with pytest.raises(FileNotFoundError, match="proyecto 'missing' no encontrado"):
             cmd_knowledge_trace(
                 argparse.Namespace(data_root=data_root, project="missing", run="r", name=None)
             )

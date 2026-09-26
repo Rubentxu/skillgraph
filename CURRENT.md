@@ -1,10 +1,10 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-26 20:54 (Europe/Madrid, v0.14.7 / 0.14.7.dev0).
+> Última verificación: 2026-09-26 21:17 (Europe/Madrid, WI-18..WI-20 deuda cerrada).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
-> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**. WI-14 (T3 Threat model S8: STRIDE sobre Adapter HTTP real; repr redact api_key tras RED test honesto; abuse-cases + 2 gaps P3) **DOC COMPLETA**. WI-15 (T5 Backups CLI: `sg backup create|list|restore` con ZIP + SHA-256 + Connection.backup() API atomica) **FEAT COMPLETA**. WI-16 (T6 Observabilidad runbook: 9 secciones, 3 niveles, schema/exit-codes/CLI verificados contra codigo real) **DOC COMPLETA**. WI-17 (H-06 deuda: `import json` redundante en `cmd_knowledge_compile` eliminado) **HOUSEKEEPING COMPLETO**.
+> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**. WI-14 (T3 Threat model S8: STRIDE sobre Adapter HTTP real; repr redact api_key tras RED test honesto; abuse-cases + 2 gaps P3) **DOC COMPLETA**. WI-15 (T5 Backups CLI: `sg backup create|list|restore` con ZIP + SHA-256 + Connection.backup() API atomica) **FEAT COMPLETA**. WI-16 (T6 Observabilidad runbook: 9 secciones, 3 niveles, schema/exit-codes/CLI verificados contra codigo real) **DOC COMPLETA**. WI-17 (H-06 deuda: `import json` redundante en `cmd_knowledge_compile` eliminado) **HOUSEKEEPING COMPLETO**. WI-18..WI-20 (H-10 locks.py drift Windows docstring honesto; H-03 pack_loader _validate cc 22→7; H-05 _DummyStorage anti-patron eliminado + raise FileNotFoundError legible) **HOUSEKEEPING COMPLETO**.
 > Tag `v0.14.0` preservado como erratum histórico (package metadata decía `0.7.0.dev0`).
 
 ## Goal
@@ -716,3 +716,37 @@ real (schema, exit codes, comandos CLI).
 - WI-17+ (deuda arquitectónica H-01..H-10).
 - Bump `0.14.6.dev0 → 0.14.7` con WI-12..WI-16 acumulados.
 - Push a origin (regla WI-01, ahora 30 commits ahead).
+
+## Reactivacion 2026-09-26 — WI-18..WI-20 deuda cerrada (H-10, H-03, H-05)
+
+Continuacion del cierre de la deuda arquitectonica tras v0.14.7.
+Tres fixes quirurgicos:
+
+### Cambios
+
+- `src/skillgraph/runtime/locks.py`: docstring honesto sobre Windows
+  (NO soportado, `import fcntl` top-level rompe).
+- `src/skillgraph/domain/pack_loader.py`: refactor `_validate`
+  (cc 22→7) extrayendo `_check_required/_check_primitive/_check_list`.
+- `src/skillgraph/cli/runner.py`: `_open_known_project` ahora RAISE
+  FileNotFoundError con mensaje legible cuando el proyecto no existe;
+  `main()` tiene handler global que devuelve EXIT_PROJECT_NOT_FOUND=4.
+  Clase `_DummyStorage` eliminada (anti-patron).
+- `tests/test_h9_cli_inproc_knowledge_refresh_compile_trace.py`: 2 tests
+  actualizados al nuevo comportamiento (mensaje legible en lugar de generico).
+- `specs/wi-18-20-deuda-arquitectonica.md`: spec + D-51.
+
+### Evidencia
+
+- HEAD pre-commit: `12f389f` (v0.14.7 archive baseline).
+- Tests: **1044/1044 PASS** en 188.77s.
+- ruff: All checks passed.
+- cc `_validate` en pack_loader: 22 -> 7 (~68% reduccion).
+- 0 `_DummyStorage` en codigo de produccion.
+
+### Pendiente
+
+- WI-21+ (deuda restante): H-01 Storage god-class (2407 LoC),
+  H-02 CLI god-module (2332 LoC), H-03 funciones con cc 11..15.
+- Bump `0.14.7.dev0 -> 0.14.8` cuando haya suficientes feats.
+- Push a origin (regla WI-01, ~37 commits ahead).
