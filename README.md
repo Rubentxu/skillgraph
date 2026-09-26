@@ -115,6 +115,27 @@ These are documented honestly in `CHANGELOG.md`:
 
 Contributions are welcome, but please **read `CONTRIBUTING.md` first**. Issues and PRs should reference a UAT (`UAT-NN`) when relevant so we can keep the evidence trail coherent.
 
+### Local git hooks (defense in depth)
+
+After cloning, run `bash scripts/install-hooks.sh` once to install the
+project's local git hooks into `.git/hooks/`:
+
+- **pre-commit**: runs `ruff check`, `ruff format --check`, and a pytest
+  smoke subset on staged `.py` files.
+- **pre-push**: runs the **full pytest suite** (~3 min) before accepting
+  a push, preventing pushes that would break CI.
+
+Bypasses (use sparingly, document in commit message when used):
+- `git commit --no-verify` / `git push --no-verify` — skip all hooks.
+- `HOOK_SKIP_TESTS=1 git commit` — skip pytest smoke in pre-commit.
+- `HOOK_SKIP_PUSH_TESTS=1 git push` — skip full pytest in pre-push
+  (e.g. experimental branches, CI config-only changes).
+
+If you set `core.hooksPath` globally (some agents do), add a wrapper at
+`~/.git-hooks/pre-commit` and `~/.git-hooks/pre-push` that delegates to
+the local hook files, since Git ignores `.git/hooks/` when a global
+`core.hooksPath` is set.
+
 ### Security
 
 For vulnerability reports, see `SECURITY.md`. **Do not file public issues for security bugs.**
@@ -221,6 +242,27 @@ Documentado honestamente en `CHANGELOG.md`:
 ### Contribuir
 
 Las contribuciones son bienvenidas, pero por favor **lee primero `CONTRIBUTING.md`**. Las issues y PRs deben referenciar un UAT (`UAT-NN`) cuando aplique para mantener coherente la trazabilidad de evidencia.
+
+### Git hooks locales (defensa en profundidad)
+
+Tras clonar, ejecuta `bash scripts/install-hooks.sh` una vez para instalar
+los git hooks locales del proyecto en `.git/hooks/`:
+
+- **pre-commit**: ejecuta `ruff check`, `ruff format --check` y un smoke
+  de pytest sobre archivos `.py` staged.
+- **pre-push**: ejecuta la **suite completa de pytest** (~3 min) antes
+  de aceptar un push, evitando pushes que romperían CI.
+
+Bypasses (úsalos con moderación, documenta en el mensaje del commit cuando los uses):
+- `git commit --no-verify` / `git push --no-verify` — salta todos los hooks.
+- `HOOK_SKIP_TESTS=1 git commit` — salta el smoke de pytest en pre-commit.
+- `HOOK_SKIP_PUSH_TESTS=1 git push` — salta el pytest completo en
+  pre-push (e.g. ramas experimentales, cambios solo de CI).
+
+Si configuras `core.hooksPath` globalmente (algunos agentes lo hacen),
+añade un wrapper en `~/.git-hooks/pre-commit` y `~/.git-hooks/pre-push`
+que delegue a los archivos de hook locales, ya que Git ignora
+`.git/hooks/` cuando hay un `core.hooksPath` global activo.
 
 ### Seguridad
 
