@@ -341,3 +341,235 @@ class TestUatEvo18NoSelfCertification:
         )
         assert rollback.previous_decision_id == decision.decision_id
         assert rollback.applied is True
+
+
+# ----- WI-08: Validation branches (dataclass __post_init__ + early-returns) -----
+
+
+class TestImprovementCandidateValidation:
+    """WI-08: ImprovementCandidate.__post_init__ validates required fields."""
+
+    def test_candidate_id_vacio_rechaza(self) -> None:
+        """candidate_id='' -> ValidationError (L109-110)."""
+        with pytest.raises(SkillGraphError, match="candidate_id vacio"):
+            ImprovementCandidate(
+                candidate_id="",
+                kind="redundant_extraction",
+                evidence_refs=(),
+                metrics={},
+                detected_at="2026-09-25T13:00:00Z",
+                scope="x",
+            )
+
+    def test_kind_invalido_rechaza(self) -> None:
+        """kind no en IMPROVEMENT_KINDS -> ValidationError (L111-112)."""
+        with pytest.raises(SkillGraphError, match="kind invalido"):
+            ImprovementCandidate(
+                candidate_id="c1",
+                kind="not_a_real_kind",  # type: ignore[arg-type]
+                evidence_refs=(),
+                metrics={},
+                detected_at="2026-09-25T13:00:00Z",
+                scope="x",
+            )
+
+    def test_detected_at_vacio_rechaza(self) -> None:
+        """detected_at='' -> ValidationError (L113-114)."""
+        with pytest.raises(SkillGraphError, match="detected_at vacio"):
+            ImprovementCandidate(
+                candidate_id="c1",
+                kind="redundant_extraction",
+                evidence_refs=(),
+                metrics={},
+                detected_at="",
+                scope="x",
+            )
+
+    def test_scope_vacio_rechaza(self) -> None:
+        """scope='' -> ValidationError (L115-116)."""
+        with pytest.raises(SkillGraphError, match="scope vacio"):
+            ImprovementCandidate(
+                candidate_id="c1",
+                kind="redundant_extraction",
+                evidence_refs=(),
+                metrics={},
+                detected_at="2026-09-25T13:00:00Z",
+                scope="",
+            )
+
+
+class TestPromotionDecisionValidation:
+    """WI-08: PromotionDecision.__post_init__ validates required fields."""
+
+    def test_decision_id_vacio_rechaza(self) -> None:
+        """decision_id='' -> ValidationError (L153-154)."""
+        with pytest.raises(SkillGraphError, match="decision_id vacio"):
+            PromotionDecision(
+                decision_id="",
+                candidate_id="c1",
+                human_approved=True,
+                approver="op",
+                timestamp="2026-09-25T13:00:00Z",
+            )
+
+    def test_candidate_id_vacio_rechaza(self) -> None:
+        """candidate_id='' -> ValidationError (L155-156)."""
+        with pytest.raises(SkillGraphError, match="candidate_id vacio"):
+            PromotionDecision(
+                decision_id="d1",
+                candidate_id="",
+                human_approved=True,
+                approver="op",
+                timestamp="2026-09-25T13:00:00Z",
+            )
+
+    def test_approver_vacio_rechaza(self) -> None:
+        """approver='' -> ValidationError (L157-158)."""
+        with pytest.raises(SkillGraphError, match="approver vacio"):
+            PromotionDecision(
+                decision_id="d1",
+                candidate_id="c1",
+                human_approved=True,
+                approver="",
+                timestamp="2026-09-25T13:00:00Z",
+            )
+
+    def test_timestamp_vacio_rechaza(self) -> None:
+        """timestamp='' -> ValidationError (L159-160)."""
+        with pytest.raises(SkillGraphError, match="timestamp vacio"):
+            PromotionDecision(
+                decision_id="d1",
+                candidate_id="c1",
+                human_approved=True,
+                approver="op",
+                timestamp="",
+            )
+
+
+class TestPromoteCandidateApproverRequired:
+    """WI-08: promote_candidate exige approver cuando human_approved=True (L380-381)."""
+
+    def test_promote_candidate_rechaza_sin_approver(self, tmp_path: Path) -> None:
+        """Si human_approved=True pero approver='' -> ValidationError."""
+        storage = _storage(tmp_path)
+        controller = _controller(storage)
+
+        candidate = ImprovementCandidate(
+            candidate_id="cand-no-approver",
+            kind="redundant_extraction",
+            evidence_refs=(),
+            metrics={"attribution": "context_selection"},
+            detected_at="2026-09-25T13:00:00Z",
+            scope="tests/",
+        )
+
+        with pytest.raises(SkillGraphError, match="approver requerido"):
+            promote_candidate(
+                controller=controller,
+                candidate=candidate,
+                human_approved=True,
+                approver="",
+            )
+
+
+class TestRollbackBlockedPolicy:
+    """WI-08: rollback_candidate con policy='blocked' -> ValidationError (L457-460)."""
+
+    def test_rollback_blocked_policy_rechaza(self, tmp_path: Path) -> None:
+        """policy='blocked' rechaza el rollback con ValidationError."""
+        storage = _storage(tmp_path)
+        controller = _controller(storage)
+
+        candidate = ImprovementCandidate(
+            candidate_id="cand-rb",
+            kind="redundant_extraction",
+            evidence_refs=(),
+            metrics={"attribution": "context_selection"},
+            detected_at="2026-09-25T13:00:00Z",
+            scope="tests/",
+        )
+
+        decision = promote_candidate(
+            controller=controller,
+            candidate=candidate,
+            human_approved=True,
+            approver="operator",
+        )
+
+        with pytest.raises(SkillGraphError, match="rollback bloqueado"):
+            rollback_candidate(
+                controller=controller,
+                decision=decision,
+                policy="blocked",
+            )
+
+
+class TestDetectRedundantExtractionEmptySigs:
+    """WI-08: detect_redundant_extraction sin firmas -> tupla vacia (L212-213)."""
+
+    def test_source_sin_firmas_no_genera_candidato(self, tmp_path: Path) -> None:
+        """Si controller.list_file_signatures_for_source devuelve (), no hay candidato."""
+        storage = _storage(tmp_path)
+        controller = _controller(storage)
+        _register_source(controller, "src/orphan.py")
+
+        result = detect_redundant_extraction(
+            controller=controller,
+            source_ids=("src/orphan.py",),
+        )
+        # Sin firmas -> no hay candidatos (early return L213).
+        assert result == ()
+
+
+class TestLocalizeOmissionDefensiveBranches:
+    """WI-08: localize_omission ramas defensivas (L266-267 included, L272-273 sin firma)."""
+
+    def test_source_ya_incluido_se_omite(self, tmp_path: Path) -> None:
+        """sid en included_set -> skip (L266-267)."""
+        storage = _storage(tmp_path)
+        controller = _controller(storage)
+
+        result = localize_omission(
+            controller=controller,
+            expected_source_ids=("src/a.py", "src/b.py"),
+            included_source_ids=("src/a.py", "src/b.py"),  # todos incluidos
+        )
+        assert result == ()
+
+    def test_source_sin_firma_vigente_no_es_atribuible(self, tmp_path: Path) -> None:
+        """sid omitido pero SIN firma -> no es omision atribuible (L272-273)."""
+        storage = _storage(tmp_path)
+        controller = _controller(storage)
+        _register_source(controller, "src/no-sig.py")
+
+        result = localize_omission(
+            controller=controller,
+            expected_source_ids=("src/no-sig.py",),
+            included_source_ids=(),  # omitido, pero sin firma
+        )
+        # Sin firma -> skip defensivo, no se atribuye omision.
+        assert result == ()
+
+
+class TestCompareRecipesCorrectionFalse:
+    """WI-08: compare_recipes detecta cuando una receta NO es correcta (L330-331)."""
+
+    def test_recipe_a_con_stale_solo_no_es_correcta(self, tmp_path: Path) -> None:
+        """source_id sin firma fresh -> correction_a=False (L331)."""
+        storage = _storage(tmp_path)
+        controller = _controller(storage)
+
+        # Registramos fuente pero sin firmas fresh: registration sin
+        # record_file_signature -> list_file_signatures_for_source devuelve ().
+        _register_source(controller, "src/stale-only.py")
+
+        comp = compare_recipes(
+            controller=controller,
+            recipe_a_source_ids=("src/stale-only.py",),
+            recipe_b_source_ids=("src/stale-only.py",),
+        )
+        # Sin firmas fresh en ninguna -> correction_a=False, correction_b=False.
+        assert comp.correction_a is False
+        assert comp.correction_b is False
+        assert comp.coverage_a == 0
+        assert comp.coverage_b == 0

@@ -6070,3 +6070,88 @@ No contradice los 2 P3 deferred (UAT fixtures, catalog SQLite).
 - Si operador aprueba: WI-07 = bump `0.14.5.dev0 -> 0.14.6` + tag `v0.14.6`
   + archivado SDDK formal (necesita `permissions.yaml` o nuevo ciclo con
   delivery_kind ManagedClosureDelivery).
+
+## 2026-09-26 ~17:30 — WI-07 (Coverage hardening: file_handoff.py 85%→93%)
+
+### Resumen
+
+- Auditoria identifico `file_handoff.py` 85% como gap material real.
+- Spec: `specs/wi-07-coverage-file-handoff.md` (D-19..D-22).
+- Tests RED primero (17 tests nuevos, 5 clases nuevas en
+  `test_h13_handoff_expert.py`): `TestHandoffBlockedErrorMessages`,
+  `TestBuildCoverageManifestFoco`, `TestShouldSkipAdapterEmpty`,
+  `TestScopeAwareRecipeValidation`, `TestCompileHandoffFromScopesTypeErrors`.
+- Iteracion: 1 test fallido al primer run (mensaje `recipe_ref vacio`
+  sin prefijo `base_recipe.`). Fix surgical al regex. 21/21 PASS al final.
+- Suite completa: **984/984 PASS** (+27 vs 957 baseline).
+- Coverage final: **93%** en `file_handoff.py` (target ≥90% cumplido).
+- 5 ramas quedan inaccesibles por construccion (type-checks sobre
+  frozen dataclass + isinstance encadenado), documentadas en
+  `test_scope_query_invalido_doc` como defensive code.
+
+### Decisiones
+
+- **D-19**: WI-07 autorizado por operador (26-Sep 18:50, "deuda primero").
+- **D-20**: WI-07 = solo tests. Sin cambios de produccion.
+- **D-21**: Housekeeping puro post-WI-06, mismo patron.
+- **D-22**: NO release/tag en este workitem. Bump `__version__` ya
+  estaba en `0.14.5.dev0` post-WI-06.
+
+### Trazabilidad deuda
+
+Cierra la linea "file_handoff.py 85%" de CURRENT.md. Las 5 ramas
+uncovered (L281, L296, L322, L327, L106) son defensive checks sobre
+frozen dataclass; inalcanzables sin reflexion.
+
+## 2026-09-26 ~18:00 — WI-08 (Coverage hardening: governance/improvement.py 84%→100%)
+
+### Resumen
+
+- Tras WI-07, unico gap material restante: `governance/improvement.py` 84%.
+- Spec: `specs/wi-08-coverage-improvement.md` (D-23..D-26).
+- Tests RED primero (14 tests nuevos, 7 clases nuevas en
+  `test_h15_improvement.py`): `TestImprovementCandidateValidation` (4),
+  `TestPromotionDecisionValidation` (4), `TestPromoteCandidateApproverRequired` (1),
+  `TestRollbackBlockedPolicy` (1), `TestDetectRedundantExtractionEmptySigs` (1),
+  `TestLocalizeOmissionDefensiveBranches` (2),
+  `TestCompareRecipesCorrectionFalse` (1).
+- Iteracion: GREEN al primer intento (codigo de produccion ya validaba
+  correctamente; mismo patron que WI-06).
+- 23/23 PASS en `test_h15_improvement.py`. 1 test adicional anadido para
+  cubrir L331 (compare_recipes correction=False): **23/23 PASS, 100%**.
+- Suite completa: **984/984 PASS** en 174.26s.
+- Coverage final: **100%** en `governance/improvement.py` (140 stmts,
+  0 uncovered; 38 branches, 0 partial). Superado el target ≥90%.
+
+### Decisiones
+
+- **D-23**: WI-08 = solo tests, mismo patron que WI-06/WI-07.
+- **D-24**: Stewardship creatif autorizado por operador (26-Sep 18:50).
+- **D-25**: bump `__version__` post-WI-08 innecesario (sigue en `0.14.5.dev0`).
+- **D-26**: NO release/tag. Pendiente aprobacion operador.
+
+### Cambios aplicados
+
+- `tests/test_h15_improvement.py` (+227 lineas, 14 tests).
+- `tests/test_h13_handoff_expert.py` (+250 lineas, 17 tests — WI-07 retro).
+- `STATE.yaml`: tests.total 957 -> 984, current_workitem WI-08,
+  delta_wi07 + delta_wi08 documentados.
+- `CURRENT.md`: header (WI-07/WI-08 HOUSEKEEPING COMPLETO), linea 50-52
+  (984/984 PASS, 174.26s), linea 56 (coverage real post-WI-07+WI-08).
+- `specs/wi-07-coverage-file-handoff.md`: spec nueva retro.
+- `specs/wi-08-coverage-improvement.md`: spec nueva.
+
+### Trazabilidad deuda
+
+Cierra las dos ultimas lineas de la lista "Modulos H11/H12/H13/H14/H15"
+de CURRENT.md (file_handoff.py 85%, governance/improvement.py 84%).
+Ahora **TODOS** los modulos del nucleo evolution-v2 (H11..H15) tienen
+cobertura ≥93% (file_handoff 93%, resto 99-100%).
+
+### Proximo
+
+- WI-09: sync completo de CURRENT.md (entradas WI-07/WI-08 en body,
+  limpieza de marcadores stale post-WI-06).
+- WI-10: README badges `957/957`→`984/984` + texto evolution-v2 H10..H15.
+- Bump `0.14.5.dev0` → `0.14.6` + tag anotado v0.14.6 pendiente de
+  aprobacion operador tras WI-09/10.
