@@ -127,6 +127,22 @@ class TestCIWorkflow:
         content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
         assert "pytest" in content or "test" in content.lower(), "Workflow no ejecuta pytest"
 
+    def test_workflow_uses_uv_cache(self) -> None:
+        """El workflow debe cachear ~/.cache/uv para reducir tiempo de CI."""
+        content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+        assert "actions/cache" in content, "Workflow sin actions/cache para uv"
+        assert "uv.lock" in content, (
+            "Cache key debe incluir hash de uv.lock para invalidar al cambiar deps"
+        )
+        assert "UV_CACHE_DIR" in content, "Workflow sin UV_CACHE_DIR env var"
+
+    def test_workflow_uploads_coverage_artifact(self) -> None:
+        """El workflow debe subir coverage.xml como artifact."""
+        content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+        assert "upload-artifact" in content, "Workflow sin upload-artifact para coverage"
+        assert "coverage.xml" in content, "Artifact no incluye coverage.xml"
+        assert "--cov" in content, "pytest sin flag --cov (sin cobertura)"
+
 
 class TestMiseTasksContract:
     """Las tareas mise referenciadas por el CI deben existir en mise.toml."""

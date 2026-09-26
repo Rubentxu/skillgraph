@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    env:
+      # Ubicacion explicita del cache uv (necesaria para actions/cache).
+      UV_CACHE_DIR: ${{ github.workspace }}/.cache/uv
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,6 +25,18 @@ jobs:
       - name: List installed tool versions
         run: mise list
 
+      - name: Restore uv cache
+        # Cache keyed by uv.lock + OS para que cualquier cambio de
+        # dependencias invalide el cache. restore-keys cubre el caso
+        # "cambio menor (e.g. version patch) que no afecta uv.lock".
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+            uv-${{ runner.os }}-
+
       - name: Sync dependencies
         run: mise run sync
 
@@ -30,8 +46,27 @@ jobs:
       - name: Format gate (ruff format --check)
         run: mise run format --check
 
-      - name: Smoke test (pytest)
-        run: mise run test
+      - name: Smoke test (pytest + coverage)
+        # pytest-cov ya esta en dev deps. Configuracion en
+        # [tool.coverage.run] de pyproject.toml (branch=true, source=skillgraph).
+        # Genera coverage.xml para Codecov/Coveralls (futuro) y muestra
+        # term-missing para visibilidad inline.
+        run: mise exec -- uv run pytest --cov=skillgraph --cov-report=xml --cov-report=term-missing -q
+
+      - name: Upload coverage artifact
+        # coverage.xml para consumo externo (Codecov, badges, etc.).
+        # if: always() para que el artifact se suba incluso si pytest fallo.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30
+
+      - name: Minimize uv cache
+        # Reduce tamano del cache antes de guardarlo. Optimizado para CI.
+        if: always()
+        run: mise exec -- uv cache prune --ci
 
       - name: Lint summary
         if: always()
@@ -40,4 +75,5 @@ jobs:
           echo "- Toolchain: $(mise current)" >> $GITHUB_STEP_SUMMARY
           echo "- Ruff check: ${{ steps.lint.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "- Format gate: ${{ steps.format.outcome }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Pytest: ${{ steps.test.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Pytest+cov: ${{ steps.smoke-test-pytest-coverage.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage artifact: ${{ steps.upload-coverage-artifact.outcome }}" >> $GITHUB_STEP_SUMMARY
