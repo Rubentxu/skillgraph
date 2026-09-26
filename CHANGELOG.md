@@ -1485,3 +1485,42 @@ ruff limpio.
 **Cobertura**: `file_scope.py` 82% → **99%** (+17pp). La única línea
 restante (284) es un corner case interno del loop de agregación donde
 `signatures_per_source` tiene entries con tuple vacío.
+
+## [Sin bump] — 2026-09-26 (cumplimiento AGENTS §1.2: errores tipados)
+
+**Commit**: `dfd192a` — 16 raises cambiados + 12 tests nuevos + audit.
+
+**Resumen**: Tras la consigna "vamos con lo siguiente", se abordó el
+hallazgo colateral de la investigación retrospectiva. La inspección
+extendida reveló 16 violaciones de AGENTS §1.2 (errores tipados) en
+6 archivos:
+
+```text
+src/skillgraph/knowledge/file_signature.py    8 raises ValueError
+src/skillgraph/knowledge/file_handoff.py      3 raises ValueError
+src/skillgraph/knowledge/git_source.py        1 raise ValueError
+src/skillgraph/runtime/locks.py                1 raise ValueError
+src/skillgraph/governance/improvement.py       2 raises ValueError
+src/skillgraph/governance/receipts.py          1 raise ValueError
+```
+
+Todos en `__post_init__` de dataclasses de dominio.
+
+**Cambios**:
+- src/: 16 raises cambiados de ValueError → ValidationError
+- tests/test_knowledge_validation_errors.py: 12 tests nuevos (12/12 rojo→verde)
+- tests/test_h9_coverage_git_source.py:78: migrado a ValidationError
+- 0 callers en src/ con `except ValueError` (grep limpio)
+- ValidationError hereda de SkillGraphError → Exception (no rompe nada)
+
+**Tests**: 918/918 verde (906 → 918, +12 nuevos). Mutation testing M8
+detectada. ruff limpio.
+
+**Verificación final**:
+```bash
+grep -rn "raise ValueError\|raise Exception" src/skillgraph/ --include="*.py"
+  → 0 resultados (100% cumplimiento §1.2)
+```
+
+**Auditoría completa** en `audits/knowledge-validation-errors-2026-09-26.md`
+(114 LoC).

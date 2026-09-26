@@ -5670,3 +5670,41 @@ anterior (8e3b617).
   Alcance: afecta H11 entero. Stewardship de bajo valor, derivado.
 
 HEAD tras este ciclo: 7a55ec7 == origin/main.
+
+---
+
+## 2026-09-26T10:13 — Cumplimiento AGENTS §1.2 (errores tipados)
+
+Operador pidio "vamos con lo siguiente" tras la investigacion
+retrospectiva. El hallazgo colateral (ValueError en SignatureProcedencia)
+parecia pequeno (~3 LoC). La inspeccion extendida revelo que la
+violacion estaba en 6 archivos con 16 raises totales:
+
+  knowledge/file_signature.py    8 raises
+  knowledge/file_handoff.py      3 raises
+  knowledge/git_source.py        1 raise
+  runtime/locks.py                1 raise + docstring
+  governance/improvement.py       2 raises
+  governance/receipts.py          1 raise
+
+TDD rojo -> verde aplicado:
+1. RED: 12 tests en test_knowledge_validation_errors.py esperando
+   ValidationError. Resultado: 12/12 rojos (los __post_init__
+   lanzaban ValueError).
+2. Fix: 16 raises cambiados a ValidationError en 6 archivos.
+   Docstring de locks.py actualizado.
+3. GREEN: 12/12 verde.
+4. Suite completa: 918 passed (906 + 12 nuevos).
+5. test_h9 migrado a ValidationError (era el unico test que
+   capturaba ValueError explicitamente).
+6. ruff limpio.
+7. Mutation M8 (revertir SignatureProcedencia): DETECTADA.
+
+Verificacion final:
+  grep -rn 'raise ValueError\|raise Exception' src/skillgraph/ --include='*.py'
+    -> 0 resultados (100% cumplimiento §1.2)
+
+**Commit**: dfd192a (11 archivos: 6 src + 2 tests + audit + 2 UAT)
+**Tests**: 918/918 verde. ruff limpio.
+
+HEAD tras este ciclo: dfd192a == origin/main.
