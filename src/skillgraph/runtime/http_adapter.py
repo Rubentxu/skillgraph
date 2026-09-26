@@ -326,7 +326,7 @@ class HttpAgentAdapter:
     """
 
     provider: Provider
-    api_key: str
+    api_key: str = field(repr=False)
     model: str = ""
     base_url: str = ""
     timeout_s: float = 30.0
@@ -355,6 +355,17 @@ class HttpAgentAdapter:
             self,
             "_retry",
             _RetryPolicy(max_retries=self.max_retries),
+        )
+
+    def __repr__(self) -> str:
+        # api_key esta marcado repr=False, asi que el dataclass auto-generado
+        # ya lo omite. Pero el cliente httpx en `client=None` puede contener
+        # credenciales en headers por defecto; usamos repr explicito que solo
+        # muestra lo seguro (provider, model, timeouts).
+        return (
+            f"HttpAgentAdapter(provider={self.provider!r}, "
+            f"model={self.model!r}, timeout_s={self.timeout_s}, "
+            f"max_retries={self.max_retries})"
         )
 
     def invoke(self, handoff: Handoff) -> AgentResult:

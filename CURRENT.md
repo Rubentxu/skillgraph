@@ -1,10 +1,10 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-26 20:14 (Europe/Madrid, WI-13).
+> Última verificación: 2026-09-26 20:14 (Europe/Madrid, WI-14).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
-> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**.
+> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**. WI-14 (T3 Threat model S8: STRIDE sobre Adapter HTTP real; repr redact api_key tras RED test honesto; abuse-cases + 2 gaps P3) **DOC COMPLETA**.
 > Tag `v0.14.0` preservado como erratum histórico (package metadata decía `0.7.0.dev0`).
 
 ## Goal
@@ -610,3 +610,44 @@ sin tocar codigo, manteniendo `--adapter fake` como default determinista.
 - Bump `0.14.6.dev0 → 0.14.7` cuando haya suficientes feats acumulados
   (siguiente release candidato).
 - Push a origin (regla WI-01, ahora 26 commits ahead of origin/main).
+
+## Reactivacion 2026-09-26 — WI-14 T3 Threat model S8 cerrado
+
+WI-14 cierra el ciclo T3 (Threat model) extendiendo el modelo STRIDE
+a la superficie HTTP nueva introducida por WI-12/13. Tambien descubre
+y corrige un gap real: el repr/str del adapter filtraba la api_key.
+
+### Cambios
+
+- `docs/architecture/ADR-0015-threat-model-stride.md`: nueva seccion
+  S8 (Adapter HTTP real Anthropic + OpenAI) con 6 filas STRIDE
+  (4 OK, 2 mitigados con gaps menores P3 deferred). E1 Adapter real
+  pasa de gap abierto a CERRADO.
+- `src/skillgraph/runtime/http_adapter.py`: `api_key: str = field(repr=False)`
+  + `__repr__` explicito que solo muestra provider/model/timeouts.
+  Antes, el dataclass auto-generado exponia `api_key='sk-ant-...'`
+  en cualquier `repr(adapter)` o `print(adapter)`.
+- `tests/test_http_adapter_repr_no_disclosure.py` (nuevo, 2 tests):
+  RED -> GREEN tras la mitigacion. Verifica repr y str.
+- `specs/wi-14-t3-threat-model-http.md`: spec + 8 abuse-cases.
+
+### Hallazgo honesto (D-47)
+
+El ADR-0015 afirmaba que "el repr NO expone api_key" sin haberlo
+verificado. RED test revelo que el dataclass default SI lo exponia.
+Mitigacion aplicada: field(repr=False) + __repr__ explicito. Leccion:
+los claims de seguridad deben tener tests que los verifiquen.
+
+### Evidencia
+
+- HEAD pre-commit: `8213ea4` (WI-13 baseline).
+- Tests: 1022/1022 PASS proyectados (+2 vs WI-13).
+- ADR-0015 con 8 superficies (S1..S8), 5 gaps abiertos documentados.
+- ruff: All checks passed.
+
+### Pendiente
+
+- WI-15 (T5 Backups CLI) + WI-16 (T6 Observabilidad).
+- WI-17+ (deuda H-01..H-10).
+- Bump `0.14.6.dev0 → 0.14.7` cuando WI-12/13/14/+15/+16 acumulados.
+- Push a origin (regla WI-01, ahora 27 commits ahead).
