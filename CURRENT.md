@@ -48,10 +48,10 @@ aplicado: T3 Threat model (ADR-0015 + tests de attestation + audit).
 ## Ultimo estado comprobado
 
 - HEAD: `b1bb264` (docs/changelog+journal trazabilidad ciclo §1.2 compliance). WI-01 en curso sobre este HEAD.
-- Tests: **927/927 PASS** en 155.73s (`uv run pytest --no-header -q`; baseline post-WI-02a). Incremento de +7 nuevos: `tests/test_persistence_ports.py` (5 structural tests + 2 runtime_checkable).
+- Tests: **929/929 PASS** en 177.28s (`uv run pytest --no-header -q`; baseline post-WI-03). Incremento vs WI-02a: +2 nuevos (Storage.list_sources happy path + aislamiento). WI-02b ya tuvo un decremento (-2) por TestStorageConnPublic borrados en T-16, neto = -2 + 2 = 0 vs v0.14.2; vs baseline post-WI-01 (920) = +9.
 - Package version: `0.14.4` (release WI-03). Tags previos: `v0.14.0` (erratum histórico, d50f666), `v0.14.1` (WI-01 release, e2cdc53), `v0.14.2` (WI-02a release, da95923), `v0.14.3` (WI-02b release, 7dec857), `v0.14.4` (WI-03 release).
 - CI dominante: local `pipelinek` (`.pipeline.kts`). GitHub Actions queda como notificación informativa (ver AGENTS.md §CI Local Obligatorio).
-- **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
+- **18 releases** emitidas: v0.3.0 → v0.14.4 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6 + WI-02b v0.14.3 + WI-03 v0.14.4). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
 - Cobertura núcleo re-medida: **83%** total. Modulos H11/H12/H13/H14/H15: file_signature.py 85%, file_scope.py 81%, file_handoff.py 80%, governance/receipts.py 73%, governance/improvement.py 84%.
 - Working tree limpio. Sin ficheros pendientes.

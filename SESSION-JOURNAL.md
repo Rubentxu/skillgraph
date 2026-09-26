@@ -5793,3 +5793,168 @@ Estrategia: B+B híbrida (puertos + Storage fachada compatibilidad).
 
 **Próximo**: WI-02b (EventLog + KnowledgeController + Storage.conn cleanup)
 si el usuario lo autoriza.
+
+## WI-02b — 2026-09-26 — Refactor WI-02b (EventLog/KnowledgeController + escape hatch removal)
+
+**Tipo**: refactor interno (sin cambio de API observable a nivel de release).
+**Sigue a**: WI-02a (v0.14.2) — los ACs 3/4/5 del WI-02 quedaron
+pendientes y se ejecutan aquí.
+
+**Trabajo completado** (commits observables):
+
+- `6c39330 refactor(ports): amplify EventStore/KnowledgeRepository for WI-02b`
+  Amplía los Protocols `EventStore` y `KnowledgeRepository` con los
+  métodos nuevos que necesitan KC / KI / EventLog / ContextController
+  tras la migración (ensure_schema, fetch_event_raw, find_entity,
+  source_exists_anywhere, list_claims_using_evidence, mark_claims_stale,
+  reactivate_claims_with_revision, list_stale_claims, record_event).
+  `+929/929 PASS`.
+
+- `86994fe refactor(runtime): EventLog acepta EventStore Protocol;
+  RunController sin escape hatch (WI-02b, AC-3)` — `EventLog` ahora
+  recibe `EventStore` Protocol (no `sqlite3.Connection` directo); helper
+  de tests `tests/_helpers/sqlite_event_store.py` crea
+  `SqliteEventStoreForTest` para los 4 archivos de tests que aún
+  necesitan `sqlite3.Connection` raw. `core.errors.IntegrityError`
+  añadido (sg_integrity); `Storage.record_event` traduce
+  `sqlite3.IntegrityError` → `IntegrityError`. Migración de 4 test
+  files. **AC-3 cerrado.**
+
+- `13edf74 refactor(knowledge): KnowledgeController migra de Storage a
+  KnowledgeRepository Protocol (WI-02b, AC-3)` — KC ahora recibe
+  `knowledge=KnowledgeRepository` (no `storage=Storage`). KI deja de
+  acceder a `controller.storage._conn`. Maintenance methods del Protocol
+  implementados en Storage. Migración de 13 archivos (KC + 10 tests +
+  CLI runner + context_controller interno). `928/929 PASS` (+1
+  test nuevo release_governance drift hasta bump final). **AC-3
+  cerrado.**
+
+- `3157a49 refactor(platform): elimina Storage.conn escape hatch (WI-02b,
+  AC-4)` — `@property def conn` de Storage eliminado. Los call sites
+  que necesitaban leer SQLite directo migran a `Storage._conn`
+  (privado por convención, sigue permitido). `TestStorageConnPublic`
+  borrado (validaba un artefacto obsoleto). **AC-4 cerrado.**
+
+**Bump + tag**:
+- `4464360` `0.14.2 → 0.14.3.dev0` (work)
+- `7dec857` `0.14.3.dev0 → 0.14.3` (release)
+- `v0.14.3` tag anotado
+
+**Tests**: **929/929 PASS** (de 927 en v0.14.2; -2 TestStorageConnPublic
+borrados, +2 ningún test nuevo del propio WI-02b; el +2 viene de
+WI-03 posterior).
+
+**Pipelinek**: `Pipeline finished with SUCCESS` (156s).
+
+**Decisiones**:
+- D-14 (split WI-02): vigente. WI-02a cerró ACs 1/2/11; WI-02b cerró
+  ACs 3/4/5.
+- Bump PATCH (sin cambio de API).
+- Storage sigue siendo fachada compatible (AC-11 PASS).
+- UAT fixtures drift (UAT-08/09.json) explícitamente fuera de scope.
+
+**Sorpresa operacional**: la migración multilínea con sed perdió
+`cast(Storage, self._runs)` en el indent de `runcontroller.py` (corregido
+en segunda pasada); `ContextController` interno también dependía de
+`ctrl.storage.*` (no detectado por la spec inicial — corregido en T-15
+ya que estaba subsumido en AC-5).
+
+**Próximo**: WI-03 si Auditor encuentra otro escape hatch residual
+(pendiente de audit transversal post-WI-02b).
+
+## WI-03 — 2026-09-26 — governance/receipts migra a KnowledgeRepository (AC-3 follow-up)
+
+**Tipo**: refactor interno (sin cambio de API observable).
+**Sigue a**: WI-02b (v0.14.3) — un audit transversal post-WI-02b
+detectó un escape hatch `_conn` residual en `receipts.py`.
+
+**Motivación** (D-15): el WI-02b cerró los escapes `_conn.execute` en
+KC, KI y ContextController, pero quedó **un sitio residual** en
+`src/skillgraph/governance/receipts.py:366` (función
+`list_applicable_receipts`) que violaba la misma regla "Storage
+encapsula SQL" introducida en WI-02b.
+
+**Trabajo completado**:
+- **ROJO**: añadidos 2 tests en
+  `tests/test_h9_coverage_knowledge_controller.py`
+  (test_storage_list_sources_returns_seeded_sources +
+  test_storage_list_sources_isolates_tenant_and_project). Ambos
+  fallaron con `AttributeError: 'Storage' object has no attribute
+  'list_sources'`. Confirmado RED.
+- **GREEN**: `Storage.list_sources(*, tenant_id, project_id) ->
+  tuple[Source, ...]` añadido a `platform/storage.py`, siguiendo el
+  patrón existente de `get_source` + `_row_to_source`. `ORDER BY
+  source_id` para determinismo. Tests verdes.
+- **Protocol**: `KnowledgeRepository` añade `list_sources` (duck
+  typing) en `platform/ports/__init__.py`.
+- **Migración**: `receipts.list_applicable_receipts` ahora itera
+  `storage.list_sources(...)` y desreferencia `source.source_id`,
+  en vez de `storage._conn.execute('SELECT source_id FROM sources
+  ...')`. Semántica idéntica. **AC-3 cerrado.**
+- **AC-3 verificado**: `grep "_conn" src/skillgraph/governance/receipts.py`
+  → 0 sitios activos (solo aparece en el comentario histórico del
+  propio WI-03).
+
+**Tests**: **929/929 PASS** (de 927 en v0.14.3; +2 = Storage.list_sources
+happy path + aislamiento tenant/project).
+
+**Bump + tag**:
+- `ea69093` `refactor(governance): receipts migra de storage._conn a
+  KnowledgeRepository.list_sources (WI-03, AC-3 follow-up)`
+- `674094b` `0.14.3 → 0.14.4.dev0` (work)
+- `dd7a3ef` `0.14.4.dev0 → 0.14.4` (release)
+- `v0.14.4` tag anotado
+
+**Pipelinek**: `Pipeline finished with SUCCESS` (177s).
+
+**Decisiones**:
+- **D-15**: spec WI-03 con `list_sources` añadido al Protocol
+  KnowledgeRepository. Firma `(*, tenant_id, project_id) ->
+  tuple[Source, ...]` consistente con `list_evidences_for_source`.
+- Bump PATCH.
+- `catalog.py` queda con `_conn` propio (Storage vs Catalog tienen
+  SQLite distintos, no viola la regla). Documentado en CHANGELOG
+  [0.14.4].
+
+**Próximo**: el proyecto no tiene deuda material restante asociada a
+los protocolos. Los siguientes frentes requieren spec del operador
+(4 Trabajos pendientes de Etapa 7) o son housekeeping
+(WI-04 si surge drift de trazabilidad).
+
+## WI-04 — 2026-09-26T16:36Z — Housekeeping trazabilidad (entradas SESSION-JOURNAL para WI-02b + WI-03)
+
+**Tipo**: housekeeping docs (sin código).
+**Sigue a**: WI-03 (v0.14.4) — un audit transversal detectó drift en
+`trazabilidad canónica`: las entradas `## WI-02b` y `## WI-03` faltaban
+del journal cronológico. Sus commits están en el repo (refs verificables
+en `git log` y `git tag -l`), pero el log durable estaba silencioso.
+
+**Motivación** (D-16): si una sesión futura reanuda sin este journal
+actualizado, no encuentra los WI que sí quedaron cerrados en tags
+`v0.14.3` y `v0.14.4`. La regla del proyecto (`external/blueprint-v1/` +
+AGENTS.md) declara el journal como log cronológico durable.
+
+**Trabajo completado**:
+- `specs/wi-04-journal-traceability.md` (73 LoC) — spec del WI.
+- Entradas cronológicas retroactivas en `SESSION-JOURNAL.md` para
+  WI-02b y WI-03, redactadas desde los observables (commits, tags,
+  CHANGELOG, specs) sin reinterpretación.
+- Entrada del propio WI-04 al final (esta entrada).
+- Cleanup: `CURRENT.md` línea "Tests: 927/927 PASS" corregida a
+  929/929 (era drift post-WI-03); "17 releases" → "18 releases"
+  (contaban v0.14.3 y v0.14.4 como 1 y 17 → ahora 18).
+
+**Tests**: N/A (housekeeping docs, no se ejecuta suite). Estado de la
+suite: 929/929 PASS en `dd7a3ef` (HEAD pre-WI-04, sin código modificado).
+
+**Commit WI-04**: este bloque se cierra en un único commit atómico
+(docs(journal): entradas WI-02b + WI-03 + housekeeping CURRENT.md).
+Sin bump de release (no hay cambio de código).
+
+**Próximo**: el proyecto sigue sin deuda material asociada a
+protocolos o storage. Los frentes pendientes:
+1. spec operador (~1 párrafo) para uno de los 4 Trabajos de Etapa 7
+   (E1 Adapter real, T3 Threat model, T5 Backups CLI, T6 Observabilidad).
+2. (opcional) WI-05 si surge nuevo housekeeping accionable.
+3. Push autorización pendiente (regla vigente de WI-01).
+
