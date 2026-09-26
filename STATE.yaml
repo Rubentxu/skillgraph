@@ -125,10 +125,29 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: DT_HOOKS_CI_cerrado  # Pre-commit hook + CI workflow instalados, 877/877 PASS
-  current_workitem: DT-HOOKS-CI
-  next_workitem: null  # ADR-0015 + format drift + hooks/CI cerrados. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
+  next_milestone_gate: DT_CI_CACHE_COVERAGE_cerrado  # Cache uv + cobertura en CI, 879/879 PASS, cobertura total 83%
+  current_workitem: DT-CI-CACHE-COVERAGE
+  next_workitem: null  # ADR-0015 + format drift + hooks/CI + cache/coverage cerrados. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
   evolution_v2:
+    DT_CI_CACHE_COVERAGE_cerrado:
+      fecha: 2026-09-26
+      ciclo: STEWARDSHIP-DT-CI-CACHE-COVERAGE
+      commit: 8430232
+      pushed: 2026-09-26
+      criterios_cumplidos:
+        - "Cache uv en CI: actions/cache@v4 keyed por uv.lock + OS, restore-keys fallback, uv cache prune --ci al final"
+        - "Cobertura en CI: pytest --cov=skillgraph --cov-report=xml --cov-report=term-missing + upload-artifact coverage.xml (30d retention)"
+        - "2 tests nuevos (test_workflow_uses_uv_cache, test_workflow_uploads_coverage_artifact): 6 invariantes"
+        - "879/879 tests PASS post-cambio (877 baseline + 2 nuevos), 0 regresiones"
+        - "Cobertura total medida: 83% (10 modulos al 100%, 4 modulos <80% documentados)"
+        - "Audit dedicado en audits/ci-cache-coverage-2026-09-26.md (185 LoC): 2 mejoras + 4 limitaciones + 4 derivados opcionales"
+      notas:
+        - "Defensa en profundidad completa: hook local + cache uv CI + cobertura CI + artefacto downloadable"
+        - "Sin Codecov badge (decidido NO aplicar, ~5 min si operador lo quiere)"
+        - "Sin enforcement de umbral (fail_under=0). Decidido NO forzar techo artificial: el proyecto acaba de estabilizarse en 83%"
+        - "Cache miss en primer run (cold start). Runs subsiguientes aprovechan cache (~1-2 min ahorro)"
+        - "Sin bump de release (CI infra, sin cambio de contrato observable)"
+      siguiente: "Codecov badge (~5 min), coverage threshold enforcement (~3 min), cache pytest (~5 min), audit advisories upstream, E1 Adapter real (spec operador)"
     DT_HOOKS_CI_cerrado:
       fecha: 2026-09-26
       ciclo: STEWARDSHIP-DT-HOOKS-CI

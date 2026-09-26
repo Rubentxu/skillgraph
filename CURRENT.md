@@ -103,6 +103,43 @@ Para reactivar la iniciativa o abrir una nueva:
 - Operador reabre con consigna explicita; el protocolo de
   reapertura esta en `INITIATIVE-CLOSED.md` seccion 8.
 
+## Reactivacion 2026-09-26 — STEWARDSHIP-DT-CI-CACHE-COVERAGE cerrado
+
+Implementa derivados #2 (cache uv) y #3 (cobertura) del audit
+`hooks-ci-2026-09-26.md` en un solo commit.
+
+**Cache uv en CI**:
+- `env.UV_CACHE_DIR = ${{ github.workspace }}/.cache/uv`
+- `actions/cache@v4` keyed por `uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}`
+- restore-keys fallback (cambios que no afectan deps)
+- `uv cache prune --ci` al final (optimiza tamano)
+
+**Cobertura en CI**:
+- pytest ahora corre con `--cov=skillgraph --cov-report=xml
+  --cov-report=term-missing`
+- `upload-artifact@v4` sube coverage.xml (retention 30d, if: always())
+- Step summary incluye outcome del nuevo step
+
+**Tests**: 2 nuevos en `TestCIWorkflow` con 6 invariantes totales.
+22 → 24 tests en `test_hooks_system.py`. 24/24 PASS.
+
+**Verificacion local**: `pytest --cov` corre 877/877 PASS en 263s.
+**Cobertura total medida: 83%** (10 modulos 100%, 4 <80% documentados).
+
+**Limitaciones** (autocritica en audit):
+- Sin Codecov badge (decidido NO aplicar).
+- Sin enforcement de umbral (fail_under=0, no fuerzo techo).
+- Cache miss en primer run (cold start).
+- Cache uv funciona porque `mise run sync` internamente usa
+  uv sync, que respeta UV_CACHE_DIR.
+
+**Commits**: `8430232 ci: cache uv + coverage artifact`
+(4 files, +57/-5 LoC).
+
+**Audit doc**: `audits/ci-cache-coverage-2026-09-26.md` (185 LoC).
+
+Sin bump de release (CI infra).
+
 ## Reactivacion 2026-09-26 — STEWARDSHIP-DT-HOOKS-CI cerrado
 
 Implementa el derivado #1 del audit `format-drift-2026-09-26.md`:

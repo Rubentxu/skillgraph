@@ -5403,3 +5403,58 @@ clases:
 **Audit doc**: `audits/hooks-ci-2026-09-26.md` (172 LoC).
 
 Sin bump de release (dev-infra). HEAD tras push: d949e33.
+
+---
+
+## 2026-09-26T00:04Z — STEWARDSHIP-DT-CI-CACHE-COVERAGE cerrado (commit `8430232`)
+
+Operador: "continua con tareas roadmap y deuda tecnica a tu criterio".
+
+Implementa los derivados #2 (cache uv) y #3 (cobertura) del audit
+`hooks-ci-2026-09-26.md` en un solo commit. Mejoras al CI workflow.
+
+**Cache uv en CI**:
+- `env.UV_CACHE_DIR = ${{ github.workspace }}/.cache/uv`
+- `actions/cache@v4` keyed por `uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}`
+- restore-keys fallback (cambios que no afectan deps exactas)
+- `uv cache prune --ci` al final (optimiza tamano antes de guardar)
+
+**Cobertura en CI**:
+- pytest con `--cov=skillgraph --cov-report=xml
+  --cov-report=term-missing` (la config `[tool.coverage.run]` de
+  pyproject.toml ya provee branch=true + source=skillgraph)
+- `upload-artifact@v4` sube coverage.xml (retention 30d,
+  if: always() para que suba incluso si pytest falla)
+- Step summary actualizado con outcomes de los nuevos steps
+
+**Tests**: 2 nuevos en `TestCIWorkflow`:
+- `test_workflow_uses_uv_cache`: 3 invariantes (actions/cache,
+  uv.lock en key, UV_CACHE_DIR env).
+- `test_workflow_uploads_coverage_artifact`: 3 invariantes
+  (upload-artifact, coverage.xml, --cov flag).
+- 22 → 24 tests en test_hooks_system.py. 24/24 PASS.
+
+**Verificacion empirica local**:
+`mise exec -- uv run pytest --cov=skillgraph
+  --cov-report=xml --cov-report=term-missing -q`
+→ 877/877 PASS en 263s. Cobertura total: **83%**.
+10 modulos al 100%, 4 <80% (cli/runner 49% gap estructural
+subprocess documentado, governance/receipts 73%, file_handoff
+80%, platform/paths 81%).
+
+**Limitaciones publicadas** (autocritica en audit):
+1. Sin Codecov badge (decidido NO aplicar).
+2. Sin enforcement de umbral (fail_under=0, no fuerzo techo).
+3. Cache uv valido porque mise usa uv sync internamente, que
+   respeta UV_CACHE_DIR.
+4. Cache miss en primer run (cold start, comportamiento esperado).
+
+**Commits**: `8430232 ci: cache uv + coverage artifact` (4 files,
++57/-5 LoC). UAT-08/09 refresh auto.
+
+**Audit doc**: `audits/ci-cache-coverage-2026-09-26.md` (185 LoC):
+2 mejoras + 4 limitaciones + 4 derivados opcionales (Codecov
+badge ~5 min, threshold enforcement ~3 min, cache pytest ~5 min,
+audit advisories upstream).
+
+Sin bump de release (CI infra). HEAD tras push: 8430232.
