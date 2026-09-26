@@ -227,6 +227,22 @@ class TestPrePushHook:
             "Hook no documenta relacion con pytest"
         )
 
+    def test_hook_cleans_up_tempfile_on_exit(self) -> None:
+        """El hook debe limpiar el tempfile en EXIT (cubre exito, fallo, SIGTERM/SIGINT).
+
+        Sin trap, un Ctrl-C durante pytest (3min) dejaria un tempfile huerfano
+        en /tmp. El trap EXIT garantiza limpieza en cualquier camino de salida.
+        """
+        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
+        # El trap debe estar en el bloque donde se crea el tempfile (_log="$(mktemp)")
+        assert "trap" in content, "Hook sin trap para limpieza"
+        # Verifica que el trap referencia EXIT (cubre todos los caminos de salida)
+        assert "trap '" in content and "EXIT" in content, (
+            "Hook sin trap EXIT para cubrir exito/fallo/signal"
+        )
+        # El trap debe limpiar $_log (el tempfile)
+        assert "rm -f" in content and '_log"' in content, "Trap no limpia $_log"
+
 
 class TestCIWorkflow:
     """El workflow GH en .github/workflows/ci.yml ejecuta los gates."""

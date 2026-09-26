@@ -53,6 +53,10 @@ if [ "${HOOK_SKIP_PUSH_TESTS:-0}" != "1" ]; then
     # de error NUNCA se ejecutaria. Mismo workaround que `.pipeline.kts`.
     # Capturamos el output a un tempfile para mostrar las ultimas 30 lineas.
     _log="$(mktemp)"
+    # Trap para limpiar tempfile en EXIT (cubre exito, fallo, signal SIGTERM/SIGINT).
+    # Si pytest corre ~3min, el usuario podria Ctrl-C y dejar el tempfile
+    # huérfano en /tmp. El trap EXIT garantiza limpieza en cualquier camino.
+    trap 'rm -f "$_log"' EXIT
     if ! run_in_toolchain run pytest -q >"$_log" 2>&1; then
         echo ""
         tail -30 "$_log"
@@ -60,10 +64,10 @@ if [ "${HOOK_SKIP_PUSH_TESTS:-0}" != "1" ]; then
         echo "ERROR: pytest failed (suite completa)."
         echo "Bypass para ramas experimentales: HOOK_SKIP_PUSH_TESTS=1 git push"
         echo "Bypass siempre: git push --no-verify"
-        rm -f "$_log"
         exit 1
     fi
     rm -f "$_log"
+    trap - EXIT
 else
     echo "[pre-push] HOOK_SKIP_PUSH_TESTS=1 -> saltando suite completa"
 fi
