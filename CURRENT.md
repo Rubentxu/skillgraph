@@ -750,3 +750,45 @@ Tres fixes quirurgicos:
   H-02 CLI god-module (2332 LoC), H-03 funciones con cc 11..15.
 - Bump `0.14.7.dev0 -> 0.14.8` cuando haya suficientes feats.
 - Push a origin (regla WI-01, ~37 commits ahead).
+
+## Reactivacion 2026-09-26 21:36 — WI-21..WI-22 (H-03 continuation)
+
+Continuacion de la deuda H-03 (cc>10) tras WI-19. Tres funciones
+mas quedan reducidas con el patron helper extraction:
+
+### Cambios
+
+- `src/skillgraph/governance/graph_expansion.py` WI-21:
+  - `validate` cc 24 -> 4 (3 helpers puros: `_check_capabilities`
+    cc=3, `_active_remove_warnings` cc<=3, `_check_cycle_bound` cc=10).
+- `src/skillgraph/resources/parser.py` WI-22:
+  - `parse_markdown` cc 17 -> 2 (4 helpers: `_require_str`,
+    `_require_dict`, `_metadata_name`, `_metadata_namespace`).
+  - Mensajes de ParseError preservados verbatim.
+- `specs/wi-21-h03-graph-expansion-validate.md`,
+  `specs/wi-22-h03-parser.md`.
+
+### Decisiones registradas
+
+- D-52: validate-like -> 1 helper por invariante, retorno tuple, <30 LoC.
+- D-53: parse_X con 4+ isinstance -> extraer _require_* helpers.
+- D-54: _require_* siempre lanza ParseError tipado con source kwarg.
+
+### Evidencia
+
+- Suite completa **1044/1044 PASS** (178-199s).
+- ruff: All checks passed.
+- commit `9e914ad` (WI-22) sobre `74fe0b8` (WI-21) sobre `1cc52a1`
+  (WI-18..WI-20).
+- 37 commits ahead of origin/main.
+
+### Pendiente
+
+- WI-23+ H-03 restantes: `take` (runtime/locks.py, cc=16),
+  `record_validation_receipt` (governance/receipts.py, cc=14),
+  `cmd_promotion_reconcile` (cli/runner.py, cc=14),
+  `traverse_invalidations` (cc=13), `invoke` (http_adapter.py, cc=12),
+  `compile_handoff_from_scopes` (cc=12).
+- H-01 Storage god-class (2407 LoC) y H-02 CLI god-module (2332 LoC)
+  son scoped WIs propios, no hacer en este ciclo.
+- Considerar bump `0.14.7.dev0 -> 0.14.8` con WI-21+WI-22 (refactor).
