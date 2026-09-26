@@ -6022,3 +6022,51 @@ protocolos o storage. Los frentes pendientes:
 protocolos, ports, o release governance. Los frentes siguen siendo
 los 4 Trabajos pendientes (E1/T5/T6/T3) que requieren spec del
 operador.
+
+## 2026-09-26 ~18:50 — WI-06 (Coverage hardening: governance/receipts.py)
+
+### Resumen
+
+- Auditoria transversal post-WI-04/05: `governance/receipts.py` en
+  73% (lagunas en `__post_init__` validations, `record_validation_receipt`
+  early returns, `list_applicable_receipts` defensive paths).
+- SPEC: `specs/wi-06-receipts-coverage.md` (D-17, D-18).
+- Tests RED escritos primero (28 tests nuevos, 4 clases nuevas:
+  `TestReceiptDataclassValidation`, `TestIsReceiptApplicableDeps`,
+  `TestRecordEarlyValidation`, `TestListApplicableDefensive`, `TestReceiptVerdictsConstant`).
+- GREEN: todos pasaron al primer intento (codigo de produccion ya
+  validaba correctamente; WI-06 es cobertura, no fix).
+- Suite completa: **957/957 PASS** en 156.55s.
+- Coverage final: **99%** en `governance/receipts.py` (target ≥90% cumplido).
+- ruff format + ruff check: limpios.
+
+### Decisiones
+
+- **D-17**: WI-06 = solo tests. Sin cambios de produccion.
+- **D-18**: bump `0.14.5 -> 0.14.5.dev0` (post-tag housekeeping). No
+  release nuevo, no tag. Pendiente aprobacion del operador si quiere
+  WI-07 = release + tag de este ciclo.
+
+### Cambios aplicados
+
+- `tests/test_h14_validation_receipts.py` (+287 lineas, 28 tests).
+- `src/skillgraph/__init__.py`: `__version__ = "0.14.5.dev0"`.
+- `STATE.yaml`: tests.total 929 -> 957, package_version 0.14.5.dev0,
+  delta_wi06 documentado.
+- `CURRENT.md`: estado verificado actualizado.
+- `specs/wi-06-receipts-coverage.md`: spec nueva.
+
+### Trazabilidad deuda
+
+Cierra la linea "Modulos H11/H12/H13/H14/H15: governance/receipts.py
+73%" reconocida en CURRENT.md desde WI-01 y no abordada por WI-02b/03/04/05.
+
+No contradice los 2 P3 deferred (UAT fixtures, catalog SQLite).
+
+### Proximo
+
+- Verificar git status pre-commit.
+- Commit atomico WI-06 (Conventional Commits: test(coverage): ...).
+- Si operador aprueba: WI-07 = bump `0.14.5.dev0 -> 0.14.6` + tag `v0.14.6`
+  + archivado SDDK formal (necesita `permissions.yaml` o nuevo ciclo con
+  delivery_kind ManagedClosureDelivery).
