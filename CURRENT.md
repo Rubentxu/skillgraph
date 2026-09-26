@@ -1,10 +1,10 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-26 20:29 (Europe/Madrid, WI-15).
+> Última verificación: 2026-09-26 20:34 (Europe/Madrid, WI-16).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
-> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**. WI-14 (T3 Threat model S8: STRIDE sobre Adapter HTTP real; repr redact api_key tras RED test honesto; abuse-cases + 2 gaps P3) **DOC COMPLETA**. WI-15 (T5 Backups CLI: `sg backup create|list|restore` con ZIP + SHA-256 + Connection.backup() API atomica) **FEAT COMPLETA**.
+> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**. WI-14 (T3 Threat model S8: STRIDE sobre Adapter HTTP real; repr redact api_key tras RED test honesto; abuse-cases + 2 gaps P3) **DOC COMPLETA**. WI-15 (T5 Backups CLI: `sg backup create|list|restore` con ZIP + SHA-256 + Connection.backup() API atomica) **FEAT COMPLETA**. WI-16 (T6 Observabilidad runbook: 9 secciones, 3 niveles, schema/exit-codes/CLI verificados contra codigo real) **DOC COMPLETA**.
 > Tag `v0.14.0` preservado como erratum histórico (package metadata decía `0.7.0.dev0`).
 
 ## Goal
@@ -683,3 +683,36 @@ con verificacion criptografica, sin dependencias externas.
 - **WI-17+ (deuda arquitectónica)**: H-01..H-10.
 - Bump `0.14.6.dev0 → 0.14.7` con WI-12/13/14/15/16 acumulados.
 - Push a origin (regla WI-01).
+
+## Reactivacion 2026-09-26 — WI-16 T6 Observabilidad runbook cerrado
+
+WI-16 cierra el item `Observabilidad` del ROADMAP. Runbook completo
+con 3 niveles (eventos / logs / metricas), validado contra el codigo
+real (schema, exit codes, comandos CLI).
+
+### Cambios
+
+- `docs/observability-runbook.md` (nuevo, 300 LoC, 9 secciones).
+- `specs/wi-16-t6-observability-runbook.md`: spec + decisiones (D-49).
+
+### Hallazgos durante la escritura (claims verificados honestamente)
+
+- Schema `runtime_events` corregido para coincidir con el real
+  (`event_kind`/`payload_json`/`timestamp`, no `event_type`/`payload`/`occurred_at`).
+- Exit codes corregidos: `EXIT_VALIDATION=12`, `EXIT_DB_MISSING=5`
+  (definidos en `runner.py`, no en `exit_codes.py`).
+- `sg runs logs` no soporta `--type`/`--json` (es CSV-like); queries
+  avanzadas via `sqlite3` directo.
+- Referencia `audits/locks-*.md` no existe; apuntamos a `tests/test_locks.py`.
+
+### Evidencia
+
+- HEAD pre-commit: `c53f0a7` (WI-15 baseline).
+- Tests: **1044/1044 PASS** sin cambios (docs-only).
+- ruff: N/A (markdown).
+
+### Pendiente
+
+- WI-17+ (deuda arquitectónica H-01..H-10).
+- Bump `0.14.6.dev0 → 0.14.7` con WI-12..WI-16 acumulados.
+- Push a origin (regla WI-01, ahora 30 commits ahead).
