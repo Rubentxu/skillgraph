@@ -541,7 +541,7 @@ tests:
   total: 984   # post-WI-08 coverage hardening governance/improvement.py
   passed: 984
   duration_s: 174   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-08)
-  package_version: "0.14.6"   # WI-11 housekeeping release (post-WI-06..WI-10; bump .dev0 -> .6 + tag anotado v0.14.6)
+  package_version: "0.14.6.dev0"   # WI-11 housekeeping release cerrado; post-tag bump .dev0 para cumplir release_governance
   delta_wi06: "+28 tests (10 dataclass validation + 1 is_receipt_applicable deps + 5 record_early_validation + 5 list_defensive_paths + 1 RECEIPT_VERDICTS + 1 to_payload + 5 misc coverage)"
   delta_wi07: "+17 tests (3 handoff_blocked messages + 4 build_coverage_manifest foco + 2 should_skip_adapter empty + 7 ScopeAwareRecipe validation + 1 type-checks doc) — file_handoff.py 85%→93%"
   delta_wi08: "+14 tests (4 ImprovementCandidate validation + 4 PromotionDecision validation + 1 promote approver required + 1 rollback blocked + 1 detect_redundant_extraction empty sigs + 2 localize_omission defensive + 1 compare_recipes correction_false) — improvement.py 84%→100%"

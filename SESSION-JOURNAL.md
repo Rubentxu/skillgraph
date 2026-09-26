@@ -6243,3 +6243,61 @@ cobertura ≥93% (file_handoff 93%, resto 99-100%).
   el agente entra en modo de espera honesto. Backlog pendiente
   de spec: deuda arquitectónica (H-01..H-06, H-10), E1 Adapter
   real, T3 Threat model, T5 Backups CLI, T6 Observabilidad.
+
+## 2026-09-26 ~18:23 — WI-11 (Release v0.14.6: housekeeping PATCH)
+
+### Resumen
+
+- Release PATCH `v0.14.6` que agrupa WI-06/07/08/09/10 en un unico
+  bloque coherente de housekeeping (cumple regla SDDK §6 — cadencia
+  inteligente: 5 WIs agrupados, no micro ni big-bang).
+- 0 cambios en codigo de produccion: solo tests + docs + bump version.
+- 0 breaking API (SEMVER PATCH por housekeeping puro).
+
+### Pasos ejecutados
+
+1. Spec `specs/wi-11-release-v0146.md` (D-35..D-39) — 84 LoC.
+2. `CHANGELOG.md`: entrada nueva `## [0.14.6]` con resumen,
+   Added (test coverage) y Changed (docs sync).
+3. `STATE.yaml`: `package_version` 0.14.5.dev0 → 0.14.6, `current_workitem` WI-11.
+4. `CURRENT.md`: header (18:18 → 18:23, WI-11), L7 (anadido WI-11 RELEASE COMPLETA),
+   L52 (0.14.6.dev0 + tags previos), L54 (19 → 20 releases).
+5. `src/skillgraph/__init__.py`: `__version__ = "0.14.6"`.
+6. Commit `42a26cf`: `build(release): bump 0.14.5.dev0 -> 0.14.6 (WI-11 housekeeping)`.
+   - Pre-commit hook corrió suite 983 passed + 1 failed (test_version_matches_git_tag
+     falla porque `__version__ = 0.14.6` puro con HEAD sin tag — drift esperado
+     pre-tag; el test es el guardian del patron post-tag, no del pre-tag).
+   - Commit proceedió (el pre-commit hook NO bloquea por drift de version, solo
+     verifica el patron post-tag).
+7. `git tag -a v0.14.6 -m "..."`: tag anotado creado en `42a26cf`.
+8. `tests/test_release_governance.py` 2/2 PASS (post-tag: `__version__ = 0.14.6` puro
+   + HEAD == tag → release limpia).
+9. `src/skillgraph/__init__.py`: `__version__ = "0.14.6.dev0"` (post-tag housekeeping,
+   patron WI-04/05 v0.14.5 → 0.14.5.dev0).
+10. `STATE.yaml` + `CURRENT.md`: `package_version` 0.14.6.dev0.
+
+### Decisiones
+
+- **D-35**: Bump `__version__` 0.14.5.dev0 → 0.14.6 (PATCH).
+- **D-36**: Tag anotado `v0.14.6` con mensaje multi-linea coherente
+  con el patron v0.14.1..v0.14.5.
+- **D-37**: NO push a `origin` (regla WI-01). Tag local; push pendiente
+  de aprobacion operador.
+- **D-38**: NO archivado formal SDDK (limitacion tooling permissions.yaml).
+- **D-39**: Mantener `release.tag=v0.14.0` historico + actualizar contador
+  de releases a 20.
+
+### Verificacion
+
+- `uv run pytest tests/test_release_governance.py` → 2/2 PASS (post-tag).
+- `git cat-file -p v0.14.6` → `object 42a26cf8b86...` (tag bien anclado).
+- `git tag --points-at HEAD` → `v0.14.6` (cuando se commitee el post-tag dev0,
+  HEAD dejara de estar en tag y la regla `.devN` aplicara).
+
+### Proximo
+
+- Post-tag commit: bump `0.14.6` → `0.14.6.dev0` + sync docs (en este mismo turno).
+- Push pendiente aprobacion operador (regla WI-01, 23 commits ahead of origin).
+- Proximo bloque roadmap: pendiente de spec operador. Backlog documentado
+  en `CURRENT.md` + `STATE.yaml`: deuda arquitectonica (H-01..H-06, H-10),
+  E1 Adapter real, T3 Threat, T5 Backups, T6 Observabilidad.
