@@ -134,6 +134,7 @@ roadmap:
       ciclo: STEWARDSHIP-DT-PRE-PUSH-HOOK
       commit: 4d1e622
       trap_fix_commit: 23e4c94
+      readme_docs_commit: 21bc550
       pushed: 2026-09-26
       criterios_cumplidos:
         - "Pre-push hook (scripts/hooks/pre-push, 62 LoC): suite completa de pytest (~190s) antes del push, con prefijo [pre-push] y bypass HOOK_SKIP_PUSH_TESTS=1"
@@ -150,6 +151,7 @@ roadmap:
         - "Limitacion del entorno del agente: core.hooksPath=/home/rubentxu/.git-hooks/ globalmente; wrapper no commiteable necesario (mismo workaround que pre-commit)"
         - "Sin bump de release (dev-infra, sin cambio de contrato observable)"
         - "Trap fix (23e4c94): cierra bug de cleanup de tempfile en SIGTERM/SIGINT descubierto en audit profundo; 889/889 PASS post-fix"
+        - "README docs (21bc550): añade seccion 'Local git hooks' (EN+ES) con install command + bypasses + workaround para core.hooksPath global; descubierto en validacion V36"
       siguiente: "E1 Adapter real (spec operador), T5 Backups (spec operador), T6 Observabilidad (spec operador), Gap A (H9-Plan-B), Gap C (H9-Plan-B), smart-cache por diff (derivado opcional)"
     DT_CI_CACHE_COVERAGE_cerrado:
       fecha: 2026-09-26
