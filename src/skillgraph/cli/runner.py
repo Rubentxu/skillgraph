@@ -21,7 +21,11 @@ import sys
 from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from skillgraph.platform.paths import agents_root
+    from skillgraph.runtime.runcontroller import RunBudget, RunController
 
 from skillgraph import (
     BrickRegistry,
@@ -1798,128 +1802,186 @@ def _build_adapter(args: argparse.Namespace, fixtures_root: Path) -> Any:
     raise ValidationError(f"adapter invalido: {kind!r} (esperado: 'fake' | 'http')")
 
 
-def cmd_run(args: argparse.Namespace) -> int:
-    """Crea un Run desde un WorkflowPlan.md y reconcilia hasta terminal.
+def _resolve_run_inputs(
+    args: argparse.Namespace,
+) -> tuple[RunController, Storage, str, str, str, str]:
+    """Valida input + construye controller + Run (nuevo o resumed).
 
-    Cierra H2 por la via UAT: el usuario real ejecuta el CLI.
+    Returns:
+        Tupla ``(ctl, storage, run_id, tenant_id, project_name,
+        project_db_error, plan_or_None)``. ``project_db_error`` es el
+    exit code si algo fallo (no-None), y ``plan_or_None`` es None en
+    el caso de fallo (el caller propaga el error al usuario).
     """
-    from skillgraph.core.runtime_types import is_terminal_run_state
     from skillgraph.platform.paths import agents_root
-    from skillgraph.resources.plan_loader import load_plan_file
     from skillgraph.runtime.runcontroller import RunBudget, RunController
 
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.project)
     if err is not None:
-        return err
+        return None, None, None, None, None, err
     if not args.plan.is_file():
         print(
             f"ERROR: plan no encontrado: {args.plan}",
             file=sys.stderr,
         )
-        return EXIT_PLAN_NOT_FOUND
+        return None, None, None, None, None, EXIT_PLAN_NOT_FOUND
     try:
         plan = load_plan_file(args.plan)
     except ParseError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-        return EXIT_PARSE
+        return None, None, None, None, None, EXIT_PARSE
     db_path = Path(project["db_path"])
     if not db_path.exists():
         print(
             f"ERROR: base de datos ausente: {db_path}",
             file=sys.stderr,
         )
-        return EXIT_DB_MISSING
+        return None, None, None, None, None, EXIT_DB_MISSING
 
     fixtures_root = args.fixtures_root or agents_root(resolver.data_root)
     fixtures_root.mkdir(parents=True, exist_ok=True)
     adapter = _build_adapter(args, fixtures_root)
     storage = Storage(db_path)
-    try:
-        ctl = RunController(
-            runs=storage,
-            events=storage,
-            policy=storage,
-            adapter=adapter,
-        )
-        # Resume-or-start: si ya existe un Run no terminal para este
-        # proyecto, lo reanudamos. Asi el usuario puede re-invocar
-        # `run` tras un crash y el controller reanuda el mismo Run
-        # con su current_node y sus NodeExecutions. Cumple UAT-06.
-        existing_run_id = _find_active_run_id(
-            storage,
-            tenant_id=project["tenant_id"],
-            project_id=project["name"],
-        )
-        if existing_run_id is not None:
-            run_id = existing_run_id
-        else:
-            # S4 Etapa 7: construye RunBudget solo si el usuario paso
-            # al menos un limite. Si los tres son None, budget=None
-            # (compat con Runs anteriores).
-            budget: RunBudget | None = None
-            if any(
-                v is not None
-                for v in (
-                    args.budget_visits,
-                    args.budget_runtime_seconds,
-                    args.budget_events,
-                )
-            ):
-                budget = RunBudget(
-                    max_visits=args.budget_visits,
-                    max_runtime_seconds=args.budget_runtime_seconds,
-                    max_events=args.budget_events,
-                )
-            run_id = ctl.create_run(
-                tenant_id=project["tenant_id"],
-                project_id=project["name"],
-                plan=plan,
-                budget=budget,
+    ctl = RunController(
+        runs=storage,
+        events=storage,
+        policy=storage,
+        adapter=adapter,
+    )
+
+    # Resume-or-start: si ya existe un Run no terminal para este
+    # proyecto, lo reanudamos. Asi el usuario puede re-invocar
+    # `run` tras un crash y el controller reanuda el mismo Run
+    # con su current_node y sus NodeExecutions. Cumple UAT-06.
+    existing_run_id = _find_active_run_id(
+        storage,
+        tenant_id=project["tenant_id"],
+        project_id=project["name"],
+    )
+    if existing_run_id is not None:
+        run_id = existing_run_id
+    else:
+        # S4 Etapa 7: construye RunBudget solo si el usuario paso
+        # al menos un limite. Si los tres son None, budget=None
+        # (compat con Runs anteriores).
+        budget: RunBudget | None = None
+        if any(
+            v is not None
+            for v in (
+                args.budget_visits,
+                args.budget_runtime_seconds,
+                args.budget_events,
             )
-        # UAT-06 (fix): max_iterations cuenta TODAS las llamadas reconcile,
-        # incluida la primera. Antes habia una llamada externa al while
-        # que ejecutaba 1 nodo, y luego el while iteraba max_iterations
-        # veces mas, dando un total de 1 + max_iterations reconciliaciones.
-        # Con max-iterations=2 sobre un plan de 3 nodos, eso ejecutaba los
-        # 3 nodos en lugar de respetar el limite. Aqui contamos la
-        # primera como iterations=1 y luego iteramos hasta max_iterations.
-        iterations = 1
-        snap = ctl.reconcile_run(
+        ):
+            budget = RunBudget(
+                max_visits=args.budget_visits,
+                max_runtime_seconds=args.budget_runtime_seconds,
+                max_events=args.budget_events,
+            )
+        run_id = ctl.create_run(
             tenant_id=project["tenant_id"],
             project_id=project["name"],
+            plan=plan,
+            budget=budget,
+        )
+    return (
+        ctl,
+        storage,
+        run_id,
+        project["tenant_id"],
+        project["name"],
+        None,
+    )
+
+
+def _reconcile_until_terminal(
+    ctl: RunController,
+    *,
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    max_iterations: int,
+) -> tuple[str, str, tuple[str, ...], int, bool]:
+    """Bucle de reconciliacion hasta terminal o max_iterations.
+
+    Returns:
+        Tupla ``(state, current_node, executed_nodes_tuple,
+        events_emitted, hit_max_iterations)``.
+    """
+    from skillgraph.core.runtime_types import is_terminal_run_state
+
+    iterations = 1
+    snap = ctl.reconcile_run(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        run_id=run_id,
+    )
+    while not is_terminal_run_state(snap.state) and iterations < max_iterations:
+        iterations += 1
+        snap = ctl.reconcile_run(
+            tenant_id=tenant_id,
+            project_id=project_id,
             run_id=run_id,
         )
-        while not is_terminal_run_state(snap.state) and iterations < args.max_iterations:
-            iterations += 1
-            snap = ctl.reconcile_run(
-                tenant_id=project["tenant_id"],
-                project_id=project["name"],
-                run_id=run_id,
-            )
-        if not is_terminal_run_state(snap.state) and iterations >= args.max_iterations:
-            print(
-                f"WARN: max-iterations alcanzado ({args.max_iterations}); "
-                f"estado={snap.state} current={snap.current_node}",
-                file=sys.stderr,
-            )
+    hit_max = not is_terminal_run_state(snap.state) and iterations >= max_iterations
+    if hit_max:
+        print(
+            f"WARN: max-iterations alcanzado ({max_iterations}); "
+            f"estado={snap.state} current={snap.current_node}",
+            file=sys.stderr,
+        )
+    return (
+        snap.state,
+        snap.current_node,
+        tuple(snap.executed_nodes),
+        snap.events_emitted,
+        hit_max,
+    )
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """Crea un Run desde un WorkflowPlan.md y reconcilia hasta terminal.
+
+    Cierra H2 por la via UAT: el usuario real ejecuta el CLI.
+    """
+    ctl, storage, run_id, tenant_id, project_name, early_exit = _resolve_run_inputs(args)
+    if early_exit is not None:
+        return early_exit
+
+    try:
+        state, _current_node, executed_nodes, events_emitted, _hit_max = _reconcile_until_terminal(
+            ctl,
+            tenant_id=tenant_id,
+            project_id=project_name,
+            run_id=run_id,
+            max_iterations=args.max_iterations,
+        )
     finally:
         storage.close()
 
     print(f"Run: {run_id}")
-    print(f"Estado: {snap.state}")
-    print(f"Nodos ejecutados: {', '.join(snap.executed_nodes) or '(ninguno)'}")
-    print(f"Eventos emitidos: {snap.events_emitted}")
+    print(f"Estado: {state}")
+    print(f"Nodos ejecutados: {', '.join(executed_nodes) or '(ninguno)'}")
+    print(f"Eventos emitidos: {events_emitted}")
     adapter_kind = getattr(args, "adapter", "fake")
     print(f"Tipo de adapter: {adapter_kind}")
-    print(f"Fixtures de agente: {fixtures_root}")
+    print(f"Fixtures de agente: {_resolve_fixtures_root(args)}")
     # Codigos distintos segun estado para que el shell pueda
     # ramificar sin parsear la salida.
-    if snap.state == "COMPLETED":
+    if state == "COMPLETED":
         return EXIT_OK
-    if snap.state == "FAILED":
+    if state == "FAILED":
         return EXIT_RUN_FAILED
     return EXIT_RUN_INCOMPLETE
+
+
+def _resolve_fixtures_root(args: argparse.Namespace) -> Path:
+    """Resuelve el fixtures_root final tras defaults (sigue a cmd_run)."""
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    fixtures_root = args.fixtures_root or agents_root(resolver.data_root)
+    fixtures_root.mkdir(parents=True, exist_ok=True)
+    return fixtures_root
 
 
 # ---------------------------------------------------------------------------

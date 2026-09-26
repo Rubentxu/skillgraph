@@ -5,9 +5,9 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **46** modulos Python, **15985** LoC, **555** funciones.
+- **46** modulos Python, **16047** LoC, **558** funciones.
 - **4** archivos >800 LoC (god modules).
-- **2** funciones publicas con cc>=20 (refactor obligatorio).
+- **1** funciones publicas con cc>=20 (refactor obligatorio).
 - **1** funciones privadas con cc>=20 (refactor opcional).
 - **11** funciones >80 LoC (legibilidad mejorable).
 - **2** funciones con anidamiento >=5 niveles.
@@ -18,7 +18,7 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 
 | LoC | Path |
 |----:|------|
-| 2477 | `src/skillgraph/cli/runner.py` |
+| 2539 | `src/skillgraph/cli/runner.py` |
 | 2407 | `src/skillgraph/platform/storage.py` |
 | 1357 | `src/skillgraph/runtime/runcontroller.py` |
 | 813 | `src/skillgraph/governance/graph_expansion.py` |
@@ -28,7 +28,6 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 | cc | LoC | Funcion | Path |
 |---:|----:|---------|------|
 | 43 | 58 | `main` | `src/skillgraph/cli/runner.py` |
-| 22 | 122 | `cmd_run` | `src/skillgraph/cli/runner.py` |
 
 ## Hotspots privados (cc>=20, refactor opcional)
 
@@ -49,12 +48,12 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 |----:|---------|------|
 | 409 | `_build_parser` | `src/skillgraph/cli/runner.py` |
 | 136 | `_execute_one` | `src/skillgraph/runtime/runcontroller.py` |
-| 122 | `cmd_run` | `src/skillgraph/cli/runner.py` |
 | 116 | `extract_file_signatures` | `src/skillgraph/knowledge/file_signature.py` |
 | 101 | `analyze_skill` | `src/skillgraph/domain/skill_importer.py` |
 | 95 | `_reconcile_run_locked` | `src/skillgraph/runtime/runcontroller.py` |
 | 92 | `cmd_expansion_apply` | `src/skillgraph/cli/runner.py` |
 | 90 | `compile_handoff` | `src/skillgraph/knowledge/context_controller.py` |
+| 89 | `_resolve_run_inputs` | `src/skillgraph/cli/runner.py` |
 | 86 | `aggregate_file_signatures` | `src/skillgraph/knowledge/knowledge_controller.py` |
 | 85 | `compile_handoff_from_scopes` | `src/skillgraph/knowledge/file_handoff.py` |
 | 84 | `promote_candidate` | `src/skillgraph/governance/improvement.py` |
