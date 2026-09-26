@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.14.8"
+__version__ = "0.14.8.dev0"
 
 from skillgraph.core.errors import (
     IdentityConflictError,
