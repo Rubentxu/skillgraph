@@ -47,6 +47,17 @@ _FAILPOINT_429 = "SKILLGRAPH_FAILPOINT_HTTP_429"
 _FAILPOINT_500 = "SKILLGRAPH_FAILPOINT_HTTP_500"
 
 
+class RetryableHttpStatus(Exception):
+    """Status HTTP que merece retry (429 / 5xx). Senal interna del adapter."""
+
+    code: str = "sg_http_retryable"
+
+
+# Sentinel privado: marca que `_dispatch_response` debe atrapar el status
+# para que el caller (invoke) aplique la politica de retry. No es una
+# `SkillGraphError` porque el usuario nunca la ve cruda.
+
+
 def _failpoint_active(name: str) -> bool:
     """Lee una variable de entorno como failpoint.
 
@@ -388,18 +399,7 @@ class HttpAgentAdapter:
         for attempt in range(self.max_retries + 1):
             try:
                 response = self._post_with_failpoints(url, body, headers)
-                if response.status_code == 200:
-                    return self._strategy.parse_response(response.json())
-                if response.status_code == 429 or response.status_code >= 500:
-                    last_exc = NotFoundError(  # type: ignore[assignment]
-                        f"HTTP {response.status_code}: {response.text[:200]}"
-                    )
-                    if attempt < self.max_retries:
-                        time.sleep(self._retry.sleep_seconds(attempt))
-                        continue
-                    raise last_exc
-                # Other 4xx: client error, no retry
-                raise ValidationError(f"HTTP {response.status_code}: {response.text[:200]}")
+                return self._dispatch_response(response)
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc
                 if attempt < self.max_retries:
@@ -408,9 +408,24 @@ class HttpAgentAdapter:
                 raise NotFoundError(
                     f"HTTP timeout/network tras {attempt + 1} intentos: {exc}"
                 ) from exc
+            except RetryableHttpStatus as exc:
+                last_exc = exc
+                if attempt < self.max_retries:
+                    time.sleep(self._retry.sleep_seconds(attempt))
+                    continue
+                raise NotFoundError(str(exc)) from exc
 
         # Defensive: should not reach here, but if retries exhausted without raise
         raise NotFoundError(f"retries exhausted: {last_exc}")
+
+    def _dispatch_response(self, response: httpx.Response) -> AgentResult:
+        """Decide la accion segun status_code. Lanza `RetryableHttpStatus` para 429/5xx."""
+        if response.status_code == 200:
+            return self._strategy.parse_response(response.json())  # type: ignore[union-attr]
+        if response.status_code == 429 or response.status_code >= 500:
+            raise RetryableHttpStatus(f"HTTP {response.status_code}: {response.text[:200]}")
+        # Other 4xx: client error, no retry
+        raise ValidationError(f"HTTP {response.status_code}: {response.text[:200]}")
 
     def _post_with_failpoints(
         self, url: str, body: dict[str, Any], headers: dict[str, str]
