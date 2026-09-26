@@ -108,7 +108,7 @@ def _seed_knowledge(storage: Storage) -> None:
 
 
 def _handoff_of_last_execution(storage: Storage) -> dict:
-    row = storage.conn.execute(
+    row = storage._conn.execute(  # _conn privado por convención (Storage.conn eliminado en T-16/WI-02b, AC-4)
         "SELECT handoff_json FROM node_executions ORDER BY started_at DESC LIMIT 1"
     ).fetchone()
     return json.loads(row[0])
@@ -179,7 +179,7 @@ class TestRecipeResolverOptIn:
         kinds = [item[0] for item in h["knowledge"]["included"]]
         assert "claim" in kinds
         # el nodo se ejecutó (el adapter recibió el handoff con contexto)
-        row = s.conn.execute(
+        row = s._conn.execute(
             "SELECT state FROM node_executions ORDER BY started_at DESC LIMIT 1"
         ).fetchone()
         assert row[0] == "SUCCEEDED"
@@ -220,7 +220,7 @@ class TestRecipeResolverOptIn:
         )
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         ctl.reconcile_run(run_id=rid, tenant_id=TENANT, project_id=PROJECT)
-        row = s.conn.execute(
+        row = s._conn.execute(
             "SELECT state, error FROM node_executions ORDER BY started_at DESC LIMIT 1"
         ).fetchone()
         assert row[0] == "FAILED"

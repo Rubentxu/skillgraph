@@ -1,24 +1,17 @@
-"""Tests focales de la limpieza de S8+S9 en H9-BSlice3: el
-``RunController.__init__`` ya no recibe ``conn`` y
-``Storage.conn`` es API publica para que ``EventLog`` (que el
-RunController construye internamente) obtenga la conexion.
+"""Tests focales de S8+S9 en H9-BSlice3 / WI-02b:
 
-Cubre:
-- Storage.conn existe y devuelve la conexion subyacente.
-- Storage.conn es la misma identidad que Storage._conn (no un
-  wrapper que rompa el sharing entre mutaciones de Storage y
-  lectura/escritura de EventLog).
-- RunController.__init__ ya no acepta parametro ``conn``
-  (TypeError al pasarlo).
-- El RunController construido sin conn funciona end-to-end
+- ``RunController.__init__`` ya no recibe ``conn`` (WI-02a).
+- ``Storage.conn`` escape hatch eliminado en T-16 / AC-4; los tests
+  solo tocan ``Storage._conn`` (privado por convención) cuando
+  necesitan leer SQLite directamente.
+- RunController construido sin ``conn`` funciona end-to-end
   (create_run + reconcile_run emiten eventos en runtime_events).
 - Red de seguridad (introspeccion): RunController.__init__ no
-  contiene "self._conn" como atributo.
+  contiene ``self._conn`` como atributo.
 """
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -60,29 +53,6 @@ def _plan(*names: str) -> WorkflowPlan:
     return WorkflowPlan(nodes=nodes, transitions=(), initial=nodes[0].name)
 
 
-class TestStorageConnPublic:
-    def test_storage_conn_returns_a_sqlite_connection(
-        self,
-        storage: tuple[Storage, FakeAgentAdapter],
-    ) -> None:
-        s, _ = storage
-        assert isinstance(s.conn, sqlite3.Connection)
-
-    def test_storage_conn_is_same_as_underlying(
-        self,
-        storage: tuple[Storage, FakeAgentAdapter],
-    ) -> None:
-        """Storage.conn no es un wrapper: es la misma identidad.
-
-        Importante: si fuera un wrapper, las mutaciones que Storage
-        hace sobre ``self._conn`` podrian no verse desde EventLog
-        (que toma ``storage.conn`` en el RunController). Aqui
-        verificamos que la identidad coincide.
-        """
-        s, _ = storage
-        assert s.conn is s._conn  # type: ignore[attr-defined]
-
-
 class TestRunControllerNoLongerAcceptsConn:
     def test_init_rejects_conn_keyword(
         self,
@@ -91,7 +61,7 @@ class TestRunControllerNoLongerAcceptsConn:
         """Pasar ``conn=...`` ahora es TypeError."""
         s, adapter = storage
         with pytest.raises(TypeError):
-            RunController(runs=s, events=s, policy=s, adapter=adapter, conn=s.conn)  # type: ignore[call-arg]
+            RunController(runs=s, events=s, policy=s, adapter=adapter, conn=s._conn)  # type: ignore[call-arg]
 
     def test_init_signature_has_only_protocols_and_adapter(self) -> None:
         """Red de seguridad (WI-02a): la firma no incluye ``conn``.
@@ -119,7 +89,7 @@ class TestRunControllerWorksWithoutConn:
         self,
         storage: tuple[Storage, FakeAgentAdapter],
     ) -> None:
-        """Camino real: ctl sin conn usa storage.conn para EventLog."""
+        """Camino real: ctl sin conn usa Storage internamente para EventLog."""
         s, adapter = storage
         ctl = RunController(runs=s, events=s, policy=s, adapter=adapter)
 
@@ -131,14 +101,14 @@ class TestRunControllerWorksWithoutConn:
 
         # El evento RunCreated SI se emite en runtime_events
         # (eso prueba que EventLog tiene la conexion correcta).
-        row = s.conn.execute(
+        row = s._conn.execute(
             "SELECT COUNT(*) c FROM runtime_events WHERE run_id = ?",
             (run_id,),
         ).fetchone()
         assert row["c"] == 1
 
         # Y el run existe en workflow_runs.
-        row = s.conn.execute(
+        row = s._conn.execute(
             "SELECT state FROM workflow_runs WHERE run_id = ?",
             (run_id,),
         ).fetchone()

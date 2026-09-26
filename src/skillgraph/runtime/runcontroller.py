@@ -274,9 +274,10 @@ class RunController:
         # Sin politica configurada, el resolver devuelve ``None``
         # y EventLog usa el default seguro "metadata".
         #
-        # WI-02b: ``EventLog`` acepta directamente el Protocol ``EventStore``
-        # (que ``events`` ya cumple por duck typing). Antes usabamos
-        # ``events.conn`` (escape hatch WI-02a) que sera eliminado en T-16.
+        # WI-02b AC-3: ``EventLog`` acepta directamente el Protocol
+        # ``EventStore`` (que ``events`` ya cumple por duck typing).
+        # Antes usabamos ``events.conn`` (escape hatch WI-02a,
+        # eliminado en T-16 / AC-4).
         self._events = EventLog(
             events,
             policy_resolver=lambda tenant_id: policy.get_policy(tenant_id=tenant_id),
