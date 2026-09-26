@@ -236,6 +236,15 @@ class KnowledgeRepository(Protocol):
 
     def register_source(self, *, tenant_id: str, project_id: str, source: Any) -> None: ...
     def get_source(self, *, tenant_id: str, project_id: str, source_id: str) -> Any | None: ...
+    def list_sources(self, *, tenant_id: str, project_id: str) -> tuple[Any, ...]:
+        """Sources del tenant/project (read-only).
+
+        WI-03: cierra el escape hatch ``storage._conn.execute('SELECT
+        source_id FROM sources ...')`` que ``receipts.list_applicable_receipts``
+        usaba.
+        """
+        ...
+
     def update_source_freshness(
         self, *, tenant_id: str, project_id: str, source_id: str, freshness: str
     ) -> None: ...

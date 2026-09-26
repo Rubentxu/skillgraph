@@ -356,19 +356,12 @@ def list_applicable_receipts(
         en el futuro; H14 mantiene el contrato simple.
     """
     out: list[ValidationReceipt] = []
-    # Iterar sobre evidences del tenant/project. Accedemos a
-    # ``storage.list_evidences_for_source`` por source_id; como
-    # desconocemos los source_ids, usamos el patron conocido:
-    # un source por receipt. Para simplificar, leemos TODAS las
-    # evidences del tenant/project y filtramos por kind.
-    # Esto es O(N) en evidences; aceptable para H14 (no escala
-    # enorme todavia).
-    sources = storage._conn.execute(
-        "SELECT source_id FROM sources WHERE tenant_id = ? AND project_id = ?",
-        (tenant_id, project_id),
-    ).fetchall()
-    for (source_id,) in sources:
-        rows = storage.list_evidences_for_source(source_id=source_id)
+    # WI-03: delega en el Protocol KnowledgeRepository.list_sources
+    # (cierra el escape hatch ``storage._conn.execute`` directo que
+    # violaba la regla "Storage encapsula SQL" introducida en WI-02b).
+    sources = storage.list_sources(tenant_id=tenant_id, project_id=project_id)
+    for source in sources:
+        rows = storage.list_evidences_for_source(source_id=source.source_id)
         for row in rows:
             if row.get("kind") != "validation_receipt":
                 continue

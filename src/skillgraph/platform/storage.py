@@ -610,6 +610,26 @@ class Storage:
             return None
         return _row_to_source(row, json)
 
+    def list_sources(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+    ) -> tuple[Source, ...]:
+        """Sources del tenant/project (read-only, orden determinista por source_id).
+
+        WI-03: migra el escape hatch ``storage._conn.execute('SELECT source_id
+        FROM sources ...')`` que hacia ``receipts.list_applicable_receipts``.
+        Devuelve tupla inmutable (regla AGENTS §1.1).
+        """
+        import json
+
+        rows = self._conn.execute(
+            "SELECT * FROM sources WHERE tenant_id = ? AND project_id = ? ORDER BY source_id",
+            (tenant_id, project_id),
+        ).fetchall()
+        return tuple(_row_to_source(row, json) for row in rows)
+
     def update_source_freshness(
         self,
         *,

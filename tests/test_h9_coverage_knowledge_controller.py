@@ -148,3 +148,75 @@ def test_record_finding_uses_provided_id_when_set(tmp_path: Path) -> None:
     )
     returned_id = ctl.record_finding(finding=f)
     assert returned_id == explicit_id
+
+
+# ----- WI-03: list_sources en Storage (espejo de list_evidences_for_source) ---
+
+
+def test_storage_list_sources_returns_seeded_sources(tmp_path: Path) -> None:
+    """WI-03 AC-1: ``Storage.list_sources(tenant_id, project_id)`` devuelve
+    los Source del tenant/project, orden determinista, dataset vacio si nada."""
+    storage = Storage(str(tmp_path / "wi03.sqlite"))
+    ctl = KnowledgeController(knowledge=storage, tenant_id="tA", project_id="pX")
+
+    assert storage.list_sources(tenant_id="tA", project_id="pX") == ()
+
+    src1 = Source(
+        source_id="src-1",
+        kind="local_file",
+        content_hash="h1",
+        locator={"path": "src/foo.py"},
+        git_commit_sha=None,
+        git_tree_sha=None,
+        working_tree_status=None,
+        checked_at="2026-01-01T00:00:00Z",
+        freshness="fresh",
+    )
+    src2 = Source(
+        source_id="src-2",
+        kind="local_file",
+        content_hash="h2",
+        locator={"path": "src/bar.py"},
+        git_commit_sha=None,
+        git_tree_sha=None,
+        working_tree_status=None,
+        checked_at="2026-01-02T00:00:00Z",
+        freshness="stale",
+    )
+    ctl.register_source(source=src1)
+    ctl.register_source(source=src2)
+
+    out = storage.list_sources(tenant_id="tA", project_id="pX")
+    assert isinstance(out, tuple)
+    assert {s.source_id for s in out} == {"src-1", "src-2"}
+
+
+def test_storage_list_sources_isolates_tenant_and_project(tmp_path: Path) -> None:
+    """WI-03 AC-1: tenant o project distintos devuelven dataset vacio."""
+    storage = Storage(str(tmp_path / "wi03-iso.sqlite"))
+    ctl_tA = KnowledgeController(knowledge=storage, tenant_id="tA", project_id="pX")
+    # ctl_tB solo se usa para verificar aislamiento tenant SIN
+    # contaminar el ``sources`` global de tA — list_sources ya
+    # aísla por tenant_id, no necesitamos ctl_tB para demostrarlo.
+
+    src = Source(
+        source_id="src-tA",
+        kind="local_file",
+        content_hash="h",
+        locator={"path": "x.py"},
+        git_commit_sha=None,
+        git_tree_sha=None,
+        working_tree_status=None,
+        checked_at="2026-01-01T00:00:00Z",
+        freshness="fresh",
+    )
+    ctl_tA.register_source(source=src)
+
+    # tA lo ve.
+    assert {s.source_id for s in storage.list_sources(tenant_id="tA", project_id="pX")} == {
+        "src-tA"
+    }
+    # tB en mismo proyecto NO lo ve (aislamiento tenant).
+    assert storage.list_sources(tenant_id="tB", project_id="pX") == ()
+    # tA en otro proyecto tampoco.
+    assert storage.list_sources(tenant_id="tA", project_id="pY") == ()
