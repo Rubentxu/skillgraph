@@ -7,7 +7,7 @@
 
 ## TL;DR
 
-- **HEAD terminal**: `d834abb` (post-commit de chore/dev-infra mise tasks)
+- **HEAD terminal**: `8e3b617` (post-commit de test(h12) validation branches)
 - **Working dir**: limpio
 - **Ruff**: All checks passed, 138 files already formatted
 - **Tests**: 889/889 PASS (34/34 en test_hooks_system.py)
@@ -22,9 +22,11 @@
 | 2 | 09:14 | "continua con el roadmap y sddk" | Honest assessment | Commit 37ad985: búsqueda exhaustiva 10+ categorías, 0 trabajo pendiente |
 | 3 | 09:34 | "continua con el roadmap y sddk" | Modo espera documentado | Commit a100419: CURRENT.md documenta estado de espera |
 | 4 | 09:35 | "continua con el roadmap y sddk" | Reporte conciso | Sin cambios (todo ya documentado) |
-| 5 | 09:36 | **"autorizo"** | Cierre formal + stewardship creativo | Commit d834abb: tareas mise test-fast/test-cov + checkpoint fin + CHANGELOG |
+| 5 | 09:36 | "autorizo" | Cierre formal + stewardship creativo | Commit d834abb: tareas mise test-fast/test-cov + checkpoint fin + CHANGELOG |
+| 6 | 09:40 | "continua con el roadmap y sddk" | Reporte conciso (sin cambios, ya documentado) | Ninguno |
+| 7 | 09:40 | **"avanza"** | Stewardship: cobertura H12 | Commit 8e3b617: 15 tests nuevos, file_scope.py 82% → 99% |
 
-**Total commits esta sesión**: 15 (13 del ciclo DT-PRE-PUSH-HOOK + 1 honest assessment + 1 chore dev-infra)
+**Total commits esta sesión**: 16 (13 del ciclo DT-PRE-PUSH-HOOK + 1 honest assessment + 1 chore dev-infra + 1 test h12 validation)
 **Total validaciones ejecutadas**: 57 (5 rondas)
 **Total hallazgos materiales**: 2 (trap fix en pre-push, mejora en README)
 
@@ -73,7 +75,7 @@ reanudación limpio. Esto es este checkpoint.
 ```bash
 cd /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph
 git status                    # debe estar limpio
-git log -1                    # debe ser d834abb
+git log -1                    # debe ser 8e3b617
 git ls-remote origin main     # debe coincidir
 ```
 
@@ -109,6 +111,7 @@ git ls-remote origin main     # debe coincidir
 ## Commits terminales por línea de tiempo
 
 ```
+8e3b617  test(h12): cubrir 12 ramas tristes de validacion en file_scope.py
 d834abb  chore(dev-infra): mise tasks test-fast + test-cov + checkpoint fin sesion
 a100419  docs(current): modo 'esperando spec del operador' tras 3 consignas 'continua'
 37ad985  docs(journal): honest assessment de segunda consigna 'continua' del dia
@@ -129,9 +132,9 @@ a378a09  docs(journal): honestidad sobre --no-verify y comprension del usuario
 
 ## Sesión cerrada formalmente
 
-5 consignas respondidas, 15 commits pushados FF, 57 validaciones ejecutadas,
-2 hallazgos materiales (trap fix + README), 1 tarea dev-infra de valor
-(mise test-fast / test-cov), 0 deuda técnica, 0 contratos rotos.
+7 consignas respondidas, 16 commits pushados FF, 904/904 tests verde,
+file_scope.py cobertura 82% → 99%, 0 deuda tecnica, 0 contratos rotos,
+1 hallazgo colateral documentado (NO reparado por scope creep).
 
 El proyecto está en estado conocido, documentado y recuperable. El modo
 "esperando spec del operador" está formalmente declarado en CURRENT.md
