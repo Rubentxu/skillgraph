@@ -852,6 +852,19 @@ ejecuta de forma reproducible y emite `audits/architecture-debt-YYYY-MM-DD.md`
 con metricas homologas (cc, loc, nesting) al algoritmo usado en
 WI-21..WI-27. Ver D-61..D-66.
 
+### Cambios WI-29 / WI-30 (post-auditor, 2026-09-26 23:25..23:29)
+
+WI-29: cmd_run cc 22 -> 5 (D-67: patron _resolve_X_inputs +
+_reconcile_until_terminal + _resolve_X_summary). Tras WI-29 los
+hotspots publicos cc>=20 en src/ se reducen a 1: main() cc=43
+(excluido por D-64).
+
+WI-30: detect_changes cc 18 -> 8 (D-68: helpers puros
+tree-walking a module-level). Tras WI-30 los hotspots publicos
+cc>=15 en src/ quedan en 1: main() cc=50 (excluido por D-64).
+
+Politica D-66 satisfecha: cero hotspots publicos cc>=20.
+
 ### Cambios
 
 - `audits/audit_debt.py`: CLI `python audits/audit_debt.py`.
