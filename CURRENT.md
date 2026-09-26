@@ -103,6 +103,49 @@ Para reactivar la iniciativa o abrir una nueva:
 - Operador reabre con consigna explicita; el protocolo de
   reapertura esta en `INITIATIVE-CLOSED.md` seccion 8.
 
+## Reactivacion 2026-09-26 — STEWARDSHIP-DT-PRE-PUSH-HOOK cerrado
+
+Cierra el derivado #4 del audit `hooks-ci-2026-09-26.md`: **3ª capa
+de defensa operativa** — pre-push hook que ejecuta la suite completa
+de pytest antes del push, evitando push que rompan CI.
+
+**Hook** (`scripts/hooks/pre-push`, 62 LoC):
+- POSIX shell (mismo patron que pre-commit)
+- Toolchain-aware: `mise exec -- uv` con fallback a `uv`
+- Suite completa de pytest (~190s) via `run_in_toolchain`
+- Bypass via `HOOK_SKIP_PUSH_TESTS=1` (ramas experimentales)
+- Bug detectado y corregido: `pipe | tail -N` rompe exit code con
+  `set -e`; fix con `mktemp` + `if !` (mismo workaround que `.pipeline.kts`)
+- Prefijo `[pre-push]` en logs para identificarse
+
+**Tests** (`tests/test_hooks_system.py`):
+- `TestPrePushHook` (8 tests): existe/ejecutable/shebang/pytest/toolchain
+  dispatcher/HOOK_SKIP_PUSH_TESTS/prefijo [pre-push]/documenta proposito
+- `test_installer_copies_all_hooks` (1 test): e2e en tmpdir con git
+  init + installer real; verifica que pre-push NO queda excluido
+- Total: 9 tests nuevos
+
+**Verificacion e2e**:
+- Caso bypass OK: `HOOK_SKIP_PUSH_TESTS=1 bash scripts/hooks/pre-push`
+  -> `[pre-push] HOOK_SKIP_PUSH_TESTS=1 -> saltando suite completa`
+- Caso fallo (simulado): patch del hook para usar fake pytest exit 1
+  -> `[pre-push] OK` **NO** aparece, aborta con exit 1 + tail del log
+- Installer: copia pre-push ejecutable a `.git/hooks/pre-push` con chmod +x
+
+**Suite final**: **888/888 PASS** en 253s (879 baseline + 9 nuevos),
+0 regresiones.
+
+**Audit doc**: `audits/pre-push-hook-2026-09-26.md` (239 LoC):
+problema + 3 capas defensa + bug doc + 5 limitaciones + 4 derivados.
+
+Sin bump de release (dev-infra).
+
+**Defensa en profundidad completa**:
+```text
+Local:  pre-commit (lint+format+smoke) → pre-push (full) → push
+Remoto: CI (lint+format+full+coverage+cache uv)
+```
+
 ## Reactivacion 2026-09-26 — STEWARDSHIP-DT-CI-CACHE-COVERAGE cerrado
 
 Implementa derivados #2 (cache uv) y #3 (cobertura) del audit

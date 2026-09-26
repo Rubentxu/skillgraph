@@ -5458,3 +5458,55 @@ badge ~5 min, threshold enforcement ~3 min, cache pytest ~5 min,
 audit advisories upstream).
 
 Sin bump de release (CI infra). HEAD tras push: 8430232.
+
+## 2026-09-26 ~09:25 — STEWARDSHIP-DT-PRE-PUSH-HOOK
+
+Operador reabre en modo AUTO: "continua con el roadmap y sddk".
+Sigo el backlog opcional del checkpoint anterior, derivado #4 del
+audit `hooks-ci-2026-09-26.md`. **3ª capa de defensa operativa**:
+pre-push hook completo que ejecuta la suite completa de pytest
+antes del push.
+
+**Implementacion**: TDD rojo → verde → refactor.
+- 8 tests nuevos en `TestPrePushHook` (existe/ejecutable/shebang/
+  pytest/toolchain dispatcher/HOOK_SKIP_PUSH_TESTS/prefijo
+  [pre-push]/documenta proposito) + 1 test e2e
+  `test_installer_copies_all_hooks` (verifica que el installer
+  copia TODOS los hooks sin hardcodear nombres).
+- Hook POSIX de 62 LoC, toolchain-aware (`mise exec -- uv` con
+  fallback a `uv`), prefijo `[pre-push]`, bypass via
+  `HOOK_SKIP_PUSH_TESTS=1`.
+
+**Bug encontrado y corregido**: primera version del hook usaba
+`run_in_toolchain ... | tail -30 || { exit 1 }`. Con `set -e`, el
+exit code del pipe es el del ultimo comando (tail siempre 0),
+asi que la rama de error **nunca se ejecutaba** — el hook
+siempre exit 0 aunque pytest fallara. Mismo bug documentado en
+`.pipeline.kts` lineas 3-6. Fix: capturar output a tempfile via
+`mktemp` y mostrar tail solo en la rama de error con `if !`.
+
+**Verificacion e2e**:
+- Bypass OK: `HOOK_SKIP_PUSH_TESTS=1 bash scripts/hooks/pre-push`
+  -> imprime `[pre-push] HOOK_SKIP_PUSH_TESTS=1 -> saltando
+  suite completa` y sale con 0.
+- Fallo simulado: patch del hook para usar fake pytest exit 1 ->
+  imprime error claro + tail del log + sale con 1.
+- Installer: copia pre-push ejecutable a `.git/hooks/pre-push` con
+  chmod +x, verificado en tmpdir con git init.
+
+**Suite final**: 888/888 PASS en 253s (879 baseline + 9 nuevos).
+ruff check + format limpios. Cobertura: sin cambio (no toca src/).
+
+**Audit doc**: `audits/pre-push-hook-2026-09-26.md` (239 LoC):
+problema resuelto + 3 capas de defensa + bug doc + 5 limitaciones
++ 4 derivados opcionales (smart-cache por diff, skip por rama,
+coverage pre-push, paralelo con CI).
+
+**Limitacion reconocida**: el pre-push completo anade ~3 min por
+push. Trade-off vs seguridad. Si el operador lo considera
+excesivo, aplicar derivado #1 (smart-cache por diff) o #2 (skip
+por rama).
+
+**Commits**: <pendiente push>. Sin bump de release (dev-infra).
+**Defensa en profundidad completa**: pre-commit (lint+format+smoke)
++ pre-push (full) + CI (lint+format+full+coverage+cache uv).

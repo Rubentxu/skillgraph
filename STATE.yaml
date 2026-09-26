@@ -125,10 +125,30 @@ roadmap:
   current_stage: 7
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
-  next_milestone_gate: DT_CI_CACHE_COVERAGE_cerrado  # Cache uv + cobertura en CI, 879/879 PASS, cobertura total 83%
-  current_workitem: DT-CI-CACHE-COVERAGE
-  next_workitem: null  # ADR-0015 + format drift + hooks/CI + cache/coverage cerrados. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
+  next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
+  current_workitem: DT-PRE-PUSH-HOOK
+  next_workitem: null  # ADR-0015 + format drift + hooks/CI + cache/coverage + pre-push cerrados. Resto del backlog requiere spec operadora (E1, T5, T6, Gap A, Gap C)
   evolution_v2:
+    DT_PRE_PUSH_HOOK_cerrado:
+      fecha: 2026-09-26
+      ciclo: STEWARDSHIP-DT-PRE-PUSH-HOOK
+      commit: <pendiente>
+      pushed: 2026-09-26
+      criterios_cumplidos:
+        - "Pre-push hook (scripts/hooks/pre-push, 62 LoC): suite completa de pytest (~190s) antes del push, con prefijo [pre-push] y bypass HOOK_SKIP_PUSH_TESTS=1"
+        - "TestPrePushHook clase (8 tests en tests/test_hooks_system.py): existe/ejecutable/shebang/contiene pytest/toolchain dispatcher/HOOK_SKIP_PUSH_TESTS/prefijo [pre-push]/documenta proposito"
+        - "test_installer_copies_all_hooks (1 test): verifica que install-hooks.sh copia TODOS los hooks en scripts/hooks/ (e2e en tmpdir con git init)"
+        - "888/888 tests PASS post-cambio (879 baseline + 9 nuevos), 0 regresiones, suite en 253s"
+        - "ruff check + format limpios: 138 files already formatted"
+        - "E2E verificado end-to-end: caso bypass OK, caso fallo aborta con exit 1 + tail del log, installer copia pre-push ejecutable"
+        - "Bug detectado y corregido durante implementacion: pipe | tail -N rompe exit code con set -e; fix con mktemp + if ! (mismo workaround que .pipeline.kts)"
+        - "Audit dedicado en audits/pre-push-hook-2026-09-26.md (239 LoC): problema resuelto + 3 capas de defensa + bug doc + 5 limitaciones + 4 derivados opcionales"
+      notas:
+        - "Defensa en profundidad completa: 3 capas (pre-commit smoke + pre-push full + CI full + coverage)"
+        - "Limitacion reconocida: pre-push completo añade ~3min por push. Trade-off vs seguridad (evita push que rompan CI)"
+        - "Limitacion del entorno del agente: core.hooksPath=/home/rubentxu/.git-hooks/ globalmente; wrapper no commiteable necesario (mismo workaround que pre-commit)"
+        - "Sin bump de release (dev-infra, sin cambio de contrato observable)"
+      siguiente: "E1 Adapter real (spec operador), T5 Backups (spec operador), T6 Observabilidad (spec operador), Gap A (H9-Plan-B), Gap C (H9-Plan-B), smart-cache por diff (derivado opcional)"
     DT_CI_CACHE_COVERAGE_cerrado:
       fecha: 2026-09-26
       ciclo: STEWARDSHIP-DT-CI-CACHE-COVERAGE
