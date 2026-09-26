@@ -36,6 +36,12 @@ from skillgraph.core.errors import (
     ValidationError,
 )
 from skillgraph.domain.pack_loader import declare_types_from_pack
+from skillgraph.governance.backups import (
+    create_backup,
+    default_backup_dir,
+    list_backups,
+    restore_backup,
+)
 from skillgraph.governance.graph_expansion import (
     AddNode,
     AddTransition,
@@ -451,6 +457,39 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("init", help="Inicializa el directorio de datos raíz.")
 
+    # WI-15 (T5 Backups CLI).
+    bkp = sub.add_parser(
+        "backup",
+        help="Crea, lista o restaura backups del data-root.",
+    )
+    bkp_sub = bkp.add_subparsers(dest="backup_command", required=True)
+    bkp_sub.add_parser("create", help="Crea un backup .zip del data-root.")
+    bkp_list = bkp_sub.add_parser("list", help="Lista backups existentes.")
+    bkp_list.add_argument(
+        "--dir",
+        type=Path,
+        default=None,
+        help="Directorio de backups (default: <data-root>/backups).",
+    )
+    bkp_restore = bkp_sub.add_parser(
+        "restore", help="Restaura un backup .zip a un data-root destino."
+    )
+    bkp_restore.add_argument(
+        "backup",
+        type=Path,
+        help="Ruta al .zip de backup a restaurar.",
+    )
+    bkp_restore.add_argument(
+        "target",
+        type=Path,
+        help="Directorio destino (data-root) donde restaurar.",
+    )
+    bkp_restore.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Permite restaurar sobre un target no vacio.",
+    )
+
     proj = sub.add_parser("project", help="Gestión de proyectos.")
     proj_sub = proj.add_subparsers(dest="project_command", required=True)
     pc = proj_sub.add_parser("create", help="Crea un proyecto.")
@@ -826,6 +865,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "init":
             return cmd_init(args)
+        if args.command == "backup":
+            return cmd_backup(args)
         if args.command == "project" and args.project_command == "create":
             return cmd_project_create(args)
         if args.command == "project" and args.project_command == "list":
@@ -1666,6 +1707,56 @@ def cmd_pack_import(args: argparse.Namespace) -> int:
     else:
         print(payload)
     return EXIT_OK
+
+
+def cmd_backup_create(args: argparse.Namespace) -> int:
+    """Crea un backup .zip del data-root (WI-15)."""
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    output = create_backup(resolver.data_root)
+    print(f"Backup creado: {output}")
+    print(f"Tamano: {output.stat().st_size} bytes")
+    return EXIT_OK
+
+
+def cmd_backup_list(args: argparse.Namespace) -> int:
+    """Lista backups disponibles en el directorio configurado."""
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    backup_dir = args.dir if args.dir is not None else default_backup_dir(resolver.data_root)
+    infos = list_backups(backup_dir)
+    if not infos:
+        print(f"Sin backups en {backup_dir}")
+        return EXIT_OK
+    print(f"Backups en {backup_dir}:")
+    for info in infos:
+        print(
+            f"  {info.relpath}  {info.size_bytes}B  "
+            f"tenants={info.tenant_count} projects={info.project_count}  "
+            f"created={info.created_at}"
+        )
+    return EXIT_OK
+
+
+def cmd_backup_restore(args: argparse.Namespace) -> int:
+    """Restaura un backup .zip a un data-root destino."""
+    target = restore_backup(args.backup, args.target, overwrite=args.overwrite)
+    print(f"Backup restaurado en: {target}")
+    return EXIT_OK
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    """Dispatcher del sub-comando `backup` (WI-15)."""
+    sub = getattr(args, "backup_command", None)
+    if sub == "create":
+        return cmd_backup_create(args)
+    if sub == "list":
+        return cmd_backup_list(args)
+    if sub == "restore":
+        return cmd_backup_restore(args)
+    print(
+        "ERROR: sub-comando de backup requerido (create|list|restore).",
+        file=sys.stderr,
+    )
+    return EXIT_VALIDATION
 
 
 def _build_adapter(args: argparse.Namespace, fixtures_root: Path) -> Any:

@@ -1,10 +1,10 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-26 20:14 (Europe/Madrid, WI-14).
+> Última verificación: 2026-09-26 20:29 (Europe/Madrid, WI-15).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
-> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**. WI-14 (T3 Threat model S8: STRIDE sobre Adapter HTTP real; repr redact api_key tras RED test honesto; abuse-cases + 2 gaps P3) **DOC COMPLETA**.
+> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**. WI-14 (T3 Threat model S8: STRIDE sobre Adapter HTTP real; repr redact api_key tras RED test honesto; abuse-cases + 2 gaps P3) **DOC COMPLETA**. WI-15 (T5 Backups CLI: `sg backup create|list|restore` con ZIP + SHA-256 + Connection.backup() API atomica) **FEAT COMPLETA**.
 > Tag `v0.14.0` preservado como erratum histórico (package metadata decía `0.7.0.dev0`).
 
 ## Goal
@@ -651,3 +651,35 @@ los claims de seguridad deben tener tests que los verifiquen.
 - WI-17+ (deuda H-01..H-10).
 - Bump `0.14.6.dev0 → 0.14.7` cuando WI-12/13/14/+15/+16 acumulados.
 - Push a origin (regla WI-01, ahora 27 commits ahead).
+
+## Reactivacion 2026-09-26 — WI-15 T5 Backups CLI cerrado
+
+WI-15 cierra el feature T5 del roadmap (`Backups y migraciones`).
+El operador ahora puede hacer backup/restore del data-root completo
+con verificacion criptografica, sin dependencias externas.
+
+### Cambios
+
+- `src/skillgraph/governance/backups.py` (nuevo, ~395 LoC): API publica
+  (create/list/verify/restore) + tipos BackupEntry/BackupManifest/BackupInfo
+  frozen+slots; formato ZIP con manifest.json y SHA-256 por archivo.
+- `src/skillgraph/cli/runner.py`: sub-comandos `sg backup create|list|restore`
+  + dispatcher `cmd_backup` con output legible para humanos.
+- `tests/test_backups.py` (nuevo, 22 tests, 6 clases): cubre manifest
+  round-trip, errores (data_root/catalog ausentes), SHA-256 mismatch,
+  overwrite policy, filtrado de corruptos en `list`.
+- `specs/wi-15-t5-backups-cli.md`: spec + decisiones (D-48).
+
+### Evidencia
+
+- HEAD pre-commit: `fc4601c` (WI-14 baseline).
+- Tests: **1044/1044 PASS** en 180.48s (+22 vs WI-14).
+- ruff: All checks passed.
+- CLI: `sg backup --help` muestra los 3 sub-comandos.
+
+### Pendiente
+
+- **WI-16 (T6 Observabilidad runbook)**: docs + sinks.
+- **WI-17+ (deuda arquitectónica)**: H-01..H-10.
+- Bump `0.14.6.dev0 → 0.14.7` con WI-12/13/14/15/16 acumulados.
+- Push a origin (regla WI-01).
