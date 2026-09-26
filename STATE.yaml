@@ -541,7 +541,7 @@ tests:
   total: 927
   passed: 927
   duration_s: 156   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-02a; 927 = 920 baseline post-WI-01 + 7 nuevos: test_persistence_ports)
-  package_version: "0.14.2.dev0"   # WI-02a work; bump a "0.14.2" puro en commit de release tras CI verde
+  package_version: "0.14.2"   # WI-02a release; tag v0.14.2 sobre este commit
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"

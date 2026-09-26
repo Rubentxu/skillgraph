@@ -49,7 +49,7 @@ aplicado: T3 Threat model (ADR-0015 + tests de attestation + audit).
 
 - HEAD: `b1bb264` (docs/changelog+journal trazabilidad ciclo §1.2 compliance). WI-01 en curso sobre este HEAD.
 - Tests: **927/927 PASS** en 155.73s (`uv run pytest --no-header -q`; baseline post-WI-02a). Incremento de +7 nuevos: `tests/test_persistence_ports.py` (5 structural tests + 2 runtime_checkable).
-- Package version: `0.14.2.dev0` (work WI-02a); `0.14.2` (release tras CI verde + tag `v0.14.2`). Tags previos: `v0.14.0` (erratum histórico, d50f666), `v0.14.1` (WI-01 release, e2cdc53).
+- Package version: `0.14.2` (release WI-02a). Tags previos: `v0.14.0` (erratum histórico, d50f666), `v0.14.1` (WI-01 release, e2cdc53), `v0.14.2` (WI-02a release).
 - CI dominante: local `pipelinek` (`.pipeline.kts`). GitHub Actions queda como notificación informativa (ver AGENTS.md §CI Local Obligatorio).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
