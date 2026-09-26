@@ -140,13 +140,14 @@ def traverse_invalidations(
 
 
 def _claims_using_evidence(controller: KnowledgeController, evidence_id: str) -> Iterator[ClaimID]:
-    """Yield ClaimID de las claims que referencian una evidence."""
-    rows = controller.storage._conn.execute(
-        "SELECT claim_id FROM claim_evidence WHERE evidence_id = ?",
-        (evidence_id,),
-    ).fetchall()
-    for r in rows:
-        yield ClaimID(r["claim_id"])
+    """Yield ClaimID de las claims que referencian una evidence.
+
+    WI-02b: delega en ``KnowledgeRepository.list_claims_using_evidence``
+    en vez de acceder a ``storage._conn``.
+    """
+    rows = controller.knowledge.list_claims_using_evidence(evidence_id=evidence_id)
+    for cid in rows:
+        yield ClaimID(cid)
 
 
 # ---------------------------------------------------------------------------
@@ -174,15 +175,14 @@ def invalidate_from_source(
         return []
 
     # Marcar stale.
-    for cid in result.invalidated_claim_ids:
-        controller.storage._conn.execute(
-            "UPDATE claims SET stale = 1 WHERE claim_id = ? AND tenant_id = ? AND project_id = ?",
-            (cid, controller.tenant_id, controller.project_id),
-        )
-    controller.storage._conn.commit()
+    controller.knowledge.mark_claims_stale(
+        tenant_id=controller.tenant_id,
+        project_id=controller.project_id,
+        claim_ids=tuple(result.invalidated_claim_ids),
+    )
 
     # Emitir event.
-    controller.storage.record_event(
+    controller.knowledge.record_event(
         tenant_id=controller.tenant_id,
         project_id=controller.project_id,
         event_id=_new_event_id("KnowledgeInvalidated"),
@@ -218,28 +218,17 @@ def refresh_source(
     """
     controller.get_source(source_id=source_id)
 
-    # Buscar Claims stale con la nueva revision y reactivarlas.
-    rows = controller.storage._conn.execute(
-        """
-        UPDATE claims
-        SET stale = 0
-        WHERE tenant_id = ? AND project_id = ?
-          AND source_id = ? AND checked_at_revision = ?
-          AND stale = 1
-        RETURNING claim_id
-        """,
-        (
-            controller.tenant_id,
-            controller.project_id,
-            source_id,
-            new_revision,
-        ),
-    ).fetchall()
-    controller.storage._conn.commit()
+    # WI-02b: delega en KnowledgeRepository.reactivate_claims_with_revision
+    # (UPDATE ... RETURNING en una sola transaccion, sin _conn directo).
+    reactivated = controller.knowledge.reactivate_claims_with_revision(
+        tenant_id=controller.tenant_id,
+        project_id=controller.project_id,
+        source_id=source_id,
+        new_revision=new_revision,
+    )
+    claim_ids: list[ClaimID] = [ClaimID(cid) for cid in reactivated]
 
-    claim_ids: list[ClaimID] = [ClaimID(r["claim_id"]) for r in rows]
-
-    controller.storage.record_event(
+    controller.knowledge.record_event(
         tenant_id=controller.tenant_id,
         project_id=controller.project_id,
         event_id=_new_event_id("KnowledgeRefreshed"),
@@ -259,31 +248,13 @@ def list_stale_claims(
     controller: KnowledgeController,
 ) -> Sequence[Claim]:
     """Lista todas las Claims stale del (tenant, project)."""
-    import json as _json
 
-    from skillgraph.platform.storage import _row_to_claim  # type: ignore[attr-defined]
-
-    rows = controller.storage._conn.execute(
-        """
-        SELECT c.claim_id, c.subject_entity_id, c.predicate, c.object_literal_json,
-               c.source_id, c.extraction_method, c.extractor_version,
-               c.checked_at_revision, c.stale
-        FROM claims c
-        WHERE c.tenant_id = ? AND c.project_id = ? AND c.stale = 1
-        ORDER BY c.checked_at_revision DESC
-        """,
-        (controller.tenant_id, controller.project_id),
-    ).fetchall()
-
-    out: list[Claim] = []
-    for row in rows:
-        ev_rows = controller.storage._conn.execute(
-            "SELECT evidence_id FROM claim_evidence WHERE claim_id = ?",
-            (row["claim_id"],),
-        ).fetchall()
-        ev_ids = [r["evidence_id"] for r in ev_rows]
-        out.append(_row_to_claim(row, ev_ids, _json))  # type: ignore[arg-type]
-    return out
+    # WI-02b: delega en KnowledgeRepository.list_stale_claims
+    # (LEFT JOIN pre-cargado, sin _conn directo, sin patron N+1).
+    return controller.knowledge.list_stale_claims(
+        tenant_id=controller.tenant_id,
+        project_id=controller.project_id,
+    )
 
 
 __all__ = [

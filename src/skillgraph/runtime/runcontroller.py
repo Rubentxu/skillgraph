@@ -1125,7 +1125,7 @@ class RunController:
         if recipe is None:
             return HandoffKnowledge(recipe_ref=recipe_ref, included=())
         kctl = KnowledgeController(
-            storage=cast(Storage, self._runs),
+            knowledge=cast(Storage, self._runs),
             tenant_id=tenant_id,
             project_id=project_id,
         )

@@ -49,7 +49,7 @@ from skillgraph.knowledge.graph import (
     SourceID,
     TraceID,
 )
-from skillgraph.platform.storage import Storage
+from skillgraph.platform.ports import KnowledgeRepository
 
 # Namespace estable para UUIDv5: cualquier texto puede ser, pero usamos
 # un UUID fijo (no aleatorio por proceso) para que el mismo contenido
@@ -91,13 +91,18 @@ def make_finding_id(
 class KnowledgeController:
     """API de alto nivel para Source/Entity/Claim/Evidence/Finding/OutcomeTrace.
 
-    Recibe `storage`, `tenant_id`, `project_id` por inyeccion. Esto permite:
-    - Mockear Storage en tests sin SQLite.
+    Recibe `knowledge` (Protocol), `tenant_id`, `project_id` por inyeccion.
+    Esto permite:
+    - Mockear el adapter en tests sin SQLite.
     - Reutilizar el mismo controller con distintos `(tenant, project)`.
     - Testeo determinista con fixtures inyectados.
+
+    WI-02b: la dependencia deja de ser ``storage: Storage`` y pasa a
+    ser ``knowledge: KnowledgeRepository`` (Protocol estructural). El
+    controller ya no accede a ``storage._conn`` (cumple AC-5).
     """
 
-    storage: Storage
+    knowledge: KnowledgeRepository
     tenant_id: str
     project_id: str
 
@@ -106,7 +111,7 @@ class KnowledgeController:
     def register_source(self, *, source: Source) -> SourceID:
         """Registra una Source. Emite `StaleKnowledgeWarning` si la source
         ya existe con `freshness != 'fresh'` (re-registro de source stale)."""
-        existing = self.storage.get_source(
+        existing = self.knowledge.get_source(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             source_id=source.source_id,
@@ -117,7 +122,7 @@ class KnowledgeController:
                 StaleKnowledgeWarning,
                 stacklevel=2,
             )
-        self.storage.register_source(
+        self.knowledge.register_source(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             source=source,
@@ -126,7 +131,7 @@ class KnowledgeController:
 
     def get_source(self, *, source_id: SourceID) -> Source:
         """Recupera una Source. `UnknownSourceError` si no existe."""
-        result = self.storage.get_source(
+        result = self.knowledge.get_source(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             source_id=source_id,
@@ -138,7 +143,7 @@ class KnowledgeController:
     def mark_source_stale(self, *, source_id: SourceID) -> None:
         """Marca una Source como stale. Lanza UnknownSourceError si no existe."""
         existing = self.get_source(source_id=source_id)
-        self.storage.update_source_freshness(
+        self.knowledge.update_source_freshness(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             source_id=existing.source_id,
@@ -148,7 +153,7 @@ class KnowledgeController:
     def mark_source_fresh(self, *, source_id: SourceID) -> None:
         """Marca una Source como fresh."""
         existing = self.get_source(source_id=source_id)
-        self.storage.update_source_freshness(
+        self.knowledge.update_source_freshness(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             source_id=existing.source_id,
@@ -159,7 +164,7 @@ class KnowledgeController:
 
     def upsert_entity(self, *, entity: Entity) -> EntityID:
         """Inserta o reemplaza una Entity. Devuelve su entity_id."""
-        self.storage.upsert_entity(
+        self.knowledge.upsert_entity(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             entity=entity,
@@ -168,7 +173,7 @@ class KnowledgeController:
 
     def get_entity(self, *, entity_id: EntityID) -> Entity:
         """Recupera una Entity. UnknownEntityError si no existe."""
-        result = self.storage.get_entity(
+        result = self.knowledge.get_entity(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             entity_id=entity_id,
@@ -184,20 +189,12 @@ class KnowledgeController:
         stable_key) por tenant/project garantiza unicidad).
         """
 
-        row = self.storage._conn.execute(
-            """
-            SELECT * FROM entities
-            WHERE tenant_id = ? AND project_id = ?
-              AND kind = ? AND stable_key = ?
-            """,
-            (self.tenant_id, self.project_id, kind, stable_key),
-        ).fetchone()
-        if row is None:
-            return None
-        return Entity(
-            entity_id=row["entity_id"],
-            kind=row["kind"],
-            stable_key=row["stable_key"],
+        # WI-02b: delega en el Protocol KnowledgeRepository.find_entity.
+        return self.knowledge.find_entity(
+            tenant_id=self.tenant_id,
+            project_id=self.project_id,
+            kind=kind,
+            stable_key=stable_key,
         )
 
     # ----- Evidences -----
@@ -205,7 +202,7 @@ class KnowledgeController:
     def record_evidence(self, *, evidence: Evidence) -> EvidenceID:
         """Registra una Evidence. Convierte FK violation en UnknownSourceError."""
         try:
-            self.storage.record_evidence(
+            self.knowledge.record_evidence(
                 tenant_id=self.tenant_id,
                 project_id=self.project_id,
                 evidence=evidence,
@@ -219,7 +216,7 @@ class KnowledgeController:
 
     def get_evidences_for_claim(self, *, claim_id: ClaimID) -> tuple[Evidence, ...]:
         """Devuelve las Evidences asociadas a un Claim."""
-        return self.storage.get_evidences_for_claim(
+        return self.knowledge.get_evidences_for_claim(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             claim_id=claim_id,
@@ -314,7 +311,7 @@ class KnowledgeController:
             except UnknownSourceError:
                 source_is_stale = False
 
-        evidences = self.storage.list_evidences_for_source(
+        evidences = self.knowledge.list_evidences_for_source(
             source_id=source_id,
         )
         sigs: list[FileSignature] = []
@@ -405,11 +402,8 @@ class KnowledgeController:
                 sources_in_scope.append(source_id)
             except UnknownSourceError:
                 # Distinguir: source-en-otro-proyecto vs no-existe.
-                cross = self.storage._conn.execute(
-                    "SELECT 1 FROM sources WHERE source_id = ? LIMIT 1",
-                    (source_id,),
-                ).fetchone()
-                if cross is not None:
+                cross = self.knowledge.source_exists_anywhere(source_id=source_id)
+                if cross:
                     # Existe en OTRO tenant/project: rechazo explicito.
                     # El mensaje NO revela el source_id (regla E2E-08:
                     # no filtrar contenido de otro proyecto).
@@ -462,7 +456,7 @@ class KnowledgeController:
                 stale=claim.stale,
             )
         try:
-            self.storage.record_claim(
+            self.knowledge.record_claim(
                 tenant_id=self.tenant_id,
                 project_id=self.project_id,
                 claim=claim_to_record,
@@ -475,7 +469,7 @@ class KnowledgeController:
             msg = str(exc)
             if "FOREIGN KEY" in msg:
                 if (
-                    self.storage.get_entity(
+                    self.knowledge.get_entity(
                         tenant_id=self.tenant_id,
                         project_id=self.project_id,
                         entity_id=claim.subject_entity_id,
@@ -491,7 +485,7 @@ class KnowledgeController:
 
     def get_claim(self, *, claim_id: ClaimID) -> Claim:
         """Recupera un Claim. UnknownClaimError si no existe."""
-        result = self.storage.get_claim(
+        result = self.knowledge.get_claim(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             claim_id=claim_id,
@@ -502,7 +496,7 @@ class KnowledgeController:
 
     def list_claims_for_source(self, *, source_id: SourceID) -> list[Claim]:
         """Lista Claims asociados a una Source."""
-        return self.storage.list_claims_for_source(
+        return self.knowledge.list_claims_for_source(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             source_id=source_id,
@@ -510,37 +504,13 @@ class KnowledgeController:
 
     def list_claims_for_subject(self, *, subject_entity_id: EntityID) -> list[Claim]:
         """Lista Claims cuyo subject_entity_id coincide."""
-        import json
 
-        rows = self.storage._conn.execute(
-            """
-            SELECT * FROM claims
-            WHERE tenant_id = ? AND project_id = ? AND subject_entity_id = ?
-            ORDER BY checked_at_revision DESC
-            """,
-            (self.tenant_id, self.project_id, subject_entity_id),
-        ).fetchall()
-        out: list[Claim] = []
-        for row in rows:
-            ev_rows = self.storage._conn.execute(
-                "SELECT evidence_id FROM claim_evidence WHERE claim_id = ?",
-                (row["claim_id"],),
-            ).fetchall()
-            out.append(
-                Claim(
-                    claim_id=row["claim_id"],
-                    subject_entity_id=row["subject_entity_id"],
-                    predicate=row["predicate"],
-                    object_literal=json.loads(row["object_literal_json"]),
-                    source_id=row["source_id"],
-                    evidence_ids=tuple(r["evidence_id"] for r in ev_rows),
-                    extraction_method=row["extraction_method"],
-                    extractor_version=row["extractor_version"],
-                    checked_at_revision=row["checked_at_revision"],
-                    stale=bool(row["stale"]),
-                )
-            )
-        return out
+        # WI-02b: delega en el Protocol; ya carga evidence_ids sin N+1.
+        return self.knowledge.list_claims_for_subject(
+            tenant_id=self.tenant_id,
+            project_id=self.project_id,
+            subject_entity_id=subject_entity_id,
+        )
 
     # ----- Findings -----
 
@@ -563,7 +533,7 @@ class KnowledgeController:
                 result=finding.result,
                 valid_until_revision=finding.valid_until_revision,
             )
-        self.storage.record_finding(
+        self.knowledge.record_finding(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             finding=f,
@@ -574,7 +544,7 @@ class KnowledgeController:
 
     def record_trace(self, *, trace: OutcomeTrace) -> TraceID:
         """Registra un OutcomeTrace y sus enlaces preservando orden."""
-        self.storage.record_trace(
+        self.knowledge.record_trace(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             trace=trace,
@@ -590,7 +560,7 @@ class KnowledgeController:
         position: int,
     ) -> None:
         """Adjunta un enlace adicional a un trace."""
-        self.storage.link_trace(
+        self.knowledge.link_trace(
             tenant_id=self.tenant_id,
             project_id=self.project_id,
             trace_id=trace_id,

@@ -450,7 +450,7 @@ class ContextController:
         H9-Coverage-11: delega en Storage.list_claims_by_predicate
         (cierra el sitio SQL directo que tenia en la linea 297-303).
         """
-        rows = ctrl.storage.list_claims_by_predicate(  # type: ignore[attr-defined]
+        rows = ctrl.knowledge.list_claims_by_predicate(  # type: ignore[attr-defined]
             tenant_id=ctrl.tenant_id,  # type: ignore[attr-defined]
             project_id=ctrl.project_id,  # type: ignore[attr-defined]
             predicate=value,
@@ -475,7 +475,7 @@ class ContextController:
         if label:
             # Encontrar evidence para esa source.
             # H9-Coverage-11: delega en Storage.list_evidences_for_source.
-            evid_rows = ctrl.storage.list_evidences_for_source(  # type: ignore[attr-defined]
+            evid_rows = ctrl.knowledge.list_evidences_for_source(  # type: ignore[attr-defined]
                 source_id=src.source_id,
             )
             out.extend(evidence_row_to_resource(ev, value) for ev in evid_rows)
@@ -516,7 +516,7 @@ class OutcomeTracer:
         # Claim refs via runtime_events del run.
         # H9-Coverage-11: delega en Storage.list_resource_refs_for_run con
         # kind="claim" (cierra el sitio SQL directo que tenia en linea 402-410).
-        rows = ctrl.storage.list_resource_refs_for_run(  # type: ignore[attr-defined]
+        rows = ctrl.knowledge.list_resource_refs_for_run(  # type: ignore[attr-defined]
             tenant_id=ctrl.tenant_id,  # type: ignore[attr-defined]
             project_id=ctrl.project_id,  # type: ignore[attr-defined]
             run_id=run_id,
@@ -526,7 +526,7 @@ class OutcomeTracer:
         # Evidence refs analogamente.
         # H9-Coverage-11: delega en Storage.list_resource_refs_for_run con
         # kind="evidence" (cierra el sitio SQL directo que tenia en linea 413-421).
-        ev_rows = ctrl.storage.list_resource_refs_for_run(  # type: ignore[attr-defined]
+        ev_rows = ctrl.knowledge.list_resource_refs_for_run(  # type: ignore[attr-defined]
             tenant_id=ctrl.tenant_id,  # type: ignore[attr-defined]
             project_id=ctrl.project_id,  # type: ignore[attr-defined]
             run_id=run_id,

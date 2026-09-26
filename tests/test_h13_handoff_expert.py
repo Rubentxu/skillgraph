@@ -124,7 +124,7 @@ def storage(tmp_path: Path) -> Storage:
 
 @pytest.fixture
 def controller(storage: Storage) -> KnowledgeController:
-    return KnowledgeController(storage=storage, tenant_id="t1", project_id="p1")
+    return KnowledgeController(knowledge=storage, tenant_id="t1", project_id="p1")
 
 
 @pytest.fixture

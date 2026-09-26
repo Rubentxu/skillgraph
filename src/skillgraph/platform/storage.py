@@ -932,6 +932,106 @@ class Storage:
             out.append(_row_to_claim(row, [r["evidence_id"] for r in ev_rows], json))
         return out
 
+    # ---- WI-02b: ports de mantenimiento (invalidation, refresh) ----
+
+    def list_claims_using_evidence(self, *, evidence_id: str) -> tuple[str, ...]:
+        """Tupla de claim_ids que referencian la evidence."""
+        rows = self._conn.execute(
+            "SELECT claim_id FROM claim_evidence WHERE evidence_id = ?",
+            (evidence_id,),
+        ).fetchall()
+        return tuple(r["claim_id"] for r in rows)
+
+    def mark_claims_stale(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        claim_ids: tuple[str, ...],
+    ) -> None:
+        """Bulk UPDATE: marca stale=1 en una sola transaccion."""
+        if not claim_ids:
+            return
+        placeholders = ",".join("?" * len(claim_ids))
+        with self._tx() as cur:
+            cur.execute(
+                f"""
+                UPDATE claims
+                SET stale = 1
+                WHERE tenant_id = ? AND project_id = ?
+                  AND claim_id IN ({placeholders})
+                """,
+                (tenant_id, project_id, *claim_ids),
+            )
+
+    def reactivate_claims_with_revision(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        source_id: str,
+        new_revision: str,
+    ) -> tuple[str, ...]:
+        """Bulk UPDATE ... RETURNING: reactiva claims con la nueva revision."""
+        with self._tx() as cur:
+            cur.execute(
+                """
+                UPDATE claims
+                SET stale = 0
+                WHERE tenant_id = ? AND project_id = ?
+                  AND source_id = ? AND checked_at_revision = ?
+                  AND stale = 1
+                RETURNING claim_id
+                """,
+                (tenant_id, project_id, source_id, new_revision),
+            )
+            rows = cur.fetchall()
+        return tuple(r["claim_id"] for r in rows)
+
+    def list_stale_claims(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+    ) -> tuple[Any, ...]:
+        """Lista Claims stale con LEFT JOIN pre-cargado (sin N+1)."""
+        import json as _json
+
+        rows = self._conn.execute(
+            """
+            SELECT c.claim_id, c.subject_entity_id, c.predicate,
+                   c.object_literal_json, c.source_id,
+                   c.extraction_method, c.extractor_version,
+                   c.checked_at_revision, c.stale,
+                   GROUP_CONCAT(ce.evidence_id) AS evidence_ids_csv
+            FROM claims c
+            LEFT JOIN claim_evidence ce ON ce.claim_id = c.claim_id
+            WHERE c.tenant_id = ? AND c.project_id = ? AND c.stale = 1
+            GROUP BY c.claim_id
+            ORDER BY c.checked_at_revision DESC
+            """,
+            (tenant_id, project_id),
+        ).fetchall()
+        out: list[Claim] = []
+        for row in rows:
+            ev_csv = row["evidence_ids_csv"] or ""
+            ev_ids = tuple(ev_csv.split(",")) if ev_csv else ()
+            out.append(
+                Claim(
+                    claim_id=row["claim_id"],
+                    subject_entity_id=row["subject_entity_id"],
+                    predicate=row["predicate"],
+                    object_literal=_json.loads(row["object_literal_json"]),
+                    source_id=row["source_id"],
+                    evidence_ids=ev_ids,
+                    extraction_method=row["extraction_method"],
+                    extractor_version=row["extractor_version"],
+                    checked_at_revision=row["checked_at_revision"],
+                    stale=bool(row["stale"]),
+                )
+            )
+        return tuple(out)
+
     # ---- H9-Coverage-11: lecturas puras para ContextController (ADR-0014)
     #
     # Estas 3 APIs cierran los 4 sitios `_conn.execute` directos que

@@ -422,7 +422,7 @@ def _seed_knowledge(data_root: Path, *, source_id: str = "local:src/foo.py") -> 
         f"data_root = resolve_data_root(Path({str(data_root)!r}));"
         "db = project_db_path(data_root, 'demo', DEFAULT_TENANT);"
         "s = Storage(db);"
-        "ctl = KnowledgeController(storage=s, tenant_id=DEFAULT_TENANT, project_id='demo');"
+        "ctl = KnowledgeController(knowledge=s, tenant_id=DEFAULT_TENANT, project_id='demo');"
         f"ctl.register_source(source=Source(source_id={source_id!r}, kind='local_file', content_hash='h', locator={{'path': 'src/foo.py'}}, git_commit_sha=None, git_tree_sha=None, working_tree_status=None, checked_at='2026-01-01T00:00:00Z', freshness='fresh'));"
         "ctl.upsert_entity(entity=Entity(entity_id='file:src/foo.py', kind='file', stable_key='src/foo.py'));"
         "ctl.record_claim(claim=Claim(claim_id='c1', subject_entity_id='file:src/foo.py', predicate='line_count', object_literal=42, source_id='local:src/foo.py', extraction_method='manual', extractor_version='skillgraph-rules/0.1.0', checked_at_revision='rev1'));"

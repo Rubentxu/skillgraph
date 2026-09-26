@@ -41,7 +41,7 @@ def _entity_id(name: str = "ent1") -> EntityID:
 def _build(tmp_path: Path) -> tuple[KnowledgeController, Storage]:
     storage = Storage(tmp_path / "store.sqlite")
     # El schema se inicializa al instanciar Storage (open -> CREATE TABLE).
-    ctl = KnowledgeController(storage=storage, tenant_id=TENANT, project_id=PROJECT)
+    ctl = KnowledgeController(knowledge=storage, tenant_id=TENANT, project_id=PROJECT)
     return ctl, storage
 
 

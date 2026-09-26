@@ -77,7 +77,7 @@ def _ent(eid: str = "file:src/foo.py") -> Entity:
 
 def test_register_and_get_source_roundtrip(tmp_path: Path) -> None:
     """Source->register->get OK."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src())
     got = ctl.get_source(source_id="local:src/foo.py")
     assert got.source_id == "local:src/foo.py"
@@ -86,7 +86,7 @@ def test_register_and_get_source_roundtrip(tmp_path: Path) -> None:
 
 def test_upsert_entity_returns_existing_id(tmp_path: Path) -> None:
     """upsert_entity idempotente: devuelve el mismo entity_id."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     e = _ent()
     id1 = ctl.upsert_entity(entity=e)
     id2 = ctl.upsert_entity(entity=e)
@@ -97,7 +97,7 @@ def test_upsert_entity_returns_existing_id(tmp_path: Path) -> None:
 
 def test_record_claim_returns_generated_id(tmp_path: Path) -> None:
     """Claim con claim_id='' genera un ClaimID formato `claim-{uuid5}`."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src())
     ctl.upsert_entity(entity=_ent())
     cid = ctl.record_claim(
@@ -123,7 +123,7 @@ def test_record_claim_returns_generated_id(tmp_path: Path) -> None:
 
 def test_find_entity_by_kind_and_key(tmp_path: Path) -> None:
     """find_entity busca sin saber el entity_id."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.upsert_entity(entity=_ent("file:src/foo.py"))
     got = ctl.find_entity(kind="file", stable_key="src/foo.py")
     assert got is not None
@@ -133,7 +133,7 @@ def test_find_entity_by_kind_and_key(tmp_path: Path) -> None:
 
 def test_record_trace_with_links_preserves_order(tmp_path: Path) -> None:
     """record_trace y link_trace preservan orden via position."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src())
     tid = ctl.record_trace(
         trace=OutcomeTrace(
@@ -148,7 +148,7 @@ def test_record_trace_with_links_preserves_order(tmp_path: Path) -> None:
     assert tid == "tr1"
     # Aniadir enlaces preservando orden.
     ctl.link_trace(trace_id="tr1", link_kind="claim", link_id="c3", position=2)
-    rows = ctl.storage._conn.execute(
+    rows = ctl.knowledge._conn.execute(
         "SELECT link_id, position FROM outcome_trace_links "
         "WHERE trace_id = ? AND link_kind = 'claim' ORDER BY position",
         ("tr1",),
@@ -179,14 +179,14 @@ def test_register_invalid_source_raises_invalid_source_error() -> None:
 
 def test_get_unknown_source_raises(tmp_path: Path) -> None:
     """get_source lanza UnknownSourceError si no existe."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     with pytest.raises(UnknownSourceError):
         ctl.get_source(source_id="missing")
 
 
 def test_record_claim_for_unknown_entity_raises(tmp_path: Path) -> None:
     """FK violation subject_entity_id -> UnknownEntityError."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src())
     # NO creamos entity.
     with pytest.raises(UnknownEntityError):
@@ -204,7 +204,7 @@ def test_record_claim_for_unknown_entity_raises(tmp_path: Path) -> None:
 
 def test_record_evidence_for_unknown_source_raises(tmp_path: Path) -> None:
     """FK violation source_id -> UnknownSourceError."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     with pytest.raises(UnknownSourceError):
         ctl.record_evidence(
             evidence=Evidence(
@@ -219,7 +219,7 @@ def test_record_evidence_for_unknown_source_raises(tmp_path: Path) -> None:
 
 def test_get_unknown_claim_raises(tmp_path: Path) -> None:
     """get_claim lanza UnknownClaimError si no existe."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     with pytest.raises(UnknownClaimError):
         ctl.get_claim(claim_id="missing")
 
@@ -231,16 +231,16 @@ def test_get_unknown_claim_raises(tmp_path: Path) -> None:
 
 def test_register_source_idempotent(tmp_path: Path) -> None:
     """Registrar misma source dos veces no duplica."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src())
     ctl.register_source(source=_src())
-    n = ctl.storage._conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+    n = ctl.knowledge._conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
     assert n == 1
 
 
 def test_record_claim_idempotent_on_full_tuple(tmp_path: Path) -> None:
     """Mismo (subject, predicate, source, revision) -> mismo ClaimID."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src())
     ctl.upsert_entity(entity=_ent())
     base = dict(
@@ -257,7 +257,7 @@ def test_record_claim_idempotent_on_full_tuple(tmp_path: Path) -> None:
     )
     # Misma tupla natural -> mismo ClaimID determinista.
     assert id1 == id2
-    n = ctl.storage._conn.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
+    n = ctl.knowledge._conn.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
     assert n == 1  # solo 1 row (INSERT OR IGNORE)
 
 
@@ -269,7 +269,7 @@ def test_record_claim_idempotent_on_full_tuple(tmp_path: Path) -> None:
 def test_controller_uses_injected_storage(tmp_path: Path) -> None:
     """Storage real inyectado: el controller lo usa via interfaz."""
     storage = _storage(tmp_path)
-    ctl = KnowledgeController(storage=storage, tenant_id="t1", project_id="p1")
+    ctl = KnowledgeController(knowledge=storage, tenant_id="t1", project_id="p1")
     # Cambiar el storage en runtime NO es posible (frozen dataclass).
     # Pero verificamos que el controller escribe en el storage dado.
     ctl.register_source(source=_src(sid="git:abc:src/x.py"))
@@ -285,8 +285,8 @@ def test_controller_uses_injected_storage(tmp_path: Path) -> None:
 def test_controller_isolates_tenants(tmp_path: Path) -> None:
     """Dos KnowledgeController con distinto tenant_id no se ven entre si."""
     storage = _storage(tmp_path)
-    ctl_a = KnowledgeController(storage=storage, tenant_id="tenant_a", project_id="p")
-    ctl_b = KnowledgeController(storage=storage, tenant_id="tenant_b", project_id="p")
+    ctl_a = KnowledgeController(knowledge=storage, tenant_id="tenant_a", project_id="p")
+    ctl_b = KnowledgeController(knowledge=storage, tenant_id="tenant_b", project_id="p")
     ctl_a.register_source(source=_src(sid="local:a.py"))
     # tenant_b NO ve la source de tenant_a.
     with pytest.raises(UnknownSourceError):
@@ -309,7 +309,7 @@ def test_register_stale_source_emits_warning(tmp_path: Path) -> None:
     El mensaje lo expone para que el operador sepa que esta re-registrando
     el mismo source con un estado stale.
     """
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src(freshness="stale"))
     with pytest.warns(StaleKnowledgeWarning, match=r"re-registrando source stale:"):
         ctl.register_source(source=_src(freshness="stale"))
@@ -317,7 +317,7 @@ def test_register_stale_source_emits_warning(tmp_path: Path) -> None:
 
 def test_mark_source_stale_then_fresh(tmp_path: Path) -> None:
     """mark_source_stale + mark_source_fresh funcionan."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src(freshness="fresh"))
     ctl.mark_source_stale(source_id="local:src/foo.py")
     assert ctl.get_source(source_id="local:src/foo.py").freshness == "stale"
@@ -327,7 +327,7 @@ def test_mark_source_stale_then_fresh(tmp_path: Path) -> None:
 
 def test_record_finding_generates_id_when_empty(tmp_path: Path) -> None:
     """record_finding genera ID via UUIDv5 si finding_id=''."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.upsert_entity(entity=_ent())
     fid = ctl.record_finding(
         finding=Finding(

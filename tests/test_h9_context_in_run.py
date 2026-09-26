@@ -78,7 +78,7 @@ def _plan(*names: str, ctx_recipe_ref: str | None = None) -> WorkflowPlan:
 
 def _seed_knowledge(storage: Storage) -> None:
     """Registra una source fresh con un claim para que la receta compile."""
-    ctl = KnowledgeController(storage=storage, tenant_id=TENANT, project_id=PROJECT)
+    ctl = KnowledgeController(knowledge=storage, tenant_id=TENANT, project_id=PROJECT)
     ctl.register_source(
         source=Source(
             source_id="src-gate",

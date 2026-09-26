@@ -37,7 +37,7 @@ from skillgraph.platform.storage import Storage
 
 def _ctl(tmp_path: Path) -> KnowledgeController:
     return KnowledgeController(
-        storage=Storage(tmp_path / "k.sqlite"),
+        knowledge=Storage(tmp_path / "k.sqlite"),
         tenant_id="t",
         project_id="p",
     )
@@ -285,7 +285,7 @@ def test_outcome_tracer_references_claims_not_copies(tmp_path: Path) -> None:
     """El trace tiene `claim_refs`, NO copia contenido."""
     ctl = _ctl(tmp_path)
     # Insertar evento con resource_ref='claim:foo' y run_id='r1'.
-    ctl.storage.record_event(
+    ctl.knowledge.record_event(
         tenant_id="t",
         project_id="p",
         event_id="evt-1",
@@ -305,7 +305,7 @@ def test_outcome_tracer_preserves_order(tmp_path: Path) -> None:
     """El orden del run se mantiene (lexicografico por resource_ref)."""
     ctl = _ctl(tmp_path)
     for cid in ["z-claim", "a-claim", "m-claim"]:
-        ctl.storage.record_event(
+        ctl.knowledge.record_event(
             tenant_id="t",
             project_id="p",
             event_id=f"evt-{cid}",

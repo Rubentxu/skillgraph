@@ -256,10 +256,10 @@ class TestS2CrossTenantLookupRejected:
     def test_knowledge_controller_unknown_source_for_cross_tenant(self, tmp_path: Path) -> None:
         """KnowledgeController en tenant A NO ve source de tenant B."""
         storage = Storage(str(tmp_path / "cross.sqlite"))
-        controller_a = KnowledgeController(storage=storage, tenant_id="tA", project_id="p1")
+        controller_a = KnowledgeController(knowledge=storage, tenant_id="tA", project_id="p1")
 
         # Registrar source bajo tenant B usando un controller con tenant B.
-        controller_b = KnowledgeController(storage=storage, tenant_id="tB", project_id="p1")
+        controller_b = KnowledgeController(knowledge=storage, tenant_id="tB", project_id="p1")
         controller_b.register_source(
             source=Source(
                 source_id="secret-source",

@@ -305,7 +305,7 @@ def cmd_knowledge_stale(args: argparse.Namespace) -> int:
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
     stale = ctl.list_stale_claims()
     print(f"stale claims ({len(stale)}):")
     for c in stale:
@@ -318,7 +318,7 @@ def cmd_knowledge_invalidate(args: argparse.Namespace) -> int:
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
     invalidated = ctl.invalidate_from_source(
         source_id=args.source,
         max_hops=args.max_hops,
@@ -334,7 +334,7 @@ def cmd_knowledge_refresh(args: argparse.Namespace) -> int:
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
     reactivated = ctl.refresh_source(
         source_id=args.source,
         new_revision=args.revision,
@@ -354,7 +354,7 @@ def cmd_knowledge_compile(args: argparse.Namespace) -> int:
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
     recipe_raw = (
         json.loads(args.recipe)
         if args.recipe.startswith("{")
@@ -394,7 +394,7 @@ def cmd_knowledge_trace(args: argparse.Namespace) -> int:
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
     tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(storage=storage, tenant_id=tenant_id, project_id=project_id)
+    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
     trace = OutcomeTracer.from_run(
         knowledge=ctl,
         run_id=args.run,

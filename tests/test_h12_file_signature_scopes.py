@@ -112,13 +112,13 @@ def storage(tmp_path: Path) -> Storage:
 
 @pytest.fixture
 def controller_p1(storage: Storage) -> KnowledgeController:
-    return KnowledgeController(storage=storage, tenant_id="t1", project_id="p1")
+    return KnowledgeController(knowledge=storage, tenant_id="t1", project_id="p1")
 
 
 @pytest.fixture
 def controller_p2(storage: Storage) -> KnowledgeController:
     """Mismo storage, proyecto distinto. Aislado por tenant/project."""
-    return KnowledgeController(storage=storage, tenant_id="t1", project_id="p2")
+    return KnowledgeController(knowledge=storage, tenant_id="t1", project_id="p2")
 
 
 # ----- UAT-EVO-05: Fichero y directorio ------------------------------

@@ -57,7 +57,7 @@ def _storage(tmp_path: Path) -> Storage:
 def test_get_claim_message_does_not_leak_claim_id(tmp_path: Path) -> None:
     """get_claim (knowledge_controller.py:508) lanza UnknownClaimError
     sin filtrar claim_id."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
     leaked = "secret-claim-id-do-not-leak"
 
     with pytest.raises(UnknownClaimError) as exc_info:
@@ -70,7 +70,7 @@ def test_get_claim_message_does_not_leak_claim_id(tmp_path: Path) -> None:
 
 def test_get_claim_no_cause_chain(tmp_path: Path) -> None:
     """get_claim NO debe tener __cause__ (lookup directo, no FK)."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
 
     with pytest.raises(UnknownClaimError) as exc_info:
         ctl.get_claim(claim_id="missing-claim")

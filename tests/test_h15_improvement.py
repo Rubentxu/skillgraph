@@ -82,7 +82,7 @@ def _storage(tmp_path: Path) -> Storage:
 
 
 def _controller(storage: Storage) -> KnowledgeController:
-    return KnowledgeController(storage=storage, tenant_id="t1", project_id="p1")
+    return KnowledgeController(knowledge=storage, tenant_id="t1", project_id="p1")
 
 
 def _register_source(controller: KnowledgeController, source_id: str) -> None:

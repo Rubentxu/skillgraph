@@ -79,7 +79,7 @@ def _claim(
 def test_get_entity_message_does_not_leak_entity_id(tmp_path: Path) -> None:
     """get_entity (knowledge_controller.py:179) lanza UnknownEntityError
     sin filtrar entity_id."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
     leaked = "secret-entity-id-do-not-leak"
 
     with pytest.raises(UnknownEntityError) as exc_info:
@@ -95,7 +95,7 @@ def test_record_claim_fk_entity_message_does_not_leak_entity_id(tmp_path: Path) 
     sin filtrar entity_id. Para llegar al path entity, la entity NO debe
     existir; la source puede o no existir, pero SQLite evalua FKs por
     orden de insercion y la entity viene primero en el tuple."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
     ctl.register_source(source=_src(sid="local:src/exists.py"))
     leaked = "phantom-entity-id-do-not-leak"
 
@@ -119,7 +119,7 @@ def test_record_claim_fk_entity_message_does_not_leak_entity_id(tmp_path: Path) 
 
 def test_record_claim_fk_entity_preserves_cause_chain(tmp_path: Path) -> None:
     """El __cause__ debe seguir apuntando a la excepcion original (path entity)."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
     ctl.register_source(source=_src(sid="local:src/exists.py"))
 
     with pytest.raises(UnknownEntityError) as exc_info:
@@ -138,7 +138,7 @@ def test_record_claim_fk_entity_preserves_cause_chain(tmp_path: Path) -> None:
 
 def test_get_entity_no_cause_chain(tmp_path: Path) -> None:
     """get_entity NO debe tener __cause__ (no es FK, es lookup directo)."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
 
     with pytest.raises(UnknownEntityError) as exc_info:
         ctl.get_entity(entity_id="missing-entity")

@@ -30,7 +30,7 @@ from skillgraph.platform.storage import Storage
 
 def _ctl(tmp_path: Path) -> KnowledgeController:
     return KnowledgeController(
-        storage=Storage(tmp_path / "k.sqlite"),
+        knowledge=Storage(tmp_path / "k.sqlite"),
         tenant_id="t",
         project_id="p",
     )
@@ -304,7 +304,7 @@ def test_invalidate_emits_knowledge_invalidated_event(tmp_path: Path) -> None:
 
     ctl.invalidate_from_source(source_id="local:a")
 
-    rows = ctl.storage.list_events(
+    rows = ctl.knowledge.list_events(
         tenant_id="t",
         project_id="p",
         event_kind="KnowledgeInvalidated",
@@ -326,7 +326,7 @@ def test_refresh_emits_knowledge_refreshed_event(tmp_path: Path) -> None:
 
     ctl.refresh_source(source_id="local:a", new_revision="rev1")
 
-    rows = ctl.storage.list_events(
+    rows = ctl.knowledge.list_events(
         tenant_id="t",
         project_id="p",
         event_kind="KnowledgeRefreshed",
@@ -351,7 +351,7 @@ def test_invalidate_with_no_claims_is_noop(tmp_path: Path) -> None:
     invalidated = ctl.invalidate_from_source(source_id="local:alone")
     assert invalidated == []
 
-    rows = ctl.storage.list_events(
+    rows = ctl.knowledge.list_events(
         tenant_id="t",
         project_id="p",
         event_kind="KnowledgeInvalidated",

@@ -90,7 +90,7 @@ def _claim(
 def test_get_source_message_does_not_leak_source_id(tmp_path: Path) -> None:
     """get_source (knowledge_controller.py:135) lanza UnknownSourceError
     sin filtrar source_id."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
     leaked = "secret-source-id-do-not-leak"
 
     with pytest.raises(UnknownSourceError) as exc_info:
@@ -104,7 +104,7 @@ def test_get_source_message_does_not_leak_source_id(tmp_path: Path) -> None:
 def test_record_evidence_fk_message_does_not_leak_source_id(tmp_path: Path) -> None:
     """record_evidence FK violation (knowledge_controller.py:216)
     sin filtrar source_id."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
     leaked = "ghost-source-id-do-not-leak"
 
     with pytest.raises(UnknownSourceError) as exc_info:
@@ -126,7 +126,7 @@ def test_record_claim_fk_message_does_not_leak_source_id(tmp_path: Path) -> None
     """record_claim FK violation source (knowledge_controller.py:488)
     sin filtrar source_id. Para llegar al path source (no entity), la
     entity debe existir y la source NO."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
     # Source valida (para no caer en el path de entity / source doble-failure)
     ctl.register_source(source=_src(sid="local:src/exists.py"))
     ctl.upsert_entity(entity=_ent(eid="file:src/foo.py"))
@@ -152,7 +152,7 @@ def test_record_claim_fk_message_does_not_leak_source_id(tmp_path: Path) -> None
 
 def test_record_evidence_fk_preserves_cause_chain(tmp_path: Path) -> None:
     """El __cause__ debe seguir apuntando a la excepcion original."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
 
     with pytest.raises(UnknownSourceError) as exc_info:
         ctl.record_evidence(
@@ -172,7 +172,7 @@ def test_record_evidence_fk_preserves_cause_chain(tmp_path: Path) -> None:
 
 def test_record_claim_fk_preserves_cause_chain(tmp_path: Path) -> None:
     """El __cause__ debe seguir apuntando a la excepcion original (path source)."""
-    ctl = KnowledgeController(storage=_storage(tmp_path), tenant_id="tA", project_id="p")
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="tA", project_id="p")
     ctl.register_source(source=_src(sid="local:src/exists.py"))
     ctl.upsert_entity(entity=_ent(eid="file:src/foo.py"))
 

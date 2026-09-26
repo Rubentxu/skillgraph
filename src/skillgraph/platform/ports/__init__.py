@@ -331,6 +331,73 @@ class KnowledgeRepository(Protocol):
     def dependencies_of(self, uid: str) -> list[dict[str, Any]]: ...
     def dependents_of(self, uid: str) -> list[dict[str, Any]]: ...
 
+    # --- WI-02b: puertos de mantenimiento (invalidation, refresh) ---
+
+    def list_claims_using_evidence(self, *, evidence_id: str) -> tuple[Any, ...]:
+        """Yield ClaimID de las claims que referencian una evidence.
+
+        Sustituye ``controller.storage._conn.execute('SELECT claim_id
+        FROM claim_evidence WHERE evidence_id = ?')`` que hacia
+        ``KnowledgeInvalidator._claims_using_evidence``.
+        """
+
+    def mark_claims_stale(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        claim_ids: tuple[str, ...],
+    ) -> None:
+        """Marca stale=1 las claims indicadas (atomicidad: 1 transaccion).
+
+        Sustituye el bucle con ``UPDATE claims SET stale = 1 WHERE
+        claim_id = ?`` que hacia ``invalidate_from_source``.
+        """
+
+    def reactivate_claims_with_revision(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        source_id: str,
+        new_revision: str,
+    ) -> tuple[str, ...]:
+        """Marca stale=0 las Claims que referencian ``new_revision``.
+
+        Devuelve los claim_ids reactivados en una sola query
+        (``UPDATE ... RETURNING claim_id``).
+        """
+
+    def list_stale_claims(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+    ) -> tuple[Any, ...]:
+        """Lista todas las Claims stale (con evidence_ids pre-cargados).
+
+        Sin N+1: una sola query con LEFT JOIN a ``claim_evidence``.
+        """
+
+    def record_event(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        event_id: str,
+        event_kind: str,
+        resource_ref: str,
+        payload: Any,
+        run_id: str | None = None,
+        causation_id: str | None = None,
+        correlation_id: str | None = None,
+        timestamp: str | None = None,
+    ) -> int:
+        """Escribir un evento. WI-02b: KC/KI emiten eventos de mantenimiento.
+
+        Delegado al EventStore real. Storage cumple ambos Protocols
+        por duck typing."""
+
 
 class PromotionRepository(Protocol):
     """Outbox de promoción entre proyectos (H7)."""

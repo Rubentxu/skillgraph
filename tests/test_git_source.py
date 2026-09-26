@@ -155,7 +155,7 @@ def test_to_source_roundtrip(tmp_path: Path) -> None:
     )
     # El KnowledgeController debe aceptar el Source.
     ctl = KnowledgeController(
-        storage=Storage(tmp_path / "k.sqlite"),
+        knowledge=Storage(tmp_path / "k.sqlite"),
         tenant_id="t",
         project_id="p",
     )

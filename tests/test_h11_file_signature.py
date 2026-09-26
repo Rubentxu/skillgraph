@@ -45,7 +45,7 @@ def storage(tmp_path: Path) -> Storage:
 @pytest.fixture
 def controller(storage: Storage) -> KnowledgeController:
     """KnowledgeController con tenant/proyecto de bench."""
-    return KnowledgeController(storage=storage, tenant_id="t1", project_id="p1")
+    return KnowledgeController(knowledge=storage, tenant_id="t1", project_id="p1")
 
 
 def _register_source(controller: KnowledgeController, source_id: str) -> None:
@@ -126,7 +126,7 @@ class TestUatEvo02ReuseAcrossProcesses:
         """Storage cerrada y reabierta conserva las FileSignatures."""
         # Proceso 1: extraer y persistir.
         s1 = Storage(str(tmp_path / "h11.sqlite"))
-        c1 = KnowledgeController(storage=s1, tenant_id="t1", project_id="p1")
+        c1 = KnowledgeController(knowledge=s1, tenant_id="t1", project_id="p1")
         _register_source(c1, "src/example.py")
         content = "def foo(): return 1\n"
         sigs = extract_file_signatures(file_path="src/example.py", content=content)

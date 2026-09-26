@@ -129,7 +129,7 @@ def _build_corpus(*, n_claims: int) -> tuple[KnowledgeController, tuple[Obligato
         # decida cerrarlo. Para bench, basta con uno temporal por
         # tamano: ``Storage`` cierra su conn al ``del``.
         storage = Storage(f"{d}/bench.sqlite")
-        ctl = KnowledgeController(storage=storage, tenant_id="bench", project_id="bench")
+        ctl = KnowledgeController(knowledge=storage, tenant_id="bench", project_id="bench")
         sels: list[ObligatorySelector] = []
         written = 0
         for i in range(n_sources):
