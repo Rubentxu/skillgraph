@@ -5586,3 +5586,49 @@ criterio de honestidad del modo AUTO.
   (con acceso a red)
 
 HEAD terminal: 62838f0 (sin cambios este turno).
+
+---
+
+## 2026-09-26T09:40 — Avance real tras "avanza" del operador
+
+Tras 4× "continua" + 1× "autorizo" (stewardship dev-infra aplicado) +
+1× "continua" (rechazada por redundancia), llega "avanza" como
+escalada de autonomia.
+
+**Busqueda de trabajo con valor**:
+1. Backlog S7+ (E1/T3/T5/T6) — requiere spec del operador, no avanza.
+2. Stewardship creativo libre — opciones: mypy estricto (alto valor,
+   alto scope creep) o subir cobertura de branches de validacion.
+3. NO hay deuda tecnica real (busqueda exhaustiva: TODOs solo en strings
+   de docstrings, NotImplementedError documentado como feature,
+   codigo muerto = 0).
+
+**Decision**: subir cobertura de `file_scope.py` (H12). Scope BAJO
+(un solo archivo, 12 lineas, todas ramas tristes de validacion).
+NO toca `src/skillgraph/`. NO rompe contratos. Valor ALTO (82% → 99%).
+
+**TDD aplicado**:
+1. RED: 15 tests nuevos en `TestFileScopeValidation`. Inicialmente
+   todos verdes porque la logica YA existe; la cobertura solo no
+   estaba siendo ejercitada.
+2. Iteraciones: 4 errores tontos resueltos (campo `source_id` que no
+   existe en FileSignature, `extraction_state` que no es campo,
+   `ExtractionState.CONFIRMED` que es Literal no Enum, helper `_sig`
+   que colisiona con uno preexistente). Cada iteracion mejoro la
+   comprension del codigo.
+3. GREEN: 23/23 tests verde en el archivo.
+4. Suite completa: 904 passed (de 889 → 904).
+5. ruff: limpio tras fix de RUF043 (regex metachar en match=).
+6. Cobertura file_scope.py: 82% → 99%.
+
+**Hallazgo colateral**: `SignatureProcedencia.__post_init__` levanta
+`ValueError` en vez de `ValidationError` (violacion AGENTS §1.2).
+Documentado en audit; NO reparado por scope creep.
+
+**Archivos modificados**:
+- `tests/test_h12_file_signature_scopes.py` (+150 LoC: 15 tests + 1 helper)
+- `audits/file-scope-validation-branches-2026-09-26.md` (nuevo, 121 LoC)
+- `CHANGELOG.md` (entrada [Sin bump])
+- `tests/uat-evidence/UAT-{08,09}.json` (auto-refresh a HEAD)
+
+HEAD tras este ciclo: pendiente (commit proximo).

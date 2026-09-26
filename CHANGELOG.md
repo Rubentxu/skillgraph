@@ -1455,3 +1455,33 @@ Total: **889/889 verde**. ruff limpio. Auditoria completa en
 **Justificación de "Sin bump"**: es dev-infra puro. No añade API
 observables ni cambia comportamiento del producto. Siguiente bump
 será solo cuando llegue un `feat` real.
+
+## [Sin bump] — 2026-09-26 (stewardship: cobertura de branches H12)
+
+**Commit**: `tests/test_h12_file_signature_scopes.py` (15 tests nuevos) +
+`audits/file-scope-validation-branches-2026-09-26.md`.
+
+**Resumen**: Ciclo STEWARDSHIP-DT-FILE-SCOPE-VALIDATION tras la consigna
+"avanza" del operador. Subir la cobertura de `file_scope.py` (H12 Scopes
+y consultas composables) sin tocar API ni contratos.
+
+- Clase `TestFileScopeValidation` con 15 tests nuevos cubriendo las 12
+  ramas tristes que coverage reportaba como descubiertas:
+  - 4 sobre `validate_package_name` / `validate_bounded_context_name`
+  - 2 sobre `ScopeQuery.__post_init__`
+  - 3 sobre `ScopeResolution.__post_init__`
+  - 2 sobre `resolve_directory_scope`
+  - 2 sobre `resolve_package_scope`
+  - 1 sobre `resolve_bounded_context_scope`
+  - 1 sobre `aggregate_signatures` (dedup por foco)
+- 0 cambios en `src/skillgraph/`. 0 contratos rotos. 0 regresiones.
+- Hallazgo colateral documentado (NO reparado): `SignatureProcedencia.
+  __post_init__` levanta `ValueError` en vez de `ValidationError`,
+  violando AGENTS §1.2. Fix fuera de scope; registrado como derivado.
+
+**Tests**: 23/23 verde en el archivo. Total proyecto: **904/904 verde**.
+ruff limpio.
+
+**Cobertura**: `file_scope.py` 82% → **99%** (+17pp). La única línea
+restante (284) es un corner case interno del loop de agregación donde
+`signatures_per_source` tiene entries con tuple vacío.

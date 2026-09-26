@@ -24,6 +24,7 @@ Pre-condiciones:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -33,9 +34,12 @@ from skillgraph.knowledge.file_scope import (
     AggregatedSignatures,
     ScopeQuery,
     ScopeResolution,
+    aggregate_signatures,
     resolve_bounded_context_scope,
     resolve_directory_scope,
     resolve_package_scope,
+    validate_bounded_context_name,
+    validate_package_name,
 )
 from skillgraph.knowledge.file_signature import (
     ExtractionState,
@@ -307,3 +311,141 @@ class TestUatEvo08ProjectIsolation:
         # Si el source no existe en ningun proyecto, se omite silenciosamente.
         assert agg.signatures_count == 0
         assert agg.cobertura_global == 0
+
+
+# ----- ramas tristes (cobertura de branches de validacion) -------------
+#
+# Estas pruebas cierran las 12 lineas que coverage reportaba como
+# descubiertas en file_scope.py. Cada test es rojo si la validacion
+# NO levanta ValidationError, y verde si la levanta con mensaje
+# util (regla AGENTS §1.2: errores tipados, no strings).
+# Ver audits/file-scope-validation-branches-2026-09-26.md.
+
+
+class TestFileScopeValidation:
+    """Tests para las ramas de validacion de file_scope.py.
+
+    Estas pruebas complementan los UAT-EVO-05..08 (que cubren el camino
+    feliz) verificando que las validaciones fallan con ``ValidationError``
+    tipado cuando los argumentos son invalidos.
+
+    No es UAT nuevo: son tests de cobertura de branches, sin cambios de
+    contrato ni de API.
+    """
+
+    # ----- validate_package_name / validate_bounded_context_name -------
+
+    def test_validate_package_name_rejects_empty(self) -> None:
+        with pytest.raises(ValidationError, match="package_name invalido"):
+            validate_package_name("")
+
+    def test_validate_package_name_rejects_uppercase_dot_segment(self) -> None:
+        # Segmentos vacios entre puntos no son validos.
+        with pytest.raises(ValidationError, match="package_name invalido"):
+            validate_package_name("skillgraph..core")
+
+    def test_validate_bounded_context_name_rejects_empty(self) -> None:
+        with pytest.raises(ValidationError, match="bounded_context_name invalido"):
+            validate_bounded_context_name("")
+
+    def test_validate_bounded_context_name_rejects_digits_start(self) -> None:
+        # Empezar con digito viola la regex.
+        with pytest.raises(ValidationError, match="bounded_context_name invalido"):
+            validate_bounded_context_name("1context")
+
+    # ----- ScopeQuery.__post_init__ -----------------------------------
+
+    def test_scope_query_rejects_invalid_kind(self) -> None:
+        # Cast explicito para forzar el branch de validacion: 'namespace'
+        # NO esta en FILE_SCOPES.
+        with pytest.raises(ValidationError, match="scope_kind invalido"):
+            ScopeQuery(scope_kind="namespace", target="src/")  # type: ignore[arg-type]
+
+    def test_scope_query_rejects_empty_target(self) -> None:
+        with pytest.raises(
+            ValidationError, match=re.escape("ScopeQuery.target no puede estar vacio")
+        ):
+            ScopeQuery(scope_kind="file", target="")
+
+    # ----- ScopeResolution.__post_init__ ------------------------------
+
+    def test_scope_resolution_rejects_invalid_kind(self) -> None:
+        with pytest.raises(ValidationError, match="scope_kind invalido"):
+            ScopeResolution(
+                scope_kind="namespace",  # type: ignore[arg-type]
+                target="src/",
+                member_source_ids=("src/a.py",),
+            )
+
+    def test_scope_resolution_rejects_empty_target(self) -> None:
+        with pytest.raises(
+            ValidationError, match=re.escape("ScopeResolution.target no puede estar vacio")
+        ):
+            ScopeResolution(
+                scope_kind="file",
+                target="",
+                member_source_ids=("src/a.py",),
+            )
+
+    def test_scope_resolution_rejects_empty_member_source_ids(self) -> None:
+        with pytest.raises(ValidationError, match="ScopeResolution sin miembros"):
+            ScopeResolution(
+                scope_kind="file",
+                target="src/a.py",
+                member_source_ids=(),
+            )
+
+    # ----- resolve_directory_scope ------------------------------------
+
+    def test_resolve_directory_rejects_empty_path(self) -> None:
+        with pytest.raises(ValidationError, match="directory_path no puede estar vacio"):
+            resolve_directory_scope(directory_path="", member_paths=("src/a.py",))
+
+    def test_resolve_directory_rejects_empty_member_paths(self) -> None:
+        with pytest.raises(ValidationError, match="sin miembros declarados"):
+            resolve_directory_scope(directory_path="src/", member_paths=())
+
+    # ----- resolve_package_scope --------------------------------------
+
+    def test_resolve_package_rejects_empty_declared_members(self) -> None:
+        with pytest.raises(ValidationError, match="sin miembros declarados"):
+            resolve_package_scope(
+                package_name="skillgraph.core",
+                declared_members=(),
+                prefix="src/skillgraph/core/",
+            )
+
+    def test_resolve_package_rejects_member_outside_prefix(self) -> None:
+        # El miembro declarado NO empieza con el prefix del paquete.
+        with pytest.raises(ValidationError, match="no vive bajo prefix"):
+            resolve_package_scope(
+                package_name="skillgraph.core",
+                declared_members=("other/foo.py",),
+                prefix="src/skillgraph/core/",
+            )
+
+    # ----- resolve_bounded_context_scope ------------------------------
+
+    def test_resolve_bounded_context_rejects_empty_member_source_ids(self) -> None:
+        with pytest.raises(ValidationError, match="sin miembros declarados"):
+            resolve_bounded_context_scope(
+                context_name="billing-context",
+                member_source_ids=(),
+            )
+
+    # ----- aggregate_signatures (dedup por foco) -----------------------
+
+    def test_aggregate_signatures_dedups_by_foco_first_occurrence_wins(
+        self,
+    ) -> None:
+        # Si dos sources tienen firmas con el mismo 'foco', solo gana la
+        # primera ocurrencia (orden de insercion en el dict).
+        sig_a = _sig(foco="Foo", cobertura=10)
+        sig_b = _sig(foco="Foo", cobertura=99)
+        scope = ScopeQuery(scope_kind="directory", target="src/")
+        agg = aggregate_signatures(
+            signatures_per_source={"src/a.py": (sig_a,), "src/b.py": (sig_b,)},
+            scope=scope,
+        )
+        assert agg.signatures_count == 1
+        assert agg.cobertura_global == 10  # la primera (cobertura=10) gana
