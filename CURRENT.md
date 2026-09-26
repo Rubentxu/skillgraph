@@ -844,3 +844,50 @@ reducido en multiples funciones de la capa core:
   + WI-27 pendiente.
 - 41+ commits ahead of origin/main.
 
+
+## Reactivacion 2026-09-26 23:17 — WI-28 (caracterizacion de deuda)
+
+Hito ceremonial: el auditor `audits/audit_debt.py` (215 LoC) se
+ejecuta de forma reproducible y emite `audits/architecture-debt-YYYY-MM-DD.md`
+con metricas homologas (cc, loc, nesting) al algoritmo usado en
+WI-21..WI-27. Ver D-61..D-66.
+
+### Cambios
+
+- `audits/audit_debt.py`: CLI `python audits/audit_debt.py`.
+  Reporta: 46 modulos, 15985 LoC, 555 funciones, 4 god files,
+  hotspots publicos, hotspots privados, funciones largas,
+  anidamiento profundo, recomendaciones P0..P3.
+- `audits/architecture-debt-2026-09-26.md`: reporte generado.
+- `tests/test_audit_debt_smoke.py`: 4 tests via subprocess.
+- `specs/wi-28-audit-deuda-arquitectonica.md`.
+
+### Estado de la deuda al cierre WI-28
+
+**P0 (refactor obligatorio)**:
+- `cmd_run` (runner.py) cc=22, 122 LoC.
+- `_make_schema_validator` (pack_loader.py) cc=22, 77 LoC (privada).
+  El main() cc=43 NO se refactoriza surgicalmente (D-64: CLI entry
+  point, forma parte del H-02 god module).
+
+**P1 (god modules, requiere ADR)**:
+- H-01 storage.py (2407 LoC).
+- H-02 cli/runner.py (2477 LoC, incluye `main` cc=43).
+- runcontroller.py (1357 LoC).
+
+**P2 (privados cc>=20, opcional)**: caso por caso.
+
+**P3 (funciones >80 LoC)**: ver tabla en reporte.
+
+### Politica D-66
+
+Cero hotspots publicos cc>=20 en cada release, o documentar la
+excepcion en CURRENT/CHANGELOG.
+
+### Evidencia
+
+- 4/4 smoke tests audit PASS.
+- 1048/1048 suite completa PASS (1044 + 4 nuevos).
+- ruff: All checks passed.
+- commit `8006c58`, 45 ahead of origin/main.
+
