@@ -541,7 +541,7 @@ tests:
   total: 1048   # post-WI-30 (debt-reduction acumulado v0.14.8: 8 hotspots cc refactored + auditor reproducible WI-28 + 4 audit smoke tests)
   passed: 1048
   duration_s: 180   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-30, ~176s)
-  package_version: "0.14.8"   # WI-21..WI-30 release MINOR cerrado en este commit; post-tag bump .dev0 vendra en housekeeping
+  package_version: "0.14.8.dev0"   # post-tag housekeeping post-v0.14.8; tag anotado c5c405e
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
