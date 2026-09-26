@@ -116,6 +116,58 @@ class RunLock:
     def lock_dir(self) -> Path:
         return self._lock_dir
 
+    @staticmethod
+    def _acquire_with_timeout(
+        fd: int,
+        lock_path: Path,
+        *,
+        timeout_seconds: float,
+    ) -> None:
+        """Espera hasta `timeout_seconds` tomando el lock. Polling suave."""
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise LockUnavailable(
+                        f"timeout esperando lock {lock_path} (>{timeout_seconds}s)"
+                    ) from None
+                time.sleep(0.05)  # poll suave
+
+    @staticmethod
+    def _acquire_fail_fast(fd: int, lock_path: Path) -> None:
+        """Intenta tomar el lock una sola vez. Falla inmediato si esta tomado."""
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise LockUnavailable(f"lock {lock_path} ya esta tomado") from exc
+
+    def _open_lock(self, lock_path: Path) -> int:
+        """Crea el directorio + abre el archivo de lock. `LockUnavailable` ante OSError."""
+        try:
+            self._lock_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise LockUnavailable(f"no se puede crear lock_dir={self._lock_dir}: {exc}") from exc
+        try:
+            return os.open(
+                str(lock_path),
+                os.O_CREAT | os.O_RDWR,
+                0o644,
+            )
+        except OSError as exc:
+            raise LockUnavailable(f"no se puede abrir lock file={lock_path}: {exc}") from exc
+
+    def _release(self, fd: int, lock_path: Path) -> None:
+        """Libera el lock y elimina el archivo. Best-effort (OSError suprimido)."""
+        with contextlib.suppress(OSError):
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+        # Eliminamos el archivo para no acumular locks vacios.
+        with contextlib.suppress(OSError):
+            lock_path.unlink()
+
     @contextlib.contextmanager
     def take(self, *, mode: LockMode, timeout_seconds: float = 30.0) -> Iterator[None]:
         """Toma el lock. Libera al salir del bloque `with`.
@@ -139,45 +191,15 @@ class RunLock:
             # Noop: no tocamos el filesystem.
             yield
             return
-        # Asegurar que lock_dir existe.
-        try:
-            self._lock_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            raise LockUnavailable(f"no se puede crear lock_dir={self._lock_dir}: {exc}") from exc
         lock_path = self._lock_dir / self._key.to_filename()
-        try:
-            self._fd = os.open(
-                str(lock_path),
-                os.O_CREAT | os.O_RDWR,
-                0o644,
-            )
-        except OSError as exc:
-            raise LockUnavailable(f"no se puede abrir lock file={lock_path}: {exc}") from exc
+        self._fd = self._open_lock(lock_path)
         try:
             if mode == "advisory":
-                deadline = time.monotonic() + timeout_seconds
-                while True:
-                    try:
-                        fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        break
-                    except OSError:
-                        if time.monotonic() >= deadline:
-                            raise LockUnavailable(
-                                f"timeout esperando lock {lock_path} (>{timeout_seconds}s)"
-                            ) from None
-                        time.sleep(0.05)  # poll suave
-            elif mode == "fail-fast":
-                try:
-                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except OSError as exc:
-                    raise LockUnavailable(f"lock {lock_path} ya esta tomado") from exc
+                self._acquire_with_timeout(self._fd, lock_path, timeout_seconds=timeout_seconds)
+            else:  # fail-fast
+                self._acquire_fail_fast(self._fd, lock_path)
             yield
         finally:
             if self._fd is not None:
-                with contextlib.suppress(OSError):
-                    fcntl.flock(self._fd, fcntl.LOCK_UN)
-                os.close(self._fd)
+                self._release(self._fd, lock_path)
                 self._fd = None
-                # Eliminamos el archivo para no acumular locks vacios.
-                with contextlib.suppress(OSError):
-                    lock_path.unlink()
