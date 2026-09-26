@@ -119,3 +119,35 @@ Ciclo stewardship-DT-FILE-SCOPE-VALIDATION cerrado. Mejora la cobertura
 de branches de validación sin tocar contratos ni API. Hallazgo
 colateral documentado (`ValueError` en `file_signature.py`) sin
 reparar (scope creep fuera del objetivo).
+
+---
+
+## Investigación retrospectiva (post-ciclo)
+
+Tras el push del commit `8e3b617`, el operador pidió investigación
+retrospectiva autónoma del ciclo anterior. Resultado:
+
+**Mutation testing** (5 mutations probadas):
+- M1 `if self.scope_kind not in FILE_SCOPES` (ScopeQuery) → DETECTADA
+- M2 `if self.scope_kind not in FILE_SCOPES` (ScopeResolution) → DETECTADA
+- M3 `if not member_paths` (resolve_directory_scope) → DETECTADA
+- M4 `if s.foco in seen_focos` (aggregate_signatures dedup) → DETECTADA
+- M5 `if not self.target` (ScopeQuery empty) → DETECTADA
+
+Los 5 tests críticos SON sensibles al código que dicen cubrir. NO son
+falsos positivos.
+
+**Cobertura de corner-cases** (rama 269 y branch 284→286):
+- `test_aggregate_signatures_with_empty_signatures_per_source` verifica
+  la rama early-return assertando que metadata NO contiene
+  `'raw_source_count'` (que solo aparece en el for-loop).
+- `test_aggregate_signatures_with_empty_sigs_tuple_per_source` verifica
+  que un source con tuple vacío se ignora pero los demás agregan.
+- Mutation M6 (early-return deshabilitado) → DETECTADA por test 1.
+- Mutation M7 (`if sigs:` deshabilitado) → DETECTADA por test 2.
+
+**Cobertura final**: `file_scope.py` 99% → **100%** (90/90 stmts,
+40/40 branches, 0 miss).
+
+**Commit derivado**: `7a55ec7` (test(h12): cerrar ramas corner-case).
+Total: 906 tests verde. Sin cambios en `src/`.

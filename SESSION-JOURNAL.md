@@ -5632,3 +5632,41 @@ Documentado en audit; NO reparado por scope creep.
 - `tests/uat-evidence/UAT-{08,09}.json` (auto-refresh a HEAD)
 
 HEAD tras este ciclo: pendiente (commit proximo).
+
+---
+
+## 2026-09-26T10:00 — Investigación retrospectiva del ciclo STEWARDSHIP-DT-FILE-SCOPE-VALIDATION
+
+Operador pidio modo investigacion retrospectiva autonoma del ciclo
+anterior (8e3b617).
+
+**Hallazgos confirmados**:
+
+1. **Mutation testing** (5 mutations aplicadas, 5 detectadas):
+   - M1 scope_kind ScopeQuery disabled -> DETECTADA
+   - M2 scope_kind ScopeResolution disabled -> DETECTADA
+   - M3 member_paths vacio disabled -> DETECTADA
+   - M4 dedup foco disabled -> DETECTADA
+   - M5 empty target ScopeQuery disabled -> DETECTADA
+
+2. **Corner cases descubiertos** (2 ramas no cubiertas):
+   - Linea 269: early-return `if not signatures_per_source`
+   - Branch 284->286: `if sigs:` false
+
+3. **Test debil detectado por mutation M6**: el test debil de la rama
+   early-return pasaba con la rama deshabilitada (no distinguia entre
+   early-return y for-loop vacio). Strengthening con assertion sobre
+   metadata: `assert "raw_source_count" not in agg.metadata`.
+
+**Accion derivada**: commit `7a55ec7` cierra los 2 corner cases con
+2 tests strengthened por mutation testing. Cobertura 99% -> 100%.
+
+**Tests**: 906/906 verde (904 + 2 nuevos). ruff limpio.
+
+**Riesgo pendiente** (NO abordado):
+- `SignatureProcedencia.__post_init__` (file_signature.py) levanta
+  `ValueError` en vez de `ValidationError`. Violacion AGENTS §1.2.
+  Coste: ~3 LoC cambio + 1-2 tests. Beneficio: cumplimiento §1.2.
+  Alcance: afecta H11 entero. Stewardship de bajo valor, derivado.
+
+HEAD tras este ciclo: 7a55ec7 == origin/main.
