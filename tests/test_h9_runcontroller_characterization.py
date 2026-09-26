@@ -34,6 +34,7 @@ from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTr
 from skillgraph.runtime.agent import FakeAgentAdapter
 from skillgraph.runtime.engine import EventLog, RuntimeEvent
 from skillgraph.runtime.runcontroller import RunController
+from tests._helpers.sqlite_event_store import SqliteEventStoreForTest
 
 TENANT = "t"
 PROJECT = "p"
@@ -119,7 +120,7 @@ class TestT1CreateRunStatePersistsIfAppendFails:
         ).fetchone()
         assert row is not None  # sanity: el evento sí se emitió.
 
-        log = EventLog(conn)
+        log = EventLog(SqliteEventStoreForTest(conn))
         with pytest.raises(IdempotencyError):
             log.append(
                 RuntimeEvent(

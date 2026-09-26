@@ -22,6 +22,7 @@ from skillgraph.runtime.engine import (
     RuntimeEvent,
     new_event_id,
 )
+from tests._helpers.sqlite_event_store import SqliteEventStoreForTest
 
 pytestmark = pytest.mark.etapa1
 
@@ -44,7 +45,7 @@ def _make_event(*, event_kind: str = "RunCreated", event_id: str | None = None) 
 def event_log() -> EventLog:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    return EventLog(conn, policy_resolver=lambda _t: "none")
+    return EventLog(SqliteEventStoreForTest(conn), policy_resolver=lambda _t: "none")
 
 
 class TestEventAppend:

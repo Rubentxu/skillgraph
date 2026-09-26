@@ -11,6 +11,7 @@ from skillgraph.runtime.redaction import (
     redact_payload,
     validate_policy,
 )
+from tests._helpers.sqlite_event_store import SqliteEventStoreForTest
 
 
 class TestValidatePolicy:
@@ -204,13 +205,14 @@ class TestEventLogRedaction:
         from skillgraph.runtime.engine import EventBuilder, EventLog
 
         log = EventLog(
-            _open_conn(tmp_path),
+            SqliteEventStoreForTest(_open_conn(tmp_path)),
             policy_resolver=lambda _tenant: "metadata",
         )
         eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         ev = eb.run_created(run_id="r", initial_node="a")
         log.append(ev)
-        conn = log._conn  # type: ignore[attr-defined]
+        store = log._events
+        conn = store._conn
         row = conn.execute(
             "SELECT payload_json FROM runtime_events WHERE event_id = ?",
             (ev.event_id,),
@@ -225,11 +227,12 @@ class TestEventLogRedaction:
 
         from skillgraph.runtime.engine import EventBuilder, EventLog
 
-        log = EventLog(_open_conn(tmp_path), policy_resolver=None)
+        log = EventLog(SqliteEventStoreForTest(_open_conn(tmp_path)), policy_resolver=None)
         eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         ev = eb.run_created(run_id="r", initial_node="a")
         log.append(ev)
-        conn = log._conn  # type: ignore[attr-defined]
+        store = log._events
+        conn = store._conn
         row = conn.execute(
             "SELECT payload_json FROM runtime_events WHERE event_id = ?",
             (ev.event_id,),
@@ -245,13 +248,14 @@ class TestEventLogRedaction:
         from skillgraph.runtime.engine import EventBuilder, EventLog
 
         log = EventLog(
-            _open_conn(tmp_path),
+            SqliteEventStoreForTest(_open_conn(tmp_path)),
             policy_resolver=lambda _tenant: "payload",
         )
         eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         ev = eb.node_started(run_id="r", node_execution_id="ne-1")
         log.append(ev)
-        conn = log._conn  # type: ignore[attr-defined]
+        store = log._events
+        conn = store._conn
         row = conn.execute(
             "SELECT payload_json FROM runtime_events WHERE event_id = ?",
             (ev.event_id,),
@@ -269,13 +273,14 @@ class TestEventLogRedaction:
         from skillgraph.runtime.engine import EventBuilder, EventLog
 
         log = EventLog(
-            _open_conn(tmp_path),
+            SqliteEventStoreForTest(_open_conn(tmp_path)),
             policy_resolver=lambda _tenant: "none",
         )
         eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
         ev = eb.run_created(run_id="r", initial_node="a")
         log.append(ev)
-        conn = log._conn  # type: ignore[attr-defined]
+        store = log._events
+        conn = store._conn
         row = conn.execute(
             "SELECT payload_json FROM runtime_events WHERE event_id = ?",
             (ev.event_id,),

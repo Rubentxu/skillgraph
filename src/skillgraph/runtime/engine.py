@@ -15,13 +15,13 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from skillgraph.core.errors import IdempotencyError, ValidationError
+from skillgraph.core.errors import IdempotencyError, IntegrityError, ValidationError
+from skillgraph.platform.ports import EventStore
 from skillgraph.runtime.redaction import redact_payload
 
 SCHEMA_VERSION = 1
@@ -94,49 +94,52 @@ CREATE INDEX IF NOT EXISTS events_by_resource
 
 
 class EventLog:
-    """Registro append-only de eventos del runtime."""
+    """Registro append-only de eventos del runtime.
+
+    WI-02b: ya no recibe ``sqlite3.Connection`` directo; depende del
+    :class:`skillgraph.platform.ports.EventStore` Protocol. La logica
+    de redaccion y validacion permanece en ``EventLog`` (las politicas
+    de tenant, el orden de operaciones); la persistencia y migracion
+    delega al ``EventStore`` adapter (que cumple el UNIQUE(event_id)
+    por constraint, no por codigo).
+    """
 
     def __init__(
         self,
-        conn: sqlite3.Connection,
+        events: EventStore,
         *,
         policy_resolver: Callable[[str], str | None] | None = None,
     ) -> None:
         """Inicializa el EventLog.
 
         Args:
-            conn: conexion SQLite donde persiste `runtime_events`.
-            policy_resolver: callable opcional que, dado un `tenant_id`,
-                devuelve la politica de redaccion (`"none"|"metadata"|
-                "payload"|"full"`). Si devuelve None, se usa el
-                default `"metadata"` (politica segura). Si el callable
+            events: implementacion del Protocol ``EventStore``. Suele ser
+                ``Storage(:memory:)`` o ``Storage(path).event_store()``
+                en tests, o un adapter SQLite dedicado.
+            policy_resolver: callable opcional que, dado un ``tenant_id``,
+                devuelve la politica de redaccion (``"none"|"metadata"|
+                "payload"|"full"``). Si devuelve None, se usa el
+                default ``"none"`` (politica segura). Si el callable
                 es None (caso por defecto), el EventLog NO redacta
                 (comportamiento pre-S5). Esto evita romper tests
                 existentes que no esperan redaccion.
         """
-        self._conn = conn
+        self._events = events
         self._policy_resolver = policy_resolver
-        self._migrate()
-
-    def _migrate(self) -> None:
-        with self._tx() as cur:
-            cur.executescript(_SCHEMA_SQL)
-
-    @contextmanager
-    def _tx(self) -> Iterator[sqlite3.Cursor]:
-        with self._conn:
-            yield self._conn.cursor()
+        # Migracion idempotente delega al EventStore (cumple AC-3):
+        # el schema ya vive en platform/, no aqui.
+        self._events.ensure_schema()
 
     def _resolve_policy(self, tenant_id: str) -> str:
         """Resuelve la politica efectiva para un tenant.
 
-        Sin resolver: default "none" (no redacta; compat con pre-S5).
-        Resolver devuelve None: default "none".
+        Sin resolver: default ``"none"`` (no redacta; compat con pre-S5).
+        Resolver devuelve None: default ``"none"``.
         Resolver devuelve un valor: se valida y se aplica tal cual.
 
-        Nota: el default es "none" (no "metadata") por el principio
+        Nota: el default es ``"none"`` (no ``"metadata"``) por el principio
         de minima sorpresa: las politicas de redaccion son opt-in
-        por tenant (Storage.upsert_policy). Si en el futuro el
+        por tenant (``Storage.upsert_policy``). Si en el futuro el
         blueprint exige redaccion por defecto, este default debe
         cambiarse y documentarse en una ADR.
         """
@@ -150,77 +153,53 @@ class EventLog:
     def append(self, event: RuntimeEvent) -> int:
         """Inserta un evento. Devuelve el sequence asignado.
 
-        Si el `event_id` ya existe (duplicado), lanza `IdempotencyError`
-        — la idempotencia vive en el UNIQUE de la tabla, no en código.
+        Si el ``event_id`` ya existe (duplicado), lanza ``IdempotencyError``
+        — la idempotencia vive en el UNIQUE de la tabla gestionada por
+        el ``EventStore``, no en codigo de EventLog.
         Esto cumple UAT-07: evento entregado dos veces NO duplica.
 
-        S5 Etapa 7: si hay policy_resolver configurado, el payload
-        se redacta ANTES de persistir. El `RuntimeEvent` original
-        NO se muta (es frozen); se serializa el payload redactado
-        a `payload_json` directamente. Asi `logs_run` y todos los
-        tests siguen viendo el evento ORIGINAL (no el redactado),
+        S5 Etapa 7: si hay ``policy_resolver`` configurado, el payload
+        se redacta ANTES de persistir. El ``RuntimeEvent`` original
+        NO se muta (es frozen); se calcula el payload redactado y se
+        pasa al ``EventStore.record_event``. Asi ``logs_run`` y todos
+        los tests siguen viendo el evento ORIGINAL (no el redactado),
         pero en disco solo aparece la version redactada.
         """
-        import json as _json
-
         policy = self._resolve_policy(event.tenant_id)
-        # Reconstruimos el payload persistible a partir del redactado.
         persisted_payload = redact_payload(event.payload, policy)
-
         try:
-            with self._tx() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO runtime_events
-                        (event_id, tenant_id, project_id, event_kind, run_id,
-                         resource_ref, causation_id, correlation_id,
-                         payload_json, timestamp, schema_version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        event.event_id,
-                        event.tenant_id,
-                        event.project_id,
-                        event.event_kind,
-                        event.run_id,
-                        event.resource_ref,
-                        event.causation_id,
-                        event.correlation_id,
-                        _json.dumps(persisted_payload, sort_keys=True),
-                        event.timestamp,
-                        event.schema_version,
-                    ),
-                )
-        except sqlite3.IntegrityError as exc:
+            sequence = self._events.record_event(
+                tenant_id=event.tenant_id,
+                project_id=event.project_id,
+                event_id=event.event_id,
+                event_kind=event.event_kind,
+                resource_ref=event.resource_ref,
+                payload=persisted_payload,
+                run_id=event.run_id,
+                causation_id=event.causation_id,
+                correlation_id=event.correlation_id,
+                timestamp=event.timestamp,
+            )
+        except IntegrityError as exc:
             # UNIQUE(event_id) -> el evento ya estaba. UAT-07.
+            # El adapter SQLite delega a sqlite3.IntegrityError; los
+            # adapters no-SQL deberian traducir a IntegrityError propia
+            # (MismatchedError del core).
             raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
-        row = self._conn.execute(
-            "SELECT sequence FROM runtime_events WHERE event_id = ?",
-            (event.event_id,),
-        ).fetchone()
-        if row is None:  # pragma: no cover
-            raise ValidationError("Fallo inesperado al obtener sequence del evento")
-        return int(row["sequence"])
+        return sequence
 
     def events_for_run(
         self, *, tenant_id: str, project_id: str, run_id: str
     ) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            """
-            SELECT * FROM runtime_events
-            WHERE tenant_id = ? AND project_id = ? AND run_id = ?
-            ORDER BY sequence ASC
-            """,
-            (tenant_id, project_id, run_id),
-        ).fetchall()
+        """Devuelve los eventos del run como dicts (compat con API previa)."""
+        rows = self._events.list_events_for_run(
+            tenant_id=tenant_id, project_id=project_id, run_id=run_id
+        )
         return [_row_to_event_dict(r) for r in rows]
 
     def has_event(self, event_id: str) -> bool:
-        row = self._conn.execute(
-            "SELECT 1 FROM runtime_events WHERE event_id = ?",
-            (event_id,),
-        ).fetchone()
-        return row is not None
+        """Test de presencia por ``event_id`` via el Protocol."""
+        return self._events.fetch_event_raw(event_id=event_id) is not None
 
 
 def _row_to_event_dict(row: sqlite3.Row) -> dict[str, Any]:

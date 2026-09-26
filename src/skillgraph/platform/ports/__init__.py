@@ -209,6 +209,14 @@ class EventStore(Protocol):
 
     def list_events_for_run(self, *, tenant_id: str, project_id: str, run_id: str) -> list[Any]: ...
 
+    def fetch_event_raw(self, *, event_id: str) -> Any | None:
+        """Devuelve la fila raw por ``event_id`` o None.
+
+        WI-02b: anadido para soportar ``EventLog.has_event`` sin
+        importar a ``runtime_events`` ni exponer ``sql conn`` al caller.
+        Implementacion SQLite hace ``SELECT * WHERE event_id = ?``.
+        """
+
     def ensure_schema(self) -> None:
         """Idempotente: aplica la migracion del schema de ``runtime_events``.
 

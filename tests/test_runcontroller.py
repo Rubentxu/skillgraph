@@ -26,6 +26,7 @@ from skillgraph.platform.storage import Storage
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 from skillgraph.runtime.agent import FakeAgentAdapter, RecordingAdapter
 from skillgraph.runtime.runcontroller import RunController
+from tests._helpers.sqlite_event_store import SqliteEventStoreForTest
 
 TENANT = "t"
 PROJECT = "p"
@@ -311,7 +312,7 @@ class TestIdempotency:
         ).fetchone()
         from skillgraph.runtime.engine import EventLog, RuntimeEvent
 
-        log = EventLog(conn)
+        log = EventLog(SqliteEventStoreForTest(conn))
         with pytest.raises(IdempotencyError):
             log.append(
                 RuntimeEvent(

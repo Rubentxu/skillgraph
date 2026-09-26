@@ -274,14 +274,11 @@ class RunController:
         # Sin politica configurada, el resolver devuelve ``None``
         # y EventLog usa el default seguro "metadata".
         #
-        # WI-02a: ``EventLog`` aún consume ``sqlite3.Connection``
-        # directamente; la migracion a ``EventStore`` queda en
-        # WI-02b. Pasamos ``events.conn`` mientras ``EventStore``
-        # siga implementando esa fachada (Storage la expone por
-        # duck typing). Esto preserva la conexion compartida y
-        # evita una cascada de cambios en este WI.
+        # WI-02b: ``EventLog`` acepta directamente el Protocol ``EventStore``
+        # (que ``events`` ya cumple por duck typing). Antes usabamos
+        # ``events.conn`` (escape hatch WI-02a) que sera eliminado en T-16.
         self._events = EventLog(
-            events.conn,  # type: ignore[attr-defined]
+            events,
             policy_resolver=lambda tenant_id: policy.get_policy(tenant_id=tenant_id),
         )
         # H9-context-in-run: resolver opt-in de recetas de contexto.

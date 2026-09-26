@@ -1165,30 +1165,38 @@ class Storage:
         from datetime import datetime
 
         ts = timestamp or datetime.now(UTC).replace(microsecond=0).isoformat()
-        with self._tx() as cur:
-            cur.execute(
-                """
-                INSERT INTO runtime_events
-                    (event_id, tenant_id, project_id, event_kind, run_id,
-                     resource_ref, causation_id, correlation_id,
-                     payload_json, timestamp, schema_version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    event_id,
-                    tenant_id,
-                    project_id,
-                    event_kind,
-                    run_id,
-                    resource_ref,
-                    causation_id,
-                    correlation_id,
-                    _json.dumps(dict(payload), ensure_ascii=False),
-                    ts,
-                    1,
-                ),
-            )
-            return cur.lastrowid or 0
+        try:
+            with self._tx() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO runtime_events
+                        (event_id, tenant_id, project_id, event_kind, run_id,
+                         resource_ref, causation_id, correlation_id,
+                         payload_json, timestamp, schema_version)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event_id,
+                        tenant_id,
+                        project_id,
+                        event_kind,
+                        run_id,
+                        resource_ref,
+                        causation_id,
+                        correlation_id,
+                        _json.dumps(dict(payload), ensure_ascii=False),
+                        ts,
+                        1,
+                    ),
+                )
+                return cur.lastrowid or 0
+        except sqlite3.IntegrityError as exc:
+            # WI-02b: traducimos a IntegrityError del core para que
+            # EventLog (y futuros consumidores) no necesiten
+            # importar sqlite3.
+            from skillgraph.core.errors import IntegrityError as _IntegrityError
+
+            raise _IntegrityError(f"constraint UNIQUE(event_id) violada: {event_id!r}") from exc
 
     def list_events(
         self,
@@ -1426,6 +1434,13 @@ class Storage:
         """
         with self._tx() as cur:
             cur.executescript(_SCHEMA_SQL)
+
+    def fetch_event_raw(self, *, event_id: str) -> sqlite3.Row | None:
+        """WI-02b: lookup directo por ``event_id``."""
+        return self._conn.execute(
+            "SELECT * FROM runtime_events WHERE event_id = ?",
+            (event_id,),
+        ).fetchone()
 
     # ----- presupuestos por Run (S4 Etapa 7) -----
 

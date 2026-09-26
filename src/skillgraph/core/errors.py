@@ -43,6 +43,20 @@ class IdempotencyError(SkillGraphError):
     code = "sg_idempotency"
 
 
+class IntegrityError(SkillGraphError):
+    """Violacion de una invariante relacional del adapter de persistencia.
+
+    WI-02b: introducida para que ``EventLog`` capture el
+    ``sqlite3.IntegrityError`` del adapter SQLite y lo traduzca a un
+    error tipado de dominio. El adapter (no el log de eventos) es el
+    unico responsable de la unicidad (``UNIQUE(event_id)``); el log lo
+    traduce para que el caller vea la jerarquia ``SkillGraphError`` y
+    no la jerarquia ``sqlite3``.
+    """
+
+    code = "sg_integrity"
+
+
 class NotFoundError(SkillGraphError):
     """Un recurso o fixture solicitada no existe."""
 
