@@ -792,3 +792,55 @@ mas quedan reducidas con el patron helper extraction:
 - H-01 Storage god-class (2407 LoC) y H-02 CLI god-module (2332 LoC)
   son scoped WIs propios, no hacer en este ciclo.
 - Considerar bump `0.14.7.dev0 -> 0.14.8` con WI-21+WI-22 (refactor).
+
+## Reactivacion 2026-09-26 22:59 — WI-23..WI-27 (H-03 cleanup masivo)
+
+Continuacion agresiva del refactor H-03. 5 WIs cerrados, cc total
+reducido en multiples funciones de la capa core:
+
+### Cambios
+
+- `src/skillgraph/runtime/locks.py` WI-23:
+  - `take` cc 16 -> 5 (4 helpers: `_acquire_with_timeout`,
+    `_acquire_fail_fast`, `_open_lock`, `_release`).
+- `src/skillgraph/governance/receipts.py` WI-24:
+  - `record_validation_receipt` cc 14 -> 5 (4 helpers:
+    `_require_non_empty` con `empty_msg` kwarg para preservar
+    genero, `_require_known_verdict`, `_require_artifact_exists`,
+    `_persist_validation_evidence`).
+- `src/skillgraph/knowledge/knowledge_invalidator.py` WI-25:
+  - `traverse_invalidations` cc 13 -> 5 (3 helpers: `_seed_hop_zero`,
+    `_expand_one_hop`, `_warn_if_truncated`).
+- `src/skillgraph/runtime/http_adapter.py` WI-26:
+  - `invoke` cc 12 -> 7 (sentinel `RetryableHttpStatus` + helper
+    `_dispatch_response`).
+- `src/skillgraph/knowledge/file_handoff.py` WI-27:
+  - `compile_handoff_from_scopes` cc 12 -> 1 (triada clasica
+    `_validate_inputs` + `_enforce_coverage_or_raise` +
+    `_build_synth_recipe`).
+- Specs: `specs/wi-23..wi-27-*.md` y D-55..D-60.
+
+### Decisiones registradas
+
+- D-55: context manager "tomar lock" -> 4 fases, cada fase en helper.
+- D-56: `_require_*` con `empty_msg` kwarg para preservar genero.
+- D-57: persistencia acoplada (Source+Evidence misma entidad) -> helper.
+- D-58: traversal BFS hops -> seed + expand + warn.
+- D-59: dispatch por valor con raise tipado por tipo de respuesta.
+- D-60: triada clasica de pipeline (validate/enforce/build_synth).
+
+### Estado funciones publicas cc>10
+
+- Antes (WI-22 baseline): 15 funciones.
+- Despues (WI-27): 8 funciones. Reduccion 47%.
+- Las 8 restantes son mayormente CLI entry points (main, cmd_run,
+  cmd_promotion_reconcile) y detect_changes (cc=18).
+
+### Evidencia
+
+- Suite completa **1044/1044 PASS** en cada cierre.
+- ruff: All checks passed.
+- 5 commits atomicos: `e4e5927`, `3cd8633`, `ab9970f`, `fe67b79`,
+  + WI-27 pendiente.
+- 41+ commits ahead of origin/main.
+
