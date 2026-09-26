@@ -214,6 +214,66 @@ def _make_receipt_id(*, command: str, revision: str, timestamp: str, tests_run: 
     return str(uuid.uuid5(namespace, digest.hex()))
 
 
+def _require_non_empty(value: str, *, field: str, empty_msg: str = "vacio") -> str:
+    """Smart constructor de string no vacio. Lanza `ValidationError` tipado.
+
+    `empty_msg` permite preservar el genero historico del mensaje del campo
+    (ej. "revision vacia" en femenino, "command vacio" en masculino).
+    """
+    if not value:
+        raise ValidationError(f"{field} {empty_msg}")
+    return value
+
+
+def _require_known_verdict(result: str) -> str:
+    """Exige que `result` pertenezca a `RECEIPT_VERDICTS`."""
+    if result not in RECEIPT_VERDICTS:
+        raise ValidationError(f"result invalido: {result!r}")
+    return result
+
+
+def _require_artifact_exists(artifact_path: str) -> str:
+    """Exige que `artifact_path` apunte a un archivo existente en disco."""
+    if not Path(artifact_path).exists():
+        raise ValidationError(f"artifact_path no existe en disco: {artifact_path!r}")
+    return artifact_path
+
+
+def _persist_validation_evidence(
+    controller: KnowledgeController,
+    *,
+    receipt: ValidationReceipt,
+    source_id: str,
+    timestamp: str,
+) -> None:
+    """Persiste el receipt como Evidence(kind='validation_receipt').
+
+    Reusa la tabla `evidence` (regla AGENTS §1.5: no tabla nueva).
+    Necesita un Source "validacion" para satisfacer la FK.
+    """
+    controller.register_source(
+        source=Source(
+            source_id=source_id,
+            kind="local_file",
+            content_hash=receipt.receipt_id,
+            locator={"path": receipt.artifact_path},
+            git_commit_sha=None,
+            git_tree_sha=None,
+            working_tree_status=None,
+            checked_at=timestamp,
+            freshness="fresh",
+        )
+    )
+    evidence = Evidence(
+        evidence_id="",  # autogenerado por KnowledgeController
+        source_id=source_id,
+        kind="validation_receipt",
+        content=receipt.to_payload(),
+        observed_at=timestamp,
+    )
+    controller.record_evidence(evidence=evidence)
+
+
 def record_validation_receipt(
     *,
     controller: KnowledgeController,
@@ -254,19 +314,12 @@ def record_validation_receipt(
         SkillGraphError: cualquier error de persistencia.
     """
     # Validaciones tempranas (smart constructors).
-    if not command:
-        raise ValidationError("command vacio")
-    if not revision:
-        raise ValidationError("revision vacia")
-    if result not in RECEIPT_VERDICTS:
-        raise ValidationError(f"result invalido: {result!r}")
-    if not artifact_path:
-        raise ValidationError("artifact_path vacio")
-    if not scope:
-        raise ValidationError("scope vacio")
-    # artifact_path debe existir en disco (UAT-EVO-12 "vinculado al artefacto").
-    if not Path(artifact_path).exists():
-        raise ValidationError(f"artifact_path no existe en disco: {artifact_path!r}")
+    _require_non_empty(command, field="command")
+    _require_non_empty(revision, field="revision", empty_msg="vacia")
+    _require_known_verdict(result)
+    _require_non_empty(artifact_path, field="artifact_path")
+    _require_non_empty(scope, field="scope")
+    _require_artifact_exists(artifact_path)
 
     ts = timestamp or _utc_now_iso()
     rid = receipt_id or _make_receipt_id(
@@ -290,31 +343,8 @@ def record_validation_receipt(
         extra_metadata=dict(extra_metadata or {}),
     )
 
-    # Persistir como Evidence(kind='validation_receipt'). Reusa tabla
-    # existente (regla AGENTS §1.5: no tabla nueva). Necesitamos un
-    # Source "validacion" para satisfacer la FK.
     source_id = f"validation:{rid}"
-    controller.register_source(
-        source=Source(
-            source_id=source_id,
-            kind="local_file",
-            content_hash=rid,
-            locator={"path": artifact_path},
-            git_commit_sha=None,
-            git_tree_sha=None,
-            working_tree_status=None,
-            checked_at=ts,
-            freshness="fresh",
-        )
-    )
-    evidence = Evidence(
-        evidence_id="",  # autogenerado por KnowledgeController
-        source_id=source_id,
-        kind="validation_receipt",
-        content=receipt.to_payload(),
-        observed_at=ts,
-    )
-    controller.record_evidence(evidence=evidence)
+    _persist_validation_evidence(controller, receipt=receipt, source_id=source_id, timestamp=ts)
     return rid
 
 
