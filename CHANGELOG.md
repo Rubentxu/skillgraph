@@ -12,6 +12,29 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.14.6] - 2026-09-26 — WI-06..WI-10 (housekeeping: coverage hardening H-14 + docs sync)
+
+**Resumen**: cierre de los 3 unicos gaps materiales de cobertura reconocidos en `CURRENT.md` para el nucleo evolution-v2 (H11..H15): `governance/receipts.py` 73%→99% (WI-06), `file_handoff.py` 85%→93% (WI-07), `governance/improvement.py` 84%→100% (WI-08). Adicionalmente se sincroniza la prosa de `CURRENT.md` y `README.md` con la realidad post-stewardship créatif (WI-09, WI-10), incluyendo badges `984/984 tests` y `evolution_v2 100% (H11..H15)`. Sin cambio de codigo de produccion (WI-06/07/08 son solo tests). Tests: 984/984 PASS preservados en CI local (`pipelinek`) y `ruff format` + `ruff check` limpios.
+
+### Added (test coverage)
+
+- **`tests/test_h14_validation_receipts.py`** (WI-06): +28 tests en 5 clases nuevas. Cubre `ValidationReceipt.__post_init__`, `is_receipt_applicable` con deps, `record_validation_receipt` early returns, `list_applicable_receipts` paths defensivos, constante `RECEIPT_VERDICTS`.
+- **`tests/test_h13_handoff_expert.py`** (WI-07): +17 tests en 5 clases nuevas. Cubre mensajes `HandoffBlockedError`, `build_coverage_manifest` con focos, `should_skip_adapter` con payloads vacios, `ScopeAwareRecipe` validation, type-checks defensivos.
+- **`tests/test_h15_improvement.py`** (WI-08): +14 tests en 7 clases nuevas. Cubre `ImprovementCandidate.__post_init__`, `PromotionDecision.__post_init__`, `promote_candidate` approver required, `rollback_candidate` policy="blocked", `detect_redundant_extraction` empty sigs, `localize_omission` defensive branches, `compare_recipes` correction=False.
+
+### Changed (docs sync)
+
+- **`CURRENT.md`** (WI-09): limpieza de 4 stale markers pre-WI-06 (L50 "HEAD pendiente", L57 "working tree staged", L59 "HEAD == origin/main"); adicion de seccion cronologica `## Reactivacion 2026-09-26 — WI-06/07/08 cerrado`; actualizacion del modo de espera con el estado real post-stewardship.
+- **`README.md`** (WI-10): badge `tests-405/405` → `tests-984/984`; nuevo badge `evolution_v2 100% (H11..H15)`; parrafo explicativo y filas tabla en EN y ES para evolution-v2 (H11..H15).
+- **`STATE.yaml`**: `tests.total` 957→984, `delta_wi06/07/08` documentados, `current_workitem` actualizado WI-08→WI-11.
+
+### Notes
+
+- PATCH bump: housekeeping puro (test coverage + docs), sin cambio de API observable.
+- Mantiene regla AGENTS §7 "release sin --force sobre published tags": los tags `v0.14.1..v0.14.5` quedan intactos, este release es nueva `v0.14.6`.
+- Migracion Pattern transitorio `.dev0`: post-tag housekeeping mantiene `__version__ = "0.14.6.dev0"` para cumplir release_governance (`HEAD > last-tag` exige `.devN`).
+- Stewardship créatif ejecutado bajo autorizacion operador ("continuamos completando, deuda tecnica primero") — D-17..D-34 documentadas.
+
 ## [0.14.5] - 2026-09-26 — WI-04/05 (housekeeping trazabilidad: journal retroactivo + cleanup drifts)
 
 **Resumen**: cierre de drift de trazabilidad canonica detectado por audit transversal post-WI-03. Las entradas cronológicas de WI-02b y WI-03 faltaban en `SESSION-JOURNAL.md`; se añaden retroactivamente desde observables (commits, tags, CHANGELOG, specs). Adicionalmente se cierra drift menor en `CURRENT.md` (baseline tests 927→929; cuenta de releases 17→18) y bump `.dev0` requerido por `release_governance` (`HEAD > last-tag` exige `.devN`). Sin cambio de codigo de produccion. Tests: 929/929 PASS preservados en CI local (`pipelinek`) sin ejecutarse code paths nuevos.

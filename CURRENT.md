@@ -1,10 +1,10 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-26 18:18 (Europe/Madrid, WI-09 en curso).
+> Última verificación: 2026-09-26 18:23 (Europe/Madrid, WI-11).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
-> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**.
+> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**.
 > Tag `v0.14.0` preservado como erratum histórico (package metadata decía `0.7.0.dev0`).
 
 ## Goal
@@ -49,9 +49,9 @@ aplicado: T3 Threat model (ADR-0015 + tests de attestation + audit).
 
 - HEAD: `951e9ef` (WI-07+WI-08 housekeeping cerrado; sin push a origin).
 - Tests: **984/984 PASS** en 174.26s (`uv run pytest --no-header -q`; baseline post-WI-07+WI-08). WI-08 anade +14 tests de coverage hardening en `governance/improvement.py` (84% -> 100%). WI-07 anade +17 tests en `file_handoff.py` (85% -> 93%).
-- Package version: `0.14.5.dev0` (bump post-v0.14.5 housekeeping; WI-07/08 no generan release nuevo). Tags previos: `v0.14.0` (erratum historico, d50f666), `v0.14.1` (WI-01 release, e2cdc53), `v0.14.2` (WI-02a release, da95923), `v0.14.3` (WI-02b release, 7dec857), `v0.14.4` (WI-03 release, dd7a3ef), `v0.14.5` (WI-04/05 housekeeping release, 6ac10ff).
+- Package version: `0.14.6` (bump post-WI-06..WI-10 housekeeping; tag anotado `v0.14.6` local, push pendiente de aprobacion operador). Tags previos: `v0.14.0` (erratum historico, d50f666), `v0.14.1` (WI-01 release, e2cdc53), `v0.14.2` (WI-02a release, da95923), `v0.14.3` (WI-02b release, 7dec857), `v0.14.4` (WI-03 release, dd7a3ef), `v0.14.5` (WI-04/05 housekeeping release, 6ac10ff), `v0.14.6` (WI-06..WI-10 housekeeping release, WI-11).
 - CI dominante: local `pipelinek` (`.pipeline.kts`). GitHub Actions queda como notificacion informativa (ver AGENTS.md §CI Local Obligatorio).
-- **19 releases** emitidas: v0.3.0 → v0.14.5 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6 + WI-02b v0.14.3 + WI-03 v0.14.4 + WI-04/05 v0.14.5 housekeeping). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
+- **20 releases** emitidas: v0.3.0 → v0.14.6 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6 + WI-02b v0.14.3 + WI-03 v0.14.4 + WI-04/05 v0.14.5 housekeeping + WI-06..WI-10 v0.14.6 housekeeping). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
 - Cobertura nucleo re-medida post-WI-07+WI-08: governance/receipts.py 99% (WI-06), governance/improvement.py 100% (WI-08), file_handoff.py 93% (WI-07). Modulos H11/H12: file_signature.py 100%, file_scope.py 100%.
 - Working tree: limpio (post-WI-07+WI-08 commit `951e9ef`).
