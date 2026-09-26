@@ -67,7 +67,7 @@ directos del RunController.
 ### 2.3 Protocolos inyectables
 
 ```python
-class AgentAdapter(Protocol):                  # src/skillgraph/runtime/agent.py:71
+class AgentAdapter(Protocol):  # src/skillgraph/runtime/agent.py:71
     def invoke(self, handoff: Handoff) -> AgentResult: ...
 ```
 
