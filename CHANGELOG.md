@@ -12,6 +12,47 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.14.2] - 2026-09-26 — Refactor B+C (persistence ports + RunController) (WI-02a)
+
+**Resumen**: refactor interno de la capa de persistencia. Introduce
+puertos de capacidad (Protocols estructurales) sin cambio de API
+observables para el usuario. Tests: 927/927 PASS (155.73s) en CI
+local canónico (`pipelinek`).
+
+### Added
+
+- `src/skillgraph/platform/ports/__init__.py`: cinco `Protocol`s
+  estructurales de capacidad (duck typing sin `runtime_checkable`
+  salvo `EventStore`):
+  - `RunRepository`: ciclo de vida de runs.
+  - `EventStore`: append-only de eventos con `UNIQUE(event_id)`.
+  - `KnowledgeRepository`: lectura/escritura de documentos.
+  - `PromotionRepository`: snapshots de promoción policy→production.
+  - `PolicyStore`: versionado de políticas.
+- `tests/test_persistence_ports.py`: 7 tests (5 structural +
+  2 `runtime_checkable` sobre `EventStore`).
+- Factorías en `Storage`: `run_repository()`, `event_store()`,
+  `policy_store()` (compatibilidad — devuelven `self`).
+
+### Changed
+
+- `RunController.__init__`: sustituye `storage: Storage` por
+  tres puertos explícitos: `runs: RunRepository`,
+  `events: EventStore`, `policy: PolicyStore`. La inyección
+  por Protocol elimina el acoplamiento a la implementación.
+- Migración masiva de call sites: 16 ficheros de test +
+  `src/skillgraph/cli/runner.py` actualizados a la nueva firma.
+- Verificado: `Storage` implementa estructuralmente los cinco
+  Protocols (19/3/4/23/3 métodos coinciden).
+
+### Deferred (WI-02b)
+
+- `EventLog`: migración de `sqlite3.Connection` directo a `EventStore`.
+- `KnowledgeController`: dejar de acceder a `storage._conn`.
+- Eliminación de `Storage.conn` como propiedad pública (romper API).
+
+---
+
 ## [0.14.1] - 2026-09-26 — Release & integration readiness (WI-01)
 
 **Resumen**: release correctiva que cierra la grieta de provenance

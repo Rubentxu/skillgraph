@@ -5753,3 +5753,43 @@ Verificacion final:
 **Tests**: 918/918 verde. ruff limpio.
 
 HEAD tras este ciclo: dfd192a == origin/main.
+
+## WI-02a — 2026-09-26 — Refactor B+C (persistence ports + RunController)
+
+**Tipo**: refactor interno (sin cambio de API observable a nivel de release).
+**Decisión D-14**: split WI-02 → WI-02a (puertos + RunController) / WI-02b (resto).
+Estrategia: B+B híbrida (puertos + Storage fachada compatibilidad).
+
+**Trabajo completado**:
+- `src/skillgraph/platform/ports/__init__.py`: 5 Protocols estructurales
+  (RunRepository / EventStore / KnowledgeRepository / PromotionRepository /
+  PolicyStore). `EventStore` es `@runtime_checkable`; los demás son duck typing
+  puro.
+- Verificado: `Storage` implementa los 5 Protocols estructuralmente
+  (19/3/4/23/3 métodos coinciden).
+- `src/skillgraph/core/runcontroller.py`: `__init__` toma ahora
+  `runs: RunRepository, events: EventStore, policy: PolicyStore` en vez de
+  `storage: Storage`. Eliminado el acoplamiento directo.
+- `tests/test_persistence_ports.py`: 7 tests verdes (5 structural + 2
+  runtime_checkable sobre EventStore).
+- Migración masiva: 16 ficheros de test + `cli/runner.py` actualizados a
+  la nueva firma.
+- `.gitignore`: añadido `.pipelinek/`.
+
+**Tests**: 927/927 PASS en 155.73s.
+**Pipelinek**: `Pipeline finished with SUCCESS` (4 stages SUCCESS).
+
+**Deuda diferida (WI-02b)**:
+- `EventLog` aún recibe `events.conn` (sqlite3.Connection directa).
+- `KnowledgeController` accede a `storage._conn`.
+- `Storage.conn` sigue siendo propiedad pública.
+
+**Decisiones**:
+- PATCH bump (v0.14.2): refactor puro sin cambio de capacidad observable
+  a nivel de API pública.
+- `Storage` mantiene API legacy; nuevos Protocol se inyectan por
+  constructor.
+- Tag `v0.14.2` se creará tras commit con `__version__ = "0.14.2"` puro.
+
+**Próximo**: WI-02b (EventLog + KnowledgeController + Storage.conn cleanup)
+si el usuario lo autoriza.
