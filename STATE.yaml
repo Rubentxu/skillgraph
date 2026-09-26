@@ -541,7 +541,7 @@ tests:
   total: 929
   passed: 929
   duration_s: 177   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-03; 929 = 927 post-WI-02a + 2 nuevos: Storage.list_sources happy path + aislamiento)
-  package_version: "0.14.4.dev0"  # WI-04 housekeeping bumps a .dev0 por release_governance (post-tag requiere .devN); siguiente release re-emitira v0.14.4
+  package_version: "0.14.5"   # WI-04/05 release; tag v0.14.5 sobre este commit
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"

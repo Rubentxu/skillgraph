@@ -12,6 +12,25 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.14.5] - 2026-09-26 — WI-04/05 (housekeeping trazabilidad: journal retroactivo + cleanup drifts)
+
+**Resumen**: cierre de drift de trazabilidad canonica detectado por audit transversal post-WI-03. Las entradas cronológicas de WI-02b y WI-03 faltaban en `SESSION-JOURNAL.md`; se añaden retroactivamente desde observables (commits, tags, CHANGELOG, specs). Adicionalmente se cierra drift menor en `CURRENT.md` (baseline tests 927→929; cuenta de releases 17→18) y bump `.dev0` requerido por `release_governance` (`HEAD > last-tag` exige `.devN`). Sin cambio de codigo de produccion. Tests: 929/929 PASS preservados en CI local (`pipelinek`) sin ejecutarse code paths nuevos.
+
+### Changed (housekeeping)
+
+- **`SESSION-JOURNAL.md`**: 2 entradas retroactivas (WI-02b, WI-03) + 1 entrada del propio WI-04. Tono consistente con entradas existentes; hechos verificables contra git log + CHANGELOG; sin reinterpretacion.
+- **`CURRENT.md`**:
+  - `Tests: 927/927 PASS` → `929/929 PASS` (post-WI-03).
+  - `17 releases` → `18 releases` (contaban v0.14.3 y v0.14.4; ahora 18 antes del bump final).
+- **`STATE.yaml`** + `__init__.py`: bump `0.14.4.dev0` → `0.14.5` (release).
+- **`specs/wi-04-journal-traceability.md`**: spec del WI (D-16, 73 LoC).
+
+### Notes
+
+- PATCH bump: housekeeping puro (documentacion + bumps de gobernanza), sin cambio de API observable.
+- Mantiene regla AGENTS §7 "release sin --force sobre published tags": el tag `v0.14.4` queda intacto, este release es nueva `v0.14.5`.
+- Migración Pattern transitorio `.dev0`: solo si housekeeping post-tag requiere `.devN` para release_governance y el operador autoriza release inmediato (v0.14.5 PATCH). Alternativa habitual es acumularlo en un WI posterior.
+
 ## [0.14.4] - 2026-09-26 — WI-03 (governance/receipts migra a KnowledgeRepository)
 
 **Resumen**: cierre del último escape hatch `_conn.execute` en código de dominio (fuera de Storage.py, que es donde debe estar, y catalog.py, que usa un SQLite propio distinto del Storage de proyecto). Sin cambio de API observable. Tests: 929/929 PASS (de 927 en v0.14.3; +2 tests nuevos de Storage.list_sources).
