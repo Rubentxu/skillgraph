@@ -12,6 +12,45 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.14.1] - 2026-09-26 — Release & integration readiness (WI-01)
+
+**Resumen**: release correctiva que cierra la grieta de provenance
+entre `__version__` y las etiquetas git. CI local canónico = `pipelinek`.
+Sin cambio de capacidad observable a nivel de API; todos los items son
+de empaquetado, admisión y reconciliación documental.
+
+### Added
+
+- `tests/test_release_governance.py`: admission gate de release. Tres
+  ramas válidas (HEAD en etiqueta, HEAD posterior con `.devN`, sin
+  etiqueta reachable) y dos derivas reales rechazadas (`__version__`
+  puro sin etiqueta; `.devN` con base contradictoria).
+- `SECURITY.md`: proceso de divulgación coordinada (GHSA,
+  ventana High = 90 días).
+- Regla `§12 Regla de release` en AGENTS.md: fuente única de
+  SemVer = `src/skillgraph/__init__.py:__version__`; prohibido
+  `--force` sobre etiquetas publicadas; release gate = test pytest.
+
+### Changed
+
+- `mise.toml`: `tasks.sync` migra de `--extra dev` (roto en PEP 735)
+  a `--group dev`. Nueva `tasks.release-gate`.
+- `pyproject.toml`: `license` pasa de `Proprietary` (text) a
+  `"Apache-2.0"` (SPDX), alineado con `LICENSE` real.
+- `pyproject.toml`: `[tool.coverage.report] fail_under` sube de 0
+  a 60 (gate global mínimo; focales por módulo siguen en WI-02).
+- `src/skillgraph/__init__.py:__version__` = `"0.14.1.dev0"` durante
+  el trabajo; `"0.14.1"` tras CI verde.
+- Documentación reconciliada: CURRENT.md, STATE.yaml, JOURNAL y
+  CHANGELOG convergen en baseline real (918 tests, 160.74s).
+
+### Erratum: `v0.14.0`
+
+La etiqueta `v0.14.0` queda como **evidencia histórica de una release
+defectuosa** (HEAD `d50f666`, package metadata declaraba `0.7.0.dev0`).
+**NO se reescribe**. La release correctiva es `v0.14.1`. SemVer no
+contempla reescritura retroactiva de versiones publicadas.
+
 ## [Unreleased — evolution-v2 (H0..H15)] — 2026-09-25
 
 **Resumen**: roadmap `external/evolution-v2/plan/ROADMAP.md` cerrado al 100%. 5 nuevos modulos, 58 tests UAT-EVO nuevos (suite 830/830 PASS). NO bump de release: los workitems añaden superficie de conocimiento/governance sin capacidad observable nueva a nivel de API CLI (no hay comandos ni flags nuevos).

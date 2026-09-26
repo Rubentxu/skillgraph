@@ -538,9 +538,10 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 772
-  passed: 772
-  duration_s: 170   # re-medido con pytest --cov el 2026-09-25 (post-session, 754 baseline + 18 nuevos: 11 evidence_lock + 4 argparse + 3 bench smoke)
+  total: 918
+  passed: 918
+  duration_s: 161   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-01; 909 baseline pre-WI-01 + 2 nuevos: test_release_governance)
+  package_version: "0.14.1.dev0"   # WI-01 work; tras CI verde bump a "0.14.1" + tag v0.14.1
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"

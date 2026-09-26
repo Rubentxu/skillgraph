@@ -17,8 +17,12 @@ uv = "0.12.17"
 experimental = true
 
 [tasks.sync]
-run = "uv sync --extra dev"
-description = "Resuelve el venv local con dependencias de producción y dev"
+run = "uv sync --group dev"
+description = "Resuelve el venv local con dependencias de producción y dev (PEP 735)"
+
+[tasks.release-gate]
+run = "uv run pytest tests/test_release_governance.py -v"
+description = "Ejecuta el admission gate de release (test_release_governance)"
 
 [tasks.test]
 run = "uv run pytest"

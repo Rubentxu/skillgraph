@@ -827,3 +827,55 @@ Ninguna hasta la fecha. Toda excepción requiere entrada en
 `SESSION-JOURNAL.md` y aprobación explícita del maintainer del proyecto.
 
 ---
+
+## 12. Regla de release
+
+Una única fuente de verdad para la SemVer publicada:
+
+- **Fuente**: `src/skillgraph/__init__.py:__version__`.
+- **Back-end**: `[tool.hatch.version] path` en `pyproject.toml`
+  apunta a ese fichero. Hatch lo lee en cada build.
+- **Etiqueta**: cada tag anotado `v<X>.<Y>.<Z>` debe corresponder
+  a un commit cuyo `__version__` (sin sufijo `.devN`) sea
+  `<X>.<Y>.<Z>`.
+- **Trabajo**: commits posteriores a la etiqueta más reciente
+  deben incrementar `.dev0`, `.dev1`, etc. (mismo SemVer base
+  hasta la siguiente release).
+- **Bumps entre releases**: si se cambia `X.Y.Z` base entre
+  dos releases, **la nueva etiqueta debe existir antes** de que
+  `__version__` la declare como base.
+- **Prohibido** `git tag --force` o `git push --force` sobre
+  cualquier etiqueta publicada. La provenance es histórica y no
+  se reescribe.
+
+### Release gate
+
+El test `tests/test_release_governance.py` es el **admission
+gate de release** y forma parte de la pipeline local canónica
+(`pipelinek run`). Tiene tres ramas válidas:
+
+1. HEAD en una etiqueta `v<X>.<Y>.<Z>` y
+   `__version__ = <X>.<Y>.<Z>` (release limpia).
+2. HEAD posterior a una etiqueta reachable y `__version__` con
+   sufijo `.devN` (trabajo entre releases; base puede ser la
+   misma o superior).
+3. Sin etiqueta reachable y `__version__` con sufijo `.devN`
+   (trabajo pre-release inicial).
+
+Y rechaza dos derivas reales:
+
+- `__version__ = X.Y.Z` puro con HEAD no etiquetado.
+- `__version__` con sufijo `.devN` apuntando a una base que
+  contradice una etiqueta anotada en el mismo commit.
+
+Si el test falla, **la release queda bloqueada** hasta que
+`__version__` y la etiqueta vuelvan a coincidir.
+
+### Erratum histórico: `v0.14.0`
+
+La etiqueta `v0.14.0` (HEAD `d50f666`) **NO se reescribe**:
+permanece como evidencia histórica de una release publicada con
+package metadata defectuosa (`__version__ = "0.7.0.dev0"`). La
+release correctiva es `v0.14.1`. SemVer no contempla reescritura
+retroactiva de versiones publicadas, y la provenance histórica
+debe preservarse como está.

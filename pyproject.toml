@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Plataforma local-first para convertir skills de agentes en workflows declarativos, verificables y extensibles."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
+license = "Apache-2.0"
 authors = [{ name = "SkillGraph" }]
 keywords = ["agents", "workflows", "declarative", "local-first", "markdown", "yaml"]
 classifiers = [
@@ -89,7 +89,7 @@ omit = [
 show_missing = true
 skip_covered = false
 skip_empty = true
-fail_under = 0
+fail_under = 60
 
 [tool.ruff]
 target-version = "py311"

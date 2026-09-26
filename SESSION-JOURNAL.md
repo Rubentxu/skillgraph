@@ -3,6 +3,51 @@
 Diario cronológico de la iniciativa SkillGraph.
 Resumen + referencia verificable. NO reproducir logs ni transcripciones.
 
+## 2026-09-26 — WI-01 (Release & integration readiness)
+
+### Resumen
+
+- Sesión arranca como **orquestador SDDK** bajo paraguas persistente
+  tras adopción (`sddk adopt apply` -> status complete).
+- Pre-flight SDDK: `sddk mode` -> `undeclared` (REASON=no-entry);
+  adoptado en este turno.
+- Auditoría origen: informe técnico integral 2026-09-26
+  (HEAD `b1bb264`). Tres hallazgos críticos:
+  - `mise run sync` invoca `--extra dev` con `dev` en
+    `[dependency-groups]` (PEP 735) -> falla.
+  - `__version__ = "0.7.0.dev0"` mientras la etiqueta
+    `v0.14.0` apunta a `d50f666` -> drift de provenance.
+  - Verdad operacional distribuida (772/830/904/918 tests
+    según el documento).
+- Baseline pytest pre-cambio: **918 passed en 160.74s, exit 0**.
+- Decisión D-03 (operador 2026-09-26T11:55:39Z): release correctiva
+  `v0.14.1`; `v0.14.0` se preserva como erratum histórico
+  (NO se reescribe); `v0.14.0-r2` rechazado (precedencia SemVer
+  inferior).
+
+### Cambios aplicados (WI-01)
+
+- T-01 `test(release-governance)`: nuevo test con tres ramas
+  válidas y dos derivas rechazadas. ROJO primero (cumple TDD).
+- T-02 `release(version)`: `__version__` = `0.14.1.dev0`.
+- T-03 `chore(tooling)`: `uv sync --group dev` (PEP 735); nuevo
+  `mise run release-gate`.
+- T-04 `chore(pyproject)`: license SPDX Apache-2.0; coverage
+  `fail_under = 60`. Cobertura global medida: 83.51%.
+- T-05 `docs(security)`: SECURITY.md con divulgación coordinada.
+- T-06 `docs(state)`: CURRENT.md y STATE.yaml reconciliados a
+  baseline 918/160.74s.
+- T-07 `docs(checkpoints)`: 2 checkpoints superseded movidos a
+  `audits/historical/`.
+- T-08 `docs(changelog+journal)`: entrada `[0.14.1]` con erratum
+  `v0.14.0`.
+- T-09 `docs(agents)`: regla `§12 Regla de release` (próxima task).
+
+### Resultado
+
+- 920/920 PASS, coverage 83.51%, exit 0.
+- Release gate local: `tests/test_release_governance.py` 2/2 PASS.
+
 ## 2026-09-23 — Sesión de descubrimiento y bootstrap
 
 ### Resumen

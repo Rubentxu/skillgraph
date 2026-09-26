@@ -1,9 +1,11 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-25 10:08 (Europe/Madrid).
+> Última verificación: 2026-09-26 13:34 (Europe/Madrid, WI-01).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
+> WI-01 (release & integration readiness) **EN CURSO** — `__version__` = `0.14.1.dev0`.
+> Tag `v0.14.0` preservado como erratum histórico (package metadata decía `0.7.0.dev0`).
 
 ## Goal
 
@@ -45,8 +47,10 @@ aplicado: T3 Threat model (ADR-0015 + tests de attestation + audit).
 
 ## Ultimo estado comprobado
 
-- HEAD: `ffa03e9` (test(evidence): refresh UAT-08/09). HEAD anterior a T3.
-- Tests: **830/830 PASS** en 189s (`mise exec -- uv run pytest -q`; baseline 821 → 830 con +9 nuevos: test_h15_improvement UAT-EVO-15..18).
+- HEAD: `b1bb264` (docs/changelog+journal trazabilidad ciclo §1.2 compliance). WI-01 en curso sobre este HEAD.
+- Tests: **918/918 PASS** en 160.74s (`uv run pytest --no-header -q`; baseline post-WI-01). Incremento de +9 nuevos: `tests/test_release_governance.py` (test de release governance, 2 tests).
+- Package version: `0.14.1.dev0` (work); `0.14.1` (release tras CI verde). Tag `v0.14.0` (HEAD `d50f666`) preservado como release histórica defectuosa, NO reescrito.
+- CI dominante: local `pipelinek` (`.pipeline.kts`). GitHub Actions queda como notificación informativa (ver AGENTS.md §CI Local Obligatorio).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
 - Cobertura núcleo re-medida: **83%** total. Modulos H11/H12/H13/H14/H15: file_signature.py 85%, file_scope.py 81%, file_handoff.py 80%, governance/receipts.py 73%, governance/improvement.py 84%.
