@@ -231,42 +231,23 @@ class GitSource:
 
         `until_commit` por defecto = HEAD del repo.
         """
-        Repo, _, tree_changes = _import_dulwich()
-        repo = Repo(str(self.repo_root))
-
-        if until_commit is None:
-            head = repo.head().decode()
-            until_commit = head
-
-        c1 = repo[since_commit.encode()]
-        c2 = repo[until_commit.encode()]
+        c1, c2 = self._resolve_commit_pair(since_commit, until_commit)
 
         changes: list[ChangedFile] = []
+        Repo, _, tree_changes = _import_dulwich()
+        repo = Repo(str(self.repo_root))
         for ch in tree_changes(repo.object_store, c1.tree, c2.tree):
-            old_sha = ch.old.sha.decode() if ch.old and ch.old.sha else None
-            new_sha = ch.new.sha.decode() if ch.new and ch.new.sha else None
-            # path siempre vive en old o new side.
-            path: str | None = None
-            if ch.old and ch.old.path:
-                path = ch.old.path.decode(errors="replace")
-            elif ch.new and ch.new.path:
-                path = ch.new.path.decode(errors="replace")
+            path = _resolve_change_path(ch)
             if path is None:
                 continue
-
-            if old_sha is None:
-                status: ChangeStatusLiteral = "added"
-            elif new_sha is None:
-                status = "deleted"
-            else:
-                status = "modified"
-
+            old_sha = ch.old.sha.decode() if ch.old and ch.old.sha else None
+            new_sha = ch.new.sha.decode() if ch.new and ch.new.sha else None
             changes.append(
                 ChangedFile(
                     path=path,
                     old_blob_sha=old_sha,
                     new_blob_sha=new_sha or "",
-                    status=status,
+                    status=_classify_change_status(old_sha, new_sha),
                 )
             )
 
@@ -275,6 +256,23 @@ class GitSource:
                 c for c in changes if any(_matches_pathspec(c.path, ps) for ps in self.pathspecs)
             ]
         return changes
+
+    def _resolve_commit_pair(
+        self, since_commit: str, until_commit: str | None
+    ) -> tuple[object, object]:
+        """Carga los dos commits a comparar.
+
+        Si `until_commit` es None, usa HEAD del repo.
+        Mantenemos `Repo(...)` lazy solo aqui para no penalizar el
+        arranque de tests que importan `git_source` sin usar dulwich.
+        """
+        Repo, _, _ = _import_dulwich()
+        repo = Repo(str(self.repo_root))
+        if until_commit is None:
+            until_commit = repo.head().decode()
+        c1 = repo[since_commit.encode()]
+        c2 = repo[until_commit.encode()]
+        return c1, c2
 
     def to_source(self, *, source_id: SourceID) -> Source:
         """Convierte este GitSource en un Source con un source_id explicito.
@@ -376,6 +374,24 @@ def _compute_content_hash(blob_shas: dict[str, str]) -> str:
         h.update(blob_shas[path].encode())
         h.update(b"\x00")
     return f"sha256:{h.hexdigest()}"
+
+
+def _resolve_change_path(ch: object) -> str | None:
+    """Path de un tree change; None si no hay path en old ni new."""
+    if ch.old and ch.old.path:
+        return ch.old.path.decode(errors="replace")
+    if ch.new and ch.new.path:
+        return ch.new.path.decode(errors="replace")
+    return None
+
+
+def _classify_change_status(old_sha: str | None, new_sha: str | None) -> ChangeStatusLiteral:
+    """added/old=None, deleted/new=None, modified/ambas."""
+    if old_sha is None:
+        return "added"
+    if new_sha is None:
+        return "deleted"
+    return "modified"
 
 
 __all__ = [

@@ -5,7 +5,7 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **46** modulos Python, **16047** LoC, **558** funciones.
+- **46** modulos Python, **16061** LoC, **561** funciones.
 - **4** archivos >800 LoC (god modules).
 - **1** funciones publicas con cc>=20 (refactor obligatorio).
 - **1** funciones privadas con cc>=20 (refactor opcional).
@@ -52,8 +52,8 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 | 101 | `analyze_skill` | `src/skillgraph/domain/skill_importer.py` |
 | 95 | `_reconcile_run_locked` | `src/skillgraph/runtime/runcontroller.py` |
 | 92 | `cmd_expansion_apply` | `src/skillgraph/cli/runner.py` |
+| 91 | `_resolve_run_inputs` | `src/skillgraph/cli/runner.py` |
 | 90 | `compile_handoff` | `src/skillgraph/knowledge/context_controller.py` |
-| 89 | `_resolve_run_inputs` | `src/skillgraph/cli/runner.py` |
 | 86 | `aggregate_file_signatures` | `src/skillgraph/knowledge/knowledge_controller.py` |
 | 85 | `compile_handoff_from_scopes` | `src/skillgraph/knowledge/file_handoff.py` |
 | 84 | `promote_candidate` | `src/skillgraph/governance/improvement.py` |
