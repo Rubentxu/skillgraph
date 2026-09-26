@@ -1,6 +1,6 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-26 20:39 (Europe/Madrid, WI-17).
+> Última verificación: 2026-09-26 20:54 (Europe/Madrid, v0.14.7 / 0.14.7.dev0).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).

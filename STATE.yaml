@@ -538,10 +538,16 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 1009   # post-WI-12 E1 Adapter real (HttpAgentAdapter Anthropic + OpenAI)
-  passed: 1009
-  duration_s: 188   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-12)
-  package_version: "0.14.6.dev0"   # WI-11 housekeeping release cerrado; post-tag bump .dev0 para cumplir release_governance
+  total: 1044   # post-WI-17 (FEAT+DOC acumulado v0.14.7: HttpAgentAdapter + Backups CLI + STRIDE S8 + Runbook + housekeeping)
+  passed: 1044
+  duration_s: 180   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-17)
+  package_version: "0.14.7.dev0"   # WI-12..WI-17 release MINOR cerrado en tag anotado v0.14.7; post-tag bump .dev0 para cumplir release_governance
+  delta_wi12: "+25 tests (HttpAgentAdapter: 5 AnthropicStrategy + 5 OpenAIStrategy + 8 HttpAgentAdapter + 4 HttpAdapterEnvConfig + 3 retry/failpoints)"
+  delta_wi13: "+11 tests (CLI adapter wiring: 2 fake + 5 http + 3 missing-key + 1 rejects-invalid)"
+  delta_wi14: "+2 tests (HttpAgentAdapter repr/str no-disclosure de api_key)"
+  delta_wi15: "+22 tests (Backups: 4 manifest + 6 create + 5 verify + 2 restore + 4 list + 1 defaults)"
+  delta_wi16: "docs-only (runbook observabilidad 9 secciones, 0 tests)"
+  delta_wi17: "0 tests (housekeeping H-06: import json redundante eliminado)"
   delta_wi06: "+28 tests (10 dataclass validation + 1 is_receipt_applicable deps + 5 record_early_validation + 5 list_defensive_paths + 1 RECEIPT_VERDICTS + 1 to_payload + 5 misc coverage)"
   delta_wi07: "+17 tests (3 handoff_blocked messages + 4 build_coverage_manifest foco + 2 should_skip_adapter empty + 7 ScopeAwareRecipe validation + 1 type-checks doc) — file_handoff.py 85%→93%"
   delta_wi08: "+14 tests (4 ImprovementCandidate validation + 4 PromotionDecision validation + 1 promote approver required + 1 rollback blocked + 1 detect_redundant_extraction empty sigs + 2 localize_omission defensive + 1 compare_recipes correction_false) — improvement.py 84%→100%"
