@@ -66,24 +66,53 @@ git ls-remote origin main    # debe coincidir
 - Gap C (stress N=10): bloqueado por H9-Plan-B
 
 **Trabajos opcionales sin spec** (avanzables con criterio propio):
+
+### Estado al 2026-09-26 (post-DT-PRE-PUSH-HOOK):
+
 1. **Codecov badge** (~5 min, derivado #1 del audit `ci-cache-coverage`):
-   añadir `codecov-action@v4` + secret `CODECOV_TOKEN`. Da badge
-   visible en README.
+   añadir `codecov-action@v4` + secret `CODECOV_TOKEN`. **BLOQUEADO**:
+   requiere accion del operador (crear el secret en GitHub repo settings).
+   Valor cosmético. NO procede sin operador.
+
 2. **Coverage threshold enforcement** (~3 min): cambiar `fail_under=0`
    a `fail_under=80` en `pyproject.toml` + añadir `--cov-fail-under=80`
-   al pytest del CI. **Decisión deliberada**: NO aplicar en este ciclo
-   porque el proyecto acaba de estabilizarse en 83% y no quiero forzar
-   techo artificial.
+   al pytest del CI. **Decisión deliberada**: NO aplicar porque el
+   proyecto acaba de estabilizarse en 83% y no quiero forzar techo
+   artificial. Riesgo: rompe CI por fluctuaciones naturales.
+
 3. **Cache de pytest** (~5 min): segundo `actions/cache` para
    `.pytest_cache` keyed por hash de `tests/`. Reduce ~10s/run.
+   **NEUTRO**: valor bajo, esfuerzo bajo. NO prioritario.
+
 4. **Pre-push hook completo** (~20 min): añadir `scripts/hooks/pre-push`
-   que ejecute la suite completa (no smoke) antes de push. Documentado
-   en audit hooks-ci.
+   que ejecute la suite completa (no smoke) antes de push. ✅ **HECHO**
+   en este turno (4d1e622 + 23e4c94 + 21bc550). Cierra 3ª capa de defensa.
+
 5. **Audit advisories upstream**: verificar pytest/ruff/pyyaml/dulwich
-   contra GitHub Security Advisories. Requiere acceso a red (sin red
-   local en esta sesión).
+   contra GitHub Security Advisories. **BLOQUEADO**: requiere acceso a
+   red (sin red local en este entorno). El operador puede ejecutar
+   este audit si quiere.
+
 6. **Re-auditar tras cambios futuros**: si cambia el schema de Storage,
    re-ejecutar `STEWARDSHIP-T-SECURITY-AUDIT` (Gap D trigger documentado).
+   **NO APLICA** ahora (sin cambios de schema).
+
+### Conclusion del backlog opcional:
+
+De los 6 items, **1 hecho** (pre-push hook) y **5 agotados**:
+- 2 requieren accion del operador (Codecov, advisories).
+- 1 decision deliberada en contra (threshold enforcement).
+- 1 trigger condicional que no aplica (re-audit).
+- 1 valor bajo (cache pytest).
+
+**Sin trabajo substantivo pendiente** sin spec del operador. El
+backlog opcional del checkpoint esta cerrado.
+
+### Siguiente paso real (cuando llegue spec del operador):
+
+Los 5 trabajos pendientes de Etapa 7 (E1, T3, T5, T6) requieren
+spec operadora. Mientras tanto, este checkpoint queda como estado
+final del stewardship transversal.
 
 ### 4. Patrones de la sesión (memoria operativa)
 
