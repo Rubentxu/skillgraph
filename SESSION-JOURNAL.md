@@ -5958,3 +5958,67 @@ protocolos o storage. Los frentes pendientes:
 2. (opcional) WI-05 si surge nuevo housekeeping accionable.
 3. Push autorización pendiente (regla vigente de WI-01).
 
+
+## WI-04/05 — 2026-09-26T17:00 — Release v0.14.5 (housekeeping) + archivado SDDK parcial
+
+**Tipo**: cierre de release + archivado (transversal al WI-04).
+
+**Operador**: "creamos release y archivado sddk".
+
+**Release**:
+
+- Bump + tag: `516bb20` (bump 0.14.4.dev0 -> 0.14.5) + tag anotado
+  `v0.14.5` (`6ac10ff`). main SHA coincide con tag SHA.
+- `v0.14.4` queda **intacto** (no `--force`); este es nuevo release
+  PATCH (regla AGENTS §7).
+- 929/929 tests PASS; ruff format + check limpios;
+  `test_release_governance.py` 2/2 PASS; `test_persistence_ports.py`
+  9/9 PASS; `test_uat_audit.py` 10/10 PASS.
+
+**Archivado SDDK**:
+
+- Cycle abierto: `p-74299cf88f51dab9/wi-04-housekeeping-traceability`
+  (`path=A-min`, `phase=explore`, `status=BLOCKED`).
+- 7 artifacts persistidos en
+  `/home/rubentxu/.local/share/sddk/projects/p-74299cf88f51dab9/cycle-artifacts/.../wi-04-housekeeping-traceability/`
+  con SHA-256 reales (no placeholder):
+  - `explore-report.md` (D-16, $TIMESTAMP)
+  - `specs-synced.md` (1 spec ADDED, 2 unchanged)
+  - `verify-report.md` (verdict PASS, lentes spec-compliance + test-quality)
+  - `debt-report.json` (verdict PASS, 0 findings abiertos; 2 P3 deferred)
+  - `release-report.md` (v0.14.5 RELEASED, 3 commits, 929/929 PASS)
+  - `archive-manifest.md` (closure subject at 516bb20 + v0.14.5)
+  - `closing-html.md` (placeholder del HTML canonico)
+- **Limitacion reconocida**: la transicion SDDK formal
+  `archive.complete` (A-min) requiere leases, gates y approval system
+  que este workspace no tiene configurados (no hay `permissions.yaml`;
+  las transiciones requieren admission policy `--approve`). El
+  ciclo queda en BLOCKED con los reports persistidos; el siguiente
+  operador con setup completo puede ejecutar la transicion formal.
+- **Camino alternativo intentado**: la ruta `archive.vault.complete`
+  (managed closure) requiere `delivery_kind = ManagedClosureDelivery`
+  declarado al crear el ciclo, y `sddk cycle start` no expone ese flag
+  en el subcommand. Por lo tanto el vault route no aplica retroactivo
+  al ciclo ya creado.
+
+**Resultado neto**:
+
+- Release v0.14.5 cerrado y durable (tag anotado, `__version__` alineado).
+- Archivado **parcial pero durable** (los 7 reports son la verdad
+  observable del ciclo; la transicion SDDK formal queda pendiente).
+- Sin push, sin re-emitir tags previos, sin workspace state nuevo
+  aparte de artifacts dir.
+
+**Pendientes para el siguiente operador (o sesion con setup completo)**:
+
+1. `sddk cycle transition --transition cycle.supersede --reason external-obsolete`
+   (necesita admission approval).
+2. O ejecutar A-min completo formal: spec → tasks → apply → verify →
+   debt-verify → release → archive (cada phase con sus gates).
+3. O configurar `permissions.yaml` local para habilitar admission
+   policy de `cycle_state` mutations.
+
+**Proximo**: el proyecto no tiene deuda material restante asociada a
+protocolos, ports, o release governance. Los frentes siguen siendo
+los 4 Trabajos pendientes (E1/T5/T6/T3) que requieren spec del
+operador.
