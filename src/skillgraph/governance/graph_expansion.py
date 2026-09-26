@@ -322,6 +322,65 @@ def _ref_exists(ref: str, registry: Mapping[str, str]) -> bool:
     return ref in registry
 
 
+def _check_capabilities(
+    proposal: GraphExpansionProposal,
+    registry: Mapping[str, str],
+) -> tuple[str, ...]:
+    """I3+I4: caps/deps no en registry. Una entrada por invariant violada."""
+    violated: list[str] = []
+    if any(not _ref_exists(cap, registry) for cap in proposal.capabilities_needed):
+        violated.append("I3")
+    if any(not _ref_exists(dep, registry) for dep in proposal.new_dependencies):
+        violated.append("I4")
+    return tuple(violated)
+
+
+def _active_remove_warnings(
+    proposal: GraphExpansionProposal,
+    active_nodes: frozenset[str],
+) -> tuple[str, ...]:
+    """W1: RemoveTransition sobre nodo activo."""
+    if not active_nodes:
+        return ()
+    msgs: list[str] = []
+    for op in proposal.operations:
+        if isinstance(op, RemoveTransition) and op.from_node in active_nodes:
+            msgs.append(f"W1: RemoveTransition sobre nodo activo {op.from_node!r}")
+    return tuple(msgs)
+
+
+def _check_cycle_bound(
+    proposal: GraphExpansionProposal,
+    plan: WorkflowPlan,
+) -> tuple[str, ...]:
+    """I5: AddNode/AddTransition crean ciclo sin salida (max_visits<1).
+
+    Devuelve ("I5",) si se rompe la invariante; () si no hay ciclo o
+    el plan declara max_visits adecuado en los nodos origen del ciclo.
+    """
+    new_nodes: list[WorkflowNode] = []
+    new_transitions: list[WorkflowTransition] = []
+    for op in proposal.operations:
+        if isinstance(op, AddNode):
+            new_nodes.append(op.node)
+        elif isinstance(op, AddTransition):
+            new_transitions.append(op.transition)
+
+    new_nodes_t = tuple(new_nodes)
+    new_trans_t = tuple(new_transitions)
+    if not _has_cycle_via_new_transitions(new_nodes_t, new_trans_t, plan):
+        return ()
+
+    cycle_nodes = _cycle_source_nodes(new_nodes_t, new_trans_t, plan)
+    for node_name in cycle_nodes:
+        node_in_plan = next((n for n in plan.nodes if n.name == node_name), None)
+        node_new = next((n for n in new_nodes if n.name == node_name), None)
+        node = node_in_plan or node_new
+        if node is None or node.max_visits is None or node.max_visits < 1:
+            return ("I5",)
+    return ()
+
+
 def _has_cycle_via_new_transitions(
     new_nodes: tuple[WorkflowNode, ...],
     new_trans: tuple[WorkflowTransition, ...],
@@ -377,66 +436,25 @@ def validate(
     """Valida la propuesta contra las 6 invariantes de blueprint §6."""
     _require_attachment(proposal.attachment_point, plan)
 
-    violated: list[str] = []
-    warnings: list[str] = []
+    # Componer violations y warnings delegando en helpers puros.
+    # I3+I4: capabilities / dependencias no autorizadas.
+    violations: list[str] = list(_check_capabilities(proposal, registry))
 
-    # I3: capabilities no autorizadas (no en registry).
-    for cap in proposal.capabilities_needed:
-        if not _ref_exists(cap, registry):
-            violated.append("I3")
-            break
-
-    # I4: dependencias inexistentes.
-    for dep in proposal.new_dependencies:
-        if not _ref_exists(dep, registry):
-            violated.append("I4")
-            break
-
-    # I1: no reescribir historicos. Para H4 slice-1, ninguna op propuesta
-    # modifica nodos completados (se conserva su revision+resultado original
-    # en node_executions). Esto se valida en una invariante de plan-level
-    # cuando se introduzcan operaciones de tipo ModifyNode (futuro slice).
-    # Por ahora, ninguna op del slice-1 lo hace -> I1 vacio en este nivel.
-    # La invariante REAL queda en storage.py: el patch nunca toca
-    # node_executions de completados.
-
-    # I2: advertencia si se propone cambio sobre nodo activo.
-    for op in proposal.operations:
-        if isinstance(op, RemoveTransition) and op.from_node in active_nodes:
-            warnings.append(f"W1: RemoveTransition sobre nodo activo {op.from_node!r}")
+    # I2: warnings por RemoveTransition sobre nodo activo.
+    warnings: list[str] = list(_active_remove_warnings(proposal, active_nodes))
 
     # I5: ciclo sin salida en el plan resultante.
-    # Detectamos: si AddTransition/AddNode crean un ciclo, el plan
-    # resultante no tiene max_visits en el nodo origen.
-    new_nodes: list[WorkflowNode] = []
-    new_transitions: list[WorkflowTransition] = []
-    for op in proposal.operations:
-        if isinstance(op, AddNode):
-            new_nodes.append(op.node)
-        elif isinstance(op, AddTransition):
-            new_transitions.append(op.transition)
-
-    if _has_cycle_via_new_transitions(tuple(new_nodes), tuple(new_transitions), plan):
-        # Para que esto NO rompa I5, el nodo source de cualquier ciclo
-        # debe declarar max_visits>=2.
-        max_visits_ok = True
-        cycle_nodes = _cycle_source_nodes(tuple(new_nodes), tuple(new_transitions), plan)
-        for node_name in cycle_nodes:
-            node_in_plan = next((n for n in plan.nodes if n.name == node_name), None)
-            node_new = next((n for n in new_nodes if n.name == node_name), None)
-            node = node_in_plan or node_new
-            if node is None or node.max_visits is None or node.max_visits < 1:
-                max_visits_ok = False
-                break
-        if not max_visits_ok:
-            violated.append("I5")
+    violations.extend(_check_cycle_bound(proposal, plan))
 
     # I6: base_revision obsoleta.
     if current_revision is not None and proposal.base_revision != current_revision:
-        violated.append("I6")
+        violations.append("I6")
 
-    # Eliminar duplicados de violated
-    violated_tuple = tuple(dict.fromkeys(violated))
+    # I1 vacio en este nivel (delegado a storage.py: patch no toca
+    # node_executions de completados; ver comment de slice-1/blueprint).
+
+    # Eliminar duplicados preservando orden
+    violated_tuple = tuple(dict.fromkeys(violations))
 
     if violated_tuple:
         reason = "; ".join(f"{code} violated" for code in violated_tuple)
