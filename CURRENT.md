@@ -1,10 +1,10 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-26 18:55 (Europe/Madrid, WI-12).
+> Última verificación: 2026-09-26 20:14 (Europe/Madrid, WI-13).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
-> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**.
+> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`. WI-03 (governance/receipts migra a KnowledgeRepository, cierra ultimo escape hatch `_conn`) **RELEASE COMPLETA** — `v0.14.4`. WI-06 (coverage hardening `governance/receipts.py` 73%→99%) **HOUSEKEEPING COMPLETO** — `0.14.5.dev0`. WI-07 (coverage hardening `file_handoff.py` 85%→93%) **HOUSEKEEPING COMPLETO**. WI-08 (coverage hardening `governance/improvement.py` 84%→100%) **HOUSEKEEPING COMPLETO**. WI-11 (release `v0.14.6` housekeeping: WI-06..WI-10 agrupados) **RELEASE COMPLETA**. WI-12 (E1 Adapter real: `HttpAgentAdapter` Anthropic + OpenAI + retry + failpoints) **FEAT COMPLETA**. WI-13 (CLI wiring `sg run --adapter http (anthropic|openai)` con `--llm-provider/--llm-model/--llm-timeout-s`) **FEAT COMPLETA**.
 > Tag `v0.14.0` preservado como erratum histórico (package metadata decía `0.7.0.dev0`).
 
 ## Goal
@@ -571,3 +571,42 @@ Conclusiones:
 - **No bump**: T8 no introduce breaking change ni capacidad nueva
   observable para el usuario. Es observabilidad interna. No genera
   release.
+
+## Reactivacion 2026-09-26 — WI-13 CLI HTTP wiring cerrado
+
+WI-13 cierra el bucle del Adapter real (WI-12). El usuario ya puede
+ejecutar `sg run` con `--adapter http` para invocar Anthropic u OpenAI
+sin tocar codigo, manteniendo `--adapter fake` como default determinista.
+
+### Cambios
+
+- `src/skillgraph/cli/runner.py`: 4 nuevos flags (`--adapter`, `--llm-provider`,
+  `--llm-model`, `--llm-timeout-s`) + helper `_build_adapter(args, fixtures_root)`
+  que retorna `FakeAgentAdapter` o `HttpAgentAdapter` segun el caso, con
+  `ValidationError` tipado para valores invalidos.
+- `tests/test_cli_adapter_wiring.py` (nuevo, 219 LoC, 11 tests, 4 clases):
+  fake/http/missing-key/rejects-invalid.
+- `specs/wi-13-cli-http-wiring.md` (spec + evidencia).
+
+### Evidencia
+
+- HEAD pre-commit: `31562a8` (WI-12 baseline).
+- Tests: **1020/1020 PASS** en 238.73s (era 1009, +11 tests nuevos).
+- ruff: `check` All checks passed; `format --check` 146 files already formatted.
+- CLI `sg run --help` muestra los 4 nuevos flags correctamente.
+- D-46: Adapter como drop-in replacement via Protocol `AgentAdapter`
+  (D-41). Default `fake` preserva backward-compat 100%.
+
+### Pendiente
+
+- **WI-14 (T3 Threat model)**: STRIDE/abuse-cases documentados sobre
+  superficie HTTP nueva (credenciales en env, retry storms, secretos
+  en logs).
+- **WI-15 (T5 Backups CLI)**: `sg backup create|restore|list`.
+- **WI-16 (T6 Observabilidad)**: runbook sinks + retención.
+- **WI-17+ (deuda arquitectónica)**: H-01 Storage god-class (2407 LoC),
+  H-02 CLI god-module (2332 LoC), H-03 funciones cc>10, H-05 `_DummyStorage`,
+  H-06 `import json` inline, H-10 `locks.py` drift Windows.
+- Bump `0.14.6.dev0 → 0.14.7` cuando haya suficientes feats acumulados
+  (siguiente release candidato).
+- Push a origin (regla WI-01, ahora 26 commits ahead of origin/main).

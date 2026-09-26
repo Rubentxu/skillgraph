@@ -21,6 +21,7 @@ import sys
 from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
+from typing import Any
 
 from skillgraph import (
     BrickRegistry,
@@ -546,6 +547,29 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Raíz de fixtures de agentes (default: <data-root>/agents).",
+    )
+    rp.add_argument(
+        "--adapter",
+        choices=["fake", "http"],
+        default="fake",
+        help="Tipo de adapter: 'fake' (fixtures locales, default) o 'http' (LLM real via Anthropic/OpenAI).",
+    )
+    rp.add_argument(
+        "--llm-provider",
+        choices=["anthropic", "openai"],
+        default="anthropic",
+        help="Proveedor LLM cuando --adapter=http (default: anthropic).",
+    )
+    rp.add_argument(
+        "--llm-model",
+        default=None,
+        help="Modelo LLM especifico (default: modelo recomendado del proveedor).",
+    )
+    rp.add_argument(
+        "--llm-timeout-s",
+        type=float,
+        default=30.0,
+        help="Timeout HTTP en segundos para el adapter (default: 30.0).",
     )
     rp.add_argument(
         "--max-iterations",
@@ -1644,6 +1668,40 @@ def cmd_pack_import(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _build_adapter(args: argparse.Namespace, fixtures_root: Path) -> Any:
+    """Construye el adapter segun --adapter (fake | http).
+
+    fake: FakeAgentAdapter con fixtures_root (default; comportamiento
+        historico, determinista).
+    http: HttpAgentAdapter leyendo ANTHROPIC_API_KEY o OPENAI_API_KEY
+        del entorno segun --llm-provider.
+
+    Raises:
+        SkillGraphError (via http_adapter_from_env) si --adapter=http
+        y la variable de entorno del proveedor no esta definida.
+    """
+    from skillgraph.core.errors import ValidationError
+    from skillgraph.runtime.agent import FakeAgentAdapter
+
+    kind = getattr(args, "adapter", "fake")
+    if kind == "fake":
+        return FakeAgentAdapter(fixtures_root)
+    if kind == "http":
+        from skillgraph.runtime.http_adapter import http_adapter_from_env
+
+        provider = getattr(args, "llm_provider", "anthropic")
+        model = getattr(args, "llm_model", None)
+        timeout_s = getattr(args, "llm_timeout_s", 30.0)
+        adapter = http_adapter_from_env(provider, model=model)
+        # Override timeout si el usuario lo especifico.
+        if timeout_s != 30.0:
+            object.__setattr__(adapter, "timeout_s", timeout_s)
+        return adapter
+    # argparse normalmente bloquea esto via choices=['fake','http'];
+    # este error existe para usos programaticos sin argparse.
+    raise ValidationError(f"adapter invalido: {kind!r} (esperado: 'fake' | 'http')")
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Crea un Run desde un WorkflowPlan.md y reconcilia hasta terminal.
 
@@ -1652,7 +1710,6 @@ def cmd_run(args: argparse.Namespace) -> int:
     from skillgraph.core.runtime_types import is_terminal_run_state
     from skillgraph.platform.paths import agents_root
     from skillgraph.resources.plan_loader import load_plan_file
-    from skillgraph.runtime.agent import FakeAgentAdapter
     from skillgraph.runtime.runcontroller import RunBudget, RunController
 
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
@@ -1680,7 +1737,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     fixtures_root = args.fixtures_root or agents_root(resolver.data_root)
     fixtures_root.mkdir(parents=True, exist_ok=True)
-    adapter = FakeAgentAdapter(fixtures_root)
+    adapter = _build_adapter(args, fixtures_root)
     storage = Storage(db_path)
     try:
         ctl = RunController(
@@ -1757,6 +1814,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"Estado: {snap.state}")
     print(f"Nodos ejecutados: {', '.join(snap.executed_nodes) or '(ninguno)'}")
     print(f"Eventos emitidos: {snap.events_emitted}")
+    adapter_kind = getattr(args, "adapter", "fake")
+    print(f"Tipo de adapter: {adapter_kind}")
     print(f"Fixtures de agente: {fixtures_root}")
     # Codigos distintos segun estado para que el shell pueda
     # ramificar sin parsear la salida.
