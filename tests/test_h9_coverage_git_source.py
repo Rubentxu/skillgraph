@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from skillgraph.core.errors import ValidationError
 from skillgraph.knowledge.git_source import (
     GitSource,
     _matches_pathspec,
@@ -75,7 +76,14 @@ def _remove_files(root: Path, rels: list[str]) -> None:
 
 
 def test_from_commit_with_non_commit_sha_raises(tmp_path: Path) -> None:
-    """`from_commit` con un SHA que NO es un commit lanza ValueError."""
+    """`from_commit` con un SHA que NO es un commit lanza ValidationError.
+
+    Tras el cumplimiento de AGENTS §1.2 (errores tipados), git_source.py
+    usa ValidationError (subclase de SkillGraphError) en vez de ValueError
+    generico. ValidationError hereda de Exception, asi que un caller que
+    capturaba ValueError deberia migrar a ValidationError o a un ancestro
+    mas alto (SkillGraphError / Exception).
+    """
     from dulwich.objects import Blob
     from dulwich.repo import Repo
 
@@ -89,7 +97,7 @@ def test_from_commit_with_non_commit_sha_raises(tmp_path: Path) -> None:
     non_commit_sha = blob.id.decode()
 
     # El blob existe en el object store pero NO es un commit.
-    with pytest.raises(ValueError, match=r"sha no apunta a un commit"):
+    with pytest.raises(ValidationError, match=r"sha no apunta a un commit"):
         GitSource.from_commit(
             repo_root=root,
             commit_sha=non_commit_sha,

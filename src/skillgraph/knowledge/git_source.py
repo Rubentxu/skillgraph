@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from skillgraph.core.errors import DulwichNotAvailableError
+from skillgraph.core.errors import DulwichNotAvailableError, ValidationError
 from skillgraph.knowledge.graph import Source, SourceID
 from skillgraph.runtime.engine import now_iso as _now_iso
 
@@ -137,7 +137,7 @@ class GitSource:
         repo = Repo(str(repo_root))
         commit_obj = repo[commit_sha.encode()]
         if commit_obj.type_name != b"commit":
-            raise ValueError(f"sha no apunta a un commit: {commit_sha!r}")
+            raise ValidationError(f"sha no apunta a un commit: {commit_sha!r}")
 
         tree_sha = commit_obj.tree.decode()
         blob_shas = _collect_blob_shas(repo, commit_obj.tree)

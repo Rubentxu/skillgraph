@@ -95,7 +95,7 @@ class ValidationReceipt:
 
     def __post_init__(self) -> None:
         if not self.receipt_id:
-            raise ValueError("receipt_id vacio")
+            raise ValidationError("receipt_id vacio")
         if not self.command:
             raise ValidationError("command vacio")
         if not self.revision:

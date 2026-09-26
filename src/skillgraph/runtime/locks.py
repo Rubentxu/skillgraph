@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from skillgraph.core.errors import SkillGraphError
+from skillgraph.core.errors import SkillGraphError, ValidationError
 
 LockMode = Literal["none", "advisory", "fail-fast"]
 
@@ -124,10 +124,12 @@ class RunLock:
 
         Raises:
             LockUnavailable: lock tomado y timeout agotado.
-            ValueError: mode desconocido.
+            ValidationError: mode desconocido.
         """
         if mode not in ("none", "advisory", "fail-fast"):
-            raise ValueError(f"lock mode invalido: {mode!r} (esperado none|advisory|fail-fast)")
+            raise ValidationError(
+                f"lock mode invalido: {mode!r} (esperado none|advisory|fail-fast)"
+            )
         self._mode = mode
         self._timeout = timeout_seconds
         if mode == "none":

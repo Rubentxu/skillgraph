@@ -26,6 +26,8 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
+from skillgraph.core.errors import ValidationError
+
 # --- ADT cerrada (regla AGENTS §2.1) ---------------------------------
 
 ExtractionState = Literal["empty", "absent", "partial", "complete", "stale"]
@@ -47,9 +49,9 @@ class SignatureProcedencia:
 
     def __post_init__(self) -> None:
         if not self.extraction_method:
-            raise ValueError("extraction_method no puede estar vacio")
+            raise ValidationError("extraction_method no puede estar vacio")
         if not self.extractor_version:
-            raise ValueError("extractor_version no puede estar vacia")
+            raise ValidationError("extractor_version no puede estar vacia")
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,19 +71,19 @@ class SignatureVigencia:
 
     def __post_init__(self) -> None:
         if self.state not in EXTRACTION_STATES:
-            raise ValueError(f"state invalido: {self.state!r}")
+            raise ValidationError(f"state invalido: {self.state!r}")
         # Coherencia fresh/stale por estado.
         # fresh=True solo para 'complete'; partial es fresh=False (algunas
         # heuristicas aplicables pero no todas; el caller debe revisar).
         expected_fresh = self.state == "complete"
         expected_stale = self.state in {"empty", "absent", "stale", "partial"}
         if self.fresh != expected_fresh:
-            raise ValueError(
+            raise ValidationError(
                 f"fresh={self.fresh} inconsistente con state={self.state!r} "
                 f"(esperaba fresh={expected_fresh})"
             )
         if self.stale != expected_stale:
-            raise ValueError(
+            raise ValidationError(
                 f"stale={self.stale} inconsistente con state={self.state!r} "
                 f"(esperaba stale={expected_stale})"
             )
@@ -111,11 +113,11 @@ class FileSignature:
 
     def __post_init__(self) -> None:
         if not self.foco:
-            raise ValueError("foco no puede estar vacio")
+            raise ValidationError("foco no puede estar vacio")
         if not self.contrato:
-            raise ValueError("contrato no puede estar vacio")
+            raise ValidationError("contrato no puede estar vacio")
         if self.cobertura < 0:
-            raise ValueError(f"cobertura debe ser >= 0, recibio {self.cobertura}")
+            raise ValidationError(f"cobertura debe ser >= 0, recibio {self.cobertura}")
 
     def to_dict(self) -> dict[str, Any]:
         """Serializa a dict plano (JSON-friendly)."""

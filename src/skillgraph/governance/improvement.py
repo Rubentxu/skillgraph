@@ -107,7 +107,7 @@ class ImprovementCandidate:
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
-            raise ValueError("candidate_id vacio")
+            raise ValidationError("candidate_id vacio")
         if self.kind not in IMPROVEMENT_KINDS:
             raise ValidationError(f"kind invalido: {self.kind!r}")
         if not self.detected_at:
@@ -151,7 +151,7 @@ class PromotionDecision:
 
     def __post_init__(self) -> None:
         if not self.decision_id:
-            raise ValueError("decision_id vacio")
+            raise ValidationError("decision_id vacio")
         if not self.candidate_id:
             raise ValidationError("candidate_id vacio")
         if not self.approver:

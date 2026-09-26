@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from skillgraph.core.errors import SkillGraphError
+from skillgraph.core.errors import SkillGraphError, ValidationError
 from skillgraph.core.recipe import ContextRecipe
 from skillgraph.knowledge.file_signature import FileSignature
 
@@ -103,11 +103,11 @@ class ScopeAwareRecipe:
 
     def __post_init__(self) -> None:
         if not self.base_recipe.recipe_ref:
-            raise ValueError("base_recipe.recipe_ref vacio")
+            raise ValidationError("base_recipe.recipe_ref vacio")
         if not self.scope_queries:
-            raise ValueError("scope_queries vacio")
+            raise ValidationError("scope_queries vacio")
         if not self.member_source_ids:
-            raise ValueError("member_source_ids vacio")
+            raise ValidationError("member_source_ids vacio")
 
 
 @dataclass(frozen=True, slots=True)
