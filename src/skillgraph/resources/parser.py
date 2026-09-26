@@ -53,6 +53,46 @@ def _parse_yaml(front: str, *, source: str) -> dict[str, Any]:
     return data
 
 
+def _require_str(
+    data: dict[str, Any],
+    key: str,
+    *,
+    source: str,
+) -> str:
+    """Lee `data[key]` y exige string no vacio. Lanza ParseError tipado."""
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise ParseError(f"{source}: {key} ausente o no es string")
+    return value
+
+
+def _require_dict(
+    data: dict[str, Any],
+    key: str,
+    *,
+    source: str,
+) -> dict[str, Any]:
+    """Lee `data[key]` y exige mapping (o {} si falta). Lanza ParseError."""
+    value = data.get(key) or {}
+    if not isinstance(value, dict):
+        raise ParseError(f"{source}: {key} debe ser un mapping")
+    return value
+
+
+def _metadata_name(metadata: dict[str, Any], *, source: str) -> str:
+    name = metadata.get("name")
+    if not isinstance(name, str) or not name:
+        raise ParseError(f"{source}: metadata.name ausente o no es string")
+    return name
+
+
+def _metadata_namespace(metadata: dict[str, Any], *, source: str) -> str:
+    namespace = metadata.get("namespace", "")
+    if not isinstance(namespace, str):
+        raise ParseError(f"{source}: metadata.namespace debe ser string")
+    return namespace
+
+
 def parse_markdown(
     text: str,
     *,
@@ -76,26 +116,13 @@ def parse_markdown(
     front, body = _split_front_matter(text)
     data = _parse_yaml(front, source=source)
 
-    api_version = data.get("apiVersion")
-    kind = data.get("kind")
-    metadata = data.get("metadata") or {}
-    spec = data.get("spec") or {}
+    api_version = _require_str(data, "apiVersion", source=source)
+    kind = _require_str(data, "kind", source=source)
+    metadata = _require_dict(data, "metadata", source=source)
+    spec = _require_dict(data, "spec", source=source)
 
-    if not isinstance(api_version, str) or not api_version:
-        raise ParseError(f"{source}: apiVersion ausente o no es string")
-    if not isinstance(kind, str) or not kind:
-        raise ParseError(f"{source}: kind ausente o no es string")
-    if not isinstance(metadata, dict):
-        raise ParseError(f"{source}: metadata debe ser un mapping")
-    if not isinstance(spec, dict):
-        raise ParseError(f"{source}: spec debe ser un mapping")
-
-    name = metadata.get("name")
-    namespace = metadata.get("namespace", "")
-    if not isinstance(name, str) or not name:
-        raise ParseError(f"{source}: metadata.name ausente o no es string")
-    if not isinstance(namespace, str):
-        raise ParseError(f"{source}: metadata.namespace debe ser string")
+    name = _metadata_name(metadata, source=source)
+    namespace = _metadata_namespace(metadata, source=source)
 
     brick_identity = ResourceIdentity(
         tenant_id=identity.tenant_id,
