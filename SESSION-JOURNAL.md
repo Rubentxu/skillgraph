@@ -6351,3 +6351,122 @@ cobertura ≥93% (file_handoff 93%, resto 99-100%).
 - Mas roadmap: T3 Threat model (formal STRIDE), T5 Backups CLI,
   T6 Observabilidad runbook, deuda arquitectonica (H-01..H-06, H-10).
 - Push pendiente aprobacion operador (regla WI-01, 24+ commits ahead).
+
+---
+
+## 2026-09-26 21:15..23:55 — Ciclo WI-18..WI-30 + Release v0.14.8 (cierre sesion)
+
+Sesion larga de ~2h40m que cerro H-10 (locks.py), H-03 (8 hotspots
+refactored), anadio auditor reproducible, y libero v0.14.8 con
+push a origin.
+
+### WI-18..WI-20 (housekeeping previo)
+
+- **WI-18**: H-10 locks.py drift Windows docstring honesto (admitir
+  que el modulo es Unix-only por `fcntl.flock`).
+- **WI-19**: H-03 pack_loader `_validate` cc 22 → 7.
+- **WI-20**: H-05 `_DummyStorage` anti-patron eliminado, ahora raise
+  `FileNotFoundError` legible cuando se llama sin real storage.
+
+### WI-21..WI-27 (mass H-03 cleanup en lote, 7 commits `e4e5927`..`eae2bb4`)
+
+Patron consistente: extraer helpers privados puros + module-level
+utilities, manteniendo 100% backward-compat. TDD strict: rojo → verde
+→ refactor.
+
+| WI | Funcion | cc antes | cc despues | Decision |
+|----|---------|----------|------------|----------|
+| WI-21 | `graph_expansion.validate` | 24 | 4 | D-52 |
+| WI-22 | `parser.parse_markdown` | 17 | 2 | D-53/D-54 |
+| WI-23 | `locks.take` | 16 | 5 | D-55 |
+| WI-24 | `record_validation_receipt` | 14 | 5 | D-56/D-57 |
+| WI-25 | `traverse_invalidations` | 13 | 5 | D-58 |
+| WI-26 | `HttpAgentAdapter.invoke` | 12 | 7 | D-59 |
+| WI-27 | `compile_handoff_from_scopes` | 12 | 1 | D-60 |
+
+### WI-28 (auditor reproducible, hito ceremonial)
+
+- `audits/audit_debt.py` (~215 LoC): CLI reproducible. Reporta cc,
+  loc, nesting, god modules, hotspots publicos/privados, funciones
+  largas, recomendaciones P0..P3.
+- `audits/architecture-debt-2026-09-26.md`: reporte emitido.
+- `tests/test_audit_debt_smoke.py`: 4 tests via subprocess.
+- `specs/wi-28-audit-deuda-arquitectonica.md`.
+- D-61..D-66: marco del auditor (god modules thresholds, exclusion
+  de `main()`, politica D-66 "cero hotspots publicos cc≥20 en cada
+  release").
+
+### WI-29..WI-30 (cierre H-03)
+
+- **WI-29**: `cli.runner.cmd_run` cc 22 → 5 (D-67). Patron
+  `_resolve_run_inputs` + `_reconcile_until_terminal` +
+  `_resolve_fixtures_root`. Lazy imports para evitar coste arranque
+  CLI. TDD catch: tuple-shape mismatch (7-tuple → 6-tuple) cazado
+  por tests rojos.
+- **WI-30**: `knowledge.git_source.detect_changes` cc 18 → 8 (D-68).
+  3 helpers (1 metodo privado + 2 module-level).
+
+### Hallazgos honestos del ciclo
+
+- **WI-22**: helper default `"vacio"` masculino vs caller
+  `"revision vacia"` femenino. TDD catches via test verbatim. Fix.
+- **WI-25**: kwarg `hop` quedo en helper sin uso. TDD catcha via
+  9 tests rojos.
+- **WI-27**: triple F821 + UP035 + UP037 simultaneo requiere
+  TYPE_CHECKING imports + `Sequence` from `collections.abc`.
+- **WI-28**: `cmd_run` cc=22 (analisis manual) → cc=50 (auditor
+  oficial). Herramientas cuentan mas estrictamente. D-66 sigue OK.
+- **WI-29**: tuple-shape mismatch en `_resolve_run_inputs`. Tests
+  rojos lo cazaron antes del commit.
+- **Release**: 2 tests `test_release_governance` cazaron
+  sincronizaciones faltantes (STATE.package_version y CURRENT.md
+  no documentaban `0.14.8.dev0`). Tests cumplen su funcion.
+
+### Release v0.14.8 (autorizado por operador a las 23:36 UTC)
+
+- **Bump**: 0.14.7.dev0 → 0.14.8 (MINOR, debt-reduction estructural).
+- **Tag anotado**: `v0.14.8` en commit `4a297ad`.
+- **Release-receipt**: `audits/release-v0.14.8-receipt.md` (113 LoC).
+- **Archive-manifest**: `audits/release-v0.14.8-archive.md` (163 LoC).
+- **CHANGELOG**: entradas v0.14.7 (retroactiva, se omitio en ciclo
+  original) + v0.14.8 anadidas.
+- **STATE.yaml**: tests 1044 → 1048, package_version sincronizada.
+- **CURRENT.md**: header refleja `0.14.8.dev0` + tag SHA.
+- **Post-tag housekeeping**: bump a `0.14.8.dev0` en commit `2595409`.
+- **Push**: 51 commits empujados (`30d2ca6` y `89b90c0`). Source of
+  truth sincronizada. Operador escribio "sube todo como puedes crear
+  release sin integrar los commits en la fuente de verdad git" —
+  motivo del push retroactivo.
+
+### Resultado del release
+
+- **1048/1048 PASS** en suite completa (199.04s).
+- **ruff check+format limpios**.
+- **Politica D-66 satisfecha**: cero hotspots publicos cc≥20 en `src/`.
+- **Unico cc≥15 restante**: `main()` cc=50 (D-64: CLI entry point,
+  parte de H-02 god module).
+- **Backlog post-v0.14.8**: P1 god modules (H-01 storage 2407 LoC,
+  H-02 cli/runner 2477 LoC, runcontroller 1357 LoC) requieren ADR.
+  Formal `prioridad_1_spec_s7plus` y `prioridad_5_s7plus_ejecucion`
+  siguen abiertos en `STATE.yaml.stewardship_backlog`, pendientes de
+  decision operador sobre S7+ scope (Opcion A/B/C/D).
+- **H-03 AGOTADA por completo** (D-66 satisfecha).
+- **H-01/H-02 pendientes de ADR** (fuera del scope surgical).
+
+### Shas de referencia para reanudar manana
+
+```
+Released baseline:  v0.14.8 -> 4a297ad14c5e105824f80a534359e258e0d23e7a
+Development head:   89b90c0 (post-housekeeping)
+Workspace version:  0.14.8.dev0
+Source of truth:    origin/main = 89b90c0
+```
+
+### SDDK Close-out final
+
+Sesion cerrada 2026-09-26 23:55 Europe/Madrid. Released baseline
+v0.14.8. Development head `89b90c0`. Workspace version `0.14.8.dev0`.
+Source of truth sincronizada. Ciclo CLOSED. Evidencia: 1048/1048 tests
++ ruff clean + push sincronizado + 4 audit smoke tests + 4 governance
+tests. Deuda nueva: 0. Siguiente paso del roadmap (manana): decision
+operador sobre S7+ scope o ADR para P1 god modules.
