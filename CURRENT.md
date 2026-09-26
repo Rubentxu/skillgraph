@@ -4,7 +4,7 @@
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
-> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`.
+> WI-01 (release & integration readiness) **RELEASE COMPLETA** — `v0.14.1`. WI-02a (refactor B+C puertos) **RELEASE COMPLETA** — `v0.14.2`. WI-02b (segundo refactor: EventLog/KC por Protocols + escape hatch removal) **RELEASE COMPLETA** — `v0.14.3`.
 > Tag `v0.14.0` preservado como erratum histórico (package metadata decía `0.7.0.dev0`).
 
 ## Goal
@@ -49,7 +49,7 @@ aplicado: T3 Threat model (ADR-0015 + tests de attestation + audit).
 
 - HEAD: `b1bb264` (docs/changelog+journal trazabilidad ciclo §1.2 compliance). WI-01 en curso sobre este HEAD.
 - Tests: **927/927 PASS** en 155.73s (`uv run pytest --no-header -q`; baseline post-WI-02a). Incremento de +7 nuevos: `tests/test_persistence_ports.py` (5 structural tests + 2 runtime_checkable).
-- Package version: `0.14.2` (release WI-02a). Tags previos: `v0.14.0` (erratum histórico, d50f666), `v0.14.1` (WI-01 release, e2cdc53), `v0.14.2` (WI-02a release).
+- Package version: `0.14.3` (release WI-02b). Tags previos: `v0.14.0` (erratum histórico, d50f666), `v0.14.1` (WI-01 release, e2cdc53), `v0.14.2` (WI-02a release, da95923), `v0.14.3` (WI-02b release).
 - CI dominante: local `pipelinek` (`.pipeline.kts`). GitHub Actions queda como notificación informativa (ver AGENTS.md §CI Local Obligatorio).
 - **17 releases** emitidas: v0.3.0 → v0.14.0 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).

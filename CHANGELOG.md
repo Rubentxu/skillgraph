@@ -12,6 +12,31 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.14.3] - 2026-09-26 — Refactor WI-02b (EventLog + KnowledgeController + escape hatch removal)
+
+**Resumen**: segunda mitad del refactor de puertos de persistencia (WI-02b). Cierra los últimos 2 ACs abiertos en 0.14.2: AC-3 (EventLog/KnowledgeController aceptan Protocols en vez de Storage) y AC-4 (eliminación del escape hatch `Storage.conn`). Sin cambio de API observable para el usuario. Tests: 926/926 PASS (sin regresión) en CI local canónico (`pipelinek`).
+
+### Changed (interno, sin API change)
+
+- **`EventLog`** ya no se construye con `sqlite3.Connection`; ahora acepta directamente el `EventStore` Protocol (que `Storage` cumple por duck typing). Wrappers `event_store()` y `record_event()` añadidos a `Storage` para que siga siendo fachada compatible.
+
+- **`KnowledgeController`** ya no se construye con `storage=Storage`; ahora recibe `knowledge=KnowledgeRepository`. `KnowledgeInvalidator` deja de acceder a `controller.storage._conn` (5 sitios SQL → 0). `ContextController` interno deja de acceder a `ctrl.storage.*` (4 sitios SQL → 0).
+
+- **`Storage.conn`** (`@property` público introducido en H9-BSlice3-S8) **eliminado**. Era escape hatch que rompía la regla "Storage encapsula SQL" — los call sites que aún lo necesitaban (3 tests internos + 1 caso de test_h9_storage_run_controller_no_conn) migran a `Storage._conn` (privado por convención, sigue permitido). `TestStorageConnPublic` borrado (validaba un artefacto que ya no existe).
+
+- **Protocols ampliados**: `EventStore` recibe `fetch_event_raw()` y `ensure_schema()`; `KnowledgeRepository` recibe `find_entity()`, `source_exists_anywhere()`, `list_claims_for_subject()`, `list_claims_using_evidence()`, `mark_claims_stale()`, `reactivate_claims_with_revision()`, `list_stale_claims()`, `record_event()` (para emisión de `KnowledgeInvalidated` por KI).
+
+- **Tests**: 4 archivos migrados a `SqliteEventStoreForTest` (helper de tests que aún necesitan `sqlite3.Connection` directo: `test_runtime_events.py`, `test_redaction.py`, `test_runcontroller.py`, `test_h9_runcontroller_characterization.py`).
+
+### Notes
+
+- AC-3 (RC/KC/KI reciben Protocols, sin `storage=` ni `conn=`): **PASS**.
+- AC-4 (`Storage.conn` eliminado, escape hatch cerrado): **PASS**.
+- AC-5 (KC/KI independientes de `_conn`, regla "Storage encapsula SQL" completa): **PASS** (verificación: `grep "_conn" src/skillgraph/knowledge/knowledge_controller.py` → exit 1).
+- AC-11 (`Storage` sigue siendo fachada compatible): **PASS** (los 3 métodos añadidos son del Protocol; la API pública no rompe).
+- `tests/uat-evidence/UAT-{08,09}.json` drift explícitamente fuera de alcance del WI-02b.
+- Sin bump adicional al SemVer: API externa sin cambio (PATCH).
+
 ## [0.14.2] - 2026-09-26 — Refactor B+C (persistence ports + RunController) (WI-02a)
 
 **Resumen**: refactor interno de la capa de persistencia. Introduce
