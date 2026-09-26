@@ -435,6 +435,40 @@ class TestFileScopeValidation:
 
     # ----- aggregate_signatures (dedup por foco) -----------------------
 
+    def test_aggregate_signatures_with_empty_signatures_per_source(
+        self,
+    ) -> None:
+        # Si signatures_per_source está vacío, aggregate_signatures debe
+        # tomar la rama early-return (línea 269-276) que produce un
+        # AggregatedSignatures con metadata={} (NO tiene raw_source_count).
+        # Si el early-return se bypasea, el código pasa por el for-loop
+        # con 0 iteraciones y la metadata incluye 'raw_source_count': 0.
+        # El test verifica la rama early-return assertando que NO está
+        # la clave 'raw_source_count' en metadata.
+        scope = ScopeQuery(scope_kind="directory", target="src/")
+        agg = aggregate_signatures(signatures_per_source={}, scope=scope)
+        assert agg.signatures_count == 0
+        assert agg.total_files == 0
+        assert agg.cobertura_global == 0
+        assert agg.signatures == ()
+        # Marca de la rama early-return: metadata vacía.
+        assert "raw_source_count" not in agg.metadata
+
+    def test_aggregate_signatures_with_empty_sigs_tuple_per_source(
+        self,
+    ) -> None:
+        # Si un source tiene tuple de firmas vacío, NO se añade a
+        # files_with_sigs (cubrir rama 284->286). El otro source sí aporta.
+        sig = _sig(foco="Bar", cobertura=5)
+        scope = ScopeQuery(scope_kind="directory", target="src/")
+        agg = aggregate_signatures(
+            signatures_per_source={"src/empty.py": (), "src/full.py": (sig,)},
+            scope=scope,
+        )
+        assert agg.signatures_count == 1
+        assert agg.total_files == 1  # solo src/full.py cuenta
+        assert agg.cobertura_global == 5
+
     def test_aggregate_signatures_dedups_by_foco_first_occurrence_wins(
         self,
     ) -> None:
