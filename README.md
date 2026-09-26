@@ -9,8 +9,9 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org)
 [![Status](https://img.shields.io/badge/status-3%20Alpha-orange)](https://pypi.org/classifiers/)
-[![Tests](https://img.shields.io/badge/tests-405%2F405%20PASS-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-984%2F984%20PASS-success)](tests/)
 [![UAT](https://img.shields.io/badge/UAT-16%2F16%20PASS-success)](tests/uat-evidence/)
+[![Evolution v2](https://img.shields.io/badge/evolution_v2-100%25%20%28H11..H15%29-success)](src/skillgraph/knowledge/)
 
 </div>
 
@@ -37,6 +38,8 @@ Most agent frameworks conflate **describing** a capability with **executing** it
 
 **Blueprint v1 is complete, including the public CLI integration (H8).** The roadmap now spans 10 milestones (H0..H6, H8, H9 — see `specs/adr/ADR-0013-divergencia-h7-y-rectificacion-v060.md` for the renumbering) and 16 acceptance tests; all of them have an implementation and verified evidence.
 
+The **evolution-v2 line** (H10..H15, 100% closed) adds typed knowledge reuse on top of the blueprint: file signatures, file scopes, expert handoffs, validation receipts, and bounded self-improvement — all isolated behind the storage boundary and persisted as `Evidence` rows (no new tables).
+
 | Component | State | Evidence |
 |---|---|---|
 | Resources (H1) | ✅ Closed | `tests/test_*` |
@@ -47,7 +50,9 @@ Most agent frameworks conflate **describing** a capability with **executing** it
 | Multipurpose: Domain Packs (H6) | ✅ Closed | `tests/test_h6_multiproposito.py` |
 | Cross-base promotion (H7→H9, library) | ✅ Closed | `tests/test_h7_promocion.py` |
 | **Public CLI integration (H8)**: `sg pack load`, `sg promotion submit/list/reconcile` with crash failpoints | ✅ Closed | `tests/test_h8_public_paths.py`, `tests/uat-evidence/UAT-12.json`, `tests/uat-evidence/UAT-13.json` |
+| **Evolution v2 (H11..H15)**: file signatures, file scopes, expert handoffs, validation receipts, bounded self-improvement | ✅ Closed | `tests/test_h11..test_h15_*.py` (58 UAT-EVO tests) |
 | **16/16 UATs** | **✅ PASS** | `tests/uat-evidence/*.json` |
+| **984/984 tests** | **✅ PASS** | `uv run pytest` in ~3 min |
 
 ### Installation
 
@@ -165,6 +170,8 @@ La mayoría de frameworks de agentes confunden **describir** una capacidad con *
 
 **El blueprint v1 está completo, incluida la integración pública por CLI (H8).** El roadmap cubre ahora 10 hitos (H0..H6, H8, H9 — ver `specs/adr/ADR-0013-divergencia-h7-y-rectificacion-v060.md` para la renumeración) y 16 acceptance tests; todos tienen implementación y evidencia verificada.
 
+La línea **evolution-v2** (H10..H15, 100% cerrada) añade reuso tipado de conocimiento sobre el blueprint: firmas de fichero, scopes de fichero, handoffs expertos, recibos de validación y automejora acotada — todo aislado tras la frontera de storage y persistido como filas `Evidence` (sin tablas nuevas).
+
 | Componente | Estado | Evidencia |
 |---|---|---|
 | Recursos (H1) | ✅ Cerrado | `tests/test_*` |
@@ -175,7 +182,9 @@ La mayoría de frameworks de agentes confunden **describir** una capacidad con *
 | Multipropósito: Domain Packs (H6) | ✅ Cerrado | `tests/test_h6_multiproposito.py` |
 | Promoción entre bases (H7→H9, biblioteca) | ✅ Cerrado | `tests/test_h7_promocion.py` |
 | **Integración pública CLI (H8)**: `sg pack load`, `sg promotion submit/list/reconcile` con failpoints de crash | ✅ Cerrado | `tests/test_h8_public_paths.py`, `tests/uat-evidence/UAT-12.json`, `tests/uat-evidence/UAT-13.json` |
+| **Evolution v2 (H11..H15)**: firmas de fichero, scopes, handoffs expertos, recibos de validación, automejora acotada | ✅ Cerrado | `tests/test_h11..test_h15_*.py` (58 UAT-EVO tests) |
 | **16/16 UATs** | **✅ PASS** | `tests/uat-evidence/*.json` |
+| **984/984 tests** | **✅ PASS** | `uv run pytest` en ~3 min |
 
 ### Instalación
 

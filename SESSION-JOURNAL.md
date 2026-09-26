@@ -6199,3 +6199,47 @@ cobertura ≥93% (file_handoff 93%, resto 99-100%).
 - WI-10: README badges `957/957`→`984/984` + texto evolution-v2 H10..H15.
 - Bump `0.14.5.dev0` → `0.14.6` + tag anotado `v0.14.6` pendiente
   de aprobación operador tras WI-10.
+
+## 2026-09-26 ~18:21 — WI-10 (README badges + texto evolution-v2)
+
+### Resumen
+
+- Housekeeping puro: sincronización de `README.md` con la realidad
+  post-stewardship créatif (suite 984/984 PASS, evolution-v2 100% cerrado).
+- 5 cambios estructurales:
+  - L12 badge `tests-405/405` → `tests-984/984`.
+  - L14 (nuevo) badge `evolution_v2 100% (H11..H15)` anadido al header.
+  - L41 (EN, nuevo) parrafo evolution-v2 explicando el H10..H15.
+  - L53 (EN tabla, nuevo) fila "Evolution v2 (H11..H15)" +
+    fila "984/984 tests".
+  - L173, L185-187 (ES) espejo del bloque EN.
+- Spec: `specs/wi-10-readme-evo-badges.md` (D-31..D-34).
+- Sin cambios en código. Suite 984/984 PASS sigue vigente.
+- ruff format + check: no afectados (no hay `.py` tocado).
+
+### Decisiones
+
+- **D-31**: WI-10 = solo README. NO toca código, ni tests, ni CI.
+- **D-32**: Anadir badge `evolution_v2 100% (H11..H15)` para reflejar
+  el logro completo de la línea evolution-v2.
+- **D-33**: NO release/tag en este workitem.
+- **D-34**: `__version__` sigue en `0.14.5.dev0` (sin bump).
+
+### Verificación
+
+- `grep "\b405\b\|\b830\b\|\b855\b\|\b888\b\|\b929\b\|\b957\b"`
+  en `README.md` → 0 matches.
+- Estructura del documento conservada: misma prosa para
+  Why SkillGraph, Quickstart, Architecture, etc.
+- Working tree: solo `README.md` + `STATE.yaml` +
+  `specs/wi-10-readme-evo-badges.md`.
+
+### Proximo
+
+- **WI-11**: bump `0.14.5.dev0` → `0.14.6` + tag anotado `v0.14.6`
+  (housekeeping release: WI-06/07/08/09/10 sin cambios de API).
+  PENDIENTE de aprobación operador.
+- Tras WI-11 (o sin él), si operador no aporta spec de roadmap,
+  el agente entra en modo de espera honesto. Backlog pendiente
+  de spec: deuda arquitectónica (H-01..H-06, H-10), E1 Adapter
+  real, T3 Threat model, T5 Backups CLI, T6 Observabilidad.
