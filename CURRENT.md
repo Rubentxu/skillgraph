@@ -103,6 +103,32 @@ Para reactivar la iniciativa o abrir una nueva:
 - Operador reabre con consigna explicita; el protocolo de
   reapertura esta en `INITIATIVE-CLOSED.md` seccion 8.
 
+**Estado al 2026-09-26 ~11:35 (post-3 consignas 'continua')**:
+
+El operador ha enviado la consigna "continua con el roadmap y sddk"
+3 veces en 2 horas sin spec adicional. Búsqueda exhaustiva en 10+
+categorías confirma: 0 trabajo substantivo pendiente.
+
+**Modo de espera documentado**: el proyecto está en estado
+"esperando spec del operador". Cualquier ciclo de stewardship
+transversal posterior requiere:
+
+1. Spec del operador (~1 parrafo) para uno de:
+   - E1 Adapter real (proveedor + formato prompts + timeouts + credenciales)
+   - T3 Threat model formal (STRIDE/abuse-cases)
+   - T5 Backups CLI (formato + retención)
+   - T6 Observabilidad (sinks + retención)
+
+2. O desbloquear opcionales con medios:
+   - Codecov badge: secret `CODECOV_TOKEN` en GitHub repo settings
+   - Audit advisories upstream: acceso a red para `pip-audit` o similar
+
+3. O reabrir iniciativa con nuevo roadmap (ver protocolo seccion 8).
+
+**El agente NO debe fabricar trabajo**. Si la consigna "continua"
+se repite sin spec, responder con honest assessment + búsqueda
+exhaustiva documentada (como se hizo en este turno).
+
 ## Reactivacion 2026-09-26 — STEWARDSHIP-DT-PRE-PUSH-HOOK cerrado
 
 Cierra el derivado #4 del audit `hooks-ci-2026-09-26.md`: **3ª capa
