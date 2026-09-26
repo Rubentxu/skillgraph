@@ -1,6 +1,6 @@
 # CURRENT — puntero operativo
 
-> Última verificación: 2026-09-26 18:00 (Europe/Madrid, WI-08).
+> Última verificación: 2026-09-26 18:18 (Europe/Madrid, WI-09 en curso).
 > Iniciativa `g-skillgraph-bootstrap` **COMPLETED** en v0.6.0 (2026-09-23).
 > Etapa 7 (runtime/reconciliación) **CERRADA** en v0.14.0 (2026-09-24).
 > Stewardship backlog P1 Opción A (H9 addendum honesto) **CERRADO** en `327a913` (2026-09-25).
@@ -47,16 +47,16 @@ aplicado: T3 Threat model (ADR-0015 + tests de attestation + audit).
 
 ## Ultimo estado comprobado
 
-- HEAD: pendiente (WI-08 en curso; pre-commit).
+- HEAD: `951e9ef` (WI-07+WI-08 housekeeping cerrado; sin push a origin).
 - Tests: **984/984 PASS** en 174.26s (`uv run pytest --no-header -q`; baseline post-WI-07+WI-08). WI-08 anade +14 tests de coverage hardening en `governance/improvement.py` (84% -> 100%). WI-07 anade +17 tests en `file_handoff.py` (85% -> 93%).
 - Package version: `0.14.5.dev0` (bump post-v0.14.5 housekeeping; WI-07/08 no generan release nuevo). Tags previos: `v0.14.0` (erratum historico, d50f666), `v0.14.1` (WI-01 release, e2cdc53), `v0.14.2` (WI-02a release, da95923), `v0.14.3` (WI-02b release, 7dec857), `v0.14.4` (WI-03 release, dd7a3ef), `v0.14.5` (WI-04/05 housekeeping release, 6ac10ff).
 - CI dominante: local `pipelinek` (`.pipeline.kts`). GitHub Actions queda como notificacion informativa (ver AGENTS.md §CI Local Obligatorio).
 - **19 releases** emitidas: v0.3.0 → v0.14.5 (incluye 4 PATCH/MINOR de refactor: v0.7.0/v0.7.1/v0.7.2/v0.7.3 + 1 refactor sin bump post-v0.14.0 + 1 v0.8.1 PATCH + 6 Etapa 7 S1..S6 + WI-02b v0.14.3 + WI-03 v0.14.4 + WI-04/05 v0.14.5 housekeeping). Nota: H15 no requiere bump (no entrega capacidad nueva a nivel de release, añade superficie de governance).
 - **UATs: 16/16 PASS** (uat_audit mantenible, invariante al avance).
 - Cobertura nucleo re-medida post-WI-07+WI-08: governance/receipts.py 99% (WI-06), governance/improvement.py 100% (WI-08), file_handoff.py 93% (WI-07). Modulos H11/H12: file_signature.py 100%, file_scope.py 100%.
-- Working tree: cambios staged pre-commit (WI-06).
+- Working tree: limpio (post-WI-07+WI-08 commit `951e9ef`).
 - ruff format + ruff check: limpios.
-- HEAD == origin/main (post push FF en este turno).
+- HEAD: 20 commits ahead of `origin/main` (push pendiente de aprobacion operador; regla WI-01).
 - `STATE.yaml.release` sincronizado con realidad: tag=v0.14.0, 17 releases, 30 capacidades_entregadas, tag_sha=241ccc9f.
 - **H9 addendum honesto**: 4/5 entregables cumplidos por conformance (E1 Adapter real PENDIENTE, E2 Seguridad CUMPLIDA_PARCIAL, E3-E5 CUMPLIDAS). Ver `audits/h9-addendum-2026-09-25.md`.
 - **H10 evolution-v2 COMPLETO**: mapa del recorrido real y baseline (audits/h10-recorrido-real-2026-09-25.md 325 LoC).
@@ -113,6 +113,21 @@ El operador ha enviado la consigna "continua con el roadmap y sddk"
 3 veces en 2 horas sin spec adicional. Búsqueda exhaustiva en 10+
 categorías confirma: 0 trabajo substantivo pendiente.
 
+**Estado al 2026-09-26 ~18:18 (post-WI-06/07/08)**:
+
+El operador renueva la consigna "continuamos completando, deuda
+tecnica primero y luego roadmap" (autorización explicita para
+stewardship créatif). WI-06/07/08 cierran los 3 gaps materiales
+reconocidos en cobertura (H-14): `governance/receipts.py` 73%→99%,
+`file_handoff.py` 85%→93%, `governance/improvement.py` 84%→100%.
+Núcleo evolution-v2 (H11..H15) queda al ≥93% en todos los modulos.
+
+Próximo bloque substantivo (WI-09/10): sincronizar la prosa del
+propio CURRENT.md con la realidad post-stewardship + README badges
++ texto evolution-v2. Tras WI-09/10, si no hay spec nueva del
+operador, **el agente entra en modo de espera** honesto y NO
+fabrica roadmap.
+
 **Modo de espera documentado**: el proyecto está en estado
 "esperando spec del operador". Cualquier ciclo de stewardship
 transversal posterior requiere:
@@ -132,6 +147,59 @@ transversal posterior requiere:
 **El agente NO debe fabricar trabajo**. Si la consigna "continua"
 se repite sin spec, responder con honest assessment + búsqueda
 exhaustiva documentada (como se hizo en este turno).
+
+## Reactivacion 2026-09-26 — WI-06/07/08 (Coverage hardening H-14) cerrado
+
+Cierra el derivado #17 del audit técnico senior (`audits/h14-coverage-gaps-2026-09-26.md`):
+los 3 unicos gaps materiales de cobertura reconocidos en `CURRENT.md`
+(modulos evolution-v2 H11..H15). Stewardship créatif ejecutado bajo
+autorización operador ("continuamos completando, deuda tecnica primero").
+
+### WI-06 (governance/receipts.py 73%→99%)
+
+- Spec: `specs/wi-06-receipts-coverage.md`.
+- +28 tests nuevos en `tests/test_h14_validation_receipts.py`.
+- 5 clases nuevas: `TestReceiptDataclassValidation`,
+  `TestIsReceiptApplicableDeps`, `TestRecordEarlyValidation`,
+  `TestListApplicableDefensive`, `TestReceiptVerdictsConstant`.
+- Suite: 929→957 PASS en 156.55s.
+- Bump `__version__ = "0.14.5.dev0"` post-v0.14.5.
+- Commit: `e6ea5c5`.
+
+### WI-07 (file_handoff.py 85%→93%)
+
+- Spec: `specs/wi-07-coverage-file-handoff.md` (retro).
+- +17 tests nuevos en `tests/test_h13_handoff_expert.py`.
+- 5 clases nuevas: `TestHandoffBlockedErrorMessages`,
+  `TestBuildCoverageManifestFoco`, `TestShouldSkipAdapterEmpty`,
+  `TestScopeAwareRecipeValidation`, `TestCompileHandoffFromScopesTypeErrors`.
+- 5 ramas uncovered restantes (L106, L281, L296, L322, L327):
+  type-checks sobre frozen dataclass + isinstance encadenado,
+  documentadas en `test_scope_query_invalido_doc` como defensive code.
+
+### WI-08 (governance/improvement.py 84%→100%)
+
+- Spec: `specs/wi-08-coverage-improvement.md`.
+- +14 tests nuevos en `tests/test_h15_improvement.py`.
+- 7 clases nuevas: `TestImprovementCandidateValidation` (4),
+  `TestPromotionDecisionValidation` (4),
+  `TestPromoteCandidateApproverRequired` (1),
+  `TestRollbackBlockedPolicy` (1),
+  `TestDetectRedundantExtractionEmptySigs` (1),
+  `TestLocalizeOmissionDefensiveBranches` (2),
+  `TestCompareRecipesCorrectionFalse` (1).
+- 140 stmts / 0 uncovered / 38 branches / 0 partial → 100%.
+
+### Veredicto
+
+- **Núcleo evolution-v2 (H11..H15) ≥93% cobertura** en todos los modulos.
+- Suite consolidada: **984/984 PASS** en 174.26s (+27 tests vs baseline 957).
+- Working tree limpio (commit `951e9ef`).
+- 0 cambios en codigo de produccion (WI-06/07/08 son solo tests).
+- 0 release/tag nuevo. `__version__` sigue en `0.14.5.dev0`.
+- Próximos: WI-09 (sincronizar prosa de este mismo `CURRENT.md`,
+  cleaning stale markers), WI-10 (README badges + texto evolution-v2),
+  después release v0.14.6 si operador aprueba.
 
 ## Reactivacion 2026-09-26 — STEWARDSHIP-DT-PRE-PUSH-HOOK cerrado
 

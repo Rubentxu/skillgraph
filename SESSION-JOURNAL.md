@@ -6155,3 +6155,47 @@ cobertura ≥93% (file_handoff 93%, resto 99-100%).
 - WI-10: README badges `957/957`→`984/984` + texto evolution-v2 H10..H15.
 - Bump `0.14.5.dev0` → `0.14.6` + tag anotado v0.14.6 pendiente de
   aprobacion operador tras WI-09/10.
+
+## 2026-09-26 ~18:18 — WI-09 (Sincronización documental CURRENT.md post-WI-06/07/08)
+
+### Resumen
+
+- Housekeeping puro: limpieza de stale markers en `CURRENT.md` que
+  reflejaban estado pre-WI-06 (HEAD pendiente, working tree staged,
+  HEAD == origin/main post-push).
+- 6 cambios estructurales:
+  - L3 timestamp 18:00 → 18:18 + WI-09 en curso.
+  - L50 "HEAD: pendiente" → "HEAD: `951e9ef`".
+  - L57 "Working tree staged" → "Working tree: limpio".
+  - L59 "HEAD == origin/main" → "HEAD: 20 ahead of origin/main".
+  - L116-129 (nuevo) bloque "Estado al 2026-09-26 ~18:18" con
+    el giro honesto del modo de espera tras autorización operador.
+  - L151-202 (nuevo) sección "## Reactivacion 2026-09-26 —
+    WI-06/07/08 (Coverage hardening H-14) cerrado" con detalle
+    por WI y veredicto consolidado.
+- Spec: `specs/wi-09-current-md-sync.md` (D-27..D-30).
+- Sin cambios en código. Suite 984/984 PASS sigue vigente.
+- ruff format + check: limpios (no tocados archivos .py).
+
+### Decisiones
+
+- **D-27**: WI-09 = solo docs (`CURRENT.md`). NO toca producción.
+- **D-28**: Mantener la nota "Modo de espera" pero actualizarla
+  para reflejar el estado real post-stewardship créatif autorizado.
+- **D-29**: NO release/tag en este workitem.
+- **D-30**: `__version__` sigue en `0.14.5.dev0` (sin bump).
+
+### Verificación
+
+- `grep "pendiente (WI-\|staged pre-commit\|WI-06 en curso\|957/957"`
+  en `CURRENT.md` → 0 matches.
+- Estructura del documento conservada: mismo orden de secciones,
+  misma prosa para secciones que no cambian.
+- Working tree: solo `CURRENT.md` + `STATE.yaml` + `specs/wi-09-current-md-sync.md`
+  modificados en este commit.
+
+### Proximo
+
+- WI-10: README badges `957/957`→`984/984` + texto evolution-v2 H10..H15.
+- Bump `0.14.5.dev0` → `0.14.6` + tag anotado `v0.14.6` pendiente
+  de aprobación operador tras WI-10.

@@ -126,8 +126,8 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-08   # coverage hardening governance/improvement.py 84%->100% (cierra gap H-14)
-  next_workitem: WI-09   # sync CURRENT.md linea 56 (file_signature 85%->100%, file_scope 81%->100%, receipts 73%->99%) + entries WI-07/WI-08
+  current_workitem: WI-09   # sincronizar CURRENT.md body + entradas post-WI-06/07/08 (housekeeping puro)
+  next_workitem: WI-10   # README badges 957->984 + texto evolution-v2 H10..H15
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
       fecha: 2026-09-26
