@@ -132,7 +132,7 @@ roadmap:
     DT_PRE_PUSH_HOOK_cerrado:
       fecha: 2026-09-26
       ciclo: STEWARDSHIP-DT-PRE-PUSH-HOOK
-      commit: <pendiente>
+      commit: 4d1e622
       pushed: 2026-09-26
       criterios_cumplidos:
         - "Pre-push hook (scripts/hooks/pre-push, 62 LoC): suite completa de pytest (~190s) antes del push, con prefijo [pre-push] y bypass HOOK_SKIP_PUSH_TESTS=1"
