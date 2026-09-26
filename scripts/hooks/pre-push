@@ -1,0 +1,71 @@
+#!/usr/bin/env sh
+# Pre-push hook for SkillGraph.
+#
+# Enforces:
+#   - Suite completa de pytest (no smoke) sobre la revision que se va a pushear.
+#
+# Por que existe:
+#   - El pre-commit hook ejecuta pytest en modo smoke (~10s, subset) para
+#     feedback rapido en commits. Eso atrapa regresiones triviales pero
+#     deja pasar tests flaky o tests que requieren el suite completo
+#     (e.g. tests de concurrencia, UAT, integracion real).
+#   - El CI workflow ejecuta la suite completa, pero solo despues del
+#     push. Si un test roto llega a main, el dev se entera tarde (tras el
+#     push y tras la espera del CI).
+#   - Este hook cierra el gap: ejecuta la suite completa (~190s) ANTES
+#     de aceptar el push. Si falla, aborta el push con un error claro.
+#
+# Bypass para casos legitimos:
+#   - git push --no-verify
+#   - HOOK_SKIP_PUSH_TESTS=1 git push
+#     (util para ramas experimentales, CI config-only, smoke tests de hooks)
+#
+# Set up: este archivo se copia a .git/hooks/pre-push (chmod +x) por
+# scripts/install-hooks.sh (idempotente). El hook vive en scripts/hooks/
+# para ser commiteable y viajar con el repo.
+
+set -e
+
+# -------------------------------------------------------------------
+# Toolchain dispatch: prefer `mise exec` if available (project pinned),
+# fall back to `uv run` directly. Patron identico al pre-commit hook.
+# -------------------------------------------------------------------
+run_in_toolchain() {
+    if command -v mise >/dev/null 2>&1; then
+        mise exec -- uv "$@"
+    else
+        uv "$@"
+    fi
+}
+
+# -------------------------------------------------------------------
+# 1. Suite completa de pytest (~190s).
+#
+# Diferencia con pre-commit: este NO corre smoke, sino la suite completa,
+# porque el push es el ultimo gate local antes del remoto. Si pasa aqui,
+# el CI solo verifica que la ejecucion es reproducible (mismo commit,
+# mismas deps via uv.lock).
+# -------------------------------------------------------------------
+if [ "${HOOK_SKIP_PUSH_TESTS:-0}" != "1" ]; then
+    echo "[pre-push] pytest -q (suite completa, puede tardar ~3min)..."
+    # NOTA: el comando va SIN pipe (| tail -N) porque con `set -e` el
+    # exit code del pipe es el del ultimo comando (tail = 0) y la rama
+    # de error NUNCA se ejecutaria. Mismo workaround que `.pipeline.kts`.
+    # Capturamos el output a un tempfile para mostrar las ultimas 30 lineas.
+    _log="$(mktemp)"
+    if ! run_in_toolchain run pytest -q >"$_log" 2>&1; then
+        echo ""
+        tail -30 "$_log"
+        echo ""
+        echo "ERROR: pytest failed (suite completa)."
+        echo "Bypass para ramas experimentales: HOOK_SKIP_PUSH_TESTS=1 git push"
+        echo "Bypass siempre: git push --no-verify"
+        rm -f "$_log"
+        exit 1
+    fi
+    rm -f "$_log"
+else
+    echo "[pre-push] HOOK_SKIP_PUSH_TESTS=1 -> saltando suite completa"
+fi
+
+echo "[pre-push] OK"

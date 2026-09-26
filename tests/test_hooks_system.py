@@ -18,6 +18,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOK_PATH = REPO_ROOT / "scripts" / "hooks" / "pre-commit"
+PRE_PUSH_HOOK_PATH = REPO_ROOT / "scripts" / "hooks" / "pre-push"
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install-hooks.sh"
 CI_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
@@ -96,6 +97,135 @@ class TestInstallHooksScript:
         """Re-ejecutar install-hooks.sh no debe fallar."""
         content = INSTALLER_PATH.read_text(encoding="utf-8")
         assert "cp" in content, "Installer no copia hooks"
+
+    def test_installer_copies_all_hooks(self, tmp_path: Path) -> None:
+        """El installer debe iterar sobre TODOS los hooks en scripts/hooks/.
+
+        Hoy usa un glob (`for hook in "$SOURCE_DIR"/*`), asi que ya copia
+        todos. Este test crea un repo temporal con multiples hooks y verifica
+        que el installer los copia todos sin hardcodear nombres.
+
+        Importante: el hook pre-push NO debe quedar excluido por error.
+        """
+        import shutil
+        import subprocess
+
+        # 1. Crear repo temporal con git init
+        fake_repo = tmp_path / "fake_repo"
+        fake_repo.mkdir()
+        subprocess.run(
+            ["git", "init", "--initial-branch=main"],
+            cwd=fake_repo,
+            check=True,
+            capture_output=True,
+        )
+
+        # 2. Crear scripts/hooks con 2 hooks (pre-commit + pre-push)
+        hooks_src = fake_repo / "scripts" / "hooks"
+        hooks_src.mkdir(parents=True)
+        (hooks_src / "pre-commit").write_text("#!/bin/sh\necho pre-commit\n")
+        (hooks_src / "pre-push").write_text("#!/bin/sh\necho pre-push\n")
+
+        # 3. Instalar el installer real apuntando al fake repo
+        # Truco: el installer usa git rev-parse para detectar root, asi que
+        # basta con ejecutarlo desde fake_repo. Pero el installer vive en el
+        # repo real, asi que copiamos el installer al fake_repo temporalmente.
+        installer_copy = fake_repo / "install-hooks.sh"
+        shutil.copy(INSTALLER_PATH, installer_copy)
+
+        # 4. Ejecutar installer
+        result = subprocess.run(
+            ["bash", str(installer_copy)],
+            cwd=fake_repo,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, (
+            f"Installer fallo: stdout={result.stdout!r} stderr={result.stderr!r}"
+        )
+
+        # 5. Verificar que AMBOS hooks se copiaron a .git/hooks/
+        git_hooks_dir = fake_repo / ".git" / "hooks"
+        assert (git_hooks_dir / "pre-commit").exists(), "pre-commit no copiado"
+        assert (git_hooks_dir / "pre-push").exists(), "pre-push no copiado por installer"
+
+        # 6. Verificar que ambos son ejecutables
+        import stat
+
+        for name in ("pre-commit", "pre-push"):
+            mode = (git_hooks_dir / name).stat().st_mode
+            assert mode & stat.S_IXUSR, f"{name} no ejecutable tras installer"
+
+
+class TestPrePushHook:
+    """El hook pre-push ejecuta la suite completa de pytest antes del push.
+
+    Defensa en profundidad 3 capas:
+      1. Pre-commit (lint + format + smoke pytest)  [ya implementado]
+      2. CI workflow (lint + format + full pytest)  [ya implementado]
+      3. Pre-push (suite completa de pytest)         [este test]
+    """
+
+    def test_hook_exists(self) -> None:
+        assert PRE_PUSH_HOOK_PATH.exists(), f"Hook no encontrado: {PRE_PUSH_HOOK_PATH}"
+
+    def test_hook_is_executable(self) -> None:
+        """El hook debe tener bit +x (stat S_IXUSR).
+
+        El install-hooks.sh debe re-aplicar chmod +x al copiar al directorio
+        .git/hooks/ (que no se commitea).
+        """
+        import stat
+
+        mode = PRE_PUSH_HOOK_PATH.stat().st_mode
+        assert mode & stat.S_IXUSR, f"Hook no ejecutable: {PRE_PUSH_HOOK_PATH}"
+
+    def test_hook_has_shebang(self) -> None:
+        first_line = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8").splitlines()[0]
+        assert first_line.startswith("#!"), f"Hook sin shebang: {first_line!r}"
+        assert "sh" in first_line or "bash" in first_line, (
+            f"Shebang no apunta a shell: {first_line!r}"
+        )
+
+    def test_hook_enforces_pytest(self) -> None:
+        """El hook debe ejecutar pytest para validar la suite antes del push."""
+        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
+        assert "pytest" in content, "Hook no ejecuta pytest"
+
+    def test_hook_uses_toolchain_dispatcher(self) -> None:
+        """El hook debe usar el dispatcher run_in_toolchain (mise/uv) para coherencia con pre-commit."""
+        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
+        assert "run_in_toolchain" in content or "mise exec" in content, (
+            "Hook no usa toolchain dispatcher (mise/uv)"
+        )
+
+    def test_hook_provides_bypass_for_experimental_branches(self) -> None:
+        """El hook debe permitir bypass via env var HOOK_SKIP_PUSH_TESTS.
+
+        Casos de uso legitimos:
+          - Push de rama experimental sin tests listos
+          - CI config / docs-only changes en worktree de otro dev
+          - Smoke test de hooks system sin esperar 190s
+        """
+        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
+        assert "HOOK_SKIP_PUSH_TESTS" in content, (
+            "Hook sin mecanismo de bypass HOOK_SKIP_PUSH_TESTS"
+        )
+
+    def test_hook_uses_consistent_log_prefix(self) -> None:
+        """El hook debe usar prefijo [pre-push] para identificarse en logs."""
+        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
+        assert "[pre-push]" in content, "Hook sin prefijo [pre-push] en logs"
+
+    def test_hook_documents_purpose(self) -> None:
+        """El header debe explicar por qué existe el hook (que problema evita)."""
+        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
+        # El header debe contener palabras clave de proposito
+        header_lines = "\n".join(content.splitlines()[:15])
+        assert "push" in header_lines.lower(), "Hook no documenta relacion con push"
+        assert "pytest" in header_lines.lower() or "test" in header_lines.lower(), (
+            "Hook no documenta relacion con pytest"
+        )
 
 
 class TestCIWorkflow:
