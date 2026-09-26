@@ -34,12 +34,17 @@ Funciones puras (sin I/O, sin reloj):
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from skillgraph.core.errors import SkillGraphError, ValidationError
 from skillgraph.core.recipe import ContextRecipe
 from skillgraph.knowledge.file_signature import FileSignature
+
+if TYPE_CHECKING:
+    from skillgraph.knowledge.file_scope import ScopeQuery
+    from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
 # --- Errores tipados (regla AGENTS §1.2) ----------------------------
 
@@ -225,7 +230,12 @@ def _validate_inputs(
     context_controller: object,
     scope_recipe: ScopeAwareRecipe,
 ) -> tuple[object, KnowledgeController, ScopeQuery]:
-    """Valida tipos y devuelve (ctx, knowledge, scope_query_0)."""
+    """Valida tipos y devuelve (ctx, knowledge, scope_query_0).
+
+    Las dependencias ``KnowledgeController`` y ``ScopeQuery`` se importan
+    dentro del cuerpo para evitar ciclos (regla AGENTS §11.7); sus type
+    hints viven en el bloque ``TYPE_CHECKING`` arriba.
+    """
     from skillgraph.knowledge.context_controller import ContextController
     from skillgraph.knowledge.file_scope import ScopeQuery
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
