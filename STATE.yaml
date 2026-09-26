@@ -538,10 +538,10 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 926
-  passed: 926
-  duration_s: 152   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-02b; 926 = 927 post-WI-02a - 2 TestStorageConnPublic borrados por artefacto obsoleto [T-16])
-  package_version: "0.14.3"   # WI-02b release; tag v0.14.3 sobre este commit
+  total: 929
+  passed: 929
+  duration_s: 177   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-03; 929 = 927 post-WI-02a + 2 nuevos: Storage.list_sources happy path + aislamiento)
+  package_version: "0.14.4.dev0"  # WI-03 work; tag v0.14.4 sobre este commit en T-17 final
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"

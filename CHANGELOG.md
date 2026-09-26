@@ -12,6 +12,23 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.14.4] - 2026-09-26 — WI-03 (governance/receipts migra a KnowledgeRepository)
+
+**Resumen**: cierre del último escape hatch `_conn.execute` en código de dominio (fuera de Storage.py, que es donde debe estar, y catalog.py, que usa un SQLite propio distinto del Storage de proyecto). Sin cambio de API observable. Tests: 929/929 PASS (de 927 en v0.14.3; +2 tests nuevos de Storage.list_sources).
+
+### Changed (interno, sin API change)
+
+- **`KnowledgeRepository` Protocol** añade `list_sources(*, tenant_id, project_id) -> tuple[Source, ...]` (duck typing).
+- **`Storage.list_sources`** nueva: SELECT * FROM sources WHERE tenant_id = ? AND project_id = ? ORDER BY source_id. Read-only, tupla inmutable.
+- **`receipts.list_applicable_receipts`**: itera `storage.list_sources(...)` en vez de `storage._conn.execute('SELECT source_id FROM sources ...')`. Semántica idéntica (mismos source_ids visitados; el nuevo método devuelve además el ADT completo por si futuro).
+- **Audit transversal post-WI-02b**: `grep "_conn" src/skillgraph/governance/` → 0 sitios activos (solo aparece en comentario histórico del WI-03). `grep "_conn" src/skillgraph/ --include="*.py" | grep -v "platform/storage.py\|resources/catalog.py"` → 0 sitios.
+
+### Notes
+
+- `catalog.py` queda con acceso directo a `_conn`: usa un SQLite propio en `data_root/catalog.sqlite`, no es Storage de proyecto (no viola la regla "Storage encapsula SQL", que se aplica a la tabla de proyecto). Fuera de scope.
+- WI-02b AC-5 extendido ahora a `governance/`: regla "Storage encapsula SQL" completa en KC, KI, ContextController, receipts.
+- PATCH bump (sin breaking change, sin nuevos comandos CLI).
+
 ## [0.14.3] - 2026-09-26 — Refactor WI-02b (EventLog + KnowledgeController + escape hatch removal)
 
 **Resumen**: segunda mitad del refactor de puertos de persistencia (WI-02b). Cierra los últimos 2 ACs abiertos en 0.14.2: AC-3 (EventLog/KnowledgeController aceptan Protocols en vez de Storage) y AC-4 (eliminación del escape hatch `Storage.conn`). Sin cambio de API observable para el usuario. Tests: 926/926 PASS (sin regresión) en CI local canónico (`pipelinek`).
