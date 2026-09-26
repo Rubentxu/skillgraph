@@ -25,6 +25,7 @@ classifiers = [
 
 dependencies = [
     "PyYAML>=6.0",
+    "httpx>=0.27,<1.0",  # WI-12 E1 Adapter real (HTTP genérico para Anthropic + OpenAI)
 ]
 
 [project.optional-dependencies]
@@ -44,6 +45,7 @@ dev = [
     "pytest-cov>=6",
     "ruff>=0.6",
     "dulwich>=0.21",  # Slice 3+ (git fingerprinting)
+    "respx>=0.21,<1.0",  # WI-12 E1 Adapter real (mock HTTP transport-level)
 ]
 docs = []
 

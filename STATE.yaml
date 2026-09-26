@@ -126,8 +126,8 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-11   # release v0.14.6 housekeeping (bump 0.14.5.dev0 -> 0.14.6 + tag anotado)
-  next_workitem: WI-12   # post-tag housekeeping 0.14.6.dev0; siguiente bloque roadmap pendiente de spec operador
+  current_workitem: WI-12   # E1 Adapter real (HttpAgentAdapter Anthropic + OpenAI + retry + failpoints)
+  next_workitem: WI-13   # CLI wiring --adapter http (anthropic|openai) + cmd sg run integrado
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
       fecha: 2026-09-26
@@ -538,13 +538,14 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 984   # post-WI-08 coverage hardening governance/improvement.py
-  passed: 984
-  duration_s: 174   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-08)
+  total: 1009   # post-WI-12 E1 Adapter real (HttpAgentAdapter Anthropic + OpenAI)
+  passed: 1009
+  duration_s: 188   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-12)
   package_version: "0.14.6.dev0"   # WI-11 housekeeping release cerrado; post-tag bump .dev0 para cumplir release_governance
   delta_wi06: "+28 tests (10 dataclass validation + 1 is_receipt_applicable deps + 5 record_early_validation + 5 list_defensive_paths + 1 RECEIPT_VERDICTS + 1 to_payload + 5 misc coverage)"
   delta_wi07: "+17 tests (3 handoff_blocked messages + 4 build_coverage_manifest foco + 2 should_skip_adapter empty + 7 ScopeAwareRecipe validation + 1 type-checks doc) — file_handoff.py 85%→93%"
   delta_wi08: "+14 tests (4 ImprovementCandidate validation + 4 PromotionDecision validation + 1 promote approver required + 1 rollback blocked + 1 detect_redundant_extraction empty sigs + 2 localize_omission defensive + 1 compare_recipes correction_false) — improvement.py 84%→100%"
+  delta_wi12: "+25 tests (5 anthropic strategy + 3 openai strategy + 11 http adapter validation/retry/failpoint + 4 env config + 2 default model) — runtime/http_adapter.py (E1 Adapter real)"
   h9_bslice1_delta: "+15 tests (10 storage + 5 in-process CLI)"
   h9_inprocess2_delta: "+12 tests in-process CLI runner (submit/reconcile/pack/show)"
   h9_bslice2_delta: "+13 tests (Storage.find_active_run + invariantes sobre acceso a storage._conn)"

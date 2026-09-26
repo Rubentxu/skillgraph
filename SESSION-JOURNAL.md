@@ -6301,3 +6301,53 @@ cobertura ≥93% (file_handoff 93%, resto 99-100%).
 - Proximo bloque roadmap: pendiente de spec operador. Backlog documentado
   en `CURRENT.md` + `STATE.yaml`: deuda arquitectonica (H-01..H-06, H-10),
   E1 Adapter real, T3 Threat, T5 Backups, T6 Observabilidad.
+
+## 2026-09-26 ~18:50 — WI-12 (E1 Adapter real: HttpAgentAdapter)
+
+### Resumen
+
+- Cierre del derivado **E1** del H9 addendum (unico pendiente del
+  release candidate v0.14.x). Implementa `HttpAgentAdapter` que
+  invoca LLMs reales via HTTP en lugar de leer fixtures desde disco.
+- Soporte 2 proveedores: **Anthropic Messages API** y **OpenAI Chat
+  Completions API**. Sin credenciales en codigo: leidas de env vars
+  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) o via constructor.
+- Retry policy: 3 reintentos max, backoff exponencial con jitter
+  (1s base, 8s max). Retry solo en 429 y 5xx.
+- Failpoints: `SKILLGRAPH_FAILPOINT_HTTP_TIMEOUT` / `_429` / `_500`
+  para tests deterministas sin red.
+- Tests integration con `respx` (mock HTTP transport-level).
+- Sin red en CI: `respx` mockea todo el HTTP.
+
+### Decisiones
+
+- **D-40**: E1 Adapter real = `HttpAgentAdapter` con strategies
+  `anthropic` + `openai`. Cero credenciales en codigo.
+- **D-41**: Reusar `AgentAdapter` Protocol existente (D-41).
+- **D-42**: HTTP via `httpx` (sync client, timeouts configurables).
+- **D-43**: Tests integration con `respx` (no `pytest-httpx`).
+- **D-44**: NO modificar `FakeAgentAdapter` (compat tests existentes).
+- **D-45**: Failpoints para 429/500/timeout (patron ya existente en SKILLGRAPH_FAILPOINT_*).
+
+### Verificacion
+
+- `uv run pytest tests/test_http_adapter.py` → 25/25 PASS en 10.16s.
+- `uv run pytest` (suite completa) → **1009/1009 PASS** en 187.53s.
+- `uv run ruff check .` → All checks passed.
+- Spec: `specs/wi-12-http-adapter.md` (D-40..D-45, 81 LoC).
+
+### Resultado
+
+- **E1 Adapter real**: cumplido. H9 conformance 5/5.
+- ~430 LoC en `src/skillgraph/runtime/http_adapter.py` (production).
+- ~380 LoC en `tests/test_http_adapter.py` (tests integration).
+- Deps añadidas: `httpx>=0.27,<1.0` (runtime), `respx>=0.21,<1.0` (dev).
+- 0 breaking API (FakeAgentAdapter intacto, Protocol reutilizado).
+- NO bump version (feat nuevo, dejo bump para cierre cuando se acumulen).
+
+### Proximo
+
+- WI-13: CLI wiring `--adapter http (anthropic|openai)` para `sg run`.
+- Mas roadmap: T3 Threat model (formal STRIDE), T5 Backups CLI,
+  T6 Observabilidad runbook, deuda arquitectonica (H-01..H-06, H-10).
+- Push pendiente aprobacion operador (regla WI-01, 24+ commits ahead).
