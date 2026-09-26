@@ -354,7 +354,6 @@ def cmd_knowledge_refresh(args: argparse.Namespace) -> int:
 
 def cmd_knowledge_compile(args: argparse.Namespace) -> int:
     """Compila un handoff desde una receta inline."""
-    import json
 
     from skillgraph.core.recipe import ContextRecipe
     from skillgraph.knowledge.context_controller import ContextController
