@@ -1426,3 +1426,32 @@ para cumplir AGENTS.md §1.5 (umbral ~40 LoC).
 
 **Tests**: 15 nuevos en `tests/test_context_controller.py`
 (11 helpers + 4 mappers). Total: **754/754 verde**. ruff limpio.
+
+## [Sin bump] — 2026-09-26 (stewardship: defensa operativa)
+
+**Commits**: `4d1e622` + `23e4c94` (fix) + `21bc550` (docs) + tareas mise.
+
+**Resumen**: Ciclo STEWARDSHIP-DT-PRE-PUSH-HOOK. Tercera capa de defensa
+operativa (junto a pre-commit y CI remoto): **pre-push** ejecuta la suite
+completa de pytest (~190s) antes de aceptar un `git push`.
+
+- Hook POSIX shell en `scripts/hooks/pre-push` (75 LoC, sin
+  dependencias externas).
+- Dispatcher `run_in_toolchain` que detecta `mise`/`uv`/`pip`/`none` y
+  delega en el wrapper nativo.
+- Bypass `HOOK_SKIP_PUSH_TESTS=1` para emergencias.
+- Patrón `mktemp` + `if !` (workaround al bug `set -e` + `| tail` ya
+  documentado en `.pipeline.kts`).
+- `trap 'rm -f "$_log"' EXIT` para limpieza de tempfile en
+  SIGTERM/SIGINT (anadido en V9d deep audit).
+- README documenta la capa defense-in-depth en EN y ES.
+- Tareas `mise run test-fast` (abort 1er fallo) y `mise run test-cov`
+  (cobertura local) para iteracion RED/GREEN.
+
+**Tests**: 9 nuevos en `TestPrePushHook` + `test_installer_copies_all_hooks`.
+Total: **889/889 verde**. ruff limpio. Auditoria completa en
+`audits/pre-push-hook-2026-09-26.md` (239 LoC).
+
+**Justificación de "Sin bump"**: es dev-infra puro. No añade API
+observables ni cambia comportamiento del producto. Siguiente bump
+será solo cuando llegue un `feat` real.

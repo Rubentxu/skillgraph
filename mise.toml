@@ -24,6 +24,14 @@ description = "Resuelve el venv local con dependencias de producción y dev"
 run = "uv run pytest"
 description = "Ejecuta la suite de tests focalizados"
 
+[tasks.test-fast]
+run = "uv run pytest -x --tb=short"
+description = "Suite completa con abort en primer fallo y traceback corto (iteracion RED/GREEN)"
+
+[tasks.test-cov]
+run = "uv run pytest --cov=skillgraph --cov-report=term-missing"
+description = "Suite con cobertura local (no genera XML)"
+
 [tasks.lint]
 run = "uv run ruff check src tests"
 description = "Lint rápido (Ruff, E/F/I/B/UP/SIM/RUF)"
