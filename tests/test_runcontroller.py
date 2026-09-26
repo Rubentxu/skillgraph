@@ -102,7 +102,7 @@ class TestCreateRun:
     ) -> None:
         storage, adapter, conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         row = conn.execute(
             "SELECT state, current_node FROM workflow_runs WHERE run_id = ?",
@@ -116,7 +116,7 @@ class TestCreateRun:
     ) -> None:
         storage, adapter, conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         rows = conn.execute(
             "SELECT event_kind FROM runtime_events WHERE run_id = ? ORDER BY sequence ASC",
@@ -136,7 +136,7 @@ class TestReconcileTerminal:
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan((_node("a"),))
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="a", outcome="ok")
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap.state == "COMPLETED"
@@ -153,7 +153,7 @@ class TestReconcileTerminal:
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan((_node("a"),))
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="a", outcome="ok")
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         events_before = conn.execute(
@@ -184,7 +184,7 @@ class TestReconcileSequential:
         )
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="a", outcome="ok")
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="b", outcome="done")
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap1 = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap1.state == "ACTIVE"
@@ -207,7 +207,7 @@ class TestReconcileFailure:
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan((_node("a"),))
         # NO sembramos fixture.
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap.state == "FAILED"
@@ -238,7 +238,7 @@ class TestReconcileFailure:
             node_name="a",
             outcome="surprise",  # NO declarado
         )
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert snap.state == "FAILED"
@@ -264,7 +264,7 @@ class TestRecovery:
         fixtures_root.mkdir(exist_ok=True)
         plan = _plan((_node("a"),))
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="a", outcome="ok")
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # Simulamos crash: insertamos manualmente un NodeExecution RUNNING
         # sin finished_at para el nodo a.
@@ -302,7 +302,7 @@ class TestIdempotency:
         duplicado no duplica la accion."""
         storage, adapter, conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # Tomamos el event_id del primer RunCreated y lo reusamos.
         row = conn.execute(
@@ -345,7 +345,7 @@ class TestRecordingAdapter:
         _seed_fixture(fixtures_root, tenant=TENANT, project=PROJECT, node_name="b", outcome="done")
         fake = FakeAgentAdapter(fixtures_root)
         rec = RecordingAdapter(fake)
-        ctl = RunController(storage=storage, adapter=rec)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=rec)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
@@ -380,7 +380,9 @@ class TestFailNodeWithHelper:
     ) -> None:
         """El helper debe aceptar Exception genérica sin re-lanzar."""
         storage, _adapter, _conn = fixture_setup
-        ctl = RunController(storage=storage, adapter=_seed_adapter_fixture(tmp_path))
+        ctl = RunController(
+            runs=storage, events=storage, policy=storage, adapter=_seed_adapter_fixture(tmp_path)
+        )
         ctl.create_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -406,7 +408,9 @@ class TestFailNodeWithHelper:
         from skillgraph.core.errors import SkillGraphError
 
         storage, _adapter, _conn = fixture_setup
-        ctl = RunController(storage=storage, adapter=_seed_adapter_fixture(tmp_path))
+        ctl = RunController(
+            runs=storage, events=storage, policy=storage, adapter=_seed_adapter_fixture(tmp_path)
+        )
         ctl.create_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -430,7 +434,9 @@ class TestFailNodeWithHelper:
         error con formato '<Type>: <message>' en node_executions.error.
         """
         storage, _adapter, conn = fixture_setup
-        ctl = RunController(storage=storage, adapter=_seed_adapter_fixture(tmp_path))
+        ctl = RunController(
+            runs=storage, events=storage, policy=storage, adapter=_seed_adapter_fixture(tmp_path)
+        )
         # create_run inserta la NodeExecution en RUNNING via start.
         run_id = ctl.create_run(
             tenant_id=TENANT,
@@ -450,7 +456,7 @@ class TestFailNodeWithHelper:
             run_id=run_id,
             node_execution_id=node_execution_id,
         )
-        ctl._storage.start_node_execution_atomically(
+        ctl._runs.start_node_execution_atomically(
             event=event,
             node_execution_id=node_execution_id,
             tenant_id=TENANT,
@@ -502,7 +508,7 @@ class TestCancelRun:
             node_name="a",
             outcome="ok",
         )
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.cancel_run(
             tenant_id=TENANT,
@@ -528,7 +534,7 @@ class TestCancelRun:
             node_name="a",
             outcome="ok",
         )
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.cancel_run(
             tenant_id=TENANT,
@@ -564,7 +570,7 @@ class TestCancelRun:
             node_name="a",
             outcome="ok",
         )
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # Reconciliar hasta COMPLETED
         ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
@@ -586,7 +592,7 @@ class TestCancelRun:
         from skillgraph.core.errors import NotFoundError
 
         storage, adapter, _conn = fixture_setup
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         with pytest.raises(NotFoundError):
             ctl.cancel_run(
                 tenant_id=TENANT,
@@ -608,7 +614,7 @@ class TestCancelRun:
             node_name="a",
             outcome="ok",
         )
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         ctl.cancel_run(
             tenant_id=TENANT,
@@ -643,7 +649,7 @@ class TestListAndShowRun:
         tmp_path: Path,
     ) -> None:
         storage, adapter, _conn = fixture_setup
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         result = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT)
         assert result == ()
 
@@ -655,7 +661,7 @@ class TestListAndShowRun:
         """El mas reciente aparece primero (orden por rowid DESC)."""
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         rid1 = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         rid2 = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         rid3 = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
@@ -670,7 +676,7 @@ class TestListAndShowRun:
     ) -> None:
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         for _ in range(5):
             ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         rows = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT, limit=2)
@@ -684,7 +690,7 @@ class TestListAndShowRun:
         """`state` opcional filtra runs por estado."""
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # El run recien creado esta en CREATED.
         rows_created = ctl.list_runs(tenant_id=TENANT, project_id=PROJECT, state="CREATED")
@@ -700,7 +706,7 @@ class TestListAndShowRun:
     ) -> None:
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.show_run(tenant_id=TENANT, project_id=PROJECT, run_id=rid)
         assert snap.run_id == rid
@@ -714,7 +720,7 @@ class TestListAndShowRun:
         from skillgraph.core.errors import NotFoundError
 
         storage, adapter, _conn = fixture_setup
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         with pytest.raises(NotFoundError):
             ctl.show_run(
                 tenant_id=TENANT,
@@ -740,7 +746,7 @@ class TestLogsRun:
         from skillgraph.core.errors import NotFoundError
 
         storage, adapter, _conn = fixture_setup
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         with pytest.raises(NotFoundError):
             ctl.logs_run(
                 tenant_id=TENANT,
@@ -756,7 +762,7 @@ class TestLogsRun:
         """Run recien creado -> al menos el evento `RunCreated`."""
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         events = ctl.logs_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         kinds = tuple(e.event.event_kind for e in events)
@@ -781,7 +787,7 @@ class TestLogsRun:
 
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         events = ctl.logs_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert len(events) > 0
@@ -939,7 +945,7 @@ class TestCreateRunWithBudget:
 
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -958,7 +964,7 @@ class TestCreateRunWithBudget:
 
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         row = storage.get_budget(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         assert row is None
@@ -976,7 +982,7 @@ class TestCreateRunWithBudget:
 
         storage, adapter, _conn = fixture_setup
         plan = _plan((_node("a"),))
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -1022,7 +1028,7 @@ class TestBudgetEnforcement:
         )
         # Sembrar fixture para el FakeAgentAdapter (self-loop re-ejecuta).
         _seed_fixtures_for_plan(adapter._root, plan, outcome_for={"a": "ok"})
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -1067,7 +1073,7 @@ class TestBudgetEnforcement:
         plan = WorkflowPlan(initial="a", nodes=(a,), transitions=())
         # Sembrar fixture para que el FakeAgentAdapter no falle.
         _seed_fixtures_for_plan(fixtures_root, plan, outcome_for={"a": "ok"})
-        ctl = RunController(storage=storage, adapter=adapter)
+        ctl = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         snap = ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
         # Plan lineal sin budget: COMPLETED (nodo terminal ejecutado).

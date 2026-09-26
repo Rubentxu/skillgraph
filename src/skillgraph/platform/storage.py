@@ -335,6 +335,39 @@ class Storage:
     def close(self) -> None:
         self._conn.close()
 
+    # ----- factorías de puertos (WI-02a) -------------------------------
+    # ``Storage`` implementa los 5 Protocols de persistencia
+    # (``RunRepository``, ``EventStore``, ``KnowledgeRepository``,
+    # ``PromotionRepository``, ``PolicyStore``) por duck typing
+    # estructural: sus métodos públicos coinciden con las firmas
+    # declaradas en ``skillgraph.platform.ports``. Estas factorías
+    # permiten a los consumidores del core (RunController, EventLog)
+    # recibir la abstracción sin acoplarse a la clase concreta
+    # ``Storage``. La factoría devuelve ``self`` para preservar el
+    # sharing de conexión: cualquier mutación sobre ``Storage``
+    # sigue siendo visible de inmediato para los adapters.
+    #
+    # Cuando se introduzcan ``SqliteRunRepository`` etc. en WI-02b,
+    # estas factorías pueden delegar a ellos sin cambiar la firma.
+
+    def run_repository(self) -> Storage:
+        """Devuelve una vista ``Storage`` que satisface ``RunRepository``.
+
+        Equivalente a ``self`` mientras ``Storage`` mantenga todas
+        las firmas de ``RunRepository``. El tipo de retorno nominal
+        es ``Storage`` para no introducir imports circulares; el
+        consumidor lo declara como ``RunRepository``.
+        """
+        return self
+
+    def event_store(self) -> Storage:
+        """Devuelve una vista ``Storage`` que satisface ``EventStore``."""
+        return self
+
+    def policy_store(self) -> Storage:
+        """Devuelve una vista ``Storage`` que satisface ``PolicyStore``."""
+        return self
+
     @property
     def conn(self) -> sqlite3.Connection:
         """Conexion SQLite subyacente.

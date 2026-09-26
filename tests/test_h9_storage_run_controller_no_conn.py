@@ -91,17 +91,27 @@ class TestRunControllerNoLongerAcceptsConn:
         """Pasar ``conn=...`` ahora es TypeError."""
         s, adapter = storage
         with pytest.raises(TypeError):
-            RunController(storage=s, adapter=adapter, conn=s.conn)  # type: ignore[call-arg]
+            RunController(runs=s, events=s, policy=s, adapter=adapter, conn=s.conn)  # type: ignore[call-arg]
 
-    def test_init_signature_has_only_storage_and_adapter(self) -> None:
-        """Red de seguridad: la firma no incluye ``conn``."""
+    def test_init_signature_has_only_protocols_and_adapter(self) -> None:
+        """Red de seguridad (WI-02a): la firma no incluye ``conn``.
+
+        WI-02a migra ``storage=`` por los Protocols ``runs``,
+        ``events`` y ``policy``. ``conn`` no debe aparecer.
+        """
         import inspect
 
         sig = inspect.signature(RunController.__init__)
         params = list(sig.parameters.keys())
         assert "conn" not in params, f"RunController.__init__ aun acepta 'conn' (params={params})"
-        # Solo storage, adapter (y self).
-        assert params[:3] == ["self", "storage", "adapter"]
+        assert "storage" not in params, (
+            f"RunController.__init__ aun acepta 'storage' (params={params}); "
+            f"WI-02b lo elimina en favor de los Protocols."
+        )
+        # self, runs, events, policy, adapter
+        assert params[:5] == ["self", "runs", "events", "policy", "adapter"], (
+            f"firma RunController.__init__ cambia: {params[:5]}"
+        )
 
 
 class TestRunControllerWorksWithoutConn:
@@ -111,7 +121,7 @@ class TestRunControllerWorksWithoutConn:
     ) -> None:
         """Camino real: ctl sin conn usa storage.conn para EventLog."""
         s, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter)
+        ctl = RunController(runs=s, events=s, policy=s, adapter=adapter)
 
         run_id = ctl.create_run(
             tenant_id=TENANT,

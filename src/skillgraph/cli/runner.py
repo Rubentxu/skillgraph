@@ -891,7 +891,9 @@ def cmd_runs_list(args: argparse.Namespace) -> int:
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, _ = resolver.lookup(args.project)
     ctl = RunController(
-        storage=storage,
+        runs=storage,
+        events=storage,
+        policy=storage,
         adapter=FakeAgentAdapter(Path("/dev/null")),  # list no invoca adapter
     )
     runs = ctl.list_runs(
@@ -928,7 +930,9 @@ def cmd_runs_show(args: argparse.Namespace) -> int:
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, _ = resolver.lookup(args.project)
     ctl = RunController(
-        storage=storage,
+        runs=storage,
+        events=storage,
+        policy=storage,
         adapter=FakeAgentAdapter(Path("/dev/null")),  # show no invoca adapter
     )
     snap = ctl.show_run(
@@ -959,7 +963,9 @@ def cmd_runs_logs(args: argparse.Namespace) -> int:
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, _ = resolver.lookup(args.project)
     ctl = RunController(
-        storage=storage,
+        runs=storage,
+        events=storage,
+        policy=storage,
         adapter=FakeAgentAdapter(Path("/dev/null")),  # logs no invoca adapter
     )
     logs = ctl.logs_run(
@@ -997,7 +1003,9 @@ def cmd_runs_cancel(args: argparse.Namespace) -> int:
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, _ = resolver.lookup(args.project)
     ctl = RunController(
-        storage=storage,
+        runs=storage,
+        events=storage,
+        policy=storage,
         adapter=FakeAgentAdapter(Path("/dev/null")),  # cancel no invoca adapter
     )
     snap = ctl.cancel_run(
@@ -1676,7 +1684,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     storage = Storage(db_path)
     try:
         ctl = RunController(
-            storage=storage,
+            runs=storage,
+            events=storage,
+            policy=storage,
             adapter=adapter,
         )
         # Resume-or-start: si ya existe un Run no terminal para este

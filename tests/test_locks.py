@@ -223,14 +223,18 @@ class TestRunControllerLockIntegration:
 
         lock_dir = tmp_path / "locks"
         ctl1 = RunController(
-            storage=storage,
+            runs=storage,
+            events=storage,
+            policy=storage,
             adapter=adapter,
             lock_dir=lock_dir,
             lock_mode="advisory",
             lock_timeout_seconds=5,
         )
         ctl2 = RunController(
-            storage=storage,
+            runs=storage,
+            events=storage,
+            policy=storage,
             adapter=adapter,
             lock_dir=lock_dir,
             lock_mode="advisory",
@@ -288,14 +292,18 @@ class TestRunControllerLockFailFast:
         lock_dir = tmp_path / "locks-failfast"
 
         ctl_hold = RunController(
-            storage=storage,
+            runs=storage,
+            events=storage,
+            policy=storage,
             adapter=adapter,
             lock_dir=lock_dir,
             lock_mode="advisory",
             lock_timeout_seconds=5,
         )
         ctl_fail = RunController(
-            storage=storage,
+            runs=storage,
+            events=storage,
+            policy=storage,
             adapter=adapter,
             lock_dir=lock_dir,
             lock_mode="fail-fast",

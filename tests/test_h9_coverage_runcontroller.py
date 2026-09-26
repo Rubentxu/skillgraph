@@ -78,7 +78,7 @@ def _setup_run(tmp_path: Path) -> tuple[Storage, RunController, str]:
         initial="a",
     )
     storage = Storage(tmp_path / "store.sqlite")
-    ctl = RunController(storage=storage, adapter=FakeAgentAdapter(fx))
+    ctl = RunController(runs=storage, events=storage, policy=storage, adapter=FakeAgentAdapter(fx))
     run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
     # s1: ejecuta a -> SUCCEEDED, avanza current="b"
     ctl.reconcile_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
@@ -135,7 +135,7 @@ def test_node_has_execution_false_when_no_rows(tmp_path: Path) -> None:
         initial="a",
     )
     storage = Storage(tmp_path / "store.sqlite")
-    ctl = RunController(storage=storage, adapter=FakeAgentAdapter(fx))
+    ctl = RunController(runs=storage, events=storage, policy=storage, adapter=FakeAgentAdapter(fx))
     run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
     assert not ctl._node_has_execution(
         tenant_id=TENANT, project_id=PROJECT, run_id=run_id, node_name="a"

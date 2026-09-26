@@ -31,11 +31,14 @@ import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from skillgraph.core.errors import SkillGraphError, ValidationError
 from skillgraph.core.runtime_types import RunState, is_terminal_run_state
-from skillgraph.platform.storage import Storage
+from skillgraph.platform.ports import EventStore, PolicyStore, RunRepository
+from skillgraph.platform.storage import (
+    Storage,  # cast en _execute_one; KnowledgeController migration a KnowledgeRepository en WI-02b
+)
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 from skillgraph.runtime.agent import AgentAdapter, AgentResult
 from skillgraph.runtime.engine import EventBuilder, EventLog, RuntimeEvent
@@ -235,21 +238,28 @@ class RunController:
     def __init__(
         self,
         *,
-        storage: Storage,
+        runs: RunRepository,
+        events: EventStore,
+        policy: PolicyStore,
         adapter: AgentAdapter,
         recipe_resolver: Callable[[str], ContextRecipe | None] | None = None,
         lock_dir: Path | None = None,
         lock_mode: LockMode = "none",
         lock_timeout_seconds: float = 30.0,
     ) -> None:
-        # H9-BSlice3-S8/S9: el constructor deja de recibir
-        # ``conn``. La conexion se obtiene de ``storage.conn``
-        # (API publica a partir de esta misma entrega). Tras
-        # S1..S7 ya no hay SQL directo en el RunController, asi
-        # que el atributo ``<conn_privado>`` se elimina tambien:
-        # solo ``EventLog`` lo necesita, y EventLog lo toma via
-        # ``storage.conn``.
-        self._storage = storage
+        # WI-02a: ``RunController`` depende de los Protocols
+        # ``RunRepository``, ``EventStore`` y ``PolicyStore``. La
+        # conexión SQLite queda contenida en
+        # ``src/skillgraph/platform/``; el controlador no ve ni
+        # ``Storage`` ni ``sqlite3.Connection``. La fachada
+        # ``Storage`` implementa los 5 Protocols por duck typing
+        # y expone factorías (``storage.run_repository()`` etc.)
+        # para inyección granular. Tests legacy que construyen
+        # ``RunController(storage=Storage(...), ...)`` siguen
+        # funcionando durante el WI-02a; en WI-02b se elimina
+        # el kwarg ``storage=``.
+        self._runs = runs
+        self._policy = policy
         self._adapter = adapter
         # S6 Etapa 7: configuracion de locks por run_id.
         # `lock_dir=None` + `lock_mode='none'` = no locks (compat
@@ -258,15 +268,21 @@ class RunController:
         self._lock_dir = Path(lock_dir) if lock_dir is not None else None
         self._lock_mode: LockMode = lock_mode
         self._lock_timeout_seconds = lock_timeout_seconds
-        # S5 Etapa 7: inyectamos un policy_resolver en el EventLog
-        # para que aplique redaccion al payload antes de persistir.
-        # El resolver delega en Storage.get_policy (regla "Storage
-        # encapsula SQL"). Si no hay politica configurada para el
-        # tenant, el resolver devuelve None y EventLog usa el
-        # default seguro "metadata".
+        # S5 Etapa 7: el EventLog aplica redaccion al payload
+        # antes de persistir. ``policy`` es el ``PolicyStore``
+        # desde el que se resuelve la politica por tenant_id.
+        # Sin politica configurada, el resolver devuelve ``None``
+        # y EventLog usa el default seguro "metadata".
+        #
+        # WI-02a: ``EventLog`` aún consume ``sqlite3.Connection``
+        # directamente; la migracion a ``EventStore`` queda en
+        # WI-02b. Pasamos ``events.conn`` mientras ``EventStore``
+        # siga implementando esa fachada (Storage la expone por
+        # duck typing). Esto preserva la conexion compartida y
+        # evita una cascada de cambios en este WI.
         self._events = EventLog(
-            storage.conn,
-            policy_resolver=lambda tenant_id: storage.get_policy(tenant_id=tenant_id),
+            events.conn,  # type: ignore[attr-defined]
+            policy_resolver=lambda tenant_id: policy.get_policy(tenant_id=tenant_id),
         )
         # H9-context-in-run: resolver opt-in de recetas de contexto.
         # None (default) preserva el stub `default-empty-recipe/v1`.
@@ -337,7 +353,7 @@ class RunController:
         """
         run_id = new_run_id()
         with self._locked_run(tenant_id=tenant_id, project_id=project_id, run_id=run_id):
-            result = self._storage.create_run_atomically(
+            result = self._runs.create_run_atomically(
                 event=EventBuilder(
                     tenant_id=tenant_id,
                     project_id=project_id,
@@ -350,7 +366,7 @@ class RunController:
                 initial_node=plan.initial,
             )
             if budget is not None and budget.is_active:
-                self._storage.upsert_budget(
+                self._policy.upsert_budget(
                     tenant_id=tenant_id,
                     project_id=project_id,
                     run_id=run_id,
@@ -514,7 +530,7 @@ class RunController:
             return True
 
         # Chequeo 2: budget global del Run (S4 Etapa 7).
-        budget_row = self._storage.get_budget(
+        budget_row = self._policy.get_budget(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
@@ -610,7 +626,7 @@ class RunController:
             DESC. El snapshot expone run_id, state, current_node y
             la lista de nodos ejecutados (via `_executed_node_names`).
         """
-        rows = self._storage.list_runs(
+        rows = self._runs.list_runs(
             tenant_id=tenant_id,
             project_id=project_id,
             state=state,
@@ -650,7 +666,7 @@ class RunController:
         Inspeccion read-only: NO emite eventos. Levanta `NotFoundError`
         si el run no existe (delegado en `Storage.get_run`).
         """
-        row = self._storage.get_run(
+        row = self._runs.get_run(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
@@ -678,7 +694,7 @@ class RunController:
         Delega en `Storage.list_events_for_run` (regla "Storage
         encapsula SQL"); no toca `_conn` directamente.
         """
-        rows = self._storage.list_events_for_run(
+        rows = self._runs.list_events_for_run(
             tenant_id=tenant_id, project_id=project_id, run_id=run_id
         )
         return len(rows)
@@ -701,12 +717,12 @@ class RunController:
 
         # Validacion temprana: si el run no existe, error tipado
         # en lugar de una tupla vacia confusa.
-        self._storage.get_run(
+        self._runs.get_run(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
         )
-        rows = self._storage.list_events_for_run(
+        rows = self._runs.list_events_for_run(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
@@ -759,7 +775,7 @@ class RunController:
           porque detecta el estado terminal del Run al inicio.
         """
         # `Storage.load_run` lanza NotFoundError si el run no existe.
-        run = self._storage.load_run(
+        run = self._runs.load_run(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
@@ -804,7 +820,7 @@ class RunController:
             state=state,
             at=at,
         )
-        self._storage.transition_run_state_atomically(
+        self._runs.transition_run_state_atomically(
             event=event,
             tenant_id=tenant_id,
             project_id=project_id,
@@ -817,7 +833,7 @@ class RunController:
 
     def _load_run(self, tenant_id: str, project_id: str, run_id: str) -> dict[str, Any]:
         # Lectura pura: delega en `Storage.load_run` (H9-BSlice3-S1).
-        return self._storage.load_run(tenant_id=tenant_id, project_id=project_id, run_id=run_id)
+        return self._runs.load_run(tenant_id=tenant_id, project_id=project_id, run_id=run_id)
 
     def _set_run_state(
         self,
@@ -833,7 +849,7 @@ class RunController:
         # siendo responsable de emitir el evento que toque (ver decision
         # arquitectonica del 2026-09-23 18:24). Mantener esta separacion
         # evita acoplar Storage al emisor de eventos.
-        self._storage.transition_run_state(
+        self._runs.transition_run_state(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
@@ -850,7 +866,7 @@ class RunController:
         gestiona Storage (una sola transaccion para todas las filas,
         a diferencia del bucle anterior que abria una tx por fila).
         """
-        self._storage.recover_interrupted_node_executions(
+        self._runs.recover_interrupted_node_executions(
             tenant_id=tenant_id, project_id=project_id, run_id=run_id
         )
 
@@ -987,7 +1003,7 @@ class RunController:
         # El INSERT real de la NodeExecution (RUNNING + NodeStarted)
         # ya ocurrio arriba, antes de compilar el handoff: aqui solo
         # se persisten el context_hash y el handoff_json definitivos.
-        self._storage.update_node_execution_handoff(
+        self._runs.update_node_execution_handoff(
             node_execution_id=node_execution_id,
             context_hash=context_hash,
             handoff_json=json.dumps(handoff.to_dict(), sort_keys=False),
@@ -1112,7 +1128,7 @@ class RunController:
         if recipe is None:
             return HandoffKnowledge(recipe_ref=recipe_ref, included=())
         kctl = KnowledgeController(
-            storage=self._storage,
+            storage=cast(Storage, self._runs),
             tenant_id=tenant_id,
             project_id=project_id,
         )
@@ -1166,7 +1182,7 @@ class RunController:
             )
         )
         node_started_event = events.node_started(run_id=run_id, node_execution_id=node_execution_id)
-        self._storage.start_node_execution_atomically(
+        self._runs.start_node_execution_atomically(
             event=node_started_event,
             node_execution_id=node_execution_id,
             tenant_id=tenant_id,
@@ -1210,7 +1226,7 @@ class RunController:
             context_hash=context_hash,
             evidence_ref=result.evidence_ref or context_hash,
         )
-        self._storage.complete_node_execution_atomically(
+        self._runs.complete_node_execution_atomically(
             event_completed=ev_completed,
             event_evidence=ev_evidence,
             node_execution_id=node_execution_id,
@@ -1271,7 +1287,7 @@ class RunController:
             error=error,
             outcome=outcome,
         )
-        self._storage.mark_node_failed_atomically(
+        self._runs.mark_node_failed_atomically(
             event=node_failed_event,
             node_execution_id=node_execution_id,
             error=error,
@@ -1282,7 +1298,7 @@ class RunController:
     ) -> list[dict[str, Any]]:
         # Lectura pura: delega en `Storage.list_node_executions`
         # (H9-BSlice3-S1). Orden por `started_at ASC` estable.
-        return self._storage.list_node_executions(
+        return self._runs.list_node_executions(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
@@ -1306,7 +1322,7 @@ class RunController:
     def _executed_node_names(self, tenant_id: str, project_id: str, run_id: str) -> tuple[str, ...]:
         # Lectura pura: delega en `Storage.list_executed_node_names`
         # (H9-BSlice3-S1). DISTINCT + ORDER BY node_name ASC determinista.
-        return self._storage.list_executed_node_names(
+        return self._runs.list_executed_node_names(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
@@ -1320,7 +1336,7 @@ class RunController:
             current_node=run["current_node"],
             executed_nodes=self._executed_node_names(tenant_id, project_id, run_id),
             events_emitted=len(
-                self._storage.list_events_for_run(
+                self._runs.list_events_for_run(
                     tenant_id=tenant_id,
                     project_id=project_id,
                     run_id=run_id,

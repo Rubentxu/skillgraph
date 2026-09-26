@@ -6,7 +6,7 @@ por el brick (`ctx_recipe_ref`) no se resolvía en la ruta de ejecución,
 aunque `ContextController.compile_handoff` (H3) existiera.
 
 Contrato nuevo (opt-in, sin romper la firma blindada del constructor):
-- `RunController(storage=..., adapter=..., recipe_resolver=...)` donde
+- `RunController(runs=..., adapter=..., recipe_resolver=...)` donde
   `recipe_resolver` es `Callable[[str], ContextRecipe | None]`.
 - Si el resolver devuelve una receta, el handoff lleva
   `recipe_ref=<ref de la receta>` y `knowledge.included` poblado por
@@ -120,7 +120,7 @@ class TestRecipeResolverOptIn:
     ) -> None:
         """Sin resolver, comportamiento degradado explícito (stub actual)."""
         s, adapter = storage
-        ctl = RunController(storage=s, adapter=adapter)
+        ctl = RunController(runs=s, events=s, policy=s, adapter=adapter)
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         ctl.reconcile_run(run_id=rid, tenant_id=TENANT, project_id=PROJECT)
         h = _handoff_of_last_execution(s)
@@ -133,7 +133,7 @@ class TestRecipeResolverOptIn:
         """Resolver que no conoce la receta -> stub, sin excepción."""
         s, adapter = storage
         resolver: Callable[[str], object] = lambda ref: None  # noqa: E731
-        ctl = RunController(storage=s, adapter=adapter, recipe_resolver=resolver)
+        ctl = RunController(runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver)
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         ctl.reconcile_run(run_id=rid, tenant_id=TENANT, project_id=PROJECT)
         h = _handoff_of_last_execution(s)
@@ -164,7 +164,7 @@ class TestRecipeResolverOptIn:
                 overflow_strategy="drop_optional",
             )
 
-        ctl = RunController(storage=s, adapter=adapter, recipe_resolver=resolver)
+        ctl = RunController(runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver)
         rid = ctl.create_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -195,7 +195,7 @@ class TestRecipeResolverOptIn:
             received.append(ref)
             return None
 
-        ctl = RunController(storage=s, adapter=adapter, recipe_resolver=resolver)
+        ctl = RunController(runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver)
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         ctl.reconcile_run(run_id=rid, tenant_id=TENANT, project_id=PROJECT)
         assert received == ["default-empty-recipe/v1"]
@@ -215,7 +215,9 @@ class TestRecipeResolverOptIn:
         def resolver(ref: str) -> ContextRecipe:
             raise StaleKnowledgeError("claim stale y policy=strict")
 
-        ctl = RunController(storage=s, adapter=ExplodingAdapter(), recipe_resolver=resolver)
+        ctl = RunController(
+            runs=s, events=s, policy=s, adapter=ExplodingAdapter(), recipe_resolver=resolver
+        )
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         ctl.reconcile_run(run_id=rid, tenant_id=TENANT, project_id=PROJECT)
         row = s.conn.execute(
@@ -225,9 +227,14 @@ class TestRecipeResolverOptIn:
         assert "stale" in (row[1] or "").lower()
 
     def test_constructor_blindaje_sigue_en_pie(self) -> None:
-        """La firma sigue sin aceptar conn (no-regresión del blindaje H9)."""
+        """La firma sigue sin aceptar conn (no-regresión del blindaje H9).
+
+        WI-02a: la firma migra de ``storage=`` a ``runs=``,
+        ``events=``, ``policy=``. ``conn`` sigue sin aparecer.
+        """
         import inspect
 
         params = list(inspect.signature(RunController.__init__).parameters)
-        assert params[:3] == ["self", "storage", "adapter"]
+        assert params[:5] == ["self", "runs", "events", "policy", "adapter"]
         assert "conn" not in params
+        assert "storage" not in params

@@ -135,7 +135,7 @@ class TestT12RunControllerUsesStartAtomic:
         monkeypatch,
     ) -> None:
         # Plan y Run simples
-        controller = RunController(storage=storage, adapter=adapter)
+        controller = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         plan = _plan_single("n")
         run_id = controller.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         # Fixture del adapter con outcome "ok"
@@ -187,7 +187,7 @@ class TestT13RunControllerUsesCompleteAtomic:
         fixtures_root: Path,
         monkeypatch,
     ) -> None:
-        controller = RunController(storage=storage, adapter=adapter)
+        controller = RunController(runs=storage, events=storage, policy=storage, adapter=adapter)
         plan = _plan_single("c")
         run_id = controller.create_run(tenant_id=TENANT, project_id=PROJECT, plan=plan)
         _seed_fixture(
@@ -243,7 +243,9 @@ class TestT14RunControllerUsesFailAtomic:
                 raise ValueError("boom")
 
         controller = RunController(
-            storage=storage,
+            runs=storage,
+            events=storage,
+            policy=storage,
             adapter=FailingAdapter(),  # type: ignore[arg-type]
         )
         plan = _plan_single("f")
