@@ -12,6 +12,53 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.14.8] - 2026-09-26 — WI-21..WI-30 (debt-reduction H-03: 8 hotspots cc→low single-digits)
+
+**Resumen**: ciclo de deuda tecnica quirurgica cerrando 8 hotspots publicos identificados en el catalogo H-03 (cyclomatic complexity > 15 en `src/`). Patron consistente: extraer helpers privados puros + module-level utilities, manteniendo 100% backward-compat. WI-28 anade auditor reproducible `audits/audit_debt.py`. **Politica D-66 satisfecha**: cero hotspots publicos cc≥20 en `src/` (unico cc≥15 restante: `main()` cc=50, excluido por D-64 al ser CLI entry point / H-02 god module). Tests: **1048/1048 PASS** preservados, ruff check+format limpios, auditor reproducible.
+
+### Changed (debt-reduction H-03, refactor surgical)
+
+- **WI-21**: `graph_expansion.validate` cc 24→4 (D-52). Helpers puros.
+- **WI-22**: `parser.parse_markdown` cc 17→2 (D-53/D-54). Helpers + bug descubierto por TDD: gender mismatch "revision vacia" vs helper default "vacio".
+- **WI-23**: `locks.take` cc 16→5 (D-55). 4 helpers privados.
+- **WI-24**: `record_validation_receipt` cc 14→5 (D-56/D-57). 4 helpers; kwarg `empty_msg` preservado verbatim.
+- **WI-25**: `traverse_invalidations` cc 13→5 (D-58). 3 helpers (seed/expand/warn); TDD catcho bug de kwarg unused `hop` que se quedaba en helper.
+- **WI-26**: `HttpAgentAdapter.invoke` cc 12→7 (D-59). Sentinel `RetryableHttpStatus` + helper `_dispatch_response`.
+- **WI-27**: `compile_handoff_from_scopes` cc 12→1 (D-60). Triada `validate_inputs` + `enforce_*_or_raise` + `build_synth_recipe`. TYPE_CHECKING imports block + `Sequence` from `collections.abc` para F821/UP035/UP037 simultaneos.
+- **WI-29**: `cli.runner.cmd_run` cc 22→5 (D-67). Patron `_resolve_run_inputs` + `_reconcile_until_terminal` + `_resolve_fixtures_root`. Lazy imports para evitar coste arranque CLI.
+- **WI-30**: `knowledge.git_source.detect_changes` cc 18→8 (D-68). 3 helpers (1 metodo privado + 2 module-level).
+
+### Added (audit infrastructure)
+
+- **WI-28**: `audits/audit_debt.py` (~215 LoC) reproducible CLI. Reporta cc, loc, nesting, god modules, hotspots publicos/privados, funciones largas. Emite `audits/architecture-debt-YYYY-MM-DD.md`. Smoke tests `tests/test_audit_debt_smoke.py` (4/4 PASS).
+- **D-61..D-66**: decisiones arquitectonicas formales (god modules thresholds, exclusion de `main()`, politica D-66 "cero hotspots publicos cc≥20 en cada release o documentar la excepcion").
+- **D-67/D-68**: patrones estructurales post-WI-28.
+
+### Notes
+
+- **MINOR bump** (regla WI-01 + AGENTS §7 SEMVER): los 8 `refactor` no son breaking, pero la campana debt-reduction es estructural y merece release visible. 0.14.7 → 0.14.8.
+- Mantiene regla WI-01 "release sin --force sobre published tags": v0.14.1..v0.14.7 intactos, este release es nueva v0.14.8.
+- Migracion Pattern transitorio `.dev0`: post-tag housekeeping mantiene `__version__ = "0.14.8.dev0"` para cumplir release_governance (`HEAD > last-tag` exige `.devN`).
+- Backlog post-WI-30: P1 god modules (H-01 storage 2407 LoC, H-02 cli/runner 2477 LoC, runcontroller 1357 LoC) requieren ADR — fuera del scope surgical. Formal `prioridad_1_spec_s7plus` y `prioridad_5_s7plus_ejecucion` siguen abiertos esperando decision de operador sobre S7+ scope.
+
+## [0.14.7] - 2026-09-26 — WI-12..WI-17 (FEAT+DOC: sg backup + threat model + observability)
+
+**Resumen**: ciclo mixto feat+debt que cierra H-06 (cmd_knowledge_compile import redundante), anade backups ZIP con SHA-256 (`sg backup create|list|restore`), publica Threat Model S8 surface HTTP + `repr` redact de `api_key`, y corre runbook T6 de observability (9 secciones verificadas). Tests: 1024/1024 PASS, ruff check+format limpios. MINOR bump por nueva capacidad observable (`sg backup`). **Nota**: esta entrada se reescribe retroactivamente en el release v0.14.8 — el tag v0.14.7 existia pero CHANGELOG fue omitido en el ciclo original.
+
+### Added (FEAT)
+
+- **WI-15**: `sg backup create|list|restore` con ZIP + SHA-256 (22 tests en `tests/test_backup.py`). Comandos nuevos del CLI para backup/restore del SQLite state.
+- **WI-14 (T3)**: Threat model S8 surface HTTP documentado en `docs/observability-runbook.md`. `HttpAgentAdapter` ahora redacta `api_key` en `repr()` para evitar leak en logs/traces.
+
+### Changed (DOC)
+
+- **WI-16**: runbook T6 ampliado a 9 secciones (alerts, dashboards, SLOs, incident response, etc.) con claims verificados.
+- **WI-17**: H-06 cierre, `cmd_knowledge_compile` pierde `import json` redundante.
+
+### Notes
+
+- **MINOR bump**: nuevo subcommand `sg backup` es capacidad observable nueva. 0.14.6 → 0.14.7.
+
 ## [0.14.6] - 2026-09-26 — WI-06..WI-10 (housekeeping: coverage hardening H-14 + docs sync)
 
 **Resumen**: cierre de los 3 unicos gaps materiales de cobertura reconocidos en `CURRENT.md` para el nucleo evolution-v2 (H11..H15): `governance/receipts.py` 73%→99% (WI-06), `file_handoff.py` 85%→93% (WI-07), `governance/improvement.py` 84%→100% (WI-08). Adicionalmente se sincroniza la prosa de `CURRENT.md` y `README.md` con la realidad post-stewardship créatif (WI-09, WI-10), incluyendo badges `984/984 tests` y `evolution_v2 100% (H11..H15)`. Sin cambio de codigo de produccion (WI-06/07/08 son solo tests). Tests: 984/984 PASS preservados en CI local (`pipelinek`) y `ruff format` + `ruff check` limpios.

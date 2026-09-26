@@ -126,8 +126,8 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-12   # E1 Adapter real (HttpAgentAdapter Anthropic + OpenAI + retry + failpoints)
-  next_workitem: WI-13   # CLI wiring --adapter http (anthropic|openai) + cmd sg run integrado
+  current_workitem: WI-30   # WI-21..WI-30 debt-reduction H-03 cycle: 8 hotspots cc refactored + auditor WI-28 (D-52..D-68). Cerrado en release v0.14.8.
+  next_workitem: WI-31   # post-v0.14.8 housekeeping: bump .dev0 + push. O pivot a P1 god modules (requiere ADR operador) o spec S7+ pendiente.
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
       fecha: 2026-09-26
@@ -538,10 +538,20 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 1044   # post-WI-17 (FEAT+DOC acumulado v0.14.7: HttpAgentAdapter + Backups CLI + STRIDE S8 + Runbook + housekeeping)
-  passed: 1044
-  duration_s: 180   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-17)
-  package_version: "0.14.7.dev0"   # WI-12..WI-17 release MINOR cerrado en tag anotado v0.14.7; post-tag bump .dev0 para cumplir release_governance
+  total: 1048   # post-WI-30 (debt-reduction acumulado v0.14.8: 8 hotspots cc refactored + auditor reproducible WI-28 + 4 audit smoke tests)
+  passed: 1048
+  duration_s: 180   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-30, ~176s)
+  package_version: "0.14.8"   # WI-21..WI-30 release MINOR cerrado en este commit; post-tag bump .dev0 vendra en housekeeping
+  delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
+  delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
+  delta_wi23: "0 tests (locks.take refactor surgical)"
+  delta_wi24: "0 tests (record_validation_receipt refactor surgical)"
+  delta_wi25: "0 tests (traverse_invalidations refactor surgical)"
+  delta_wi26: "0 tests (HttpAgentAdapter.invoke refactor surgical)"
+  delta_wi27: "0 tests (compile_handoff_from_scopes refactor surgical)"
+  delta_wi28: "+4 tests (audits/audit_debt.py smoke: subprocess + report + metadata + idempotencia)"
+  delta_wi29: "0 tests (cli.runner.cmd_run refactor surgical, 8/8 test_cli_run_uat PASS)"
+  delta_wi30: "0 tests (knowledge.git_source.detect_changes refactor surgical, 21/21 git/knowledge PASS)"
   delta_wi12: "+25 tests (HttpAgentAdapter: 5 AnthropicStrategy + 5 OpenAIStrategy + 8 HttpAgentAdapter + 4 HttpAdapterEnvConfig + 3 retry/failpoints)"
   delta_wi13: "+11 tests (CLI adapter wiring: 2 fake + 5 http + 3 missing-key + 1 rejects-invalid)"
   delta_wi14: "+2 tests (HttpAgentAdapter repr/str no-disclosure de api_key)"
