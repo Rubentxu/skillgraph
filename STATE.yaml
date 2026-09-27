@@ -541,7 +541,7 @@ tests:
   total: 1109   # post-WI-32.4+32.5+33 (R1+R2 audit externo, 4 DTOs inmutables + SqliteUnitOfWork; 1109/1109 PASS en HEAD b42a2a8 en 184s; +31 vs v0.15.0 base 1078: +13 DTOs + 6 UoW + +12 Storage/RunController tests)
   passed: 1109
   duration_s: 184   # re-medido el 2026-09-27 11:02 con uv run pytest --no-header -q (1109 passed in 183.86s)
-  package_version: "0.16.0.dev0"   # post-v0.16.0 housekeeping: tag anotado v0.16.0 sobre commit e99df3a (release limpia); HEAD ca361d1 en trabajo entre releases
+  package_version: "0.16.1"   # release patch de lifecycle SQLite CLI; tag anotado pendiente en este commit
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"

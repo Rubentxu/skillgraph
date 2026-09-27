@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.0.dev0"  # post-v0.16.0 housekeeping: tag anotado v0.16.0 sobre commit e99df3a; HEAD en trabajo entre releases
+__version__ = "0.16.1"  # PATCH: cierre explícito de lifecycle SQLite en CLI
 
 from skillgraph.core.errors import (
     IdentityConflictError,
