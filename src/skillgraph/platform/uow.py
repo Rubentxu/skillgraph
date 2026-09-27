@@ -246,13 +246,13 @@ class SqliteRunAdapter(_AdapterBase):
         result_json: str | None,
         context_hash: str | None,
     ) -> None:
+        # Storage.complete_node_execution deriva tenant/project de la conexion
+        # y solo acepta node_execution_id/outcome/result_json; el
+        # context_hash viaja por update_node_execution_handoff.
         self._storage.complete_node_execution(
-            tenant_id=tenant_id,
-            project_id=project_id,
             node_execution_id=node_execution_id,
             outcome=outcome,
             result_json=result_json,
-            context_hash=context_hash,
         )
 
     def mark_node_failed(
@@ -264,12 +264,12 @@ class SqliteRunAdapter(_AdapterBase):
         error: str,
         context_hash: str | None,
     ) -> None:
+        # Ver complete_node_execution: la facade ignora tenant/project y
+        # no expone context_hash; el adaptador conserva el parametro
+        # por contrato del puerto pero no lo propaga.
         self._storage.mark_node_failed(
-            tenant_id=tenant_id,
-            project_id=project_id,
             node_execution_id=node_execution_id,
             error=error,
-            context_hash=context_hash,
         )
 
     def create_run(
@@ -279,14 +279,12 @@ class SqliteRunAdapter(_AdapterBase):
         project_id: str,
         plan_json: str,
         initial_node: str,
-        run_id: str | None = None,
     ) -> str:
         return self._storage.create_run(
             tenant_id=tenant_id,
             project_id=project_id,
             plan_json=plan_json,
             initial_node=initial_node,
-            run_id=run_id,
         )
 
     def transition_run_state_atomically(
@@ -308,17 +306,65 @@ class SqliteRunAdapter(_AdapterBase):
             current_node=current_node,
         )
 
-    def start_node_execution_atomically(self, *, event: Any, **kwargs: Any) -> None:
-        self._storage.start_node_execution_atomically(event=event, **kwargs)
+    def start_node_execution_atomically(
+        self,
+        *,
+        event: Any,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        node_execution_id: str,
+        node_name: str,
+        attempt: int,
+        context_hash: str,
+        handoff_json: str,
+    ) -> None:
+        self._storage.start_node_execution_atomically(
+            event=event,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_execution_id=node_execution_id,
+            node_name=node_name,
+            attempt=attempt,
+            context_hash=context_hash,
+            handoff_json=handoff_json,
+        )
 
-    def complete_node_execution_atomically(self, *, event: Any, **kwargs: Any) -> None:
-        self._storage.complete_node_execution_atomically(event=event, **kwargs)
+    def complete_node_execution_atomically(
+        self,
+        *,
+        event_completed: Any,
+        event_evidence: Any,
+        node_execution_id: str,
+        outcome: str,
+        result_json: str,
+    ) -> None:
+        self._storage.complete_node_execution_atomically(
+            event_completed=event_completed,
+            event_evidence=event_evidence,
+            node_execution_id=node_execution_id,
+            outcome=outcome,
+            result_json=result_json,
+        )
 
-    def mark_node_failed_atomically(self, *, event: Any, **kwargs: Any) -> None:
-        self._storage.mark_node_failed_atomically(event=event, **kwargs)
+    def mark_node_failed_atomically(
+        self, *, event: Any, node_execution_id: str, error: str
+    ) -> None:
+        self._storage.mark_node_failed_atomically(
+            event=event,
+            node_execution_id=node_execution_id,
+            error=error,
+        )
 
-    def update_node_execution_handoff(self, **kwargs: Any) -> None:
-        self._storage.update_node_execution_handoff(**kwargs)
+    def update_node_execution_handoff(
+        self, *, node_execution_id: str, context_hash: str, handoff_json: str
+    ) -> None:
+        self._storage.update_node_execution_handoff(
+            node_execution_id=node_execution_id,
+            context_hash=context_hash,
+            handoff_json=handoff_json,
+        )
 
 
 # --- EventStore adapter ---------------------------------------------------
@@ -345,7 +391,19 @@ class SqliteEventAdapter(_AdapterBase):
         return self._storage.fetch_event_raw(event_id=event_id)
 
     def record_event(self, *, event: Any) -> None:
-        self._storage.record_event(event=event)
+        # Storage.record_event recibe campos planos, no un RuntimeEvent.
+        self._storage.record_event(
+            tenant_id=event.tenant_id,
+            project_id=event.project_id,
+            event_id=event.event_id,
+            event_kind=event.event_kind,
+            resource_ref=event.resource_ref,
+            payload=event.payload,
+            run_id=event.run_id,
+            causation_id=event.causation_id,
+            correlation_id=event.correlation_id,
+            timestamp=event.timestamp,
+        )
 
 
 # --- KnowledgeRepository adapter ------------------------------------------
@@ -404,21 +462,35 @@ class SqliteGovernanceAdapter(_AdapterBase):
     """Adapter para ``PromotionRepository`` (promotion_outbox + governance)."""
 
     def get_promotion(self, proposal_id: str) -> dict[str, Any] | None:
-        return self._storage.get_promotion(proposal_id=proposal_id)
+        return self._storage.get_promotion(proposal_id)
 
     def list_promotions(self, *, status: str | None = None, limit: int = 50) -> Any:
-        return self._storage.list_promotions(status=status, limit=limit)
+        # Storage.list_promotions no acepta limit; el adaptador lo
+        # conserva por contrato del puerto y recorta en memoria.
+        found = self._storage.list_promotions(status=status)
+        return found[:limit]
 
 
 @dataclass(slots=True)
 class SqlitePolicyAdapter(_AdapterBase):
-    """Adapter para ``PolicyStore`` (tenant_policies)."""
+    """Adapter para ``PolicyStore`` (tenant_policies).
+
+    WI-45: los dos metodos delegaban a ``Storage.get_redaction_policy``
+    y ``Storage.set_redaction_policy``, que NO existen. Los metodos
+    reales son ``get_policy`` y ``upsert_policy``. Nadie lo noto porque
+    ningun test ejercitaba este adapter: la delegacion estaba muerta,
+    no verificada.
+
+    Los nombres publicos del adapter se conservan porque son los que
+    declara el ``PolicyStore`` Protocol; lo que estaba mal era el
+    destino de la llamada, no el contrato.
+    """
 
     def get_redaction_policy(self, tenant_id: str) -> Any:
-        return self._storage.get_redaction_policy(tenant_id=tenant_id)
+        return self._storage.get_policy(tenant_id=tenant_id)
 
     def set_redaction_policy(self, tenant_id: str, policy: str) -> None:
-        self._storage.set_redaction_policy(tenant_id=tenant_id, policy=policy)
+        self._storage.upsert_policy(tenant_id=tenant_id, policy=policy)
 
 
 # --- SqliteUnitOfWork ------------------------------------------------------

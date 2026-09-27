@@ -406,10 +406,17 @@ class Storage:
     como alias directo sobre el adapter correspondiente.
     """
 
-    # WI-33: nombres de metodos publicos que se bind-an en ``__init__``.
-    # Mantener sincronizado con los metodos declarados en los adapters
-    # de ``skillgraph.platform.uow``.
-    # Si se anade un metodo nuevo a un adapter, anadirlo aqui tambien.
+    # Nombres de metodos publicos declarados en los 5 adapters de
+    # ``skillgraph.platform.uow``. Documenta la superficie; NO se
+    # consume en ninguna parte (``__init__`` no hace bind de metodos:
+    # el facade tiene sus propios metodos SQL y los adapters delegan
+    # en el, no al reves).
+    #
+    # WI-45: se corrige el comentario, que afirmaba que estos nombres
+    # "se bind-an en __init__". No era cierto, y por eso la lista
+    # arrastraba dos nombres que ningun metodo real tiene
+    # (``get_redaction_policy`` / ``set_redaction_policy``). La
+    # lista ahora nombra lo que el facade implementa de verdad.
     _PUBLIC_METHODS = frozenset(
         {
             # SqliteRunAdapter (RunRepository)
@@ -444,9 +451,11 @@ class Storage:
             # SqliteGovernanceAdapter (PromotionRepository)
             "get_promotion",
             "list_promotions",
-            # SqlitePolicyAdapter (PolicyStore)
-            "get_redaction_policy",
-            "set_redaction_policy",
+            # SqlitePolicyAdapter (PolicyStore) — los metodos reales
+            # del facade; los del adapter se llaman get/set_redaction_policy
+            # y delegan aqui.
+            "get_policy",
+            "upsert_policy",
         }
     )
 
