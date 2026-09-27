@@ -2571,6 +2571,28 @@ def _dispatch_nested(command: str, args: argparse.Namespace) -> int:
     return handler(args)
 
 
+# --- Nota sobre los tres "abrir proyecto + storage" (WI-41) -----------------
+# `_open_known_project`, `_open_project_storage` y `_open_project_or_error`
+# comparten sus dos primeras lineas (resolver + lookup) pero NO su contrato:
+#   - `_open_known_project`    es contextmanager y lanza FileNotFoundError.
+#   - `_open_project_storage`  es contextmanager y devuelve (storage, exit).
+#   - `_open_project_or_error` no es contextmanager y devuelve (dict, exit).
+# Unificarlos exigiría un tipo de retorno que hoy no existe, y los 21 usos
+# de la línea `ProjectResolver(...).with_default_root()` están repartidos
+# entre los tres y los handlers.
+#
+# Decision: NO se unifican en este bloque. La repetición de esas dos
+# líneas es real pero superficial; el contrato divergente es lo que
+# sostiene la diferencia. Forzar una firma única produciría un helper
+# con más ramas que los tres que sustituye, que es exactamente el
+# antipatrón que WI-41 acaba de eliminar del dispatch. Queda como deuda
+# heredar en el siguiente ciclo: extraer `resolve_project(args, name)`
+# y componer sobre él, lo que sí elimina las 21 repeticiones sin
+# unificar contratos. Verificado por AST: los tres hacen exactamente
+# `ProjectResolver(data_root=resolve_data_root(args.data_root))
+#  .with_default_root()`.
+
+
 if __name__ == "__main__":
     sys.exit(main())
 
