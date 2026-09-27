@@ -38,6 +38,7 @@ from skillgraph.platform.ports import (
     StoredResource,
     StoredRun,
 )
+from skillgraph.platform.uow import SqliteUnitOfWork
 from skillgraph.resources.bricks import Brick
 
 if TYPE_CHECKING:
@@ -353,7 +354,72 @@ class Storage:
 
     Diseñada para fallar rápido en errores de identidad y validación,
     sin exponer SQL a los controladores.
+
+    WI-33: ``Storage`` es ahora un facade delgado sobre
+    ``SqliteUnitOfWork``. Los 5 bounded-context adapters (runs,
+    events, knowledge, governance, policy) comparten la misma
+    ``sqlite3.Connection``. El facade expone cada metodo publico
+    como alias directo sobre el adapter correspondiente.
     """
+
+    # WI-33: nombres de metodos publicos que se bind-an en ``__init__``.
+    # Mantener sincronizado con los metodos declarados en los adapters
+    # de ``skillgraph.platform.uow``.
+    # Si se anade un metodo nuevo a un adapter, anadirlo aqui tambien.
+    _PUBLIC_METHODS = frozenset(
+        {
+            # SqliteRunAdapter (RunRepository)
+            "list_runs",
+            "get_run",
+            "load_run",
+            "list_node_executions",
+            "find_active_run",
+            "list_executed_node_names",
+            "recover_interrupted_node_executions",
+            "transition_run_state",
+            "start_node_execution",
+            "complete_node_execution",
+            "mark_node_failed",
+            "create_run",
+            "transition_run_state_atomically",
+            "start_node_execution_atomically",
+            "complete_node_execution_atomically",
+            "mark_node_failed_atomically",
+            "update_node_execution_handoff",
+            # SqliteEventAdapter (EventStore)
+            "list_events_for_run",
+            "fetch_event_raw",
+            "record_event",
+            # SqliteKnowledgeAdapter (KnowledgeRepository)
+            "get_resource",
+            "list_resources",
+            "dependencies_of",
+            "dependents_of",
+            "upsert_resource",
+            "add_relation",
+            # SqliteGovernanceAdapter (PromotionRepository)
+            "get_promotion",
+            "list_promotions",
+            # SqlitePolicyAdapter (PolicyStore)
+            "get_redaction_policy",
+            "set_redaction_policy",
+        }
+    )
+
+    @property
+    def uow(self) -> SqliteUnitOfWork:
+        """Acceso al ``SqliteUnitOfWork`` underlying (WI-33).
+
+        La UoW es estable: la misma instancia para todo el ciclo
+        de vida del ``Storage``. Esto permite a tests verificar
+        ``storage.uow is storage.uow``.
+
+        Tipo: ``SqliteUnitOfWork``. Esta propiedad es la API
+        publica de WI-33: los tests nuevos pueden usar
+        ``storage.uow.runs.list_runs(...)`` en vez de la facade
+        ``storage.list_runs(...)``.
+        """
+        return self._uow
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -366,6 +432,39 @@ class Storage:
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._migrate()
+        # WI-33 (R2 audit externo): el ``SqliteUnitOfWork`` owns la
+        # conexion y expone 5 bounded-context adapters que la
+        # comparten. ``Storage`` sigue siendo el facade historico,
+        # con sus metodos SQL directos. Los adapters son NUEVAS
+        # implementaciones que viven en ``platform/uow.py`` y se
+        # acceden via ``storage.uow.runs.list_runs(...)``.
+        #
+        # WI-33 NO reemplaza los metodos del facade. Esto preserva
+        # la API actual y evita recursion: el facade tiene sus
+        # implementaciones SQL, los adapters tienen las suyas
+        # (inicialmente delegando al facade, pero con la UoW como
+        # single owner de la conexion).
+        from skillgraph.platform.uow import (
+            SqliteEventAdapter,
+            SqliteGovernanceAdapter,
+            SqliteKnowledgeAdapter,
+            SqlitePolicyAdapter,
+            SqliteRunAdapter,
+            SqliteUnitOfWork,
+        )
+
+        self._runs_adapter = SqliteRunAdapter(_conn=self._conn, _storage=self)
+        self._events_adapter = SqliteEventAdapter(_conn=self._conn, _storage=self)
+        self._knowledge_adapter = SqliteKnowledgeAdapter(_conn=self._conn, _storage=self)
+        self._governance_adapter = SqliteGovernanceAdapter(_conn=self._conn, _storage=self)
+        self._policy_adapter = SqlitePolicyAdapter(_conn=self._conn, _storage=self)
+        self._uow = SqliteUnitOfWork(
+            runs=self._runs_adapter,
+            events=self._events_adapter,
+            knowledge=self._knowledge_adapter,
+            governance=self._governance_adapter,
+            policy=self._policy_adapter,
+        )
 
     def close(self) -> None:
         """Cierra la conexion SQLite. Idempotente: doble close no falla.

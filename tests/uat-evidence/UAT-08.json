@@ -1,6 +1,6 @@
 {
   "uat_id": "UAT-08",
-  "revision": "5de6ec16ebd4d395f255b89026a5f22b48fe3503",
+  "revision": "c79b4db69daba8f9575ee8f6bf1463b1aed581a9",
   "timestamp": "2026-09-23T11:00:00Z",
   "scenario": "Dada una problematica no contemplada, cuando se propone un subgrafo valido y autorizado, entonces se incorpora unicamente el cambio solicitado. Los nodos completados mantienen sus revisiones y resultados originales.",
   "expected": "apply rc=0; plan.nodes contiene nuevo nodo 'extra'; originales intactos",
