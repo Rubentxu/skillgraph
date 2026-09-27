@@ -6683,3 +6683,111 @@ Latest tag:                        v0.16.1 -> 4cb641c
 Development head:                  ca96613 (3 commits por delante de origin/main)
 ```
 
+
+## 2026-09-27 — WI-48 (validador de listas silencioso en Domain Packs)
+
+### Resumen
+
+Un `list_of` cuyo `elem_type` no estuviera en `_PRIMITIVE_TYPES`
+desactivaba la validacion de la lista entera. El guard era correcto en
+su forma pero su rama de fallo no hacia nada: si el tipo no era
+primitivo conocido, la lista se aceptaba sin mirar un solo elemento.
+Un typo en el pack (`str` por `string`, `int` por `integer`) pasaba
+desapercibido hasta el punto de uso.
+
+La asimetria con el campo escalar, que si rechazaba, es lo que
+delata que no era decision de diseno: el mismo fallo en dos sitios.
+
+### Commits atomicos
+
+- `ac0c985` fix(domain): un tipo desconocido en una lista ya no salta la validacion
+- `6343a64` refactor(domain): sacar la comprobacion de tipos del closure del validador
+
+### Evidencia (OBSERVED)
+
+- Rojo inicial del fix: 16 failed / 13 passed.
+- 38 tests nuevos en `tests/test_wi48_unknown_list_elem_type.py`.
+- Falsificacion independiente de los tres fallos contra el codigo previo.
+- Suite completa: 1413 passed. `ruff check src tests`: limpio.
+- `pack_loader`: 97% -> 98%.
+- `_make_schema_validator`: 87 LoC (antes) -> 121 (tras los fixes) -> 70
+  (tras la extraccion). Sale de la lista de >80 LoC del audit.
+
+### Los tres fallos
+
+1. **Silencioso**: un `list_of` con tipo desconocido no validaba nada.
+2. **Mensaje inutil**: el campo escalar reportaba "esperaba int,
+   recibio int" ante un tipo desconocido, porque `_matches` devolvia
+   `False` para un tipo que no conocia y caia en el mismo mensaje que
+   un valor erroneo. Son dos errores con dos arreglos distintos.
+3. **Invariante desprotegido**: `_PRIMITIVE_TYPES` y los `case` de
+   `_matches` duplican el mismo dato. Desincronizarlos haria que un
+   campo rechazara todo sin decir por que. Un test lo vigila desde
+   fuera.
+
+### Conocimiento negativo (util para no repetirlo)
+
+- La metrica de `audits/audit_debt.py` cuenta comentarios y docstrings
+  (`end_lineno - lineno + 1`), no codigo ejecutable. Mover la
+  explicacion a un docstring **empeoro** el numero: 121 -> 125. Solo
+  extraer las funciones a nivel de modulo lo reduce.
+- Una falsificacion que no muta nada da verde falso. El primer intento
+  de validar la guarda de sincronia no encontro el patron de texto, no
+  cambio el codigo, y la guarda "paso". Hay que mutar el registro de
+  verdad para que la prueba signifique algo.
+- `git sddk-align --ack` exige el UUID que deriva
+  `sddk plan roadmap`, no el nombre local del WorkItem. `WI-48` no
+  existe en el ledger; el item activo es el stub
+  `e01ff5ba-754c-4c27-8b60-a73056c9f6d3`.
+- El gate de `git sddk-close` bloquea `git commit --amend` si el
+  closeout del commit anterior no esta emitido. Un `--amend` con
+  cambios en el indice falla y deja el commit intacto: hay que cerrar
+  primero y commitear el refactor aparte.
+- `sddk plan roadmap` es de solo lectura: no admite anotar un item.
+  El ledger solo crece por transiciones gobernadas. No se fabrico un
+  ciclo para dejar una nota.
+- `agent-session close` solo registra la accion y el HEAD: no guarda
+  contenido. El contexto real persiste en los recibos de closeout,
+  dentro de `.git/sddk-agent-gate/closeout-<sha>.txt`.
+- Los recibos viven en `.git`, asi que sobreviven al reinicio de la
+  sesion pero no a un clone. Este journal es la copia versionada.
+
+### Blocker abierto (NO pertenece a WI-48)
+
+**El roadmap de SDDK sigue siendo un stub.** El item activo
+`e01ff5ba-754c-4c27-8b60-a73056c9f6d3` no tiene titulo, objetivo,
+`horizon`, `spine_status` ni `exit_gate`. `sddk backlog list` dice
+`(no live backlog items)`. `sddk plan roadmap next` seguiria
+devolviendo ese mismo item vacio, asi que la proxima sesion tiene que
+saber que no hay trabajo ahi: **no derivar trabajo de el, y no usarlo
+como si fuera una tarea real**.
+
+### Informacion aun necesaria
+
+- No se ha comprobado si existen Domain Packs reales en el repo que
+  declaren `list_of` y ahora fallen al cargar. El arreglo es correcto
+  por construccion, pero eso queda sin observar.
+- No se ha auditado si el esquema acepta por defecto campos ausentes
+  (la rama `if field_name not in spec: continue` en `_validate`).
+
+### Deuda residual
+
+- Ninguna en codigo: los dos commits cierran limpios.
+- P3: `audits/release-v0.16.2-receipt.md` sin `ruff format`
+  (preexistente, no tocado en esta sesion).
+- Preexistente y ya conocido: `audits/architecture-debt-*.md` y
+  `tests/uat-evidence/UAT-*.json` se regeneran como side effect de
+  ejecutar la suite. Se revirtieron al cerrar; no se commitean.
+
+### Shas de referencia para reanudar
+
+```
+WI-48 fix commit:                    ac0c985 fix(domain)
+WI-48 refactor commit:               6343a64 refactor(domain)
+Closeout receipts:                   .git/sddk-agent-gate/closeout-{ac0c985,6343a64}.txt
+SDDK work item activo (stub):        e01ff5ba-754c-4c27-8b60-a73056c9f6d3 (vacio)
+Workspace version:                   0.16.2.dev0
+Latest tag:                          v0.16.2 -> 92e06f3
+Development head:                    6343a64 (22 commits por delante de origin/main)
+Working tree:                        clean
+```
