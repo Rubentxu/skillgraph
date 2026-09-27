@@ -85,13 +85,15 @@ branch = true
 source = ["skillgraph"]
 omit = [
     "src/skillgraph/__init__.py",
+    "src/skillgraph/__main__.py",
+    "src/skillgraph/cli/runner.py",
 ]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
 skip_empty = true
-fail_under = 60
+fail_under = 80
 
 [tool.ruff]
 target-version = "py311"

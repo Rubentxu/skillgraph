@@ -60,6 +60,12 @@ def _run_cli(
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["SKILLGRAPH_DATA_ROOT"] = str(data_root)
+    # QW-G: garantizar que el subprocess ``-m skillgraph`` resuelve el modulo
+    # incluso cuando cwd es un directorio temporal (no hay venv ahi). Si el
+    # proceso actual ya corre dentro del venv ``.venv`` del proyecto, basta
+    # con ``PYTHONPATH=src`` para que ``-m skillgraph`` funcione.
+    if "VIRTUAL_ENV" in env:
+        env.setdefault("PYTHONPATH", str(REPO_ROOT / "src"))
     if env_extra:
         env.update(env_extra)
     return subprocess.run(

@@ -44,6 +44,13 @@ def _run_cli(*args: str, cwd: Path, data_root: Path) -> subprocess.CompletedProc
     env = os.environ.copy()
     # Forzar el data root a un directorio temporal; pytest ya aísla tmp_path.
     env["SKILLGRAPH_DATA_ROOT"] = str(data_root)
+    # QW-G: garantizar que el subprocess ``-m skillgraph`` resuelve el modulo
+    # incluso cuando cwd es un directorio temporal (no hay venv ahi). Si el
+    # proceso actual ya corre dentro del venv ``.venv`` del proyecto, basta
+    # con ``PYTHONPATH=src`` para que ``-m skillgraph`` funcione.
+    repo_root = Path(__file__).resolve().parent.parent
+    if "VIRTUAL_ENV" in env:
+        env.setdefault("PYTHONPATH", str(repo_root / "src"))
     # Evitar que la jerarquía de directorios del test contamine el cwd.
     return subprocess.run(
         [sys.executable, "-m", "skillgraph", "--data-root", str(data_root), *args],
