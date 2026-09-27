@@ -365,10 +365,7 @@ def test_uats_can_be_loaded_as_documentation(tmp_path: Path) -> None:
     pueden citar como documentacion viva desde el repo."""
     # QW-I: leer del snapshot versionado ``docs/blueprint/plan/UAT.md``
     # (no del origen ``external/blueprint-v1/`` que esta gitignored).
-    uat_doc = (
-        Path(__file__).resolve().parent.parent
-        / "docs" / "blueprint" / "plan" / "UAT.md"
-    )
+    uat_doc = Path(__file__).resolve().parent.parent / "docs" / "blueprint" / "plan" / "UAT.md"
     if not uat_doc.exists():  # pragma: no cover
         pytest.skip("snapshot del blueprint no versionado en docs/blueprint/")
     text = uat_doc.read_text(encoding="utf-8")

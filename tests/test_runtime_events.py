@@ -154,7 +154,7 @@ class TestEventKindSingleSource:
 
         from skillgraph.core.runtime_types import EVENT_KINDS, EventType
 
-        assert EVENT_KINDS == frozenset(get_args(EventType)), (
+        assert frozenset(get_args(EventType)) == EVENT_KINDS, (
             "EVENT_KINDS no se deriva de EventType. "
             "Anade el valor al Literal EventType en runtime_types.py."
         )
@@ -181,9 +181,7 @@ class TestEventKindSingleSource:
             "BudgetExceeded",
         }
         missing = required - EVENT_KINDS
-        assert not missing, (
-            f"Eventos emitidos por runtime no estan en EVENT_KINDS: {missing}"
-        )
+        assert not missing, f"Eventos emitidos por runtime no estan en EVENT_KINDS: {missing}"
 
 
 class TestSourceKindSingleSource:
@@ -198,7 +196,7 @@ class TestSourceKindSingleSource:
 
         from skillgraph.core.runtime_types import SOURCE_KINDS, SourceKind
 
-        assert SOURCE_KINDS == frozenset(get_args(SourceKind)), (
+        assert frozenset(get_args(SourceKind)) == SOURCE_KINDS, (
             "SOURCE_KINDS no se deriva de SourceKind Literal."
         )
 

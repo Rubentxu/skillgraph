@@ -190,7 +190,7 @@ class TestUat08Uat09DelegatesToE2E:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Si UAT-08.json existe con status PASS, uat_08 lo devuelve."""
-        import uat_audit as _ua  # noqa: E402
+        import uat_audit as _ua
 
         fake_dir = tmp_path / "tests" / "uat-evidence"
         fake_dir.mkdir(parents=True)
@@ -224,7 +224,7 @@ class TestUat08Uat09DelegatesToE2E:
     def test_uat_09_returns_existing_pass_evidence_when_present(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        import uat_audit as _ua  # noqa: E402
+        import uat_audit as _ua
 
         fake_dir = tmp_path / "tests" / "uat-evidence"
         fake_dir.mkdir(parents=True)
@@ -258,7 +258,7 @@ class TestUat08Uat09DelegatesToE2E:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Sin evidencia en disco, devuelve BLOCKED con nota honesta."""
-        import uat_audit as _ua  # noqa: E402
+        import uat_audit as _ua
 
         fake_dir = tmp_path / "tests" / "uat-evidence"
         fake_dir.mkdir(parents=True)
@@ -275,7 +275,7 @@ class TestUat08Uat09DelegatesToE2E:
     def test_uat_09_returns_blocked_when_no_evidence(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        import uat_audit as _ua  # noqa: E402
+        import uat_audit as _ua
 
         fake_dir = tmp_path / "tests" / "uat-evidence"
         fake_dir.mkdir(parents=True)
@@ -292,7 +292,7 @@ class TestUat08Uat09DelegatesToE2E:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """Si el JSON existe pero NO es PASS (p.ej. cadena vieja), vuelve a BLOCKED."""
-        import uat_audit as _ua  # noqa: E402
+        import uat_audit as _ua
 
         fake_dir = tmp_path / "tests" / "uat-evidence"
         fake_dir.mkdir(parents=True)

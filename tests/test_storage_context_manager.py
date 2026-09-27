@@ -39,16 +39,13 @@ class TestStorageContextManager:
     def test_with_propagates_exception(self, tmp_path: Path) -> None:
         """Excepcion en el cuerpo se propaga despues de cerrar."""
         db = tmp_path / "test.db"
-        with pytest.raises(ValueError, match="boom"):
-            with Storage(db) as s:
-                s._conn.execute("CREATE TABLE t(x INTEGER)")
-                raise ValueError("boom")
+        with pytest.raises(ValueError, match="boom"), Storage(db) as s:
+            s._conn.execute("CREATE TABLE t(x INTEGER)")
+            raise ValueError("boom")
         # Conexion cerrada: la instancia queda en estado consistente.
         # Reabrir y leer debe funcionar.
         with Storage(db) as s2:
-            rows = s2._conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            rows = s2._conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             assert any("t" in r[0] for r in rows)
 
     def test_double_close_is_idempotent(self, tmp_path: Path) -> None:
