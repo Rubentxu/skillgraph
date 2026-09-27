@@ -12,6 +12,44 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.15.0] - 2026-09-27 — R0 housekeeping + WI-31 (cast Storage Protocol) + WI-35 (docs) (BREAKING)
+
+**Resumen**: cierre de la ronda de housekeeping + refactors sobre la base post-v0.14.8, en modo SDDK autónomo. **MINOR bump** por **1 BREAKING** (QW-B: redaction default `none`→`metadata`, secure-by-default) + **3 feat** (QW-C: `Storage` context manager, WI-31: factor `Storage.knowledge_repository()`, QW-I: snapshot `docs/blueprint/` versionado) + **1 fix** (QW-A: Anthropic default migrated retired model `claude-3-5-sonnet-20241022` → `claude-sonnet-4-6`). WI-31 cubre un code path del `RunController._compile_knowledge` con **0 tests** previos, anade 7 tests nuevos y elimina un `cast(Storage, self._runs)` que era un workaround del type checker. WI-35 documenta el patron SDDK end-to-end para futuras sesiones. Total: **1078/1078 tests PASS** (+30 desde 1048, +10 vs mi memoria previa de 1068; medido via `pytest --collect-only` y `--no-header -q` en HEAD `7e5566e` en 527.95s), ruff check+format limpios, cobertura **95.25%** lines / **90.54%** branches.
+
+### BREAKING CHANGE
+
+- **QW-B `fix(redaction)`**: default policy del EventLog paso de `"none"` a `"metadata"`. Antes (`v0.14.8.dev0` y todos los ancestros), un tenant sin policy explícita devolvia payloads sin redaccion: claves `api_key`, `password`, `token` se emitian en el `runtime_events` con su valor original. Ahora un EventLog sin policy explícita redacta todo metadata antes de emitirlos como evento. Migracion opt-in: los callers que necesiten el comportamiento anterior deben pasar `EventLog(..., policy_resolver=lambda _t: "none")` o setear `policy_resolver` a nivel tenant. Tests: `test_eventlog_default_policy_is_metadata` (re-named de `test_eventlog_passes_through_by_default`) + `test_eventlog_explicit_none_passes_through` documentan el cambio. **Impacto**: tenants que ya tenian un `policy_resolver` explicito no se ven afectados.
+
+### Added (feat)
+
+- **QW-C `feat(storage)`**: `Storage` como context manager — `with Storage(path) as s: ...` cierra la conexion sqlite determinísticamente via `__exit__`. Antes (`v0.14.8.dev0` y todos los ancestros), abrir una `Storage` sin `close()` emitia `ResourceWarning: unclosed database`. El metodo `close()` es idempotente. Nuevo modulo `tests/test_storage_context_manager.py` con 6 tests. Migracion opt-in: callers existentes con `storage.close()` siguen funcionando igual.
+
+- **WI-31 `refactor(runcontroller)`** (`Storage.knowledge_repository()` factor): introduce una tercera factoria `Storage.knowledge_repository()` paralela a `Storage.run_repository()` y `Storage.event_store()`, devolviendo el propio `Storage` (sin implementar otras vistas). Como los dos Protocols `RunRepository` + `KnowledgeRepository` los implementa `Storage` por structural subtyping, este factor se reduce a sinonimo de `self`. Habilita la migracion futura a `RunStorage`/`KnowledgeStorage` separadas (WI-02b) sin tocar `RunController`. Tambien: nuevo kwarg opcional `knowledge: KnowledgeRepository | None` en `RunController.__init__` que elimina el antiguo `cast(Storage, self._runs)` en `_compile_knowledge`. 4 callers legacy en `tests/test_h9_context_in_run.py` migrados con `knowledge=s` explicito. 7 tests nuevos en `tests/test_runcontroller_compile_knowledge.py`. Tambien: `Storage.close()` cambia `try/except pass` por `contextlib.suppress(ProgrammingError)` (ruff SIM105).
+
+- **QW-I `docs(blueprint)`**: snapshot versionado del blueprint en `docs/blueprint/` (12 capitulos + README + adr/ 13 ADR + plan/ 6 plans + references/). Antes el test `test_uats_can_be_loaded_as_documentation` leia de `external/blueprint-v1/` que esta gitignored y saltaba con `pytest.skip`. Ahora lo lee del snapshot versionado. `.gitignore` permite unicamente `docs/blueprint/` (no `docs/*` blanket). Script `scripts/sync_blueprint.sh` idempotente; `--check` detecta drift entre el origen y el snapshot via SHA256. Documento `docs/blueprint/SYNC.md` con la politica on-demand.
+
+### Fixed
+
+- **QW-A `fix(http_adapter)`**: el default Anthropic para `HttpAgentAdapter` migraba a `claude-sonnet-4-6` desde el model `claude-3-5-sonnet-20241022` que Anthropic retiro el 2025-10-28. Antes, una llamada HTTP sin header explicito `x-llm-model` enviaba una peticion que el proveedor rechazaba con 404 Not Found. Tambien: blacklist de modelos retirados en tests (`claude-3-5-sonnet-20240620`, `claude-3-opus-20240229`). Test nuevo: `test_default_model_anthropic_not_deprecated`.
+
+### Changed (refactor, sin bump)
+
+- **QW-D `refactor(runtime_types)`**: `EVENT_KINDS` ahora se deriva del Literal `EventType` via `frozenset(get_args(EventType))` (no mas frozenset paralelo). Antes `EventType` (Literal 8 valores) y `EVENT_KINDS` (frozenset 14 valores) eran DOS conjuntos con solo 3 valores comunes. Despues: 19 valores unicos. 2 tests nuevos (`TestEventKindSingleSource`) verifican single-source-of-truth.
+
+- **QW-E `refactor(runtime_types)`**: `SOURCE_KINDS` ahora derivado del Literal `SourceKind` via `frozenset(get_args(SourceKind))` (5 valores; `skill_pack` ahora valido). Antes el frozenset omitia `skill_pack` y lo rechazaba runtime aunque el Literal lo declaraba. 2 tests nuevos (`TestSourceKindSingleSource`).
+
+- **QW-F + QW-G `chore(coverage)`**: `fail_under` 60→80 + omit de `__init__.py`, `__main__.py`, `cli/runner.py` en `[tool.coverage.run]`. Tambien: `tests/uat_audit.py` y `tests/test_cli_uat.py` propagan `PYTHONPATH` al subprocess cuando el padre corre dentro del venv (QW-G fix que evita `No module named skillgraph` en tmpdir).
+
+- **QW-H `refactor(uat_audit)`**: `uat_audit.uat_08()` y `uat_audit.uat_09()` ahora leen la evidencia existente en `tests/uat-evidence/UAT-XX.json` en vez de pisarla con un stub BLOCKED. Antes el test E2E `test_h4_expansion_cli.py` escribia evidencia PASS real, y `uat_audit` lo sobrescribia con BLOCKED en cada corrida. 5 tests nuevos verifican ambos caminos.
+
+### Chore (no bump)
+
+- **`pytest` + coerencia release governance**: el conjunto de stewardship (STATE.yaml + CURRENT.md + CHANGELOG.md) ahora cubre la timeline completa del repo en una sola fuente. `current_workitem` en STATE.yaml pasa de `WI-30` a `WI-31` (primera vez que cambia despues de WI-30).
+
+- **`scripts/sync_blueprint.sh`** (QW-I): idempotente; modo `--check` detecta drift sin tocar archivos.
+
+- **WI-35 `docs(state)`**: prioridad_6 en `STATE.yaml.stewardship_backlog` documenta el patron operacional aplicado en WI-31 (cycle start → backlog capture → TDD → commit atomico → smoke → triage → promote). Entrada en SESSION-JOURNAL.md con SHA del commit y bl_item_id. Sin cambio de contrato.
+
 ## [0.14.8] - 2026-09-26 — WI-21..WI-30 (debt-reduction H-03: 8 hotspots cc→low single-digits)
 
 **Resumen**: ciclo de deuda tecnica quirurgica cerrando 8 hotspots publicos identificados en el catalogo H-03 (cyclomatic complexity > 15 en `src/`). Patron consistente: extraer helpers privados puros + module-level utilities, manteniendo 100% backward-compat. WI-28 anade auditor reproducible `audits/audit_debt.py`. **Politica D-66 satisfecha**: cero hotspots publicos cc≥20 en `src/` (unico cc≥15 restante: `main()` cc=50, excluido por D-64 al ser CLI entry point / H-02 god module). Tests: **1048/1048 PASS** preservados, ruff check+format limpios, auditor reproducible.

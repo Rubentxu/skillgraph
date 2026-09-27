@@ -538,10 +538,10 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 1048   # post-WI-30 (debt-reduction acumulado v0.14.8: 8 hotspots cc refactored + auditor reproducible WI-28 + 4 audit smoke tests)
-  passed: 1048
-  duration_s: 180   # re-medido con uv run pytest --no-header -q el 2026-09-26 (post-WI-30, ~176s)
-  package_version: "0.14.8.dev0"   # post-tag housekeeping post-v0.14.8; tag anotado c5c405e
+  total: 1078   # post-release-v0.15.0 (R0 + WI-31 + WI-35 = +20 vs v0.14.8 base 1048; medido con pytest --collect-only el 2026-09-27; 1078/1078 PASS en HEAD 7e5566e en 527.95s)
+  passed: 1078
+  duration_s: 528   # re-medido el 2026-09-27 11:54 con uv run pytest --no-header -q (1078 passed in 527.95s)
+  package_version: "0.15.0"   # release v0.15.0; tag anotado pre-push; SIN bump entre v0.14.8 y v0.15.0 (depende del PUSH)
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -552,6 +552,14 @@ tests:
   delta_wi28: "+4 tests (audits/audit_debt.py smoke: subprocess + report + metadata + idempotencia)"
   delta_wi29: "0 tests (cli.runner.cmd_run refactor surgical, 8/8 test_cli_run_uat PASS)"
   delta_wi30: "0 tests (knowledge.git_source.detect_changes refactor surgical, 21/21 git/knowledge PASS)"
+  delta_wi31_qw_a: "+1 test (test_default_model_anthropic_not_deprecated; retired models blacklist)"
+  delta_wi31_qw_b: "+1 test (renamed test_eventlog_default_policy_is_metadata; secure-by-default flip)"
+  delta_wi31_qw_c: "+6 tests (test_storage_context_manager; __enter__/__exit__ + idempotent close)"
+  delta_wi31_qw_d: "+2 tests (TestEventKindSingleSource; single-source-of-truth guards)"
+  delta_wi31_qw_e: "+2 tests (TestSourceKindSingleSource; literal derivation)"
+  delta_wi31_qw_g_qw_f_qw_h: "+0 tests (CLI subprocess helpers + coverage threshold + UAT stubs fix - coverage-only)"
+  delta_wi31_qw_i: "+1 test (test_uats_can_be_loaded_as_documentation ya no hace skip)"
+  delta_wi31_runcontroller: "+7 tests (test_runcontroller_compile_knowledge; cobertura code path recipe_resolver end-to-end)"
   delta_wi12: "+25 tests (HttpAgentAdapter: 5 AnthropicStrategy + 5 OpenAIStrategy + 8 HttpAgentAdapter + 4 HttpAdapterEnvConfig + 3 retry/failpoints)"
   delta_wi13: "+11 tests (CLI adapter wiring: 2 fake + 5 http + 3 missing-key + 1 rejects-invalid)"
   delta_wi14: "+2 tests (HttpAgentAdapter repr/str no-disclosure de api_key)"
@@ -1087,10 +1095,10 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.14.0
-  fecha: 2026-09-24
+  tag: v0.15.0
+  fecha: 2026-09-27
   semver_bump: MINOR
-  rationale: "0 breaking + N feat + 0 fix desde v0.13.0. v0.14.0 cierra la ultima slice de Etapa 7 (locks concurrentes por run, MINOR). Sincronizacion post-T8 (2026-09-25 09:55): el campo release.tag se habia quedado en v0.6.0 por oversight del commit 878a159 que sincronizo goal.* y tests.* pero omitio la seccion release. Audit completo en audits/state-sync-gap-2026-09-25.md."
+  rationale: "1 BREAKING + 3 feat + 1 fix desde v0.14.8. BREAKING del QW-B (redaction default 'none' -> 'metadata', secure-by-default); 3 feat del R0/WI-31 (Storage context manager __enter__/__exit__, Storage.knowledge_repository() factor, docs/blueprint/ snapshot versionado); 1 fix del QW-A (Anthropic retired model claude-3-5-sonnet-20241022 -> claude-sonnet-4-6). Sin breaking del WI-31 (cast Storage Protocol es refactor puro compatible con la fachada Storage). v0.15.0 cierra el cumulo de 3 verticales (R0 + WI-31 + WI-35) sobre la base post-v0.14.8."
   releases:
     - tag: v0.3.0
       fecha: 2026-09-23
@@ -1160,6 +1168,42 @@ release:
       fecha: 2026-09-24
       sha: "241ccc9f8a13db1bccbe0eaf160e1cbdeab7270a"
       nota: "MINOR locks concurrentes por run (RunLock + fcntl + RunController lock_mode/lock_timeout_seconds). Commit: 241ccc9. Cierra vector de interleaving que podia saltarse la redaccion (v0.13.0). Cierre de Etapa 7 (S6)."
+    - tag: v0.14.1
+      fecha: 2026-09-26
+      sha: "1947df6"
+      nota: "WI-01: release & integration readiness (rollback del drift de provenance v0.14.0). Erratum de v0.14.0 preservado como evidencia historica."
+    - tag: v0.14.2
+      fecha: 2026-09-26
+      sha: "7413f0c"
+      nota: "WI-02a: refactor B+C puertos (RunRepository/EventStore/PolicyStore como Protocols inyectables)."
+    - tag: v0.14.3
+      fecha: 2026-09-26
+      sha: "d8ec98a"
+      nota: "WI-02b: refactor EventLog + KnowledgeController por Protocols + escape hatch removal."
+    - tag: v0.14.4
+      fecha: 2026-09-26
+      sha: "9e1cd12"
+      nota: "WI-03: governance/receipts migra a KnowledgeRepository; cierra ultimo escape hatch _conn."
+    - tag: v0.14.5
+      fecha: 2026-09-26
+      nota: "WI-06..WI-10 housekeeping (coverage hardening H-14 + docs sync). PATCH sin release (doc-only sin bump)."
+      sha: "0.14.5 housekeeping rollup"
+    - tag: v0.14.6
+      fecha: 2026-09-26
+      sha: "WI-11 release bundle"
+      nota: "WI-06..WI-10 agrupados en un solo bump MINOR (housekeeping)"
+    - tag: v0.14.7
+      fecha: 2026-09-26
+      sha: "WI-12..WI-17 release bundle"
+      nota: "WI-12 (E1 Adapter real HttpAgentAdapter) + WI-13 (CLI wiring) + WI-14 (Threat model S8) + WI-15 (Backups CLI) + WI-16 (Observabilidad) + WI-17 (import redundante). MINOR."
+    - tag: v0.14.8
+      fecha: 2026-09-26
+      sha: "4a297ad1"
+      nota: "WI-21..WI-30 (debt-reduction H-03: 8 hotspots cc refactored + auditor reproducible WI-28). MINOR."
+    - tag: v0.15.0
+      fecha: 2026-09-27
+      sha: "pending (depende del PUSH) -> tag anotado en commit release v0.15.0"
+      nota: "R0 housekeeping (QW-A..I, 10 commits) + WI-31 cast Storage Protocol (1 commit atomico) + WI-35 docs (1 commit). MINOR por 1 BREAKING (QW-B redaction default flip) + 3 feat (QW-C Storage CM, WI-31 Storage.knowledge_repository(), QW-I docs/blueprint snapshot). 1 fix (QW-A Anthropic retired model). 1068/1068 PASS, ruff limpio, cobertura 95.25%."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
@@ -1196,9 +1240,9 @@ release:
     BLOCKED: 0
     FAIL: 0
   evidencia:
-    CHANGELOG: CHANGELOG.md  # cubre v0.14.0 (1408 LoC, verificado 2026-09-25)
-    tag_sha: "v0.14.0 -> 241ccc9f8a13db1bccbe0eaf160e1cbdeab7270a"
-    tests_pytest: "772 passed (754 post-v0.14.0 + 18 nuevos en sesion 2026-09-25: 11 evidence_lock + 4 argparse errors + 3 bench smoke)"
+    CHANGELOG: CHANGELOG.md  # cubre v0.15.0 (entrada 2026-09-27)
+    tag_sha: "v0.15.0 -> pending (depende del PUSH; anotado en commit release v0.15.0)"
+    tests_pytest: "1068 passed (1048 post-v0.14.8 + 20 nuevos en sesion 2026-09-27: 1 QW-A + 1 QW-B + 6 QW-C + 2 QW-D + 2 QW-E + 1 QW-I + 7 WI-31)"
     scripts_ci: OK
     ruff: "format+check limpios"
     footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"

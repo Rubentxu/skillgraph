@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.14.8.dev0"
+__version__ = "0.15.0"   # release v0.15.0 — BREAKING + 3 feat (Storage CM, knowledge_repository factor, blueprint snapshot)
 
 from skillgraph.core.errors import (
     IdentityConflictError,
