@@ -31,6 +31,7 @@ from skillgraph.knowledge.graph import (
     OutcomeTrace,
     Source,
 )
+from skillgraph.platform.ports import StoredEvent
 from skillgraph.resources.bricks import Brick
 
 if TYPE_CHECKING:
@@ -311,6 +312,34 @@ def _uid(brick: Brick) -> str:
     """
     i = brick.identity
     return f"{i.tenant_id}/{i.project_id}/{brick.api_version}/{brick.kind}/{i.namespace}/{i.name}"
+
+
+def _row_to_stored_event(row: sqlite3.Row) -> StoredEvent:
+    """Mapea ``sqlite3.Row`` de ``runtime_events`` al DTO ``StoredEvent``.
+
+    WI-32.2 (R1 strict, audit 2026-09-27): este helper es la frontera
+    entre ``platform/`` y el resto del runtime. El consumidor (EventLog,
+    RunController) solo ve ``StoredEvent``; nunca importa ``sqlite3``.
+
+    El campo ``payload`` se deserializa desde ``payload_json`` aqui;
+    ``runtime/engine.py`` ya no maneja ``json.loads`` sobre filas.
+    """
+    import json  # local import por consistencia con resto del modulo
+
+    return StoredEvent(
+        sequence=row["sequence"],
+        event_id=row["event_id"],
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        event_kind=row["event_kind"],
+        run_id=row["run_id"],
+        resource_ref=row["resource_ref"],
+        causation_id=row["causation_id"],
+        correlation_id=row["correlation_id"],
+        payload=json.loads(row["payload_json"]),
+        timestamp=row["timestamp"],
+        schema_version=row["schema_version"],
+    )
 
 
 class Storage:
@@ -1560,20 +1589,25 @@ class Storage:
         tenant_id: str,
         project_id: str,
         run_id: str,
-    ) -> list[sqlite3.Row]:
+    ) -> list[StoredEvent]:
         """Lista eventos de un Run ordenados por sequence ASC.
 
         Lectura pura: usada por `RunController.logs_run` para
         mostrar el timeline de eventos al operador. NO filtra por
         `correlation_id` porque el `run_id` ya esta indexado
         (`events_by_run`).
+
+        WI-32.2: mapea ``Row -> StoredEvent`` antes de devolver. El
+        consumer (RunController/EventLog) recibe DTOs inmutables en
+        vez de filas SQLite.
         """
-        return self._conn.execute(
+        rows = self._conn.execute(
             "SELECT * FROM runtime_events "
             "WHERE tenant_id = ? AND project_id = ? AND run_id = ? "
             "ORDER BY sequence ASC",
             (tenant_id, project_id, run_id),
         ).fetchall()
+        return [_row_to_stored_event(r) for r in rows]
 
     def ensure_schema(self) -> None:
         """Idempotente: aplica el schema de ``runtime_events``.
@@ -1588,12 +1622,20 @@ class Storage:
         with self._tx() as cur:
             cur.executescript(_SCHEMA_SQL)
 
-    def fetch_event_raw(self, *, event_id: str) -> sqlite3.Row | None:
-        """WI-02b: lookup directo por ``event_id``."""
-        return self._conn.execute(
+    def fetch_event_raw(self, *, event_id: str) -> StoredEvent | None:
+        """WI-02b: lookup directo por ``event_id``.
+
+        WI-32.2: devuelve ``StoredEvent`` (DTO inmutable). El adapter
+        SQLite mapea ``Row -> StoredEvent`` aqui; el resto del runtime
+        nunca ve ``sqlite3.Row``. Ver ``platform/ports.py`` para el DTO.
+        """
+        row = self._conn.execute(
             "SELECT * FROM runtime_events WHERE event_id = ?",
             (event_id,),
         ).fetchone()
+        if row is None:
+            return None
+        return _row_to_stored_event(row)
 
     # ----- presupuestos por Run (S4 Etapa 7) -----
 

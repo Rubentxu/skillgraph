@@ -722,9 +722,12 @@ class RunController:
         si el run no existe (delegado en `Storage.get_run`; lo
         validamos ANTES de leer eventos para fallar rapido si el
         run no existe vs. devolver una tupla vacia).
-        """
-        from skillgraph.runtime.engine import _row_to_event_dict
 
+        WI-32.2 (audit 2026-09-27): ``list_events_for_run`` devuelve
+        ``list[StoredEvent]`` (DTO inmutable). Construimos
+        ``RuntimeEvent`` directamente desde los atributos del DTO;
+        ya no hay conversion ``Row -> dict -> RuntimeEvent``.
+        """
         # Validacion temprana: si el run no existe, error tipado
         # en lugar de una tupla vacia confusa.
         self._runs.get_run(
@@ -738,23 +741,24 @@ class RunController:
             run_id=run_id,
         )
         out: list[RuntimeEventLog] = []
-        for row in rows:
-            d = _row_to_event_dict(row)
+        for d in rows:
+            # StoredEvent ya tiene los campos deserializados (payload
+            # JSON parseado por el adapter en ``platform/``).
             out.append(
                 RuntimeEventLog(
-                    sequence=int(d["sequence"]),
+                    sequence=int(d.sequence),
                     event=RuntimeEvent(
-                        event_id=d["event_id"],
-                        tenant_id=d["tenant_id"],
-                        project_id=d["project_id"],
-                        event_kind=d["event_kind"],
-                        run_id=d["run_id"],
-                        resource_ref=d["resource_ref"],
-                        causation_id=d["causation_id"],
-                        correlation_id=d["correlation_id"],
-                        payload=d["payload"],
-                        timestamp=d["timestamp"],
-                        schema_version=d["schema_version"],
+                        event_id=d.event_id,
+                        tenant_id=d.tenant_id,
+                        project_id=d.project_id,
+                        event_kind=d.event_kind,
+                        run_id=d.run_id,
+                        resource_ref=d.resource_ref,
+                        causation_id=d.causation_id,
+                        correlation_id=d.correlation_id,
+                        payload=d.payload,
+                        timestamp=d.timestamp,
+                        schema_version=d.schema_version,
                     ),
                 )
             )

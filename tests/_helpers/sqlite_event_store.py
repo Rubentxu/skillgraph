@@ -7,6 +7,10 @@ delega a ``record_event`` / ``list_events_for_run``.
 
 No es parte de la API publica: existe solo para que la suite
 migre limpia de ``EventLog(conn)`` a ``EventLog(store)``.
+
+WI-32.2 (R1 strict, audit 2026-09-27): ahora devuelve DTOs
+``StoredEvent`` (no ``sqlite3.Row``) para mantener paridad con el
+contrato del ``EventStore`` Protocol que cambio en WI-32.2.
 """
 
 from __future__ import annotations
@@ -15,6 +19,27 @@ import json
 import sqlite3
 from datetime import datetime
 from typing import Any
+
+from skillgraph.platform.ports import StoredEvent
+
+
+def _row_to_stored_event(row: sqlite3.Row) -> StoredEvent:
+    """Adaptador Row -> StoredEvent (test helper, paralelo a
+    ``platform/storage._row_to_stored_event``)."""
+    return StoredEvent(
+        sequence=row["sequence"],
+        event_id=row["event_id"],
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        event_kind=row["event_kind"],
+        run_id=row["run_id"],
+        resource_ref=row["resource_ref"],
+        causation_id=row["causation_id"],
+        correlation_id=row["correlation_id"],
+        payload=json.loads(row["payload_json"]),
+        timestamp=row["timestamp"],
+        schema_version=row["schema_version"],
+    )
 
 
 class SqliteEventStoreForTest:
@@ -123,18 +148,20 @@ class SqliteEventStoreForTest:
         tenant_id: str,
         project_id: str,
         run_id: str,
-    ) -> list[Any]:
-        return list(
-            self._conn.execute(
-                "SELECT * FROM runtime_events "
-                "WHERE tenant_id = ? AND project_id = ? AND run_id = ? "
-                "ORDER BY sequence ASC",
-                (tenant_id, project_id, run_id),
-            ).fetchall()
-        )
+    ) -> list[StoredEvent]:
+        rows = self._conn.execute(
+            "SELECT * FROM runtime_events "
+            "WHERE tenant_id = ? AND project_id = ? AND run_id = ? "
+            "ORDER BY sequence ASC",
+            (tenant_id, project_id, run_id),
+        ).fetchall()
+        return [_row_to_stored_event(r) for r in rows]
 
-    def fetch_event_raw(self, *, event_id: str) -> Any | None:
-        return self._conn.execute(
+    def fetch_event_raw(self, *, event_id: str) -> StoredEvent | None:
+        row = self._conn.execute(
             "SELECT * FROM runtime_events WHERE event_id = ?",
             (event_id,),
         ).fetchone()
+        if row is None:
+            return None
+        return _row_to_stored_event(row)

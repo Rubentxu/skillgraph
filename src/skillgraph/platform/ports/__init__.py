@@ -37,7 +37,77 @@ de aplicación puede refinarlos.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
+
+# ---------------------------------------------------------------------------
+# DTO de persistencia (WI-32.2 R1 strict, audit 2026-09-27):
+#
+# ``StoredEvent`` es el DTO inmutable que reemplaza el retorno de
+# ``sqlite3.Row`` por el ``EventStore`` Protocol. La representacion
+# SQLite se queda en ``platform/storage.py``; el resto del runtime
+# consume estos DTOs. Esto cumple el objetivo 2 de WI-32:
+#
+#   "ningun ``sqlite3.Row`` fuera de ``platform/``"
+#
+# ``StoredEvent``:
+#   - frozen=True, slots=True: inmutable, sin __dict__, footprint minimo.
+#   - 12 campos 1:1 con la tabla ``runtime_events`` (sequence autogenerado).
+#   - ``to_dict()`` para compatibilidad con consumers que esperan dict
+#     (RunController.logs_run, EventLog.events_for_run legacy API).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class StoredEvent:
+    """DTO inmutable de un evento persistido en ``runtime_events``.
+
+    WI-32.2: sustituye ``sqlite3.Row`` en el contrato de
+    :class:`EventStore`. El adapter SQLite (``Storage``) realiza la
+    traduccion ``Row -> StoredEvent`` y la inversa en mutaciones.
+    El resto del runtime (EventLog, RunController) opera exclusivamente
+    sobre estos DTOs, sin importar ``sqlite3``.
+    """
+
+    sequence: int
+    event_id: str
+    tenant_id: str
+    project_id: str
+    event_kind: str
+    run_id: str | None
+    resource_ref: str
+    causation_id: str | None
+    correlation_id: str | None
+    payload: dict[str, Any]
+    timestamp: str
+    schema_version: int
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa a dict para consumers que esperan API dict-legacy.
+
+        Compatibilidad: ``RunController.logs_run`` y ``EventLog.events_for_run``
+        exponen ``list[dict]`` en su API publica historica. Este metodo
+        evita que esos consumidores tengan que conocer el DTO.
+        """
+        return {
+            "sequence": self.sequence,
+            "event_id": self.event_id,
+            "tenant_id": self.tenant_id,
+            "project_id": self.project_id,
+            "event_kind": self.event_kind,
+            "run_id": self.run_id,
+            "resource_ref": self.resource_ref,
+            "causation_id": self.causation_id,
+            "correlation_id": self.correlation_id,
+            "payload": self.payload,
+            "timestamp": self.timestamp,
+            "schema_version": self.schema_version,
+        }
+
+
+__all__ = [
+    "StoredEvent",
+]
 
 # ---------------------------------------------------------------------------
 # Note: ``@runtime_checkable`` se aplica selectivamente. Solo
@@ -68,7 +138,9 @@ class RunRepository(Protocol):
 
     def get_run(self, *, tenant_id: str, project_id: str, run_id: str) -> dict[str, Any] | None: ...
 
-    def list_events_for_run(self, *, tenant_id: str, project_id: str, run_id: str) -> list[Any]: ...
+    def list_events_for_run(
+        self, *, tenant_id: str, project_id: str, run_id: str
+    ) -> list[StoredEvent]: ...
 
     def load_run(self, *, tenant_id: str, project_id: str, run_id: str) -> dict[str, Any]: ...
 
@@ -207,14 +279,21 @@ class EventStore(Protocol):
         event_kind: str | None = None,
     ) -> list[Any]: ...
 
-    def list_events_for_run(self, *, tenant_id: str, project_id: str, run_id: str) -> list[Any]: ...
+    def list_events_for_run(
+        self, *, tenant_id: str, project_id: str, run_id: str
+    ) -> list[StoredEvent]: ...
 
-    def fetch_event_raw(self, *, event_id: str) -> Any | None:
-        """Devuelve la fila raw por ``event_id`` o None.
+    def fetch_event_raw(self, *, event_id: str) -> StoredEvent | None:
+        """Devuelve el evento por ``event_id`` o None.
 
         WI-02b: anadido para soportar ``EventLog.has_event`` sin
         importar a ``runtime_events`` ni exponer ``sql conn`` al caller.
-        Implementacion SQLite hace ``SELECT * WHERE event_id = ?``.
+        Implementacion SQLite hace ``SELECT * WHERE event_id = ?`` y mapea
+        ``Row -> StoredEvent`` (WI-32.2 R1 strict, audit 2026-09-27).
+
+        WI-32.2: el retorno cambia de ``sqlite3.Row`` a ``StoredEvent``.
+        Consumidores que necesiten filas raw pueden consultar
+        ``Storage`` directamente (legacy); el Protocol ya no las expone.
         """
 
     def ensure_schema(self) -> None:

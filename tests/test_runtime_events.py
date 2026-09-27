@@ -82,7 +82,9 @@ class TestEventReconstruction:
         event_log.append(ev2)
         event_log.append(ev3)
         out = event_log.events_for_run(tenant_id="t", project_id="p", run_id="r-1")
-        assert [e["event_id"] for e in out] == ["e1", "e2", "e3"]
+        # WI-32.2: ahora devuelve StoredEvent (DTO inmutable), no dict.
+        # Acceso por atributo (.event_id) en vez de por clave (["event_id"]).
+        assert [e.event_id for e in out] == ["e1", "e2", "e3"]
 
     def test_events_for_run_filters_by_project_and_run(self, event_log: EventLog) -> None:
         a = RuntimeEvent(
@@ -111,8 +113,9 @@ class TestEventReconstruction:
         event_log.append(b)
         out_a = event_log.events_for_run(tenant_id="t", project_id="pA", run_id="r-A")
         out_b = event_log.events_for_run(tenant_id="t", project_id="pA", run_id="r-B")
-        assert [e["event_id"] for e in out_a] == ["a"]
-        assert [e["event_id"] for e in out_b] == ["b"]
+        # WI-32.2: acceso por atributo.
+        assert [e.event_id for e in out_a] == ["a"]
+        assert [e.event_id for e in out_b] == ["b"]
 
     def test_event_payload_round_trip_preserves_data(self, event_log: EventLog) -> None:
         payload = {"k": 1, "nested": {"x": [1, 2, 3]}}
@@ -129,7 +132,8 @@ class TestEventReconstruction:
         )
         event_log.append(ev)
         out = event_log.events_for_run(tenant_id="t", project_id="p", run_id="r-1")[0]
-        assert out["payload"] == payload
+        # WI-32.2: acceso por atributo.
+        assert out.payload == payload
 
 
 class TestEventKindSingleSource:

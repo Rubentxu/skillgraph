@@ -240,7 +240,8 @@ class TestS1AtomicityGrietasBCD:
 
         # Verificar idempotencia: el evento aparece UNA sola vez.
         events = storage.list_events_for_run(tenant_id="t1", project_id="p1", run_id=run_id)
-        matching = [e for e in events if e["event_id"] == event_id]
+        # WI-32.2: events es list[StoredEvent]; acceso por atributo.
+        matching = [e for e in events if e.event_id == event_id]
         assert len(matching) == 1, (
             f"event_id {event_id!r} aparece {len(matching)} veces, "
             f"esperaba 1 (grieta B/C/D no cerrada)"

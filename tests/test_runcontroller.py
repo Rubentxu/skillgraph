@@ -1043,12 +1043,14 @@ class TestBudgetEnforcement:
         assert snap2.state == "FAILED"
         # Verifica que se emitio el evento BudgetExceeded.
         rows = storage.list_events_for_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
-        kinds = [r["event_kind"] for r in rows]
+        # WI-32.2: rows es list[StoredEvent]; acceso por atributo.
+        kinds = [r.event_kind for r in rows]
         assert "BudgetExceeded" in kinds
-        budget_event = next(r for r in rows if r["event_kind"] == "BudgetExceeded")
-        import json as _json
+        budget_event = next(r for r in rows if r.event_kind == "BudgetExceeded")
 
-        payload = _json.loads(budget_event["payload_json"])
+        # El payload ya viene deserializado en el DTO; no necesitamos
+        # re-leer ``payload_json`` de la BD.
+        payload = budget_event.payload
         # QW-B: default redaction 'metadata' -> valores [REDACTED],
         # claves conservadas. El test verifica el shape y tipo, no
         # contenido (que estaria filtrado bajo la politica por defecto).

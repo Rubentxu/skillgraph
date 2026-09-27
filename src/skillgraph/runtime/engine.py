@@ -12,8 +12,6 @@ duplicacion: el EventLog NO usa el orden temporal como autoridad.
 
 from __future__ import annotations
 
-import json
-import sqlite3
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -22,7 +20,7 @@ from typing import Any
 
 from skillgraph.core.errors import IdempotencyError, IntegrityError, ValidationError
 from skillgraph.core.runtime_types import EVENT_KINDS
-from skillgraph.platform.ports import EventStore
+from skillgraph.platform.ports import EventStore, StoredEvent
 from skillgraph.runtime.redaction import redact_payload
 
 SCHEMA_VERSION = 1
@@ -179,35 +177,30 @@ class EventLog:
             raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
         return sequence
 
-    def events_for_run(
-        self, *, tenant_id: str, project_id: str, run_id: str
-    ) -> list[dict[str, Any]]:
-        """Devuelve los eventos del run como dicts (compat con API previa)."""
-        rows = self._events.list_events_for_run(
+    def events_for_run(self, *, tenant_id: str, project_id: str, run_id: str) -> list[StoredEvent]:
+        """Devuelve los eventos del run como DTOs ``StoredEvent`` (WI-32.2 R1 strict).
+
+        WI-32.2 (audit 2026-09-27): antes devolvia ``list[dict]`` construido
+        a mano desde ``sqlite3.Row``. Ahora el ``EventStore`` Protocol ya
+        filtra: el adapter SQLite mapea ``Row -> StoredEvent`` y este
+        metodo simplemente reenvia. Esto cierra el objetivo 2 de WI-32:
+
+          "ningun ``sqlite3.Row`` fuera de ``platform/``"
+
+        Para consumidores que esperan dict (legacy API), cada DTO expone
+        ``StoredEvent.to_dict()``.
+        """
+        return self._events.list_events_for_run(
             tenant_id=tenant_id, project_id=project_id, run_id=run_id
         )
-        return [_row_to_event_dict(r) for r in rows]
 
     def has_event(self, event_id: str) -> bool:
-        """Test de presencia por ``event_id`` via el Protocol."""
+        """Test de presencia por ``event_id`` via el Protocol.
+
+        WI-32.2: el adapter devuelve ``StoredEvent | None`` en vez de
+        ``sqlite3.Row | None``. Aqui solo nos importa la presencia.
+        """
         return self._events.fetch_event_raw(event_id=event_id) is not None
-
-
-def _row_to_event_dict(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "sequence": row["sequence"],
-        "event_id": row["event_id"],
-        "tenant_id": row["tenant_id"],
-        "project_id": row["project_id"],
-        "event_kind": row["event_kind"],
-        "run_id": row["run_id"],
-        "resource_ref": row["resource_ref"],
-        "causation_id": row["causation_id"],
-        "correlation_id": row["correlation_id"],
-        "payload": json.loads(row["payload_json"]),
-        "timestamp": row["timestamp"],
-        "schema_version": row["schema_version"],
-    }
 
 
 def new_event_id() -> str:
