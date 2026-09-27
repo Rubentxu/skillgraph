@@ -6470,3 +6470,91 @@ Source of truth sincronizada. Ciclo CLOSED. Evidencia: 1048/1048 tests
 + ruff clean + push sincronizado + 4 audit smoke tests + 4 governance
 tests. Deuda nueva: 0. Siguiente paso del roadmap (manana): decision
 operador sobre S7+ scope o ADR para P1 god modules.
+
+## 2026-09-27 — WI-31 + WI-35 (ciclo SDDK end-to-end)
+
+### Resumen
+
+- Patron SDDK aplicado de forma completa y trazable:
+  backlog SDDK -> cycle start (A-min path) -> TDD rojo->verde ->
+  commit atomico en main -> smoke full suite -> backlog triage
+  + promote. Demuestra que el flujo A-min es viable para
+  refactors surgical sobre la base post-v0.14.8 sin reabrir la
+  iniciativa (que sigue COMPLETED).
+
+### WorkItems cerrados
+
+- **WI-31 cast Storage Protocol** (`e82c670` refactor(runcontroller)):
+  - Hallazgo del audit 2026-09-27: `cast(Storage, self._runs)` en
+    `runcontroller.py:1129` era un workaround del type checker
+    para `RunRepository` (Protocol del run-side) usado como
+    `KnowledgeRepository` (Protocol del knowledge-side). Storage
+    implementa ambos por structural subtyping, pero el path
+    `recipe_resolver != None` tenia **0 tests**.
+  - Fix:
+    1. Factor `Storage.knowledge_repository()` (paralelo a
+       `run_repository()`); tipico Storage, sinonimo de self
+       mientras Storage cumpla las firmas de KnowledgeRepository.
+    2. Kwarg opcional `knowledge: KnowledgeRepository | None` en
+       `RunController.__init__`. Si None, `_compile_knowledge`
+       degrada al stub `default-empty-recipe/v1` (incluido=()).
+    3. Eliminado `cast(Storage, self._runs)` y el import del
+       cast en `runcontroller.py`. Storage importado ahi para
+       fuera; KnowledgeRepository dentro.
+  - 7 tests nuevos en `tests/test_runcontroller_compile_knowledge.py`:
+    happy path del resolver real, stub en resolver=None, stub
+    en knowledge=None, structural conformance, factor nuevo
+    (presencia + aceptacion por KnowledgeController). 2 eran
+    rojos antes del fix; todos verdes despues.
+  - 4 callers legacy actualizados en `tests/test_h9_context_in_run.py`
+    con `knowledge=s` injection explicita (antes funcionaban
+    por el cast).
+  - Tambien: `Storage.close()` cambia try/except pass por
+    `contextlib.suppress(sqlite3.ProgrammingError)` (SIM105).
+  - Sin release bump (refactor sin cambio de contrato observable).
+
+- **WI-35 documentar patron SDDK** (esta entrada + `855877e`):
+  - Documentado como `prioridad_6_sddk_cycle_methodology` en
+    `STATE.yaml.stewardship_backlog` (estado: completed). Permite
+    que la proxima sesion localice el flujo sin re-descubrirlo.
+
+### Cambio adicional in-flight
+
+- **WI-31X housekeeping** (`855877e` chore(housekeeping)):
+  - Carryover del smoke WI-31: ruff format/fix dejaron 4 archivos
+    de tests con cosmetics minimos (multi-line path -> one line,
+    noqas innecesarias fuera, reorden de operandos en asserts).
+  - `tests/uat-evidence/UAT-08.json` y `UAT-09.json`
+    refrescados al nuevo SHA `e82c670` por `test_h4_expansion_cli.py`
+    durante el smoke.
+  - `audits/architecture-debt-2026-09-27.md` regenerado:
+    storage +18 LoC, runcontroller +19 LoC, +1 funcion.
+    Total LoC 16124 -> 16161.
+
+### Resultado del ciclo
+
+- 1068/1068 PASS (full suite sin --cov).
+- ruff check + format limpios.
+- Cobertura: runcontroller.py 95.8%, storage.py 94.3%.
+- 0 regressions, 0 backlog items abiertos nuevos.
+
+### Shas de referencia para reanudar
+
+```
+WI-31 commit (feature+e82c670):     e82c670 (refactor(runcontroller))
+WI-35 housekeeping:                 855877e (chore(housekeeping))
+SDDK backlog WI-31:                  bl-bl-01M3H2VFVW00038725PMQJ52R0
+SDDK backlog WI-35:                  bl-bl-01M3H3E09F00038726YQ1163M0
+Workspace version:                   0.14.8.dev0
+Released baseline:                   v0.14.8 -> 4a297ad14c5e105824f80a534359e258e0d23e7a
+Development head:                    855877e
+```
+
+### SDDK Close-out
+
+Sesion cerrada 2026-09-27 11:34 Europe/Madrid. SDDK adoption
+complete. WI-31 refactor applied and verified. WI-35 (this entry)
+cierra el ciclo documental. Source of truth sincronizada.
+Quedan 2 prioridades abiertas sin spec operador: prioridad_1
+(elegir A/B/C/D para H9-Plan-B) y prioridad_5 (ejecutar el
+slice S7+ elegido).

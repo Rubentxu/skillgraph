@@ -1056,6 +1056,34 @@ stewardship_backlog:
     coste: "variable segun opcion (S7-A ~300-500 LoC, S7-B ~200-500 LoC, S7-C ~1-2 dias stress, S7-D variable)"
     riesgo: "medio-alto (cambia contratos o requiere proveedor real)"
     valor: "alto (cierra capacidad post-Etapa 7)"
+  prioridad_6_sddk_cycle_methodology:
+    descripcion: >
+      Documentar el patron operacional aplicado en WI-31 (cast
+      Storage Protocol): ciclo SDDK valido de cycle start -> backlog
+      capture -> A-min apply (TDD rojo->verde) -> commit atomico
+      en main -> smoke full suite -> triage + promote en backlog.
+      Tres frentes: (1) entrada en este stewardship_backlog como
+      guia para WorkItems futuros; (2) nota breve en CURRENT.md
+      (no en CHANGELOG) describiendo el flujo; (3) entrada de
+      cierre en SESSION-JOURNAL.md con SHA del commit + bl_ id.
+    archivos_afectados:
+      - "STATE.yaml.stewardship_backlog (este bloque)"
+    coste: "0 LoC produccion; entradas documentales pequenas"
+    riesgo: "nulo (solo documentacion; sin cambio de contrato)"
+    valor: "medio-alto (preserva metodologia entre sesiones; reduce amnesia institucional)"
+    accionable_sin_spec: true
+    estado: completed
+    cerrado_en_sesion: "2026-09-27"
+    commits: ["855877e"]
+    bl_item_id: "bl-bl-01M3H3E09F00038726YQ1163M0"
+    implementacion: >
+      WI-35 cierra tras WI-31. El patron aplicado en WI-31 (cast
+      Storage Protocol + 7 tests nuevos + 1 commit atomico e82c670
+      + 1 commit housekeeping 855877e) es la linea base metodologica
+      documentada. Sin nueva eleccion tecnica: solo registrar el
+      flujo y el bl_ id como anclaje. Esta entrada permite que la
+      proxima sesion localizada SDDK-reanudable no tenga que
+      re-descubrir el metodo.
 
 
 release:
