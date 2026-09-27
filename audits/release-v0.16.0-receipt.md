@@ -153,8 +153,97 @@ Delta specs estructurales (mantenidos):
 2. **DTOs frozen+slots cierran fuga `dict[str,Any]`**: la mayoria de consumers subscriptaban `row["key"]`. Migracion masiva fue 13 sitios en RunController + 3 en CLI runner, atomica por commit (WI-32.4 + WI-32.5). Compat legacy via `to_dict()` preservada.
 3. **Yaml indentacion pre-existente**: STATE.yaml tiene un bug de indentacion en `coverage_snapshot_2026-09-24_post_v140` (no introducido por este sprint). No afecta tests ni release. Documentado como deuda pre-existente.
 4. **Audit debt regeneration**: `audits/architecture-debt-2026-09-27.md` debe regenerarse en cualquier commit que cambia LoC. WI-33 lo regenero (commit `b42a2a8`); el bump (`e99df3a`) no cambia LoC, no requirio regeneracion.
+5. **Drift entre signature y cuerpo no detectable por mypy** (post-release fix `45e67e7`): `Storage.list_runs` declaraba `list[dict[str, Any]]` pero el cuerpo retornaba `list[StoredRun]`. El type checker pasa porque el cuerpo es list comprehension de StoredRun. Lección: **siempre E2E la API publica contra consumers reales despues del release**, no solo verificar la suite verde.
 
-## Evidencia reproducible
+## Evidencia reproducible E2E (post-release, en worktree local)
+
+Ademas de la suite verde, el sprint fue ejercitado contra la API publica
+real (no contra tests). Comandos observados y resultados:
+
+```bash
+# E2E SDK: import + version + Storage facade
+$ mise exec -- uv run python -c "import skillgraph; print(skillgraph.__version__)"
+0.16.0.dev0
+
+# E2E SDK: create_run + list_runs + facade/UoW equivalence
+# (script tempfile.TemporaryDirectory() + Storage real)
+create_run returned: run-fd20800c-2b1e-4238-a0f1-0e0cf3934d80
+facade list_runs: 1 run(s)
+uow list_runs: 1 run(s)
+facade==uow equivalence OK
+to_dict() legacy OK: state=CREATED
+DTO frozen: FrozenInstanceError OK
+sqlite3.Row NO escapa OK
+=== E2E persistence boundary PASS ===
+
+# E2E SDK: StoredResource/Relation (real API Brick + add_relation)
+upsert_resource: default/demo/v1/capability/capabilities/write, ...
+add_relation: e03e70a9-4025-4b6f-a327-a3174bd9589d
+get_resource: type=StoredResource, kind=capability, ns=capabilities
+list_resources: 2
+dependencies_of(read): 1, kind=depends_on
+dependents_of(write): 1
+StoredResource frozen: FrozenInstanceError OK
+sqlite3.Row NO escapa en recursos/relaciones OK
+=== E2E WI-32.5 PASS ===
+
+# E2E SDK: UoW lifecycle + WAL + FK ON
+journal_mode: wal
+foreign_keys: 1
+uow identity: uow1 is uow2 = True
+uow.runs identity: r1 is r2 = True
+adapter._conn is storage._conn = True OK
+close() idempotente OK
+=== E2E WI-33 PASS ===
+
+# E2E CLI: sg --version, sg init, sg project create, sg runs list
+$ sg --version
+skillgraph 0.16.0.dev0
+$ sg init
+Catálogo inicializado en: /tmp/sg-cli-e2e/.sg-data/catalog.sqlite
+$ sg project create demo
+Proyecto 'demo' creado en: /tmp/sg-cli-e2e/.sg-data/tenants/default/projects/demo/project.sqlite
+$ sg runs list demo
+(sin runs)
+exit: 0
+
+# E2E CLI: sg run con plan valido completo
+$ sg run demo p.md
+Run: run-09d6b52f-cff5-4cf2-9cd3-8cde6f592976
+Estado: FAILED
+Nodos ejecutados: (ninguno)
+Eventos emitidos: 6
+Tipo de adapter: fake
+```
+
+### Drift detectado y corregido en 45e67e7 (post-release)
+
+El E2E обнаружил (observado, no asumido):
+
+- **list_runs signature drift**: la firma declaraba `list[dict[str, Any]]`
+  pero el cuerpo usaba `_row_to_run` (que devuelve `StoredRun`). El type
+  checker no lo detecta porque el cuerpo retorna list comprehension de
+  StoredRun. Consumers que subscriptaban `row["key"]` fallaban
+  silenciosamente en runtime. Corregido en commit `45e67e7` (push al
+  origin tras el release tag v0.16.0).
+- **StoredRelation.properties_json**: el DTO expone `properties_json`
+  (raw string JSON) en lugar de `properties` (dict parseado). Decision
+  de diseño consciente: el caller parsea lazy si lo necesita. NO es drift.
+
+### Descubrimientos E2E adicionales (fuera del scope del sprint)
+
+Documentados pero NO arreglados en este sprint (scope):
+
+- **cli/runner.py:1982 NameError**: `agents_root` no esta importado.
+  El run se crea y emite 6 eventos antes de fallar en
+  `_resolve_fixtures_root`. Pre-existente, no introducido por el sprint.
+  Fix trivial (importar `agents_root` desde `platform.paths` o similar).
+- **workflows require namespace/api_version/resource_revision**: el
+  front matter de un WorkflowPlan necesita campos exhaustivos para
+  validar contra `WorkflowNode.__post_init__`. Posible UX gap pero es
+  contrato deliberado (consistente con ResourceIdentity).
+
+## Evidencia reproducible (test runner)
 
 ```bash
 # Reproducibilidad de la firma del release:
