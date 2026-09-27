@@ -6558,3 +6558,128 @@ cierra el ciclo documental. Source of truth sincronizada.
 Quedan 2 prioridades abiertas sin spec operador: prioridad_1
 (elegir A/B/C/D para H9-Plan-B) y prioridad_5 (ejecutar el
 slice S7+ elegido).
+
+## 2026-09-27 — WI-40 (Cierre de fugas de conexion en la suite)
+
+### Resumen
+
+- **Objetivo**: la suite emitia ~224 `ResourceWarning: unclosed database`
+  en cada ejecucion. No era ruido: `Storage` expone `close()` y context
+  manager desde v0.15.0 y la mayoria de los creators en tests no lo
+  invocaban nunca.
+- **Defecto 1**: el fixture `storage_cleanup` de `tests/conftest.py` ya
+  resolvia esa clase, pero era opt-in: solo 6 de ~60 ficheros lo
+  adoptaban, dejando ~154 creators fugando.
+- **Defecto 2 (aparecido al medir)**: volver `storage_cleanup` autouse
+  bajo los avisos de ~224 a 35, **no a cero**. `storage_cleanup` solo ve
+  instancias de `Storage`; los 35 restantes los produce `sqlite3.connect`
+  directo, invisible al fixture. Dos vias: helpers que abren la base para
+  inspeccionarla, y el idiom `with sqlite3.connect(path) as conn`, que
+  **no cierra** (el context manager de `sqlite3` solo confirma la
+  transaccion). Un plugin de diagnostico que rastrea `sqlite3.connect`
+  atribuyo las 35 a 6 ficheros.
+
+### Cambios (commits atomicos)
+
+- `ca96613` `fix(tests): close storage connections suite-wide instead of per-file`
+  - `storage_cleanup` pasa a `autouse=True`.
+  - `sqlite_cleanup` nuevo, `autouse=True`, envuelve `sqlite3.connect`.
+  - 7 marcadores `usefixtures("storage_cleanup")` eliminados por redundantes.
+  - `audits/audit_debt.py`: cronologia manual conservada bajo
+    `<!-- ANNALS:append-only -->`. Antes sobrescribia el informe completo
+    y destruia el analisis de cierre de WI-38 en cada ejecucion.
+- `246bf94` `chore(uat): refresh evidence revision stamps to HEAD`
+  - Side effect de ejecutar la suite, separado para no ensuciar el diff.
+
+### Evidencia (OBSERVED)
+
+| Metrica | Antes | Despues |
+|---|---|---|
+| `unclosed database` (suite completa) | ~224 | 0 |
+| Tests | 1119 | 1131 |
+| Conexiones vivas tras teardown | 35 en 6 ficheros | 0 |
+| Secciones WI-38/39/40 tras 2 regeneraciones del auditor | destruidas | 3 conservadas |
+
+- Rojo→verde TDD verificado por fixture revirtiendo `autouse=True`.
+- Suite con `PYTHONWARNINGS=error::ResourceWarning`: 1131 passed, exit 0.
+- `pipelinek run`: `Pipeline finished with SUCCESS`; los 5 criterios de
+  AGENTS.md verificados uno a uno. SHA-256 de `.pipeline.kts`:
+  `e4a754fa211a62070fc8d9cfc93125d14f332b2ec94c3fcd63fdb203d5ac8ff6`.
+- `ruff check` limpio; `ruff format --check` limpio en las 11 rutas tocadas.
+
+### Decisiones
+
+- **Instrumentar `sqlite3.connect` en vez de parchear ~10 sitios**:
+  `with sqlite3.connect` es un error sistemico, no un descuido puntual.
+  Seguro porque la suite no tiene fixtures `module`/`session` que
+  reutilicen una conexion entre tests (verificado: 0 ocurrencias).
+- **Sin `__del__` en produccion**: la conexion sigue perteneciendo a
+  quien la abre (AGENTS.md 8, R2).
+- **Ningun test afirma "0 ResourceWarning" de forma global**:
+  `gc.collect()` tambien reclama huerfanas de otros tests, asi que la
+  asercion era order-dependent. Los tests verifican lo observable por
+  test; el agregado se verifica a nivel de suite.
+
+### Blocker abierto (NO pertenece a WI-40)
+
+`sddk release plan` aborta antes de actuar con
+`VERSION LOCKSTEP ERROR: could not read .../Cargo.toml`. Este repositorio
+es Python (fuente de version: `src/skillgraph/__init__.py::__version__`
+via `[tool.hatch.version] path` en `pyproject.toml`).
+
+Descartado explicitamente: `--route local` NO lo evita (la comprobacion
+es incondicional) y no existe flag de manifiesto en `sddk release plan`.
+Es una **carencia de la herramienta, no un error de configuracion local**,
+y bloquea por igual a WI-39 y WI-40.
+
+Rechazado a proposito: (a) fabricar un `Cargo.toml` para satisfacer el
+gate — anadiria un manifiesto Rust a un proyecto Python solo para engañar
+al chequeo; (b) declarar `release.complete` de todos modos — falsearia el
+`merge-receipt` y el `release-receipt` que el gate exige.
+
+En su lugar, el ciclo enruta por `release.recover` de vuelta a Build, con
+la evidencia de fallo registrada (artifact `art-42cb1504e797-4cab7d4d`).
+`main` queda 3 commits por delante de `origin/main`, sin push.
+
+### Conocimiento negativo (util para no repetirlo)
+
+- `sddk cycle status` **sin `--cycle`** devuelve "no active cycle" aunque
+  el ciclo exista en el ledger. El lookup de snapshot esta roto: hay que
+  pasar `--cycle` explicito o leer la tabla `cycles` del ledger SQLite.
+- Los gate receipts existentes usan `actor: sddk` y `evaluator: sddk.cli`.
+  Un actor de tipo agente (`agent:jcode`) es **denegado** por el registro
+  default-deny (`ActorKindNotPermitted`), igual que `--actor agent:cli`.
+- `sddk plan roadmap status` **falla** si hay mas de un WorkItem en estado
+  Active. Por eso el item de WI-39 paso a `Done`: su codigo ya estaba
+  verificado y solo queda el release.
+- El gate global de SDDK se instala via `core.hooksPath` global
+  (`~/.config/git/sddk-hooks`), que **sobrescribe** el
+  `.git/hooks/pre-commit` del propio repo.
+- Cada commit gobernado exige `git sddk-align --ack` (alignment receipt
+  ligado a HEAD + staged tree) y `git sddk-close` (closeout del commit
+  anterior) antes del siguiente.
+- Los `revision` de `tests/uat-evidence/UAT-*.json` se regeneran como side
+  effect de ejecutar la suite; aparecen como working tree sucio al validar.
+
+### Deuda residual
+
+- Ninguna en lifecycle de test.
+- P3 (fuera de alcance): `audits/release-v0.15.0-receipt.md` y
+  `audits/release-v0.16.0-receipt.md` siguen sin `ruff format`.
+  Preexistente, no tocado.
+
+### Shas de referencia para reanudar
+
+```
+WI-40 commits:                     246bf94 (chore uat), ca96613 (fix tests)
+SDDK cycle WI-40:                  p-74299cf88f51dab9/wi-40-test-connection-lifecycle
+SDDK work item WI-40:              dace741b-ea03-44f3-9f94-d08b4a7a0beb (Done)
+SDDK cycle WI-39:                  p-74299cf88f51dab9/stored-claim-evidence-boundary
+SDDK work item WI-39:              f03d6341-2268-4f1a-bf37-5f205daca4f6 (Done)
+Artifact verify WI-40:             art-10ff79bec925-ab2ef507
+Artifact release-failure WI-40:    art-42cb1504e797-4cab7d4d
+Workspace version:                 0.16.1.dev0
+Latest tag:                        v0.16.1 -> 4cb641c
+Development head:                  ca96613 (3 commits por delante de origin/main)
+```
+
