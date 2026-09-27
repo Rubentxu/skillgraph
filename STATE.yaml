@@ -541,7 +541,7 @@ tests:
   total: 1109   # post-WI-32.4+32.5+33 (R1+R2 audit externo, 4 DTOs inmutables + SqliteUnitOfWork; 1109/1109 PASS en HEAD b42a2a8 en 184s; +31 vs v0.15.0 base 1078: +13 DTOs + 6 UoW + +12 Storage/RunController tests)
   passed: 1109
   duration_s: 184   # re-medido el 2026-09-27 11:02 con uv run pytest --no-header -q (1109 passed in 183.86s)
-  package_version: "0.16.0"   # MINOR: WI-33 introduce SqliteUnitOfWork (R2 audit externo cerrado); WI-32.4+32.5 anaden 4 DTOs inmutables (StoredRun/NodeExecution/Resource/Relation) que cierran dict[str,Any] fuga de persistencia
+  package_version: "0.16.0.dev0"   # post-v0.16.0 housekeeping: tag anotado v0.16.0 sobre commit e99df3a (release limpia); HEAD ca361d1 en trabajo entre releases
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1206,7 +1206,7 @@ release:
       nota: "R0 housekeeping (QW-A..I, 10 commits) + WI-31 cast Storage Protocol (1 commit atomico) + WI-35 docs (1 commit). MINOR por 1 BREAKING (QW-B redaction default flip) + 3 feat (QW-C Storage CM, WI-31 Storage.knowledge_repository(), QW-I docs/blueprint snapshot) + 1 fix (QW-A Anthropic retired model). 1078/1078 PASS, ruff limpio, cobertura 95.25%. Erratum v0.14.0 preservado."
     - tag: v0.16.0
       fecha: 2026-09-27
-      sha: "TBD (tag SHA a crear al taggear v0.16.0 sobre el commit de bump 0.16.0; HEAD del sprint R1+R2 es b42a2a8)"
+      sha: "e99df3a0e83972fd9f2a99fbdbe172346d3aeffa (tag SHA e99df3a0e83972fd9f2a99fbdbe172346d3aeffa sobre commit e99df3a0e83972fd9f2a99fbdbe172346d3aeffa; sprint R1+R2 HEAD base b42a2a8)"
       nota: "Sprint audit externo 974055c: WI-32.1 cast residual + WI-32.2 StoredEvent (WI-32.2 ya en v0.15.0 base 2e85a8d), WI-32.4 StoredRun/NodeExecution, WI-32.5 StoredResource/Relation, WI-33 SqliteUnitOfWork + 5 bounded-context adapters. 1109/1109 PASS, ruff limpio. 0 BREAKING. Sin WI-34 (adelgazar RunController) ni WI-35 (CLI split) por scope/riesgo."
   capacidades_entregadas:
     - H0_Blueprint_validado
