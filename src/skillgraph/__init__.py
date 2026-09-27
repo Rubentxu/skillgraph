@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.0"  # MINOR: WI-33 introduce SqliteUnitOfWork (R2 audit externo cerrado); WI-32.4+32.5 anaden 4 DTOs inmutables (StoredRun/NodeExecution/Resource/Relation) que cierran dict[str,Any] fuga de persistencia
+__version__ = "0.16.0.dev0"  # post-v0.16.0 housekeeping: tag anotado v0.16.0 sobre commit e99df3a; HEAD en trabajo entre releases
 
 from skillgraph.core.errors import (
     IdentityConflictError,
