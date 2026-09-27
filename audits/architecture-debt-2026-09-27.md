@@ -5,7 +5,7 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **48** modulos Python, **17593** LoC, **624** funciones.
+- **48** modulos Python, **17609** LoC, **625** funciones.
 - **5** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **1** funciones privadas con cc>=20 (refactor opcional).
@@ -19,7 +19,7 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 | LoC | Path |
 |----:|------|
 | 2814 | `src/skillgraph/platform/storage.py` |
-| 2232 | `src/skillgraph/cli/runner.py` |
+| 2248 | `src/skillgraph/cli/runner.py` |
 | 1393 | `src/skillgraph/runtime/runcontroller.py` |
 | 927 | `src/skillgraph/platform/ports/__init__.py` |
 | 813 | `src/skillgraph/governance/graph_expansion.py` |
@@ -53,7 +53,7 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 | 95 | `_reconcile_run_locked` | `src/skillgraph/runtime/runcontroller.py` |
 | 92 | `cmd_expansion_apply` | `src/skillgraph/cli/runner.py` |
 | 90 | `compile_handoff` | `src/skillgraph/knowledge/context_controller.py` |
-| 90 | `_resolve_run_inputs` | `src/skillgraph/cli/runner.py` |
+| 89 | `_resolve_run_inputs` | `src/skillgraph/cli/runner.py` |
 | 86 | `aggregate_file_signatures` | `src/skillgraph/knowledge/knowledge_controller.py` |
 | 85 | `compile_handoff_from_scopes` | `src/skillgraph/knowledge/file_handoff.py` |
 | 84 | `promote_candidate` | `src/skillgraph/governance/improvement.py` |
