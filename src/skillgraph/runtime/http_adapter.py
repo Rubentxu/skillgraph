@@ -102,12 +102,17 @@ def _config_from_env(provider: Provider, *, model: str | None = None) -> _Provid
 
     Anthropic: ``ANTHROPIC_API_KEY`` (+ ``ANTHROPIC_MODEL`` opcional).
     OpenAI: ``OPENAI_API_KEY`` (+ ``OPENAI_MODEL`` opcional).
-    Modelos default: ``claude-3-5-sonnet-20241022`` (Anthropic),
+    Modelos default: ``claude-sonnet-4-6`` (Anthropic; sustituye al
+    ``claude-3-5-sonnet-20241022`` retirado por Anthropic el 2025-10-28),
     ``gpt-4o-mini`` (OpenAI).
     """
     if provider == "anthropic":
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        default_model = "claude-3-5-sonnet-20241022"
+        # claude-3-5-sonnet-20241022 fue retirado por Anthropic el
+        # 2025-10-28. Migramos al modelo estable actual. Si necesitas
+        # un modelo especifico, sobreescribe via ANTHROPIC_MODEL o
+        # el parametro ``model=``.
+        default_model = "claude-sonnet-4-6"
         env_model = os.environ.get("ANTHROPIC_MODEL")
         return _ProviderConfig(
             provider="anthropic",
@@ -448,7 +453,8 @@ class HttpAgentAdapter:
 
 def _default_model(provider: Provider) -> str:
     if provider == "anthropic":
-        return "claude-3-5-sonnet-20241022"
+        # claude-3-5-sonnet-20241022 fue retirado el 2025-10-28.
+        return "claude-sonnet-4-6"
     if provider == "openai":
         return "gpt-4o-mini"
     raise ValidationError(f"provider sin modelo default: {provider!r}")

@@ -79,7 +79,7 @@ def _anthropic_response(outcome: str = "ok", result: dict | None = None) -> dict
                 "text": json.dumps({"outcome": outcome, "result": result or {}}),
             }
         ],
-        "model": "claude-3-5-sonnet-20241022",
+        "model": "claude-sonnet-4-6",
         "stop_reason": "end_turn",
     }
 
@@ -116,14 +116,12 @@ class TestAnthropicStrategy:
     def test_request_shape_contains_required_fields(self) -> None:
         from skillgraph.runtime.http_adapter import _AnthropicStrategy, _ProviderConfig
 
-        cfg = _ProviderConfig(
-            provider="anthropic", api_key="test-key", model="claude-3-5-sonnet-20241022"
-        )
+        cfg = _ProviderConfig(provider="anthropic", api_key="test-key", model="claude-sonnet-4-6")
         strat = _AnthropicStrategy(cfg)
         url, body, headers = strat.build_request("hello world")
 
         assert url == _ANTHROPIC_URL
-        assert body["model"] == "claude-3-5-sonnet-20241022"
+        assert body["model"] == "claude-sonnet-4-6"
         assert body["max_tokens"] == 1024
         assert body["messages"] == [{"role": "user", "content": "hello world"}]
         assert headers["x-api-key"] == "test-key"
@@ -134,7 +132,7 @@ class TestAnthropicStrategy:
         from skillgraph.runtime.http_adapter import _AnthropicStrategy, _ProviderConfig
 
         strat = _AnthropicStrategy(
-            _ProviderConfig(provider="anthropic", api_key="k", model="claude-3-5-sonnet-20241022")
+            _ProviderConfig(provider="anthropic", api_key="k", model="claude-sonnet-4-6")
         )
         result = strat.parse_response(_anthropic_response("ok", {"score": 0.9}))
         assert isinstance(result, AgentResult)
@@ -226,11 +224,32 @@ class TestHttpAgentAdapter:
 
     def test_default_model_anthropic(self) -> None:
         adapter = HttpAgentAdapter(provider="anthropic", api_key="k")
-        assert adapter.model == "claude-3-5-sonnet-20241022"
+        assert adapter.model == "claude-sonnet-4-6"
 
     def test_default_model_openai(self) -> None:
         adapter = HttpAgentAdapter(provider="openai", api_key="k")
         assert adapter.model == "gpt-4o-mini"
+
+    def test_default_model_anthropic_not_deprecated(self) -> None:
+        """QW-A: el default Anthropic NO debe ser un modelo retirado por
+        el proveedor. ``claude-3-5-sonnet-20241022`` fue retirado por
+        Anthropic el 2025-10-28. Si este test falla, hay que migrar
+        el default de ``_default_model()`` al modelo actual.
+        """
+        from skillgraph.runtime.http_adapter import _default_model
+
+        # Lista negra explicita de modelos retirados conocidos. Cualquier
+        # match debe bloquearse. Si Anthropic retira mas modelos, an
+        # adirlos aqui.
+        known_retired = {
+            "claude-3-5-sonnet-20241022",  # Anthropic shutdown 2025-10-28
+            "claude-3-5-sonnet-20240620",  # shutdown 2025-08-13
+            "claude-3-opus-20240229",  # shutdown 2025-07-21
+        }
+        current = _default_model("anthropic")
+        assert current not in known_retired, (
+            f"Default Anthropic {current!r} es un modelo retirado. Migrar a un modelo actual."
+        )
 
     @respx.mock
     def test_anthropic_end_to_end_success(self, client: httpx.Client) -> None:
@@ -335,7 +354,7 @@ class TestHttpAdapterEnvConfig:
         adapter = http_adapter_from_env("anthropic")
         assert adapter.provider == "anthropic"
         assert adapter.api_key == "sk-ant-test"
-        assert adapter.model == "claude-3-5-sonnet-20241022"
+        assert adapter.model == "claude-sonnet-4-6"
 
     def test_anthropic_model_override(self, monkeypatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")

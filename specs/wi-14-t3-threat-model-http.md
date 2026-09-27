@@ -37,7 +37,9 @@ residuales antes de promover WI-12/13 a release.
 
 - `api_key: str = field(repr=False)` — evita dataclass auto-repr leak.
 - `__repr__` explicito: `HttpAgentAdapter(provider='anthropic',
-  model='claude-3-5-sonnet-20241022', timeout_s=30.0, max_retries=3)`.
+  model='claude-sonnet-4-6', timeout_s=30.0, max_retries=3)`.
+  (Modelo actualizado desde `claude-3-5-sonnet-20241022`, retirado por
+  Anthropic el 2025-10-28. Ver QW-A del WI-31.)
 - NO incluye `api_key`, `base_url` (puede ser local proxy), `client`
   (httpx.Client puede contener headers).
 

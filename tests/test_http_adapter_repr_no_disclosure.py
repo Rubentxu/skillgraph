@@ -23,7 +23,7 @@ class TestHttpAdapterReprNoDisclosure:
         return HttpAgentAdapter(
             provider="anthropic",
             api_key=self.SENSITIVE_VALUE,
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-6",
         )
 
     def test_repr_does_not_contain_api_key_value(self) -> None:
