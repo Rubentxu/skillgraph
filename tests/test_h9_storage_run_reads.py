@@ -79,14 +79,18 @@ class TestLoadRun:
         ctl = RunController(runs=s, events=s, policy=s, adapter=adapter)
         run_id = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         row = s.load_run(tenant_id=TENANT, project_id=PROJECT, run_id=run_id)
-        assert isinstance(row, dict)
-        assert row["run_id"] == run_id
-        assert row["state"] == "CREATED"
-        assert row["current_node"] == "a"
+        # WI-32.4: row es ``StoredRun`` (DTO frozen), no ``dict``.
+        # El ``to_dict()`` legacy permite verificar campos sin cambiar
+        # la semantica del test.
+        d = row.to_dict()
+        assert isinstance(d, dict)
+        assert d["run_id"] == run_id
+        assert d["state"] == "CREATED"
+        assert d["current_node"] == "a"
         # plan_json se expone como string JSON, no como objeto.
-        assert isinstance(row["plan_json"], str)
+        assert isinstance(d["plan_json"], str)
         # Debe parsear como JSON valido.
-        assert "initial" in json.loads(row["plan_json"])
+        assert "initial" in json.loads(d["plan_json"])
 
     def test_raises_not_found_for_inexistent_run(
         self,
@@ -166,7 +170,7 @@ class TestListNodeExecutions:
             run_id="run-ord",
             node_name="ordered",
         )
-        ids = [r["node_execution_id"] for r in rows]
+        ids = [r.node_execution_id for r in rows]
         assert ids == ["ne-a", "ne-b", "ne-c"]
 
     def test_isolates_by_node_name(
@@ -204,8 +208,8 @@ class TestListNodeExecutions:
             run_id=run_id,
             node_name="b",
         )
-        assert [r["node_execution_id"] for r in rows_a] == ["ne-a-1"]
-        assert [r["node_execution_id"] for r in rows_b] == ["ne-b-1"]
+        assert [r.node_execution_id for r in rows_a] == ["ne-a-1"]
+        assert [r.node_execution_id for r in rows_b] == ["ne-b-1"]
 
 
 # ---------- list_executed_node_names ----------

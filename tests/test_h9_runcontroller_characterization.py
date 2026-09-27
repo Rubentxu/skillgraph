@@ -343,7 +343,7 @@ class TestT5NodeExecutionsForOrdering:
             run_id="run-order",
             node_name="ordered",
         )
-        ids = [r["node_execution_id"] for r in rows]
+        ids = [r.node_execution_id for r in rows]
         assert ids == ["ne-a", "ne-b", "ne-c"]
 
 

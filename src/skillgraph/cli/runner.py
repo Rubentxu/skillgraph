@@ -230,7 +230,7 @@ def _count_resources(storage: Storage, *, tenant_id: str, project_id: str) -> di
     rows = storage.list_resources(tenant_id=tenant_id, project_id=project_id)
     by_kind: dict[str, int] = {}
     for row in rows:
-        by_kind[row["kind"]] = by_kind.get(row["kind"], 0) + 1
+        by_kind[row.kind] = by_kind.get(row.kind, 0) + 1
     return {"total": len(rows), "by_kind": by_kind}
 
 
@@ -1238,7 +1238,7 @@ def _build_registry_for_project(
         tenant_id=tenant_id, project_id=project_id, kind="DomainPack"
     ):
         try:
-            spec = _json.loads(row.get("spec_json", "{}") or "{}")
+            spec = _json.loads(row.spec_json or "{}")
         except (ValueError, TypeError):
             spec = {}
         try:
@@ -1248,11 +1248,11 @@ def _build_registry_for_project(
                     identity=ResourceIdentity(
                         tenant_id=tenant_id,
                         project_id=project_id,
-                        namespace=row.get("namespace", "shared"),
+                        namespace=row.namespace,
                         kind="DomainPack",
-                        name=row.get("name", "?"),
+                        name=row.name,
                     ),
-                    api_version=row.get("api_version", "skillgraph.dev/v1alpha1"),
+                    api_version=row.api_version,
                     kind="DomainPack",
                     spec=spec or {},
                 ),
@@ -2022,15 +2022,12 @@ def _load_registry(project_db: Path, *, tenant_id: str, project_id: str) -> dict
     out: dict[str, str] = {}
     for r in rows:
         try:
-            spec = json.loads(r.get("spec_json", "{}") or "{}")
+            spec = json.loads(r.spec_json or "{}")
         except (ValueError, TypeError):
             continue
         caps = (spec or {}).get("capabilities", []) or []
-        ns = r.get("namespace", "?")
-        kind = r.get("kind", "?")
-        name = r.get("name", "?")
         for cap in caps:
-            out[cap] = f"{ns}:{kind}/{name}"
+            out[cap] = f"{r.namespace}:{r.kind}/{r.name}"
     return out
 
 

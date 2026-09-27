@@ -31,7 +31,13 @@ from skillgraph.knowledge.graph import (
     OutcomeTrace,
     Source,
 )
-from skillgraph.platform.ports import StoredEvent
+from skillgraph.platform.ports import (
+    StoredEvent,
+    StoredNodeExecution,
+    StoredRelation,
+    StoredResource,
+    StoredRun,
+)
 from skillgraph.resources.bricks import Brick
 
 if TYPE_CHECKING:
@@ -542,11 +548,16 @@ class Storage:
                 # Si el spec coincide, upsert idempotente (no incrementa rev).
         return uid
 
-    def get_resource(self, uid: str) -> dict[str, Any] | None:
+    def get_resource(self, uid: str) -> StoredResource | None:
+        """Devuelve el DTO de un Resource por uid.
+
+        WI-32.5: devuelve ``StoredResource`` (frozen + slots) en vez
+        de ``dict``, manteniendo la frontera de persistencia.
+        """
         row = self._conn.execute("SELECT * FROM resources WHERE uid = ?", (uid,)).fetchone()
         if row is None:
             return None
-        return dict(row)
+        return _row_to_resource(row)
 
     def list_resources(
         self,
@@ -554,14 +565,19 @@ class Storage:
         tenant_id: str,
         project_id: str,
         kind: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[StoredResource]:
+        """Lista Resources por (tenant, project) con filtro opcional de kind.
+
+        WI-32.5: devuelve ``list[StoredResource]`` en vez de
+        ``list[dict]``.
+        """
         sql = "SELECT * FROM resources WHERE tenant_id = ? AND project_id = ?"
         params: tuple[Any, ...] = (tenant_id, project_id)
         if kind is not None:
             sql += " AND api_version || '/' || kind = ? OR kind = ?"
             params = (tenant_id, project_id, kind, kind)
         rows = self._conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        return [_row_to_resource(r) for r in rows]
 
     # ----- relaciones -----
 
@@ -612,15 +628,23 @@ class Storage:
             )
         return rid
 
-    def dependencies_of(self, uid: str) -> list[dict[str, Any]]:
-        """Aristas salientes: 'qué necesita este recurso' (target)."""
-        rows = self._conn.execute("SELECT * FROM relations WHERE source_uid = ?", (uid,)).fetchall()
-        return [dict(r) for r in rows]
+    def dependencies_of(self, uid: str) -> list[StoredRelation]:
+        """Aristas salientes: 'qué necesita este recurso' (target).
 
-    def dependents_of(self, uid: str) -> list[dict[str, Any]]:
-        """Aristas entrantes: 'qué recursos apuntan a este' (source)."""
+        WI-32.5: devuelve ``list[StoredRelation]`` en vez de
+        ``list[dict]``.
+        """
+        rows = self._conn.execute("SELECT * FROM relations WHERE source_uid = ?", (uid,)).fetchall()
+        return [_row_to_relation(r) for r in rows]
+
+    def dependents_of(self, uid: str) -> list[StoredRelation]:
+        """Aristas entrantes: 'qué recursos apuntan a este' (source).
+
+        WI-32.5: devuelve ``list[StoredRelation]`` en vez de
+        ``list[dict]``.
+        """
         rows = self._conn.execute("SELECT * FROM relations WHERE target_uid = ?", (uid,)).fetchall()
-        return [dict(r) for r in rows]
+        return [_row_to_relation(r) for r in rows]
 
     # ----- H3 Slice 1: conocimiento (sources, entities, claims, etc.) -----
     #
@@ -1546,7 +1570,8 @@ class Storage:
         if limit <= 0:
             limit = 10**9  # cap practico: no necesitamos >10^9 runs
         sql = (
-            "SELECT run_id, state, current_node, created_at, updated_at "
+            "SELECT run_id, tenant_id, project_id, state, current_node, "
+            "       plan_json, created_at, updated_at "
             "FROM workflow_runs "
             "WHERE tenant_id = ? AND project_id = ?"
         )
@@ -1557,7 +1582,7 @@ class Storage:
         sql += " ORDER BY rowid DESC LIMIT ?"
         params.append(limit)
         rows = self._conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        return [_row_to_run(r) for r in rows]
 
     def get_run(
         self,
@@ -1565,23 +1590,27 @@ class Storage:
         tenant_id: str,
         project_id: str,
         run_id: str,
-    ) -> dict[str, Any]:
-        """Devuelve la fila cruda de un Run.
+    ) -> StoredRun:
+        """Devuelve el DTO de un Run.
 
         Lanza ``NotFoundError`` si no existe. API explicita para que
         `RunController.show_run` no dependa de `load_run` (que es
         la API de runtime pero tiene la misma semantica).
+
+        WI-32.4: devuelve ``StoredRun`` (frozen + slots) en vez de
+        ``dict`` mutable, evitando que ``sqlite3.Row`` escape de
+        ``platform/``.
         """
         row = self._conn.execute(
-            "SELECT run_id, state, current_node, plan_json, "
-            "       created_at, updated_at "
+            "SELECT run_id, tenant_id, project_id, state, current_node, "
+            "       plan_json, created_at, updated_at "
             "FROM workflow_runs "
             "WHERE tenant_id = ? AND project_id = ? AND run_id = ?",
             (tenant_id, project_id, run_id),
         ).fetchone()
         if row is None:
             raise NotFoundError(f"run no encontrado: {run_id}")
-        return dict(row)
+        return _row_to_run(row)
 
     def list_events_for_run(
         self,
@@ -1735,15 +1764,17 @@ class Storage:
         tenant_id: str,
         project_id: str,
         run_id: str,
-    ) -> dict[str, Any]:
-        """Carga la fila de `workflow_runs` para (tenant, project, run).
+    ) -> StoredRun:
+        """Carga el DTO de `workflow_runs` para (tenant, project, run).
 
         Lanza ``NotFoundError`` si no existe. Sustituye a la lectura
         directa sobre ``self._conn.execute(...)`` que realizaba
         ``RunController._load_run``. Es una lectura pura: no participa
         en transacciones compartidas con ``EventLog.append``.
 
-        No expone SQL al caller; la conversión de Row a dict es interna.
+        WI-32.4: devuelve ``StoredRun`` (frozen + slots) en vez de
+        ``dict``. ``RunController`` consume el DTO directamente sin
+        depender de ``sqlite3``.
         """
         row = self._conn.execute(
             """
@@ -1754,7 +1785,7 @@ class Storage:
         ).fetchone()
         if row is None:
             raise NotFoundError(f"run no encontrado: {run_id}")
-        return dict(row)
+        return _row_to_run(row)
 
     def list_node_executions(
         self,
@@ -1763,7 +1794,7 @@ class Storage:
         project_id: str,
         run_id: str,
         node_name: str,
-    ) -> list[dict[str, Any]]:
+    ) -> list[StoredNodeExecution]:
         """Lista NodeExecutions de un (run, node_name) ordenadas por
         ``started_at ASC``.
 
@@ -1771,6 +1802,9 @@ class Storage:
         ``RunController._node_executions_for``. Lectura pura:
         orden estable, sin filtrado por estado (la query del
         RunController original tampoco filtraba).
+
+        WI-32.4: devuelve ``list[StoredNodeExecution]`` en vez de
+        ``list[dict]``.
         """
         rows = self._conn.execute(
             """
@@ -1781,7 +1815,7 @@ class Storage:
             """,
             (tenant_id, project_id, run_id, node_name),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [_row_to_node_execution(r) for r in rows]
 
     def list_executed_node_names(
         self,
@@ -2485,6 +2519,90 @@ def _row_to_claim(row: sqlite3.Row, evidence_ids: list[str], json: Any) -> Claim
         extractor_version=row["extractor_version"],
         checked_at_revision=row["checked_at_revision"],
         stale=bool(row["stale"]),
+    )
+
+
+def _row_to_run(row: sqlite3.Row) -> StoredRun:
+    """Convierte una fila de ``workflow_runs`` al DTO ``StoredRun``.
+
+    WI-32.4: sustituye ``dict(row)`` por una traduccion tipada.
+    El adapter expone ``StoredRun`` (frozen + slots) en vez de dict
+    mutable, evitando que ``sqlite3.Row`` escape del modulo
+    ``platform/``.
+    """
+    return StoredRun(
+        run_id=row["run_id"],
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        state=row["state"],
+        plan_json=row["plan_json"],
+        current_node=row["current_node"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_node_execution(row: sqlite3.Row) -> StoredNodeExecution:
+    """Convierte una fila de ``node_executions`` al DTO ``StoredNodeExecution``.
+
+    WI-32.4: sustituye ``dict(row)`` por una traduccion tipada.
+    ``StoredNodeExecution`` es frozen + slots y refleja 1:1 la tabla.
+    """
+    return StoredNodeExecution(
+        node_execution_id=row["node_execution_id"],
+        run_id=row["run_id"],
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        node_name=row["node_name"],
+        attempt=row["attempt"],
+        state=row["state"],
+        outcome=row["outcome"],
+        context_hash=row["context_hash"],
+        handoff_json=row["handoff_json"],
+        result_json=row["result_json"],
+        error=row["error"],
+        started_at=row["started_at"],
+        finished_at=row["finished_at"],
+    )
+
+
+def _row_to_resource(row: sqlite3.Row) -> StoredResource:
+    """Convierte una fila de ``resources`` al DTO ``StoredResource``.
+
+    WI-32.5: sustituye ``dict(row)`` por una traduccion tipada. El
+    adapter expone ``StoredResource`` (frozen + slots) en vez de
+    ``dict``, manteniendo la frontera de persistencia.
+    """
+    return StoredResource(
+        uid=row["uid"],
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        api_version=row["api_version"],
+        kind=row["kind"],
+        namespace=row["namespace"],
+        name=row["name"],
+        resource_version=row["resource_version"],
+        generation=row["generation"],
+        spec_json=row["spec_json"],
+        status_json=row["status_json"],
+        created_at=row["created_at"],
+    )
+
+
+def _row_to_relation(row: sqlite3.Row) -> StoredRelation:
+    """Convierte una fila de ``relations`` al DTO ``StoredRelation``.
+
+    WI-32.5: sustituye ``dict(row)`` por traduccion tipada.
+    ``StoredRelation`` es frozen + slots y refleja 1:1 la tabla.
+    """
+    return StoredRelation(
+        uid=row["uid"],
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        source_uid=row["source_uid"],
+        target_uid=row["target_uid"],
+        kind=row["kind"],
+        properties_json=row["properties_json"],
     )
 
 

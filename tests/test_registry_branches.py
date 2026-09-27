@@ -197,7 +197,8 @@ class TestStorageRelationProperties:
             assert len(deps) == 1
             import json as _json
 
-            props = _json.loads(deps[0]["properties_json"])
+            # WI-32.5: ``deps[0]`` es ``StoredRelation`` (DTO frozen).
+            props = _json.loads(deps[0].properties_json or "{}")
             assert props == {"weight": 0.7, "note": "test"}
         finally:
             s.close()

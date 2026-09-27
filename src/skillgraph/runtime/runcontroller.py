@@ -35,7 +35,14 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from skillgraph.core.errors import SkillGraphError, ValidationError
 from skillgraph.core.runtime_types import RunState, is_terminal_run_state
-from skillgraph.platform.ports import EventStore, KnowledgeRepository, PolicyStore, RunRepository
+from skillgraph.platform.ports import (
+    EventStore,
+    KnowledgeRepository,
+    PolicyStore,
+    RunRepository,
+    StoredNodeExecution,
+    StoredRun,
+)
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 from skillgraph.runtime.agent import AgentAdapter, AgentResult
 from skillgraph.runtime.engine import EventBuilder, EventLog, RuntimeEvent
@@ -417,8 +424,8 @@ class RunController:
     ) -> RunSnapshot:
         """Cuerpo de reconcile_run ejecutado dentro del lock."""
         run = self._load_run(tenant_id, project_id, run_id)
-        plan = plan_from_json(run["plan_json"])
-        state = run["state"]
+        plan = plan_from_json(run.plan_json)
+        state = run.state
 
         # UAT-06: si un NodeExecution quedo RUNNING sin finished_at,
         # lo devolvemos a READY (interrupcion).
@@ -462,9 +469,9 @@ class RunController:
 
             # Si el nodo completado no tiene sucesor, el run termina.
             last = self._latest_node_execution(tenant_id, project_id, run_id, node_name)
-            if last is None or last["state"] != "SUCCEEDED":
+            if last is None or last.state != "SUCCEEDED":
                 continue
-            next_name = plan.successors(node_name, last["outcome"] or "")
+            next_name = plan.successors(node_name, last.outcome or "")
             if next_name is None:
                 break
             # Avanzar el puntero current_node al siguiente.
@@ -478,7 +485,7 @@ class RunController:
         # Si frontier vacia -> terminamos.
         # Caso H4 budget exhausted: current con self-loop y max_visits
         # agotado -> FAILED. Caso DAG normal -> COMPLETED.
-        prev_current = self._load_run(tenant_id, project_id, run_id)["current_node"]
+        prev_current = self._load_run(tenant_id, project_id, run_id).current_node
         new_frontier = self._calculate_frontier(tenant_id, project_id, run_id, plan)
         if not new_frontier:
             if self._is_budget_exhausted(plan, tenant_id, project_id, run_id, prev_current):
@@ -647,18 +654,18 @@ class RunController:
             executed = self._executed_node_names(
                 tenant_id=tenant_id,
                 project_id=project_id,
-                run_id=row["run_id"],
+                run_id=row.run_id,
             )
             snapshots.append(
                 RunSnapshot(
-                    run_id=row["run_id"],
-                    state=row["state"],  # type: ignore[arg-type]
-                    current_node=row["current_node"],
+                    run_id=row.run_id,
+                    state=row.state,  # type: ignore[arg-type]
+                    current_node=row.current_node,
                     executed_nodes=executed,
                     events_emitted=self._count_events(
                         tenant_id=tenant_id,
                         project_id=project_id,
-                        run_id=row["run_id"],
+                        run_id=row.run_id,
                     ),
                 )
             )
@@ -687,9 +694,9 @@ class RunController:
             run_id=run_id,
         )
         return RunSnapshot(
-            run_id=row["run_id"],
-            state=row["state"],  # type: ignore[arg-type]
-            current_node=row["current_node"],
+            run_id=row.run_id,
+            state=row.state,  # type: ignore[arg-type]
+            current_node=row.current_node,
             executed_nodes=executed,
             events_emitted=self._count_events(
                 tenant_id=tenant_id,
@@ -794,7 +801,7 @@ class RunController:
             project_id=project_id,
             run_id=run_id,
         )
-        state = run["state"]
+        state = run.state
         if is_terminal_run_state(state):
             raise ValidationError(f"Run {run_id!r} ya es terminal ({state}); no se puede cancelar")
         # H9-run-lifecycle: la transicion a CANCELLED y la emision del
@@ -845,8 +852,12 @@ class RunController:
 
     # ---------- internals ----------
 
-    def _load_run(self, tenant_id: str, project_id: str, run_id: str) -> dict[str, Any]:
+    def _load_run(self, tenant_id: str, project_id: str, run_id: str) -> StoredRun:
         # Lectura pura: delega en `Storage.load_run` (H9-BSlice3-S1).
+        # WI-32.4: devuelve ``StoredRun`` (DTO inmutable) en vez de
+        # ``dict``. Los consumidores internos del RunController usan
+        # atributos (no ``["key"]``), eliminando el ``dict[str, Any]``
+        # que el audit externo senalo como fuga de persistencia.
         return self._runs.load_run(tenant_id=tenant_id, project_id=project_id, run_id=run_id)
 
     def _set_run_state(
@@ -904,7 +915,7 @@ class RunController:
           recien creado.
         """
         run_row = self._load_run(tenant_id, project_id, run_id)
-        current = run_row["current_node"]
+        current = run_row.current_node
         if current is None:
             return []
 
@@ -916,14 +927,14 @@ class RunController:
         # H4: si last es SUCCEEDED, es ciclo solo si el plan declara una
         # auto-transicion desde current hacia si mismo. Sin self-loop
         # declarada, es nodo terminal post-exito: devolver [].
-        if last["state"] == "SUCCEEDED":
+        if last.state == "SUCCEEDED":
             node = plan.node(current)
             if not has_self_loop(plan, current):
                 return []
             if node.max_visits is not None and len(existing) >= node.max_visits:
                 return []
             return [current]
-        if last["state"] in {"SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"}:
+        if last.state in {"SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"}:
             return []
         return [current]
 
@@ -946,7 +957,7 @@ class RunController:
             tenant_id,
             project_id,
             run_id,
-            prev_current=prev["current_node"],
+            prev_current=prev.current_node,
         ):
             return False
 
@@ -954,7 +965,7 @@ class RunController:
         # self-loop en este nodo, no hacemos nada (DAG lineal).
         # H4: en self-loop, debemos re-ejecutar para gastar el budget.
         existing = self._node_executions_for(tenant_id, project_id, run_id, node_name)
-        if existing and existing[-1]["state"] == "SUCCEEDED" and not has_self_loop(plan, node_name):
+        if existing and existing[-1].state == "SUCCEEDED" and not has_self_loop(plan, node_name):
             return True
 
         attempt = len(existing) + 1
@@ -1316,9 +1327,11 @@ class RunController:
 
     def _node_executions_for(
         self, tenant_id: str, project_id: str, run_id: str, node_name: str
-    ) -> list[dict[str, Any]]:
+    ) -> list[StoredNodeExecution]:
         # Lectura pura: delega en `Storage.list_node_executions`
         # (H9-BSlice3-S1). Orden por `started_at ASC` estable.
+        # WI-32.4: devuelve ``list[StoredNodeExecution]`` (DTOs frozen)
+        # en vez de ``list[dict]``.
         return self._runs.list_node_executions(
             tenant_id=tenant_id,
             project_id=project_id,
@@ -1328,7 +1341,7 @@ class RunController:
 
     def _latest_node_execution(
         self, tenant_id: str, project_id: str, run_id: str, node_name: str
-    ) -> dict[str, Any] | None:
+    ) -> StoredNodeExecution | None:
         rows = self._node_executions_for(tenant_id, project_id, run_id, node_name)
         return rows[-1] if rows else None
 
@@ -1353,8 +1366,8 @@ class RunController:
         run = self._load_run(tenant_id, project_id, run_id)
         return RunSnapshot(
             run_id=run_id,
-            state=run["state"],
-            current_node=run["current_node"],
+            state=run.state,
+            current_node=run.current_node,
             executed_nodes=self._executed_node_names(tenant_id, project_id, run_id),
             events_emitted=len(
                 self._runs.list_events_for_run(

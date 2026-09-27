@@ -105,8 +105,181 @@ class StoredEvent:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class StoredRun:
+    """DTO inmutable de un Run persistido en ``workflow_runs``.
+
+    WI-32.4: sustituye ``dict[str, Any]`` y ``sqlite3.Row`` en el
+    contrato de :class:`RunRepository`. Los 8 campos reflejan 1:1
+    la tabla ``workflow_runs`` (``sequence`` autogenerado, no
+    almacenado: ``run_id`` es PK textual).
+
+    ``current_node`` es opcional: ``None`` para runs en estado
+    ``CREATED`` que aún no han avanzado.
+
+    ``to_dict()`` preserva la API legacy (``RunController.show_run``
+    y ``list_runs`` exponen ``list[dict]`` historicamente).
+    """
+
+    run_id: str
+    tenant_id: str
+    project_id: str
+    state: str
+    plan_json: str
+    current_node: str | None
+    created_at: str
+    updated_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa a dict preservando todas las columnas.
+
+        Compatibilidad con consumers (``RunController.show_run``,
+        tests historicos) que esperan API dict-based.
+        """
+        return {
+            "run_id": self.run_id,
+            "tenant_id": self.tenant_id,
+            "project_id": self.project_id,
+            "state": self.state,
+            "plan_json": self.plan_json,
+            "current_node": self.current_node,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class StoredNodeExecution:
+    """DTO inmutable de una NodeExecution persistida en ``node_executions``.
+
+    WI-32.4: sustituye ``dict[str, Any]`` en el contrato de
+    :class:`RunRepository`. Los 13 campos son 1:1 con la tabla
+    ``node_executions``.
+
+    ``outcome``, ``context_hash``, ``handoff_json``, ``result_json``,
+    ``error``, ``started_at``, ``finished_at`` son opcionales: una fila
+    recien creada via ``start_node_execution`` solo tiene ``state='RUNNING'``
+    y los timestamps inicializados.
+    """
+
+    node_execution_id: str
+    run_id: str
+    tenant_id: str
+    project_id: str
+    node_name: str
+    attempt: int
+    state: str
+    outcome: str | None
+    context_hash: str | None
+    handoff_json: str | None
+    result_json: str | None
+    error: str | None
+    started_at: str | None
+    finished_at: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa a dict preservando todas las columnas."""
+        return {
+            "node_execution_id": self.node_execution_id,
+            "run_id": self.run_id,
+            "tenant_id": self.tenant_id,
+            "project_id": self.project_id,
+            "node_name": self.node_name,
+            "attempt": self.attempt,
+            "state": self.state,
+            "outcome": self.outcome,
+            "context_hash": self.context_hash,
+            "handoff_json": self.handoff_json,
+            "result_json": self.result_json,
+            "error": self.error,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class StoredResource:
+    """DTO inmutable de un Resource persistido en ``resources``.
+
+    WI-32.5: sustituye ``dict[str, Any]`` y ``sqlite3.Row`` en el
+    contrato de :class:`KnowledgeRepository` para ``get_resource``
+    y ``list_resources``. Los 12 campos son 1:1 con la tabla.
+
+    ``spec_json`` y ``status_json`` mantienen la convencion JSON-as-text
+    del resto del proyecto: el adapter (``Storage``) deserializa a
+    ``dict`` solo en la capa de uso (registry); el DTO expone el
+    texto crudo preservando la frontera de persistencia.
+    """
+
+    uid: str
+    tenant_id: str
+    project_id: str
+    api_version: str
+    kind: str
+    namespace: str
+    name: str
+    resource_version: int
+    generation: int
+    spec_json: str
+    status_json: str
+    created_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa a dict preservando todas las columnas."""
+        return {
+            "uid": self.uid,
+            "tenant_id": self.tenant_id,
+            "project_id": self.project_id,
+            "api_version": self.api_version,
+            "kind": self.kind,
+            "namespace": self.namespace,
+            "name": self.name,
+            "resource_version": self.resource_version,
+            "generation": self.generation,
+            "spec_json": self.spec_json,
+            "status_json": self.status_json,
+            "created_at": self.created_at,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class StoredRelation:
+    """DTO inmutable de una Relation (arista) entre resources.
+
+    WI-32.5: sustituye ``dict[str, Any]`` en ``dependencies_of`` y
+    ``dependents_of``. Los 7 campos son 1:1 con la tabla ``relations``.
+
+    ``properties_json`` es opcional (``None`` permitido por defecto
+    via ``DEFAULT '{}'``): ``to_dict()`` lo serializa tal cual.
+    """
+
+    uid: str
+    tenant_id: str
+    project_id: str
+    source_uid: str
+    target_uid: str
+    kind: str
+    properties_json: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa a dict preservando todas las columnas."""
+        return {
+            "uid": self.uid,
+            "tenant_id": self.tenant_id,
+            "project_id": self.project_id,
+            "source_uid": self.source_uid,
+            "target_uid": self.target_uid,
+            "kind": self.kind,
+            "properties_json": self.properties_json,
+        }
+
+
 __all__ = [
     "StoredEvent",
+    "StoredNodeExecution",
+    "StoredRelation",
+    "StoredResource",
+    "StoredRun",
 ]
 
 # ---------------------------------------------------------------------------
@@ -134,19 +307,19 @@ class RunRepository(Protocol):
 
     def list_runs(
         self, *, tenant_id: str, project_id: str, state: str | None = None, limit: int = 50
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[StoredRun]: ...
 
-    def get_run(self, *, tenant_id: str, project_id: str, run_id: str) -> dict[str, Any] | None: ...
+    def get_run(self, *, tenant_id: str, project_id: str, run_id: str) -> StoredRun: ...
 
     def list_events_for_run(
         self, *, tenant_id: str, project_id: str, run_id: str
     ) -> list[StoredEvent]: ...
 
-    def load_run(self, *, tenant_id: str, project_id: str, run_id: str) -> dict[str, Any]: ...
+    def load_run(self, *, tenant_id: str, project_id: str, run_id: str) -> StoredRun: ...
 
     def list_node_executions(
         self, *, tenant_id: str, project_id: str, run_id: str, node_name: str
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[StoredNodeExecution]: ...
 
     def list_executed_node_names(
         self, *, tenant_id: str, project_id: str, run_id: str
@@ -398,14 +571,14 @@ class KnowledgeRepository(Protocol):
     ) -> None: ...
     # Recursos / relaciones (cubren la capability 'resources').
     def upsert_resource(self, brick: Any) -> str: ...
-    def get_resource(self, uid: str) -> dict[str, Any] | None: ...
+    def get_resource(self, uid: str) -> StoredResource | None: ...
     def list_resources(
         self,
         *,
         tenant_id: str,
         project_id: str,
         kind: str | None = None,
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[StoredResource]: ...
     def add_relation(
         self,
         *,
@@ -416,8 +589,8 @@ class KnowledgeRepository(Protocol):
         kind: str,
         properties: dict[str, Any] | None = None,
     ) -> str: ...
-    def dependencies_of(self, uid: str) -> list[dict[str, Any]]: ...
-    def dependents_of(self, uid: str) -> list[dict[str, Any]]: ...
+    def dependencies_of(self, uid: str) -> list[StoredRelation]: ...
+    def dependents_of(self, uid: str) -> list[StoredRelation]: ...
 
     # --- WI-02b: puertos de mantenimiento (invalidation, refresh) ---
 

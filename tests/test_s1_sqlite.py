@@ -66,8 +66,8 @@ class TestStorageRoundTrip:
             uid = s.upsert_resource(brick)
             got = s.get_resource(uid)
             assert got is not None
-            assert got["kind"] == "DecisionNode"
-            assert json.loads(got["spec_json"])["ctx_recipe_ref"] == ("software.implementation")
+            assert got.kind == "DecisionNode"
+            assert json.loads(got.spec_json)["ctx_recipe_ref"] == ("software.implementation")
         finally:
             s.close()
 
