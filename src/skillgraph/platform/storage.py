@@ -1650,7 +1650,7 @@ class Storage:
         project_id: str,
         state: str | None = None,
         limit: int = 50,
-    ) -> list[dict[str, Any]]:
+    ) -> list[StoredRun]:
         """Lista Runs de un (tenant, project) ordenados por mas reciente.
 
         Args:
@@ -1665,6 +1665,10 @@ class Storage:
         empatan.
 
         Lectura pura: no participa en transacciones compartidas.
+
+        WI-32.4: devuelve ``list[StoredRun]`` (frozen + slots) en
+        vez de ``list[dict[str, Any]]``, evitando que ``sqlite3.Row``
+        escape de ``platform/``.
         """
         if limit <= 0:
             limit = 10**9  # cap practico: no necesitamos >10^9 runs
