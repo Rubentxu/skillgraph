@@ -130,3 +130,57 @@ class TestEventReconstruction:
         event_log.append(ev)
         out = event_log.events_for_run(tenant_id="t", project_id="p", run_id="r-1")[0]
         assert out["payload"] == payload
+
+
+class TestEventKindSingleSource:
+    """QW-D: ``EVENT_KINDS`` debe venir de una sola fuente.
+
+    Si ``runtime.engine.EVENT_KINDS`` y
+    ``core.runtime_types.EVENT_KINDS`` divergen, este test falla.
+    """
+
+    def test_engine_event_kinds_matches_runtime_types(self) -> None:
+        from skillgraph.core.runtime_types import EVENT_KINDS as RT_KINDS
+        from skillgraph.runtime.engine import EVENT_KINDS as ENGINE_KINDS
+
+        assert ENGINE_KINDS == RT_KINDS, (
+            "EVENT_KINDS divergente entre runtime.engine y "
+            "core.runtime_types. La fuente canonica es "
+            "core.runtime_types.EventType (Literal)."
+        )
+
+    def test_event_kinds_derived_from_event_type_literal(self) -> None:
+        from typing import get_args
+
+        from skillgraph.core.runtime_types import EVENT_KINDS, EventType
+
+        assert EVENT_KINDS == frozenset(get_args(EventType)), (
+            "EVENT_KINDS no se deriva de EventType. "
+            "Anade el valor al Literal EventType en runtime_types.py."
+        )
+
+    def test_event_kinds_includes_runtime_emitted(self) -> None:
+        """QW-D: el set incluye los eventos que el runtime realmente emite.
+
+        Si engine.py emite un evento NO listado en EventType Literal,
+        este test falla y obliga a actualizar el Literal.
+        """
+        from skillgraph.core.runtime_types import EVENT_KINDS
+
+        required = {
+            "RunCreated",
+            "NodeScheduled",
+            "HandoffCreated",
+            "NodeStarted",
+            "NodeCompleted",
+            "NodeFailed",
+            "EvidenceProduced",
+            "KnowledgeInvalidated",
+            "KnowledgeRefreshed",
+            "RunCompleted",
+            "BudgetExceeded",
+        }
+        missing = required - EVENT_KINDS
+        assert not missing, (
+            f"Eventos emitidos por runtime no estan en EVENT_KINDS: {missing}"
+        )

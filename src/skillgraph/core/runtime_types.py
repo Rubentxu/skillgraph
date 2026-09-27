@@ -8,19 +8,17 @@ Estos tipos son **ADT cerradas**: anadir un valor nuevo es un cambio
 de contrato del blueprint, no un detalle local. Si necesitas un valor
 nuevo, abre una ADR primero.
 
-Por que existe este modulo aparte:
-- `runtime.py` ya tiene EVENT_KINDS como frozenset, pero NO como
-  Literal (porque al ser un frozen dataclass necesita el valor como
-  tipo de campo). Aqui declaramos las versiones Literal que pueden
-  usar las firmas publicas, y los frozenset que necesitan las
-  validaciones runtime.
-- Centralizar las constantes evita divergencia entre el snapshot,
-  el controller y la CLI.
+QW-D (WI-31, 2026-09-27): ``EventType`` Literal y ``EVENT_KINDS``
+frozenset eran DOS conjuntos con interseccion de 3 valores. Ahora
+hay una sola fuente: ``EventType`` Literal. ``EVENT_KINDS`` se deriva
+de el via ``typing.get_args()``. El antiguo modulo ``runtime.engine``
+define ``EVENT_KINDS`` por compat historica pero importa ``EventType``
+de aqui; cualquier valor nuevo debe declararse en ``EventType``.
 """
 
 from __future__ import annotations
 
-from typing import Final, Literal, NewType
+from typing import Final, Literal, NewType, get_args
 
 # --- Tipos suma (ADT cerradas) -------------------------------------------
 
@@ -84,14 +82,42 @@ RuleRef = Literal["max_lines_per_function", "max_complexity", "naming_convention
 EventType = Literal[
     "RunCreated",
     "RunStarted",
-    "NodeStarted",
-    "NodeFinished",
+    "RunCompleted",
     "RunFinished",
     "RunFailed",
+    "NodeScheduled",
+    "HandoffCreated",
+    "NodeStarted",
+    "NodeFinished",
+    "NodeCompleted",
+    "NodeFailed",
+    "EvidenceProduced",
     "KnowledgeInvalidated",
     "KnowledgeRefreshed",
+    "ProblemDiscovered",
+    "GraphExpansionProposed",
+    "GraphExpansionAccepted",
+    "GraphExpansionRejected",
+    "BudgetExceeded",
 ]
-"""Tipos de evento que pueden aparecer en `runtime_events` (H3 + slice 4)."""
+"""Tipos de evento que pueden aparecer en `runtime_events`.
+
+QW-D: union canonica de los antiguos ``EventType`` (8 valores) y
+``runtime.engine.EVENT_KINDS`` (14 valores). Las dos colecciones
+estaban desincronizadas (solo 3 comunes: RunCreated, NodeStarted,
+KnowledgeInvalidated). Ahora hay una sola fuente. ``EVENT_KINDS`` se
+deriva de este Literal via ``get_args()``.
+
+Si anades un evento nuevo, declaralo aqui y un ADR con la justificacion.
+"""
+
+#: Conjunto canonico derivado del Literal EventType.
+#: Cualquier ``event_kind`` fuera de este set falla validacion
+#: (``RuntimeEvent.__post_init__``).
+EVENT_KINDS: Final[frozenset[str]] = frozenset(get_args(EventType))
+"""Conjunto derivado: ``frozenset(get_args(EventType))``. Importado por
+``runtime.engine`` para la validacion runtime. No redefinir en otros
+modulos: una sola fuente de verdad (QW-D)."""
 
 # --- NewType: evita confusion entre strings ------------------------------
 # Un NodeName NO es un Outcome, aunque ambos sean str. Los NewType

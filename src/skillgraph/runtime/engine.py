@@ -21,29 +21,17 @@ from datetime import UTC, datetime
 from typing import Any
 
 from skillgraph.core.errors import IdempotencyError, IntegrityError, ValidationError
+from skillgraph.core.runtime_types import EVENT_KINDS
 from skillgraph.platform.ports import EventStore
 from skillgraph.runtime.redaction import redact_payload
 
 SCHEMA_VERSION = 1
 
-EVENT_KINDS = frozenset(
-    {
-        "RunCreated",
-        "NodeScheduled",
-        "HandoffCreated",
-        "NodeStarted",
-        "NodeCompleted",
-        "NodeFailed",
-        "EvidenceProduced",
-        "KnowledgeInvalidated",
-        "ProblemDiscovered",
-        "GraphExpansionProposed",
-        "GraphExpansionAccepted",
-        "GraphExpansionRejected",
-        "RunCompleted",
-        "BudgetExceeded",
-    }
-)
+# QW-D (WI-31, 2026-09-27): ``EVENT_KINDS`` se importa desde
+# ``skillgraph.core.runtime_types``. La unica fuente de verdad es el
+# Literal ``EventType``; ``EVENT_KINDS`` se deriva de ``get_args()``.
+# Si necesitas anadir un evento nuevo, declaralo en ``EventType``
+# (en runtime_types.py) y un ADR con la justificacion del contrato.
 
 
 @dataclass(frozen=True, slots=True)
