@@ -147,9 +147,15 @@ TERMINAL_NODE_STATES: Final[frozenset[str]] = frozenset(
 )
 
 #: Conjunto canonico de kinds de fuente.
-SOURCE_KINDS: Final[frozenset[str]] = frozenset(
-    {"git_commit", "git_tree", "local_file", "external_doc"}
-)
+SOURCE_KINDS: Final[frozenset[str]] = frozenset(get_args(SourceKind))
+"""Conjunto derivado: ``frozenset(get_args(SourceKind))`` (QW-E).
+
+Antes era un frozenset declarado a mano con 4 valores; el Literal
+``SourceKind`` tenia 5 (``skill_pack`` incluido). Validacion runtime
+rechazaba ``skill_pack`` por la divergencia.
+
+Cualquier ``source_kind`` fuera de este set falla validacion.
+"""
 
 #: Conjunto canonico de predicados de Claim (H3).
 CLAIM_PREDICATES: Final[frozenset[str]] = frozenset(

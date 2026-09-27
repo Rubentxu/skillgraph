@@ -184,3 +184,28 @@ class TestEventKindSingleSource:
         assert not missing, (
             f"Eventos emitidos por runtime no estan en EVENT_KINDS: {missing}"
         )
+
+
+class TestSourceKindSingleSource:
+    """QW-E: ``SOURCE_KINDS`` debe venir de una sola fuente.
+
+    Si ``SOURCE_KINDS`` no coincide con el Literal ``SourceKind``,
+    alguien esta manteniendo un frozenset paralelo.
+    """
+
+    def test_source_kinds_derived_from_source_kind_literal(self) -> None:
+        from typing import get_args
+
+        from skillgraph.core.runtime_types import SOURCE_KINDS, SourceKind
+
+        assert SOURCE_KINDS == frozenset(get_args(SourceKind)), (
+            "SOURCE_KINDS no se deriva de SourceKind Literal."
+        )
+
+    def test_source_kinds_includes_skill_pack(self) -> None:
+        """QW-E: ``skill_pack`` es parte del Literal pero antes faltaba."""
+        from skillgraph.core.runtime_types import SOURCE_KINDS
+
+        assert "skill_pack" in SOURCE_KINDS, (
+            "SOURCE_KINDS no incluye 'skill_pack' — divergencia del Literal."
+        )
