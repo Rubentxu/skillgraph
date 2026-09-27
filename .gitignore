@@ -42,5 +42,7 @@ external/inputs/
 audits/*-audit-bundle.tar.gz
 .atl/
 .tool-versions
-.pipeline.kts
+# AGENTS.md exige que .pipeline.kts este VERSIONADO en la raiz: es el
+# gate de CI local canonico. Ignorarlo dejaba la verificacion fuera del
+# control de versiones. Solo se ignoran sus artefactos de ejecucion.
 .pipelinek/
