@@ -20,7 +20,11 @@ dist/
 .skillgraph/
 
 # Documentación input del blueprint (se conserva en external/, fuera del repo)
-docs/
+# Excepción: docs/blueprint/ SI se versiona (snapshot del blueprint que el
+# codigo puede referenciar de forma estable; ver tests/test_cli_uat.py).
+docs/*
+!docs/blueprint/
+!docs/blueprint/**
 
 # Entradas externas no versionadas (blueprint original, generador, etc.)
 external/
