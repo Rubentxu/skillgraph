@@ -171,3 +171,154 @@ def test_main_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "Auditoria UAT de SkillGraph" in out
     assert "--write" in out
+
+
+# ---------------------------------------------------------------------------
+# QW-H: UAT-08/09 deben usar la evidencia E2E, no un stub BLOCKED.
+# ---------------------------------------------------------------------------
+
+
+class TestUat08Uat09DelegatesToE2E:
+    """Comportamiento nuevo (QW-H):
+
+    - Si el test E2E ``test_h4_expansion_cli.py`` escribio evidencia
+      PASS, ``uat_08/09()`` la devuelve tal cual.
+    - Si no, devuelve BLOCKED con referencia al test que la debe generar.
+    """
+
+    def test_uat_08_returns_existing_pass_evidence_when_present(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Si UAT-08.json existe con status PASS, uat_08 lo devuelve."""
+        import uat_audit as _ua  # noqa: E402
+
+        fake_dir = tmp_path / "tests" / "uat-evidence"
+        fake_dir.mkdir(parents=True)
+        fake_dir.joinpath("UAT-08.json").write_text(
+            _ua.json.dumps(
+                {
+                    "uat_id": "UAT-08",
+                    "revision": "deadbeef" * 5,
+                    "timestamp": "2026-09-23T11:00:00Z",
+                    "scenario": "scenario X",
+                    "expected": "expected X",
+                    "observed": "observed X",
+                    "steps": [],
+                    "artifacts": [],
+                    "status": "PASS",
+                    "notes": "fake evidencia",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        # uat_08 -> uats_blocked_gap -> _git_rev (subprocess git rev-parse).
+        monkeypatch.setattr(_ua, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(_ua, "_git_rev", lambda: "deadbeef" * 5)
+        monkeypatch.setattr(_ua, "_now", lambda: "2026-09-27T08:00:00Z")
+
+        ev = _ua.uat_08()
+        assert ev.observed == "observed X"
+        assert ev.uat_id == "UAT-08"
+
+    def test_uat_09_returns_existing_pass_evidence_when_present(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import uat_audit as _ua  # noqa: E402
+
+        fake_dir = tmp_path / "tests" / "uat-evidence"
+        fake_dir.mkdir(parents=True)
+        fake_dir.joinpath("UAT-09.json").write_text(
+            _ua.json.dumps(
+                {
+                    "uat_id": "UAT-09",
+                    "revision": "deadbeef" * 5,
+                    "timestamp": "2026-09-23T11:00:00Z",
+                    "scenario": "scenario Y",
+                    "expected": "expected Y",
+                    "observed": "observed Y",
+                    "steps": [],
+                    "artifacts": [],
+                    "status": "PASS",
+                    "notes": "fake evidencia",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(_ua, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(_ua, "_git_rev", lambda: "deadbeef" * 5)
+        monkeypatch.setattr(_ua, "_now", lambda: "2026-09-27T08:00:00Z")
+
+        ev = _ua.uat_09()
+        assert ev.status == "PASS"
+        assert ev.observed == "observed Y"
+
+    def test_uat_08_returns_blocked_when_no_evidence(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Sin evidencia en disco, devuelve BLOCKED con nota honesta."""
+        import uat_audit as _ua  # noqa: E402
+
+        fake_dir = tmp_path / "tests" / "uat-evidence"
+        fake_dir.mkdir(parents=True)
+        # No UAT-08.json.
+
+        monkeypatch.setattr(_ua, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(_ua, "_git_rev", lambda: "deadbeef" * 5)
+        monkeypatch.setattr(_ua, "_now", lambda: "2026-09-27T08:00:00Z")
+
+        ev = _ua.uat_08()
+        assert ev.status == "BLOCKED"
+        assert "test_h4_expansion_cli.py" in ev.notes
+
+    def test_uat_09_returns_blocked_when_no_evidence(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import uat_audit as _ua  # noqa: E402
+
+        fake_dir = tmp_path / "tests" / "uat-evidence"
+        fake_dir.mkdir(parents=True)
+
+        monkeypatch.setattr(_ua, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(_ua, "_git_rev", lambda: "deadbeef" * 5)
+        monkeypatch.setattr(_ua, "_now", lambda: "2026-09-27T08:00:00Z")
+
+        ev = _ua.uat_09()
+        assert ev.status == "BLOCKED"
+        assert "test_h4_expansion_cli.py" in ev.notes
+
+    def test_uat_08_returns_blocked_when_evidence_is_not_pass(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Si el JSON existe pero NO es PASS (p.ej. cadena vieja), vuelve a BLOCKED."""
+        import uat_audit as _ua  # noqa: E402
+
+        fake_dir = tmp_path / "tests" / "uat-evidence"
+        fake_dir.mkdir(parents=True)
+        fake_dir.joinpath("UAT-08.json").write_text(
+            _ua.json.dumps(
+                {
+                    "uat_id": "UAT-08",
+                    "revision": "x",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "scenario": "s",
+                    "expected": "e",
+                    "observed": "stale (PASS pre-QW-H)",
+                    "steps": [],
+                    "artifacts": [],
+                    "status": "BLOCKED",
+                    "notes": "viejo",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(_ua, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(_ua, "_git_rev", lambda: "deadbeef" * 5)
+        monkeypatch.setattr(_ua, "_now", lambda: "2026-09-27T08:00:00Z")
+
+        ev = _ua.uat_08()
+        # Como ya es BLOCKED, no la aceptamos: regeneramos notas honestas.
+        assert ev.status == "BLOCKED"
+        assert "test_h4_expansion_cli.py" in ev.notes

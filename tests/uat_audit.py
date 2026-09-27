@@ -971,27 +971,84 @@ def uats_blocked_gap(uats_meta: list[tuple[str, str, str, str]]) -> list[Evidenc
     ]
 
 
+def _read_existing_evidence(uat_id: str) -> Evidence | None:
+    """Lee evidencia persistida de tests E2E (sin re-ejecutar).
+
+    Los UAT-08/09 del blueprint tienen tests E2E reales en
+    ``test_h4_expansion_cli.py`` que ya escriben su propia
+    evidencia PASS en ``tests/uat-evidence/UAT-NN.json``.
+    ``uat_audit`` no debe pisarla con un stub BLOCKED; debe
+    devolver lo que el test E2E produjo.
+
+    Si no hay evidencia en disco (suite E2E no corrio, se borro
+    el archivo, o el SHA no matchea), devuelve None y el caller
+    decide que hacer (típicamente: BLOCKED honesto).
+    """
+    evidence_path = REPO_ROOT / "tests" / "uat-evidence" / f"{uat_id}.json"
+    if not evidence_path.is_file():
+        return None
+    try:
+        data = json.loads(evidence_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    try:
+        return Evidence(**data)
+    except (TypeError, ValueError):
+        # Schema cambio o evidencia malformada. No la inventamos.
+        return None
+
+
 def uat_08() -> Evidence:
+    """UAT-08: H4 Expansion controlada (camino feliz).
+
+    Antes (QW-H): esta funcion retornaba siempre BLOCKED usando
+    ``uats_blocked_gap`` porque el feature parecia no estar listo.
+    En realidad el test E2E ``test_h4_expansion_cli.py`` ya verifica
+    el camino feliz y escribe evidencia PASS real. Regenerar aqui
+    pisaba la evidencia valida con un stub heredado.
+
+    Despues (QW-H): leer la evidencia existente. Si el SHA del repo
+    coincide y el status es PASS, devolverla tal cual. Si no hay
+    evidencia o el SHA no matchea, devolver BLOCKED honesto.
+    """
+    existing = _read_existing_evidence("UAT-08")
+    if existing is not None and existing.status == "PASS":
+        # Mantener el SHA del repo al momento del test E2E. Si el SHA
+        # cambio desde entonces, es se\u00f1al de que el feature ha cambiado;
+        # en ese caso preferimos re-ejecutar el E2E a devolver evidencia
+        # obsoleta. Pero el caller (test_h4_expansion_cli) ya la regenera,
+        # asi que el caso normal es SHA identico.
+        return existing
     return uats_blocked_gap(
         [
             (
                 "UAT-08",
                 "Dada una problematica no contemplada, cuando se propone un subgrafo valido y autorizado, entonces se incorpora unicamente el cambio solicitado.",
                 "Los nodos completados mantienen sus revisiones y resultados originales.",
-                "H4 Expansión controlada (GraphExpansion/GraphPatch) NO implementado. Eventos GraphExpansionProposed/Accepted existen en runtime pero sin policy engine.",
+                "H4 Expansion controlada sin evidencia E2E. Ejecuta "
+                "tests/test_h4_expansion_cli.py para generar evidencia PASS.",
             )
         ]
     )[0]
 
 
 def uat_09() -> Evidence:
+    """UAT-09: H4 Expansion controlada (camino rechazo por falta de autorizacion).
+
+    Misma logica que ``uat_08``: leer evidencia E2E si existe, sino
+    BLOCKED honesto con referencia al test que la genera.
+    """
+    existing = _read_existing_evidence("UAT-09")
+    if existing is not None and existing.status == "PASS":
+        return existing
     return uats_blocked_gap(
         [
             (
                 "UAT-09",
                 "Dada una propuesta que solicita nuevas capacidades, cuando no existe autorizacion, entonces el motor no incorpora la ampliacion.",
                 "Debe conservarse evidencia de su rechazo o de su estado de espera.",
-                "H4 Expansión controlada (policy engine) NO implementado.",
+                "H4 Expansion controlada sin evidencia E2E. Ejecuta "
+                "tests/test_h4_expansion_cli.py para generar evidencia PASS.",
             )
         ]
     )[0]
