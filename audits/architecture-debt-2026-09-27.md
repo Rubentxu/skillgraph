@@ -5,7 +5,7 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **46** modulos Python, **16063** LoC, **561** funciones.
+- **46** modulos Python, **16124** LoC, **563** funciones.
 - **4** archivos >800 LoC (god modules).
 - **1** funciones publicas con cc>=20 (refactor obligatorio).
 - **1** funciones privadas con cc>=20 (refactor opcional).
@@ -19,7 +19,7 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 | LoC | Path |
 |----:|------|
 | 2539 | `src/skillgraph/cli/runner.py` |
-| 2407 | `src/skillgraph/platform/storage.py` |
+| 2439 | `src/skillgraph/platform/storage.py` |
 | 1357 | `src/skillgraph/runtime/runcontroller.py` |
 | 813 | `src/skillgraph/governance/graph_expansion.py` |
 
