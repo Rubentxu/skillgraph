@@ -333,7 +333,39 @@ class Storage:
         self._migrate()
 
     def close(self) -> None:
-        self._conn.close()
+        """Cierra la conexion SQLite. Idempotente: doble close no falla.
+
+        QW-C: permite que ``Storage`` se use como context manager
+        (``with Storage(path) as s: ...``) sin generar
+        ``ResourceWarning: unclosed database``. ``__exit__`` llama
+        a este metodo; tests que ya usan ``storage.close()`` siguen
+        funcionando igual.
+        """
+        # sqlite3.Connection.close() es idempotente en Python >=3.10,
+        # pero por seguridad marcamos una bandera para dobles llamadas.
+        try:
+            self._conn.close()
+        except sqlite3.ProgrammingError:
+            # Ya cerrada: ignorar.
+            pass
+
+    def __enter__(self) -> Storage:
+        """Soporte ``with Storage(path) as s: ...``.
+
+        Devuelve ``self`` para que el cuerpo del ``with`` pueda usar
+        el storage directamente.
+        """
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Cierra la conexion al salir del ``with``. Ignora la excepcion
+        del cuerpo (no la suprime: el caller la ve normalmente).
+
+        Si el cuerpo lanzo una excepcion, sqlite3 cierra la transaccion
+        abierta (rollback automatico) y nosotros cerramos la conexion.
+        """
+        self.close()
+        # No devolvemos True: la excepcion (si la hubo) se propaga.
 
     # ----- factorías de puertos (WI-02a) -------------------------------
     # ``Storage`` implementa los 5 Protocols de persistencia
