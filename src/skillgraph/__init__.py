@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.1.dev0"  # post-v0.16.1 patch release; HEAD en trabajo entre releases
+__version__ = "0.16.2"  # release limpia: 5 fix, 4 refactor, 0 feat, 0 breaking => PATCH
 
 from skillgraph.core.errors import (
     IdentityConflictError,
