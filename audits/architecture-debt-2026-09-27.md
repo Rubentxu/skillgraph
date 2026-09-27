@@ -5,7 +5,7 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **47** modulos Python, **17565** LoC, **624** funciones.
+- **48** modulos Python, **17593** LoC, **624** funciones.
 - **5** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **1** funciones privadas con cc>=20 (refactor opcional).
@@ -19,7 +19,7 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 | LoC | Path |
 |----:|------|
 | 2814 | `src/skillgraph/platform/storage.py` |
-| 2637 | `src/skillgraph/cli/runner.py` |
+| 2232 | `src/skillgraph/cli/runner.py` |
 | 1393 | `src/skillgraph/runtime/runcontroller.py` |
 | 927 | `src/skillgraph/platform/ports/__init__.py` |
 | 813 | `src/skillgraph/governance/graph_expansion.py` |
@@ -46,7 +46,7 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 
 | LoC | Funcion | Path |
 |----:|---------|------|
-| 409 | `_build_parser` | `src/skillgraph/cli/runner.py` |
+| 409 | `build_parser` | `src/skillgraph/cli/parser.py` |
 | 136 | `_execute_one` | `src/skillgraph/runtime/runcontroller.py` |
 | 116 | `extract_file_signatures` | `src/skillgraph/knowledge/file_signature.py` |
 | 101 | `analyze_skill` | `src/skillgraph/domain/skill_importer.py` |
