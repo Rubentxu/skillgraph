@@ -35,6 +35,8 @@ from skillgraph.knowledge.graph import Source
 from skillgraph.knowledge.knowledge_controller import KnowledgeController
 from skillgraph.platform.storage import Storage
 
+pytestmark = pytest.mark.usefixtures("storage_cleanup")
+
 
 @pytest.fixture
 def storage(tmp_path: Path) -> Storage:

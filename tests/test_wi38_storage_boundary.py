@@ -116,24 +116,11 @@ def _is_list_of_str(annotation_str: str) -> bool:
 
 
 def test_wi38_storage_public_methods_no_sqlite_row_escape() -> None:
-    """R1 strict: NINGUN metodo publico de Storage debe retornar sqlite3.Row.
-
-    Excepciones legitimas documentadas (siguiente sprint WI-39):
-    - ``list_claims_by_predicate``: retorna ``tuple[dict[str, object], ...]``
-      porque los consumers subscriptan ``row["object_literal_json"]`` y
-      requieren cambio a ADT ``Claim`` (no hay DTO StoredClaim todavia).
-    - ``list_evidences_for_source``: similar, requiere ``StoredEvidence``.
-    """
+    """R1 strict: ningún método público de Storage retorna representación raw."""
     # Phase 1: signature audit
-    exceptions_legitimas = {
-        "list_claims_by_predicate",  # WI-39 follow-up
-        "list_evidences_for_source",  # WI-39 follow-up
-    }
     leaked: list[tuple[str, str]] = []
     for name, obj in inspect.getmembers(Storage, predicate=inspect.isfunction):
         if name.startswith("_"):
-            continue
-        if name in exceptions_legitimas:
             continue
         sig = inspect.signature(obj)
         ret = sig.return_annotation
@@ -148,18 +135,8 @@ def test_wi38_storage_public_methods_no_sqlite_row_escape() -> None:
 
 
 def test_wi38_storage_no_legacy_dict_returns_for_table_reads() -> None:
-    """R1 strict: los metodos de lectura de tablas NO deben retornar dict[str, Any] raw.
-
-    Excepciones legitimas (WI-39 follow-up por scope creep):
-    - list_claims_by_predicate, list_evidences_for_source: requieren
-      crear StoredClaim/StoredEvidence (ADT knowledge) y migrar
-      consumers en context_controller.py + governance/receipts.py.
-    """
+    """R1 strict: las lecturas de tablas devuelven DTOs, no dicts raw."""
     legacy: list[tuple[str, str]] = []
-    exceptions_legitimas = {
-        "list_claims_by_predicate",  # WI-39 follow-up
-        "list_evidences_for_source",  # WI-39 follow-up
-    }
     for name in (
         "list_pending_promotions",
         "list_promotions",
@@ -169,8 +146,6 @@ def test_wi38_storage_no_legacy_dict_returns_for_table_reads() -> None:
         "get_budget",
         "list_events",
     ):
-        if name in exceptions_legitimas:
-            continue
         if not hasattr(Storage, name):
             continue
         sig = inspect.signature(getattr(Storage, name))

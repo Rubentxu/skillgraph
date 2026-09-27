@@ -294,6 +294,107 @@ class StoredRelation:
 
 
 @dataclass(frozen=True, slots=True)
+class StoredClaim:
+    """DTO inmutable de un Claim persistido.
+
+    WI-39 sustituye filas y diccionarios raw en las lecturas de claims.
+    ``object_literal`` y ``evidence_ids`` ya vienen deserializados por
+    el adapter SQLite.
+    """
+
+    claim_id: str
+    tenant_id: str
+    project_id: str
+    subject_entity_id: str
+    predicate: str
+    object_literal: Any
+    source_id: str
+    evidence_ids: tuple[str, ...]
+    extraction_method: str
+    extractor_version: str
+    checked_at_revision: str
+    stale: bool
+
+    def __getitem__(self, key: str) -> Any:
+        """Compatibilidad explícita con consumidores históricos basados en filas."""
+        if key == "object_literal_json":
+            return json.dumps(self.object_literal, sort_keys=True)
+        if key == "stale":
+            return int(self.stale)
+        if not hasattr(self, key):
+            raise KeyError(key)
+        return getattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Compatibilidad explícita con ``dict.get`` durante la migración."""
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa preservando los nombres históricos de columnas."""
+        return {
+            "claim_id": self.claim_id,
+            "tenant_id": self.tenant_id,
+            "project_id": self.project_id,
+            "subject_entity_id": self.subject_entity_id,
+            "predicate": self.predicate,
+            "object_literal_json": json.dumps(self.object_literal, sort_keys=True),
+            "source_id": self.source_id,
+            "extraction_method": self.extraction_method,
+            "extractor_version": self.extractor_version,
+            "checked_at_revision": self.checked_at_revision,
+            "stale": int(self.stale),
+            "evidence_ids": self.evidence_ids,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class StoredEvidence:
+    """DTO inmutable de una Evidence persistida.
+
+    WI-39 sustituye filas y diccionarios raw en las lecturas de evidences.
+    ``content`` ya viene deserializado por el adapter SQLite.
+    """
+
+    evidence_id: str
+    tenant_id: str
+    project_id: str
+    kind: str
+    content: Any
+    source_id: str
+    observed_at: str
+
+    def __getitem__(self, key: str) -> Any:
+        """Compatibilidad explícita con consumidores históricos basados en filas."""
+        if key == "content_json":
+            return json.dumps(self.content, sort_keys=True)
+        if not hasattr(self, key):
+            raise KeyError(key)
+        return getattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Compatibilidad explícita con ``dict.get`` durante la migración."""
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa preservando los nombres históricos de columnas."""
+        return {
+            "evidence_id": self.evidence_id,
+            "tenant_id": self.tenant_id,
+            "project_id": self.project_id,
+            "kind": self.kind,
+            "content_json": json.dumps(self.content, sort_keys=True),
+            "source_id": self.source_id,
+            "observed_at": self.observed_at,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class StoredPromotion:
     """DTO inmutable de una propuesta de promocion (promotion_outbox).
 
@@ -385,7 +486,9 @@ class StoredBudget:
 
 __all__ = [
     "StoredBudget",
+    "StoredClaim",
     "StoredEvent",
+    "StoredEvidence",
     "StoredNodeExecution",
     "StoredPromotion",
     "StoredRelation",
@@ -660,8 +763,8 @@ class KnowledgeRepository(Protocol):
     ) -> list[Any]: ...
     def list_claims_by_predicate(
         self, *, tenant_id: str, project_id: str, predicate: str
-    ) -> tuple[Any, ...]: ...
-    def list_evidences_for_source(self, *, source_id: str) -> tuple[Any, ...]: ...
+    ) -> tuple[StoredClaim, ...]: ...
+    def list_evidences_for_source(self, *, source_id: str) -> tuple[StoredEvidence, ...]: ...
     def list_resource_refs_for_run(
         self, *, tenant_id: str, project_id: str, run_id: str, kind: str
     ) -> tuple[str, ...]: ...

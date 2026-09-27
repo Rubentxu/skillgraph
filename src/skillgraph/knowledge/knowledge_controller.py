@@ -294,8 +294,6 @@ class KnowledgeController:
         Returns:
             Tupla de FileSignatures deserializadas. Vacía si no hay.
         """
-        import json as _json
-
         from skillgraph.knowledge.file_signature import (
             FileSignature,
             SignatureProcedencia,
@@ -316,12 +314,11 @@ class KnowledgeController:
         )
         sigs: list[FileSignature] = []
         for e in evidences:
-            if e.get("kind") != "file_signature":
+            if e.kind != "file_signature":
                 continue
-            content_json = e.get("content_json")
-            if not isinstance(content_json, str):
+            if not isinstance(e.content, dict):
                 continue
-            payload = _json.loads(content_json)
+            payload = e.content
             sig = FileSignature(
                 foco=payload["foco"],
                 contrato=payload["contrato"],

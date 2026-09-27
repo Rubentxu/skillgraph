@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from skillgraph.platform.storage import Storage
+
 
 @pytest.fixture
 def fixtures_dir() -> Path:
@@ -34,3 +36,25 @@ def tmp_data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[P
     monkeypatch.setenv("SKILLGRAPH_DATA_ROOT", str(root))
     yield root
     # monkeypatch restaura las variables automáticamente al salir del test.
+
+
+@pytest.fixture
+def storage_cleanup(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Cierra los ``Storage`` creados por un test legacy al finalizarlo.
+
+    Algunos módulos históricos construyen ``Storage`` directamente en helpers
+    en vez de inyectarlo mediante una fixture. El fixture conserva la
+    propiedad de la conexión dentro del test y garantiza el cierre explícito
+    en el teardown, sin introducir un ``__del__`` silencioso en producción.
+    """
+    created: list[Storage] = []
+    original_init = Storage.__init__
+
+    def tracked_init(storage: Storage, path: str | Path) -> None:
+        original_init(storage, path)
+        created.append(storage)
+
+    monkeypatch.setattr(Storage, "__init__", tracked_init)
+    yield
+    for storage in reversed(created):
+        storage.close()

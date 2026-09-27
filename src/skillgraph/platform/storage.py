@@ -33,7 +33,9 @@ from skillgraph.knowledge.graph import (
 )
 from skillgraph.platform.ports import (
     StoredBudget,
+    StoredClaim,
     StoredEvent,
+    StoredEvidence,
     StoredNodeExecution,
     StoredPromotion,
     StoredRelation,
@@ -1293,36 +1295,44 @@ class Storage:
         tenant_id: str,
         project_id: str,
         predicate: str,
-    ) -> tuple[dict[str, object], ...]:
+    ) -> tuple[StoredClaim, ...]:
         """Devuelve todos los Claims con `predicate == value` para el
         (tenant, project) dado.
 
-        Devuelve `tuple[dict, ...]` con cada fila como `sqlite3.Row`
-        (key access por nombre de columna). El caller deserializa
-        `object_literal_json` con `json.loads` si lo necesita.
+        El adapter deserializa JSON y carga los evidence ids asociados.
         """
+        import json
+
         rows = self._conn.execute(
-            "SELECT * FROM claims WHERE tenant_id = ? AND project_id = ? AND predicate = ?",
+            """
+            SELECT c.*, GROUP_CONCAT(ce.evidence_id) AS evidence_ids_csv
+            FROM claims c
+            LEFT JOIN claim_evidence ce ON ce.claim_id = c.claim_id
+            WHERE c.tenant_id = ? AND c.project_id = ? AND c.predicate = ?
+            GROUP BY c.claim_id
+            """,
             (tenant_id, project_id, predicate),
         ).fetchall()
-        return tuple(dict(row) for row in rows)
+        return tuple(_row_to_stored_claim(row, json) for row in rows)
 
     def list_evidences_for_source(
         self,
         *,
         source_id: str,
-    ) -> tuple[dict[str, object], ...]:
+    ) -> tuple[StoredEvidence, ...]:
         """Devuelve todas las Evidences asociadas a `source_id`.
 
         NO filtra por tenant+project: la fuente ya garantiza aislamiento
         (source_id es unico en el sistema via PK + FK en claims).
-        El caller deserializa `content_json` con `json.loads`.
+        El adapter deserializa `content_json` antes de devolver el DTO.
         """
+        import json
+
         rows = self._conn.execute(
             "SELECT * FROM evidences WHERE source_id = ?",
             (source_id,),
         ).fetchall()
-        return tuple(dict(row) for row in rows)
+        return tuple(_row_to_stored_evidence(row, json) for row in rows)
 
     def list_resource_refs_for_run(
         self,
@@ -2653,6 +2663,23 @@ def _row_to_evidence(row: sqlite3.Row, json: Any) -> Evidence:
     )
 
 
+def _row_to_stored_evidence(row: sqlite3.Row, json: Any) -> StoredEvidence:
+    """Convierte una fila de ``evidences`` al DTO de ports."""
+    try:
+        content = json.loads(row["content_json"])
+    except json.JSONDecodeError:
+        content = row["content_json"]
+    return StoredEvidence(
+        evidence_id=row["evidence_id"],
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        kind=row["kind"],
+        content=content,
+        source_id=row["source_id"],
+        observed_at=row["observed_at"],
+    )
+
+
 def _row_to_claim(row: sqlite3.Row, evidence_ids: list[str], json: Any) -> Claim:
     return Claim(
         claim_id=row["claim_id"],
@@ -2661,6 +2688,30 @@ def _row_to_claim(row: sqlite3.Row, evidence_ids: list[str], json: Any) -> Claim
         object_literal=json.loads(row["object_literal_json"]),
         source_id=row["source_id"],
         evidence_ids=tuple(evidence_ids),
+        extraction_method=row["extraction_method"],
+        extractor_version=row["extractor_version"],
+        checked_at_revision=row["checked_at_revision"],
+        stale=bool(row["stale"]),
+    )
+
+
+def _row_to_stored_claim(row: sqlite3.Row, json: Any) -> StoredClaim:
+    """Convierte una fila de ``claims`` al DTO de ports."""
+    evidence_csv = row["evidence_ids_csv"] or ""
+    evidence_ids = tuple(evidence_csv.split(",")) if evidence_csv else ()
+    try:
+        object_literal = json.loads(row["object_literal_json"])
+    except json.JSONDecodeError:
+        object_literal = row["object_literal_json"]
+    return StoredClaim(
+        claim_id=row["claim_id"],
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        subject_entity_id=row["subject_entity_id"],
+        predicate=row["predicate"],
+        object_literal=object_literal,
+        source_id=row["source_id"],
+        evidence_ids=evidence_ids,
         extraction_method=row["extraction_method"],
         extractor_version=row["extractor_version"],
         checked_at_revision=row["checked_at_revision"],

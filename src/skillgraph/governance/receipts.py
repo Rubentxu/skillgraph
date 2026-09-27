@@ -33,7 +33,6 @@ Historia y aplicabilidad (UAT-EVO-14):
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -393,15 +392,11 @@ def list_applicable_receipts(
     for source in sources:
         rows = storage.list_evidences_for_source(source_id=source.source_id)
         for row in rows:
-            if row.get("kind") != "validation_receipt":
+            if row.kind != "validation_receipt":
                 continue
-            content_json = row.get("content_json")
-            if not isinstance(content_json, str):
+            if not isinstance(row.content, dict):
                 continue
-            try:
-                payload = json.loads(content_json)
-            except json.JSONDecodeError:
-                continue
+            payload = row.content
             try:
                 receipt = _payload_to_receipt(payload)
             except (KeyError, ValueError, TypeError):

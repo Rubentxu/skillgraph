@@ -28,6 +28,7 @@ from skillgraph.core.errors import (
 )
 from skillgraph.core.recipe import ContextRecipe
 from skillgraph.knowledge.graph import OutcomeTrace
+from skillgraph.platform.ports import StoredClaim, StoredEvidence
 from skillgraph.runtime.engine import now_iso as _now_iso
 from skillgraph.runtime.handoff import (
     Handoff,
@@ -178,45 +179,41 @@ def claim_to_resource(claim: object, resource_name: str) -> CompiledResource:
     )
 
 
-def predicate_row_to_resource(
-    row: dict[str, object],
+def stored_claim_to_resource(
+    claim: StoredClaim,
     resource_name: str,
 ) -> CompiledResource:
-    """Mapea una fila de `list_claims_by_predicate` -> CompiledResource.
-
-    La fila viene de Storage con `object_literal_json` como string;
-    aqui se deserializa para que el body sea comparable por valor.
-    """
+    """Mapea un ``StoredClaim`` a ``CompiledResource``."""
     return CompiledResource(
         resource_kind="claim",
-        resource_namespace=f"claim:{row['claim_id']}",
+        resource_namespace=f"claim:{claim.claim_id}",
         resource_name=resource_name,
         body={
-            "claim_id": row["claim_id"],
-            "predicate": row["predicate"],
-            "object_literal": json.loads(row["object_literal_json"]),  # type: ignore[arg-type]
-            "source_id": row["source_id"],
-            "checked_at_revision": row["checked_at_revision"],
-            "stale": bool(row["stale"]),
+            "claim_id": claim.claim_id,
+            "predicate": claim.predicate,
+            "object_literal": claim.object_literal,
+            "source_id": claim.source_id,
+            "checked_at_revision": claim.checked_at_revision,
+            "stale": claim.stale,
         },
     )
 
 
-def evidence_row_to_resource(
-    row: dict[str, object],
+def stored_evidence_to_resource(
+    evidence: StoredEvidence,
     resource_name: str,
 ) -> CompiledResource:
-    """Mapea una fila de `list_evidences_for_source` -> CompiledResource."""
+    """Mapea un ``StoredEvidence`` a ``CompiledResource``."""
     return CompiledResource(
         resource_kind="evidence",
-        resource_namespace=f"evidence:{row['evidence_id']}",
+        resource_namespace=f"evidence:{evidence.evidence_id}",
         resource_name=resource_name,
         body={
-            "evidence_id": row["evidence_id"],
-            "kind": row["kind"],
-            "content": json.loads(row["content_json"]),  # type: ignore[arg-type]
-            "source_id": row["source_id"],
-            "observed_at": row["observed_at"],
+            "evidence_id": evidence.evidence_id,
+            "kind": evidence.kind,
+            "content": evidence.content,
+            "source_id": evidence.source_id,
+            "observed_at": evidence.observed_at,
         },
     )
 
@@ -455,7 +452,7 @@ class ContextController:
             project_id=ctrl.project_id,  # type: ignore[attr-defined]
             predicate=value,
         )
-        return [predicate_row_to_resource(row, value) for row in rows]
+        return [stored_claim_to_resource(row, value) for row in rows]
 
     def _resolve_source_selector(
         self,
@@ -478,7 +475,7 @@ class ContextController:
             evid_rows = ctrl.knowledge.list_evidences_for_source(  # type: ignore[attr-defined]
                 source_id=src.source_id,
             )
-            out.extend(evidence_row_to_resource(ev, value) for ev in evid_rows)
+            out.extend(stored_evidence_to_resource(ev, value) for ev in evid_rows)
         return out
 
 

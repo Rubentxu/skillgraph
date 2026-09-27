@@ -20,6 +20,8 @@ from skillgraph.core.errors import ValidationError
 from skillgraph.knowledge.graph import Claim, Entity, Evidence, Source
 from skillgraph.platform.storage import Storage
 
+pytestmark = pytest.mark.usefixtures("storage_cleanup")
+
 # ---------------------------------------------------------------------------
 # Helpers: sembrar via APIs publicas de Storage (FK-aware).
 # ---------------------------------------------------------------------------

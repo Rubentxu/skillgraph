@@ -65,6 +65,8 @@ from skillgraph.runtime.redaction import (
     validate_policy,
 )
 
+pytestmark = pytest.mark.usefixtures("storage_cleanup")
+
 # ---------- S1 Storage ----------------------------------------------
 
 

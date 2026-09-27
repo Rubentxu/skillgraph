@@ -20,6 +20,8 @@ from skillgraph.knowledge.context_controller import (
     ContextController,
     OutcomeTracer,
     approx_chars,
+    stored_claim_to_resource,
+    stored_evidence_to_resource,
 )
 from skillgraph.knowledge.graph import (
     Claim,
@@ -28,7 +30,10 @@ from skillgraph.knowledge.graph import (
     Source,
 )
 from skillgraph.knowledge.knowledge_controller import KnowledgeController
+from skillgraph.platform.ports import StoredClaim, StoredEvidence
 from skillgraph.platform.storage import Storage
+
+pytestmark = pytest.mark.usefixtures("storage_cleanup")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -608,68 +613,64 @@ class TestClaimToResource:
         assert res.body["stale"] is False
 
 
-class TestPredicateRowToResource:
-    """`predicate_row_to_resource`: fila SQL -> CompiledResource."""
+class TestStoredClaimToResource:
+    """`stored_claim_to_resource`: DTO persistido -> CompiledResource."""
 
-    def test_row_with_json_string_literal(self) -> None:
-        import json as _json
-
-        from skillgraph.knowledge.context_controller import (
-            predicate_row_to_resource,
+    def test_claim_with_literal(self) -> None:
+        claim = StoredClaim(
+            claim_id="c-1",
+            tenant_id="t-1",
+            project_id="p-1",
+            subject_entity_id="e-1",
+            predicate="imports",
+            object_literal="os",
+            source_id="s-1",
+            evidence_ids=(),
+            extraction_method="manual",
+            extractor_version="test",
+            checked_at_revision="rev-1",
+            stale=False,
         )
-
-        row: dict[str, object] = {
-            "claim_id": "c-1",
-            "predicate": "imports",
-            "object_literal_json": _json.dumps("os"),
-            "source_id": "s-1",
-            "checked_at_revision": "rev-1",
-            "stale": 0,
-        }
-        res = predicate_row_to_resource(row, "imports")
+        res = stored_claim_to_resource(claim, "imports")
         assert res.resource_kind == "claim"
         assert res.resource_namespace == "claim:c-1"
         # JSON deserializado, no el string crudo.
         assert res.body["object_literal"] == "os"
         assert res.body["stale"] is False  # bool(0) == False
 
-    def test_row_with_stale_true(self) -> None:
-        import json as _json
-
-        from skillgraph.knowledge.context_controller import (
-            predicate_row_to_resource,
+    def test_claim_with_stale_true(self) -> None:
+        claim = StoredClaim(
+            claim_id="c-2",
+            tenant_id="t-1",
+            project_id="p-1",
+            subject_entity_id="e-1",
+            predicate="calls",
+            object_literal="foo",
+            source_id="s-1",
+            evidence_ids=(),
+            extraction_method="manual",
+            extractor_version="test",
+            checked_at_revision="rev-1",
+            stale=True,
         )
-
-        row: dict[str, object] = {
-            "claim_id": "c-2",
-            "predicate": "calls",
-            "object_literal_json": _json.dumps("foo"),
-            "source_id": "s-1",
-            "checked_at_revision": "rev-1",
-            "stale": 1,
-        }
-        res = predicate_row_to_resource(row, "calls")
+        res = stored_claim_to_resource(claim, "calls")
         assert res.body["stale"] is True
 
 
-class TestEvidenceRowToResource:
-    """`evidence_row_to_resource`: fila SQL -> CompiledResource."""
+class TestStoredEvidenceToResource:
+    """`stored_evidence_to_resource`: DTO persistido -> CompiledResource."""
 
-    def test_evidence_maps_with_json_content(self) -> None:
-        import json as _json
-
-        from skillgraph.knowledge.context_controller import (
-            evidence_row_to_resource,
+    def test_evidence_maps_with_content(self) -> None:
+        evidence = StoredEvidence(
+            evidence_id="ev-1",
+            tenant_id="t-1",
+            project_id="p-1",
+            kind="static_analysis",
+            content={"matched": "os.path.join"},
+            source_id="s-1",
+            observed_at="2026-01-01T00:00:00Z",
         )
-
-        row: dict[str, object] = {
-            "evidence_id": "ev-1",
-            "kind": "static_analysis",
-            "content_json": _json.dumps({"matched": "os.path.join"}),
-            "source_id": "s-1",
-            "observed_at": "2026-01-01T00:00:00Z",
-        }
-        res = evidence_row_to_resource(row, "s-1")
+        res = stored_evidence_to_resource(evidence, "s-1")
         assert res.resource_kind == "evidence"
         assert res.resource_namespace == "evidence:ev-1"
         assert res.body["content"] == {"matched": "os.path.join"}
