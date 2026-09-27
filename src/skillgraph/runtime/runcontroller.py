@@ -556,7 +556,7 @@ class RunController:
             return False
 
         # 2a: max_visits del Run.
-        mv = budget_row.get("max_visits")
+        mv = budget_row["max_visits"]
         if mv is not None and len(existing_prev) >= mv:
             self._emit_budget_exceeded(
                 tenant_id=tenant_id,
@@ -569,7 +569,7 @@ class RunController:
             return True
 
         # 2b: max_events del Run.
-        me = budget_row.get("max_events")
+        me = budget_row["max_events"]
         if me is not None:
             event_count = self._count_events(
                 tenant_id=tenant_id,

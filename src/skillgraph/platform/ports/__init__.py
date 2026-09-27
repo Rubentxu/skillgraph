@@ -37,6 +37,7 @@ de aplicación puede refinarlos.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -81,6 +82,24 @@ class StoredEvent:
     payload: dict[str, Any]
     timestamp: str
     schema_version: int
+
+    def __getitem__(self, key: str) -> Any:
+        """Compat legacy: ``event["payload_json"]`` -> ``event.payload``.
+
+        WI-38 (R1 strict): los tests historicos subscriptan ``row["payload_json"]``
+        y luego aplican ``json.loads()``. Mantenemos frozen=True delegando
+        en ``getattr``; los campos son 1:1 con la tabla.
+
+        ``payload_json`` (clave historica de la columna SQLite) devuelve
+        el JSON serializado de ``payload`` (dict) para que los tests
+        legacy que esperan string raw continen funcionando sin cambios.
+        Lanza KeyError si la clave no es un campo del DTO.
+        """
+        if key == "payload_json":
+            return json.dumps(self.payload, sort_keys=True)
+        if not hasattr(self, key):
+            raise KeyError(key)
+        return getattr(self, key)
 
     def to_dict(self) -> dict[str, Any]:
         """Serializa a dict para consumers que esperan API dict-legacy.
@@ -274,9 +293,101 @@ class StoredRelation:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class StoredPromotion:
+    """DTO inmutable de una propuesta de promocion (promotion_outbox).
+
+    WI-38 (R1 strict): sustituye ``dict[str, Any]`` en ``get_promotion``,
+    ``list_pending_promotions`` y ``list_promotions``. Los 11 campos
+    son 1:1 con la tabla ``promotion_outbox`` + ``payload`` (parseado
+    desde ``payload_json``).
+
+    ``to_dict()`` preserva el dict historico con ``payload_json`` (no
+    parseado) para compatibilidad con consumers que esperan string raw.
+    ``__getitem__`` permite subscript legacy (``p["status"]``) mientras
+    se migran los tests que dependen de la API dict-based.
+    """
+
+    proposal_id: str
+    idempotency_key: str
+    tenant_id: str
+    source_project: str
+    target_catalog: str
+    knowledge_ref: str
+    payload: dict[str, Any]
+    status: str
+    attempts: int
+    created_at: str
+    updated_at: str
+    published_at: str | None
+
+    def __getitem__(self, key: str) -> Any:
+        """Compat legacy: ``proposal["status"]`` -> ``proposal.status``.
+
+        Mantiene frozen=True. NO permite assignment (KV implicito seria
+        un workaround del dataclass frozen). Lanza KeyError si la
+        clave no es un campo del DTO.
+        """
+        if not hasattr(self, key):
+            raise KeyError(key)
+        return getattr(self, key)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa a dict preservando todas las columnas (payload_json raw)."""
+        return {
+            "proposal_id": self.proposal_id,
+            "idempotency_key": self.idempotency_key,
+            "tenant_id": self.tenant_id,
+            "source_project": self.source_project,
+            "target_catalog": self.target_catalog,
+            "knowledge_ref": self.knowledge_ref,
+            "payload_json": json.dumps(self.payload, sort_keys=True),
+            "status": self.status,
+            "attempts": self.attempts,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "published_at": self.published_at,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class StoredBudget:
+    """DTO inmutable de un RunBudget (run_budgets).
+
+    WI-38 (R1 strict): sustituye ``dict[str, Any]`` en ``get_budget``.
+    Los 3 campos son 1:1 con la tabla ``run_budgets``.
+
+    ``to_dict()`` preserva el dict historico.
+    ``__getitem__`` permite subscript legacy durante la migracion.
+    """
+
+    tenant_id: str
+    project_id: str
+    run_id: str
+    max_visits: int | None
+    max_runtime_seconds: int | None
+    max_events: int | None
+
+    def __getitem__(self, key: str) -> Any:
+        """Compat legacy: ``budget["max_visits"]`` -> ``budget.max_visits``."""
+        if not hasattr(self, key):
+            raise KeyError(key)
+        return getattr(self, key)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa a dict preservando todas las columnas."""
+        return {
+            "max_visits": self.max_visits,
+            "max_runtime_seconds": self.max_runtime_seconds,
+            "max_events": self.max_events,
+        }
+
+
 __all__ = [
+    "StoredBudget",
     "StoredEvent",
     "StoredNodeExecution",
+    "StoredPromotion",
     "StoredRelation",
     "StoredResource",
     "StoredRun",

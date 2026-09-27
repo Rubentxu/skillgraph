@@ -5,8 +5,8 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **47** modulos Python, **17167** LoC, **607** funciones.
-- **4** archivos >800 LoC (god modules).
+- **47** modulos Python, **17321** LoC, **614** funciones.
+- **5** archivos >800 LoC (god modules).
 - **1** funciones publicas con cc>=20 (refactor obligatorio).
 - **1** funciones privadas con cc>=20 (refactor opcional).
 - **11** funciones >80 LoC (legibilidad mejorable).
@@ -18,9 +18,10 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 
 | LoC | Path |
 |----:|------|
-| 2720 | `src/skillgraph/platform/storage.py` |
+| 2763 | `src/skillgraph/platform/storage.py` |
 | 2536 | `src/skillgraph/cli/runner.py` |
 | 1393 | `src/skillgraph/runtime/runcontroller.py` |
+| 824 | `src/skillgraph/platform/ports/__init__.py` |
 | 813 | `src/skillgraph/governance/graph_expansion.py` |
 
 ## Hotspots publicos (cc>=20, refactor obligatorio)
@@ -101,3 +102,36 @@ Anidamiento >=5 suele indicar decision tree en lugar de composicion declarativa.
 - WIs P0 siguen el patron helper-extraction ya establecido (D-52..D-60).
 - WIs P1 (god modules) requieren un ADR previo porque tocan contratos publicos y boundary.
 - Cualquier release debe mantener cero hotspots publicos cc>=20 o documentar la excepcion.
+
+## WI-38 R1 strict — delta tras auditoria de boundary Storage (2026-09-27)
+
+**Objetivo**: auditar TODOS los metodos publicos de `Storage` y eliminar retornos de `sqlite3.Row` / `dict[str, object]` raw sustituyendolos por DTOs `Stored*` inmutables.
+
+**Drifts обнаружилs** (5):
+1. `list_events` retornaba `list[sqlite3.Row]` → fixed con `_row_to_stored_event`.
+2. `list_pending_promotions` retornaba `list[dict[str, Any]]` → fixed con `_row_to_stored_promotion` + DTO `StoredPromotion`.
+3. `list_promotions` retornaba `list[dict[str, Any]]` → fixed idem.
+4. `get_promotion` retornaba `dict[str, Any] | None` → fixed idem.
+5. `get_budget` retornaba `dict[str, Any] | None` → fixed con `_row_to_stored_budget` + DTO `StoredBudget`.
+
+**DTOs nuevos** (en `src/skillgraph/platform/ports/__init__.py`):
+- `StoredPromotion`: 12 campos frozen+slots (proposal_id, idempotency_key, tenant_id, source_project, target_catalog, knowledge_ref, payload, status, attempts, created_at, updated_at, published_at) + `__getitem__` compat legacy.
+- `StoredBudget`: 6 campos frozen+slots (tenant_id, project_id, run_id, max_visits, max_runtime_seconds, max_events) + `__getitem__` compat legacy.
+- `StoredEvent`: añadido `__getitem__` para subscript legacy (`event["payload_json"]` → JSON serializado del payload).
+
+**Helpers de traduccion** (en `src/skillgraph/platform/storage.py`):
+- `_row_to_stored_event(row)`
+- `_row_to_stored_promotion(row)` — deserializa `payload_json` con `json.loads`.
+- `_row_to_stored_budget(row)`
+
+**Tests**:
+- `tests/test_wi38_storage_boundary.py` (5 tests): exhaustivo, audita signatures publicas + retornos runtime.
+- 1114 passed (suite completa), ruff All checks passed.
+
+**Deuda residual (WI-39 follow-up)**:
+- `list_claims_by_predicate` y `list_evidences_for_source` aun retornan `tuple[dict[str, object], ...]`. Requiere nuevos DTOs `StoredClaim` y `StoredEvidence` (fuera de scope de WI-38).
+
+**Delta LoC**:
+- storage.py: +~356 LoC (DTOs + helpers + metodos refactorizados).
+- ports/__init__.py: +~75 LoC (StoredPromotion + StoredBudget + `__getitem__`).
+- runner.py: ~+0 LoC (sin cambios netos despues de la migration compat).

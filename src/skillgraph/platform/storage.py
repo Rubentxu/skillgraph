@@ -32,8 +32,10 @@ from skillgraph.knowledge.graph import (
     Source,
 )
 from skillgraph.platform.ports import (
+    StoredBudget,
     StoredEvent,
     StoredNodeExecution,
+    StoredPromotion,
     StoredRelation,
     StoredResource,
     StoredRun,
@@ -346,6 +348,46 @@ def _row_to_stored_event(row: sqlite3.Row) -> StoredEvent:
         payload=json.loads(row["payload_json"]),
         timestamp=row["timestamp"],
         schema_version=row["schema_version"],
+    )
+
+
+def _row_to_stored_promotion(row: sqlite3.Row) -> StoredPromotion:
+    """Mapea ``sqlite3.Row`` de ``promotion_outbox`` al DTO ``StoredPromotion``.
+
+    WI-38 (R1 strict): cierra la fuga de ``dict[str, Any]`` en los
+    3 metodos de promotion (``get_promotion``, ``list_pending_promotions``,
+    ``list_promotions``). El campo ``payload`` se deserializa aqui.
+    """
+    import json  # local import por consistencia con resto del modulo
+
+    return StoredPromotion(
+        proposal_id=row["proposal_id"],
+        idempotency_key=row["idempotency_key"],
+        tenant_id=row["tenant_id"],
+        source_project=row["source_project"],
+        target_catalog=row["target_catalog"],
+        knowledge_ref=row["knowledge_ref"],
+        payload=json.loads(row["payload_json"]),
+        status=row["status"],
+        attempts=row["attempts"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        published_at=row["published_at"],
+    )
+
+
+def _row_to_stored_budget(row: sqlite3.Row) -> StoredBudget:
+    """Mapea ``sqlite3.Row`` de ``run_budgets`` al DTO ``StoredBudget``.
+
+    WI-38 (R1 strict): sustituye ``dict(row)`` en ``get_budget``.
+    """
+    return StoredBudget(
+        tenant_id=row["tenant_id"],
+        project_id=row["project_id"],
+        run_id=row["run_id"],
+        max_visits=row["max_visits"],
+        max_runtime_seconds=row["max_runtime_seconds"],
+        max_events=row["max_events"],
     )
 
 
@@ -1510,8 +1552,13 @@ class Storage:
         project_id: str,
         resource_ref: str | None = None,
         event_kind: str | None = None,
-    ) -> list[sqlite3.Row]:
-        """Lista eventos filtrados por (tenant, project) + resource_ref/kind."""
+    ) -> list[StoredEvent]:
+        """Lista eventos filtrados por (tenant, project) + resource_ref/kind.
+
+        WI-38 (R1 strict): devuelve ``list[StoredEvent]`` (frozen + slots)
+        en vez de ``list[sqlite3.Row]``. Mapea via ``_row_to_stored_event``
+        para cerrar la fuga de Row fuera de ``platform/``.
+        """
         q = "SELECT * FROM runtime_events WHERE tenant_id = ? AND project_id = ?"
         params: list[Any] = [tenant_id, project_id]
         if resource_ref is not None:
@@ -1521,7 +1568,8 @@ class Storage:
             q += " AND event_kind = ?"
             params.append(event_kind)
         q += " ORDER BY sequence ASC"
-        return self._conn.execute(q, params).fetchall()
+        rows = self._conn.execute(q, params).fetchall()
+        return [_row_to_stored_event(r) for r in rows]
 
     # ----- H7 promocion entre bases (UAT-13) -----
 
@@ -1571,29 +1619,30 @@ class Storage:
                 ),
             )
 
-    def get_promotion(self, proposal_id: str) -> dict[str, Any] | None:
-        """Devuelve la propuesta por id, o None si no existe."""
-        import json as _json
+    def get_promotion(self, proposal_id: str) -> StoredPromotion | None:
+        """Devuelve la propuesta por id, o None si no existe.
 
+        WI-38 (R1 strict): devuelve ``StoredPromotion`` (frozen + slots)
+        en vez de ``dict[str, Any]``. El campo ``payload`` se deserializa
+        en el DTO (no raw json).
+        """
         row = self._conn.execute(
             "SELECT * FROM promotion_outbox WHERE proposal_id = ?",
             (proposal_id,),
         ).fetchone()
         if row is None:
             return None
-        d = dict(row)
-        d["payload"] = _json.loads(d.pop("payload_json"))
-        return d
+        return _row_to_stored_promotion(row)
 
-    def list_pending_promotions(self) -> list[dict[str, Any]]:
+    def list_pending_promotions(self) -> list[StoredPromotion]:
         """Lista propuestas con status IN ('PENDING', 'IN_PROGRESS') para reconciliacion.
 
         Equivalente a ``list_promotions(status="PENDING")`` mas los registros
         ``IN_PROGRESS`` (los dejados por un crash previo). Conservado para
         compatibilidad con callers existentes.
-        """
-        import json as _json  # local import por consistencia con resto del modulo
 
+        WI-38 (R1 strict): devuelve ``list[StoredPromotion]`` (frozen + slots).
+        """
         rows = self._conn.execute(
             """
             SELECT * FROM promotion_outbox
@@ -1601,12 +1650,7 @@ class Storage:
             ORDER BY created_at ASC
             """
         ).fetchall()
-        result = []
-        for row in rows:
-            d = dict(row)
-            d["payload"] = _json.loads(d.pop("payload_json"))
-            result.append(d)
-        return result
+        return [_row_to_stored_promotion(r) for r in rows]
 
     def find_active_run(
         self,
@@ -1811,19 +1855,23 @@ class Storage:
         tenant_id: str,
         project_id: str,
         run_id: str,
-    ) -> dict[str, Any] | None:
-        """Devuelve la fila cruda del budget de un Run, o None si no existe.
+    ) -> StoredBudget | None:
+        """Devuelve el DTO de un RunBudget, o None si no existe.
 
         No lanza NotFoundError: ausencia de budget significa "sin
         limites" (compat con Runs anteriores a S4).
+
+        WI-38 (R1 strict): devuelve ``StoredBudget`` (frozen + slots)
+        en vez de ``dict[str, Any]``.
         """
         row = self._conn.execute(
-            "SELECT max_visits, max_runtime_seconds, max_events "
+            "SELECT max_visits, max_runtime_seconds, max_events, "
+            "       tenant_id, project_id, run_id "
             "FROM run_budgets "
             "WHERE tenant_id = ? AND project_id = ? AND run_id = ?",
             (tenant_id, project_id, run_id),
         ).fetchone()
-        return None if row is None else dict(row)
+        return None if row is None else _row_to_stored_budget(row)
 
     # ----- politicas por tenant (S5 Etapa 7) -----
 
@@ -2505,7 +2553,7 @@ class Storage:
     def list_promotions(
         self,
         status: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[StoredPromotion]:
         """Lista propuestas del outbox, opcionalmente filtradas por ``status``.
 
         - ``status=None`` -> todas las propuestas, ordenadas por ``created_at`` ASC.
@@ -2516,9 +2564,9 @@ class Storage:
 
         Lanza ``ValidationError`` si ``status`` no esta en
         ``PROMOTION_STATUSES``. No expone SQL al caller.
-        """
-        import json as _json  # local import por consistencia con resto del modulo
 
+        WI-38 (R1 strict): devuelve ``list[StoredPromotion]``.
+        """
         if status is not None and status not in PROMOTION_STATUSES:
             raise ValidationError(
                 f"status de promocion invalido: {status!r}; validos={sorted(PROMOTION_STATUSES)}"
@@ -2533,12 +2581,7 @@ class Storage:
                 "SELECT * FROM promotion_outbox WHERE status = ? ORDER BY created_at ASC",
                 (status,),
             ).fetchall()
-        result = []
-        for row in rows:
-            d = dict(row)
-            d["payload"] = _json.loads(d.pop("payload_json"))
-            result.append(d)
-        return result
+        return [_row_to_stored_promotion(r) for r in rows]
 
     def mark_promotion_in_progress(self, proposal_id: str) -> bool:
         """Pasa de PENDING a IN_PROGRESS. Devuelve True si transiciono."""
