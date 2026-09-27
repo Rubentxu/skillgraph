@@ -1049,9 +1049,12 @@ class TestBudgetEnforcement:
         import json as _json
 
         payload = _json.loads(budget_event["payload_json"])
-        assert payload["kind"] == "visits"
-        assert payload["limit"] == 1
-        assert payload["observed"] >= 1
+        # QW-B: default redaction 'metadata' -> valores [REDACTED],
+        # claves conservadas. El test verifica el shape y tipo, no
+        # contenido (que estaria filtrado bajo la politica por defecto).
+        assert payload["kind"] == "[REDACTED]"
+        assert payload["limit"] == "[REDACTED]"
+        assert payload["observed"] == "[REDACTED]"
 
     def test_reconcile_without_budget_does_not_enforce(self, fixture_setup) -> None:
         """Sin budget, un DAG lineal no se aborta por max_visits."""

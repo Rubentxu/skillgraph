@@ -119,10 +119,12 @@ class EventLog:
             policy_resolver: callable opcional que, dado un ``tenant_id``,
                 devuelve la politica de redaccion (``"none"|"metadata"|
                 "payload"|"full"``). Si devuelve None, se usa el
-                default ``"none"`` (politica segura). Si el callable
-                es None (caso por defecto), el EventLog NO redacta
-                (comportamiento pre-S5). Esto evita romper tests
-                existentes que no esperan redaccion.
+                default ``"metadata"`` (secure-by-default). Si el callable
+                es None (caso por defecto), el EventLog redacta con
+                ``"metadata"``: claves conservadas, valores
+                ``[REDACTED]``. Los tenants que necesiten ``"none"``
+                deben declararlo explicitamente via ``Storage.upsert_policy``
+                o un ``policy_resolver`` que devuelva ``"none"``.
         """
         self._events = events
         self._policy_resolver = policy_resolver
@@ -133,21 +135,22 @@ class EventLog:
     def _resolve_policy(self, tenant_id: str) -> str:
         """Resuelve la politica efectiva para un tenant.
 
-        Sin resolver: default ``"none"`` (no redacta; compat con pre-S5).
-        Resolver devuelve None: default ``"none"``.
+        Sin resolver: default ``"metadata"`` (secure-by-default; redacta
+        valores, conserva claves). El caller puede sobreescribir via
+        ``Storage.upsert_policy`` (per-tenant) o ``policy_resolver``.
+        Resolver devuelve None: default ``"metadata"``.
         Resolver devuelve un valor: se valida y se aplica tal cual.
 
-        Nota: el default es ``"none"`` (no ``"metadata"``) por el principio
-        de minima sorpresa: las politicas de redaccion son opt-in
-        por tenant (``Storage.upsert_policy``). Si en el futuro el
-        blueprint exige redaccion por defecto, este default debe
-        cambiarse y documentarse en una ADR.
+        Nota: el cambio de default (pre-QW-B era ``"none"``) es un
+        cambio de seguridad deliberado: secure-by-default. Los
+        tenants que necesiten ``"none"`` deben declararlo explicitamente
+        via ``upsert_policy``. Ver audit 2026-09-27 / WI-31 QW-B.
         """
         if self._policy_resolver is None:
-            return "none"
+            return "metadata"
         policy = self._policy_resolver(tenant_id)
         if policy is None:
-            return "none"
+            return "metadata"
         return policy
 
     def append(self, event: RuntimeEvent) -> int:

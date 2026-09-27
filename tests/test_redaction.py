@@ -221,8 +221,13 @@ class TestEventLogRedaction:
         # metadata: claves conservadas, valores [REDACTED].
         assert all(v == REDACTED_MARKER for v in persisted.values()), persisted
 
-    def test_eventlog_passes_through_by_default(self, tmp_path) -> None:
-        """Sin resolver -> default 'none': payload integro en disco."""
+    def test_eventlog_default_policy_is_metadata(self, tmp_path) -> None:
+        """QW-B (secure-by-default): sin resolver -> default 'metadata'.
+
+        El EventLog redacta los valores del payload por defecto. Los
+        tenants que necesiten ``"none"`` deben declararlo explicitamente
+        via ``Storage.upsert_policy`` o un ``policy_resolver``.
+        """
         import json as _json
 
         from skillgraph.runtime.engine import EventBuilder, EventLog
@@ -238,7 +243,30 @@ class TestEventLogRedaction:
             (ev.event_id,),
         ).fetchone()
         persisted = _json.loads(row["payload_json"])
-        # Default 'none' = payload integro (compat pre-S5).
+        # metadata: claves conservadas, valores [REDACTED].
+        assert all(v == REDACTED_MARKER for v in persisted.values()), persisted
+
+    def test_eventlog_explicit_none_passes_through(self, tmp_path) -> None:
+        """policy='none' explicito: payload integro en disco."""
+        import json as _json
+
+        from skillgraph.runtime.engine import EventBuilder, EventLog
+
+        log = EventLog(
+            SqliteEventStoreForTest(_open_conn(tmp_path)),
+            policy_resolver=lambda _tenant: "none",
+        )
+        eb = EventBuilder(tenant_id="t", project_id="p", correlation_id="c")
+        ev = eb.run_created(run_id="r", initial_node="a")
+        log.append(ev)
+        store = log._events
+        conn = store._conn
+        row = conn.execute(
+            "SELECT payload_json FROM runtime_events WHERE event_id = ?",
+            (ev.event_id,),
+        ).fetchone()
+        persisted = _json.loads(row["payload_json"])
+        # 'none' explicito = payload integro.
         assert persisted.get("initial_node") == "a"
 
     def test_eventlog_redacts_with_policy_payload(self, tmp_path) -> None:
