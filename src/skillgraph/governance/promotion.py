@@ -114,6 +114,17 @@ def apply_proposal(
     try:
         ok = apply_fn(proposal["payload"])
     except Exception:
+        # `apply_fn` lo inyecta el caller y ejecuta su codigo de
+        # negocio: es una frontera con codigo de terceros, asi que sus
+        # excepciones no son nuestras y no se pueden enumerar. El
+        # contrato (docstring de `reconcile_pending`) es que si
+        # `apply_fn` lanza, la propuesta pasa a FAILED, no que el
+        # proceso aborte.
+        #
+        # DEUDA CONOCIDA: `mark_promotion_failed` solo escribe el
+        # status, no el motivo. La causa se pierde y queda solo para
+        # inspeccion manual. Persistirla exigiria una columna nueva en
+        # `promotion_outbox`; se deja fuera de este commit.
         storage.mark_promotion_failed(proposal_id)
         return "FAILED"
 

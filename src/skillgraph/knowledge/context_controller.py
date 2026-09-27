@@ -25,6 +25,8 @@ from skillgraph.core.errors import (
     MissingObligatoryError,
     StaleKnowledgeError,
     TokenBudgetExceededError,
+    UnknownEntityError,
+    UnknownSourceError,
 )
 from skillgraph.core.recipe import ContextRecipe
 from skillgraph.knowledge.graph import OutcomeTrace
@@ -430,7 +432,13 @@ class ContextController:
         """Branch `entity`: claims cuyo subject_entity_id == value."""
         try:
             ctrl.get_entity(entity_id=value)  # type: ignore[attr-defined]
-        except Exception:
+        except UnknownEntityError:
+            # Una entidad ausente produce un branch vacio, que es el
+            # resultado legitimo. Antes se capturaba `Exception` entera
+            # (AGENTS.md 11.14.4), con lo que un fallo de I/O o un bug
+            # del controller se disfrazaba de "esa entidad no existe"
+            # y el compile terminaba con un grafo incompleto, sin
+            # senal ni error.
             return []
         claims = ctrl.list_claims_for_subject(  # type: ignore[attr-defined]
             subject_entity_id=value
@@ -463,7 +471,9 @@ class ContextController:
         """Branch `source`: claims directos + (si label) evidences."""
         try:
             src = ctrl.get_source(source_id=value)  # type: ignore[attr-defined]
-        except Exception:
+        except UnknownSourceError:
+            # Igual que en el branch `entity`: la ausencia es un branch
+            # vacio legitimo; cualquier otro fallo debe propagar.
             return []
         claims = ctrl.list_claims_for_source(  # type: ignore[attr-defined]
             source_id=src.source_id

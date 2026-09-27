@@ -653,11 +653,16 @@ class Storage:
         try:
             yield cur
             self._conn.execute("COMMIT")
-        except Exception:
+        except BaseException:
             # ROLLBACK es best-effort: si falla (p.ej. la conexion
             # esta rota), sqlite3 abortara la transaccion de todos
             # modos. Coherente con el patron de `*_atomically`.
-            with suppress(Exception):
+            # Se capturan TODAS las excepciones (incluido KeyboardInterrupt)
+            # porque el proposito es dejar la transacion consistente
+            # antes de propagar: un `except Exception` dejaria el BEGIN
+            # abierto si el fallo es una BaseException: un Ctrl-C no
+            # debe dejar la transaccion a medias.
+            with suppress(sqlite3.Error):
                 self._conn.execute("ROLLBACK")
             raise
 
@@ -2255,8 +2260,14 @@ class Storage:
             self._conn.execute(exec_sql[0], exec_sql[1])
             self._insert_event_in_tx(self._conn.cursor(), event)
             self._conn.execute("COMMIT")
-        except Exception:
-            with suppress(Exception):
+        except BaseException:
+            # El cuerpo de la transaccion puede lanzar CUALQUIER cosa
+            # (validacion de dominio, TypeError, ...), no solo errores
+            # de sqlite3. Estrechar aqui a `sqlite3.Error` dejaba el
+            # BEGIN abierto ante un ValidationError, que es peor que
+            # el except ancho que se queria evitar. Lo que si se
+            # estrecha es el ROLLBACK, que solo habla de la conexion.
+            with suppress(sqlite3.Error):
                 self._conn.execute("ROLLBACK")
             raise
 
@@ -2365,14 +2376,17 @@ class Storage:
             self._insert_event_in_tx(cur, event_evidence)
             self._conn.execute("COMMIT")
         except sqlite3.IntegrityError as exc:
-            with suppress(Exception):
+            with suppress(sqlite3.Error):
                 self._conn.execute("ROLLBACK")
             raise IdempotencyError(
                 f"evento duplicado en complete_node_execution_atomically: "
                 f"{event_completed.event_id} o {event_evidence.event_id}"
             ) from exc
-        except Exception:
-            with suppress(Exception):
+        except BaseException:
+            # Cualquier otro fallo dentro de la transaccion: ROLLBACK
+            # best-effort y se propaga intacto. Ver el comentario de
+            # `_tx` para por que `BaseException` y no `Exception`.
+            with suppress(sqlite3.Error):
                 self._conn.execute("ROLLBACK")
             raise
 

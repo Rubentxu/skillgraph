@@ -23,6 +23,7 @@ Lo que NO hace este slice:
 
 from __future__ import annotations
 
+import sqlite3
 import uuid
 import warnings
 from dataclasses import dataclass
@@ -207,11 +208,17 @@ class KnowledgeController:
                 project_id=self.project_id,
                 evidence=evidence,
             )
-        except Exception as exc:
-            msg = str(exc)
-            if "FOREIGN KEY" in msg:
-                raise UnknownSourceError("Source no existe") from exc  # NO expone source_id (S2/I)
-            raise
+        except sqlite3.IntegrityError as exc:
+            # Se discrimina por TIPO primero y por mensaje despues: con
+            # `except Exception` + `"FOREIGN KEY" in str(exc)`, cualquier
+            # error no relacionado que incluyera ese texto (un CHECK, un
+            # trigger, un error de dominio que lo mencione) se reportaba
+            # como UnknownSourceError, senalando al usuario a una causa
+            # que no era la real. Un IntegrityError que no sea FK se
+            # propaga intacto.
+            if "FOREIGN KEY" not in str(exc):
+                raise
+            raise UnknownSourceError("Source no existe") from exc  # NO expone source_id (S2/I)
         return evidence.evidence_id
 
     def get_evidences_for_claim(self, *, claim_id: ClaimID) -> tuple[Evidence, ...]:
@@ -458,26 +465,26 @@ class KnowledgeController:
                 project_id=self.project_id,
                 claim=claim_to_record,
             )
-        except Exception as exc:
+        except sqlite3.IntegrityError as exc:
             # SQLite emite "FOREIGN KEY constraint failed" sin nombrar la tabla.
             # Distinguimos por el orden de chequeo: SQLite evalua FKs por orden
             # de insercion, asi que si subject_entity_id no existe, falla antes
             # que source_id. Hacemos lookup para saber cual.
-            msg = str(exc)
-            if "FOREIGN KEY" in msg:
-                if (
-                    self.knowledge.get_entity(
-                        tenant_id=self.tenant_id,
-                        project_id=self.project_id,
-                        entity_id=claim.subject_entity_id,
-                    )
-                    is None
-                ):
-                    raise UnknownEntityError(
-                        "Entity no existe"
-                    ) from exc  # NO expone entity_id (S2/I)
-                raise UnknownSourceError("Source no existe") from exc  # NO expone source_id (S2/I)
-            raise
+            # El tipo se comprueba antes que el texto: con `except Exception`
+            # cualquier error cuyo mensaje contuviera "FOREIGN KEY" sin ser
+            # una violacion de FK se reportaba como Entity/Source inexistente.
+            if "FOREIGN KEY" not in str(exc):
+                raise
+            if (
+                self.knowledge.get_entity(
+                    tenant_id=self.tenant_id,
+                    project_id=self.project_id,
+                    entity_id=claim.subject_entity_id,
+                )
+                is None
+            ):
+                raise UnknownEntityError("Entity no existe") from exc  # NO expone entity_id (S2/I)
+            raise UnknownSourceError("Source no existe") from exc  # NO expone source_id (S2/I)
         return claim_to_record.claim_id
 
     def get_claim(self, *, claim_id: ClaimID) -> Claim:

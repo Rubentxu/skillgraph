@@ -1038,6 +1038,13 @@ class RunController:
         try:
             result = self._adapter.invoke(handoff)
         except Exception as exc:
+            # Frontera con el Adapter, que es un `Protocol` inyectado:
+            # su `invoke` lo implementa codigo externo y puede fallar
+            # con cualquier excepcion. El contrato del RunController es
+            # que un fallo del adapter NO tumba el run, se convierte en
+            # un nodo FAILED persistido con el motivo, de modo que el
+            # run queda en un estado inspeccionable. La excepcion se
+            # guarda en el nodo, asi que aqui no se pierde.
             return self._fail_node_with(
                 tenant_id=tenant_id,
                 project_id=project_id,

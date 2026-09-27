@@ -549,6 +549,12 @@ def apply_expansion(
             transitions=tuple(new_transitions),
         )
     except Exception as e:
+        # Conversion inmediata a error de dominio tipado: lo que salga
+        # de construir el WorkflowPlan (TypeError por una arista
+        # mal formada, ValidationError de una invariante) se reporta
+        # como InvalidProposal, que es el contrato de esta funcion.
+        # El mensaje original se conserva en `reason` para no perder
+        # el detalle. La exception no escapa nunca.
         err = InvalidProposal(
             reason=f"WorkflowPlan integrity check failed: {e}",
             violated_invariants=("I0",),

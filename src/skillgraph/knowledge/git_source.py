@@ -142,7 +142,8 @@ class GitSource:
         tree_sha = commit_obj.tree.decode()
         blob_shas = _collect_blob_shas(repo, commit_obj.tree)
 
-        # Working tree status (no aborta si no se puede).
+        # Working tree status. `None` = no se pudo determinar (repo
+        # roto o no-repo); NO se confunde con un working tree limpio.
         working_tree_status = _safe_capture_status(str(repo_root), porcelain)
 
         # Filtrar blob_shas por pathspecs si vienen.
@@ -348,12 +349,27 @@ def _matches_pathspec(path: str, pathspec: str) -> bool:
     return path == normalized or path.startswith(normalized + "/")
 
 
-def _safe_capture_status(repo_root: str, porcelain: object) -> dict[str, object]:
-    """Captura working tree status. Si falla, devuelve {} (no aborta)."""
+def _safe_capture_status(repo_root: str, porcelain: object) -> dict[str, object] | None:
+    """Captura el working tree status.
+
+    Antes devolvia `{}` ante cualquier fallo, y ese `{}` viaja dentro
+    del `Source.locator`. Un repo roto, o no-repo, se convertia asi
+    en un Source que afirma "no hay cambios pendientes": un dato
+    plausible y falso, que es peor que un error.
+
+    `None` significa "no se pudo determinar" y la clave se omite del
+    locator, de modo que la ausencia es distinguishable de un working
+    tree limpio. El consumidor decide si eso es tolerable.
+    """
     try:
         st = porcelain.status(repo_root)
     except Exception:
-        return {}
+        # Se captura `Exception` entera porque `dulwich` falla con
+        # varias familias (ValueError en un path no-repo, KeyError con
+        # refs ausentes, OSError en un repo corrupto) y enumerarlas
+        # ataria esta funcion al backend. El `return None` de abajo hace
+        # que el fallo NO se disfraze de "working tree limpio".
+        return None
     return {
         "staged": {
             "add": list(st.staged["add"]),
