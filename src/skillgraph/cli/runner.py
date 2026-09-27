@@ -59,6 +59,7 @@ from skillgraph.governance.graph_expansion import (
 )
 from skillgraph.platform.paths import (
     DEFAULT_TENANT,
+    agents_root,
     catalog_path,
     is_safe_name,
     project_db_path,
@@ -1813,7 +1814,6 @@ def _resolve_run_inputs(
     exit code si algo fallo (no-None), y ``plan_or_None`` es None en
     el caso de fallo (el caller propaga el error al usuario).
     """
-    from skillgraph.platform.paths import agents_root
     from skillgraph.runtime.runcontroller import RunBudget, RunController
 
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()

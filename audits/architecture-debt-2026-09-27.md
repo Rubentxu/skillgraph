@@ -52,8 +52,8 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 | 101 | `analyze_skill` | `src/skillgraph/domain/skill_importer.py` |
 | 95 | `_reconcile_run_locked` | `src/skillgraph/runtime/runcontroller.py` |
 | 92 | `cmd_expansion_apply` | `src/skillgraph/cli/runner.py` |
-| 91 | `_resolve_run_inputs` | `src/skillgraph/cli/runner.py` |
 | 90 | `compile_handoff` | `src/skillgraph/knowledge/context_controller.py` |
+| 90 | `_resolve_run_inputs` | `src/skillgraph/cli/runner.py` |
 | 86 | `aggregate_file_signatures` | `src/skillgraph/knowledge/knowledge_controller.py` |
 | 85 | `compile_handoff_from_scopes` | `src/skillgraph/knowledge/file_handoff.py` |
 | 84 | `promote_candidate` | `src/skillgraph/governance/improvement.py` |
