@@ -541,7 +541,7 @@ tests:
   total: 1078   # post-release-v0.15.0 (R0 + WI-31 + WI-35 = +20 vs v0.14.8 base 1048; medido con pytest --collect-only el 2026-09-27; 1078/1078 PASS en HEAD 7e5566e en 527.95s)
   passed: 1078
   duration_s: 528   # re-medido el 2026-09-27 11:54 con uv run pytest --no-header -q (1078 passed in 527.95s)
-  package_version: "0.15.0"   # release v0.15.0; tag anotado pre-push; SIN bump entre v0.14.8 y v0.15.0 (depende del PUSH)
+  package_version: "0.15.0.dev0"   # post-v0.15.0 housekeeping: tag anotado v0.15.0 (0d73f73 -> 4d6d1b4); HEAD d2f3c5f en trabajo entre releases
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1202,8 +1202,8 @@ release:
       nota: "WI-21..WI-30 (debt-reduction H-03: 8 hotspots cc refactored + auditor reproducible WI-28). MINOR."
     - tag: v0.15.0
       fecha: 2026-09-27
-      sha: "pending (depende del PUSH) -> tag anotado en commit release v0.15.0"
-      nota: "R0 housekeeping (QW-A..I, 10 commits) + WI-31 cast Storage Protocol (1 commit atomico) + WI-35 docs (1 commit). MINOR por 1 BREAKING (QW-B redaction default flip) + 3 feat (QW-C Storage CM, WI-31 Storage.knowledge_repository(), QW-I docs/blueprint snapshot). 1 fix (QW-A Anthropic retired model). 1068/1068 PASS, ruff limpio, cobertura 95.25%."
+      sha: "4d6d1b430ca3f726a080e12c37dd58180d72483b (tag SHA 0d73f731dd9142cd44b5be27965f642ab03254b1)"
+      nota: "R0 housekeeping (QW-A..I, 10 commits) + WI-31 cast Storage Protocol (1 commit atomico) + WI-35 docs (1 commit). MINOR por 1 BREAKING (QW-B redaction default flip) + 3 feat (QW-C Storage CM, WI-31 Storage.knowledge_repository(), QW-I docs/blueprint snapshot) + 1 fix (QW-A Anthropic retired model). 1078/1078 PASS, ruff limpio, cobertura 95.25%. Erratum v0.14.0 preservado."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
@@ -1241,8 +1241,8 @@ release:
     FAIL: 0
   evidencia:
     CHANGELOG: CHANGELOG.md  # cubre v0.15.0 (entrada 2026-09-27)
-    tag_sha: "v0.15.0 -> pending (depende del PUSH; anotado en commit release v0.15.0)"
-    tests_pytest: "1068 passed (1048 post-v0.14.8 + 20 nuevos en sesion 2026-09-27: 1 QW-A + 1 QW-B + 6 QW-C + 2 QW-D + 2 QW-E + 1 QW-I + 7 WI-31)"
+    tag_sha: "v0.15.0 -> 0d73f731dd9142cd44b5be27965f642ab03254b1 (sobre commit 4d6d1b430ca3f726a080e12c37dd58180d72483b)"
+    tests_pytest: "1078 passed (1048 post-v0.14.8 + 30 nuevos en sesion 2026-09-27: 1 QW-A + 1 QW-B + 6 QW-C + 2 QW-D + 2 QW-E + 5 QW-H + 1 QW-I + 7 WI-31 + 4 housekeeping audit_debt + 1 release_governance)"
     scripts_ci: OK
     ruff: "format+check limpios"
     footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"

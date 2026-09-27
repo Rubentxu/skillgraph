@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.15.0"   # release v0.15.0 — BREAKING + 3 feat (Storage CM, knowledge_repository factor, blueprint snapshot)
+__version__ = "0.15.0.dev0"   # post-v0.15.0 housekeeping: HEAD posterior a tag v0.15.0 (0d73f73 sobre 4d6d1b4); trabajo en curso
 
 from skillgraph.core.errors import (
     IdentityConflictError,
