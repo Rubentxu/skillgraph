@@ -33,8 +33,6 @@ from skillgraph.knowledge.knowledge_controller import KnowledgeController
 from skillgraph.platform.ports import StoredClaim, StoredEvidence
 from skillgraph.platform.storage import Storage
 
-pytestmark = pytest.mark.usefixtures("storage_cleanup")
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

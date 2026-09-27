@@ -27,6 +27,13 @@ SRC_ROOT = pathlib.Path("src")
 AUDITS_DIR = pathlib.Path("audits")
 AUDITS_DIR.mkdir(exist_ok=True)
 
+# Marca que delimita la cronologia escrita a mano. Todo lo que quede por
+# debajo se conserva al regenerar el informe: el generador solo reescribe
+# la seccion automatica de metricas.
+# Sin esta marca, cada ejecucion del auditor destruia el analisis de
+# cierre de WI (drifts, deuda residual) anadido despues de generar.
+ANNALS_MARKER = "<!-- ANNALS:append-only -->"
+
 
 def cyclomatic(node: ast.AST) -> int:
     """Cyclomatic complexity simplificada (mismo algoritmo que WI-21..WI-27)."""
@@ -81,6 +88,23 @@ def audit_file(path: pathlib.Path) -> dict:
         "loc": len(src.splitlines()),
         "funcs": func_metrics,
     }
+
+
+def read_annals(path: pathlib.Path) -> list[str]:
+    """Devuelve la cronologia manual ya presente en ``path``.
+
+    Funcion pura salvo por la lectura: no escribe nada. Si el informe no
+    existe o no tiene la marca, devuelve una lista vacia y el informe se
+    regenera limpio. Si la tiene, devuelve todo lo que va despues, para
+    que `main` lo reescriba por debajo de la seccion automatica.
+    """
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    marker_at = text.find(ANNALS_MARKER)
+    if marker_at < 0:
+        return []
+    return text[marker_at + len(ANNALS_MARKER) :].strip("\n").split("\n")
 
 
 def main() -> int:
@@ -262,7 +286,8 @@ def main() -> int:
     lines.append("")
 
     out_path = AUDITS_DIR / f"architecture-debt-{today}.md"
-    out_path.write_text("\n".join(lines))
+    annals = read_annals(out_path)
+    out_path.write_text("\n".join([*lines, "", ANNALS_MARKER, "", *annals]))
     print(out_path)
     return 0
 

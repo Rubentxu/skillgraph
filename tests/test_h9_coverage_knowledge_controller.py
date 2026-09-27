@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from skillgraph.knowledge.graph import (
     Entity,
     EntityID,
@@ -27,8 +25,6 @@ from skillgraph.knowledge.knowledge_controller import (
     make_finding_id,
 )
 from skillgraph.platform.storage import Storage
-
-pytestmark = pytest.mark.usefixtures("storage_cleanup")
 
 TENANT = "t"
 PROJECT = "p"

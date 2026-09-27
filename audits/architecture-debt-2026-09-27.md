@@ -5,7 +5,7 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **47** modulos Python, **17321** LoC, **614** funciones.
+- **47** modulos Python, **17485** LoC, **622** funciones.
 - **5** archivos >800 LoC (god modules).
 - **1** funciones publicas con cc>=20 (refactor obligatorio).
 - **1** funciones privadas con cc>=20 (refactor opcional).
@@ -18,10 +18,10 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 
 | LoC | Path |
 |----:|------|
-| 2763 | `src/skillgraph/platform/storage.py` |
-| 2536 | `src/skillgraph/cli/runner.py` |
+| 2814 | `src/skillgraph/platform/storage.py` |
+| 2557 | `src/skillgraph/cli/runner.py` |
 | 1393 | `src/skillgraph/runtime/runcontroller.py` |
-| 824 | `src/skillgraph/platform/ports/__init__.py` |
+| 927 | `src/skillgraph/platform/ports/__init__.py` |
 | 813 | `src/skillgraph/governance/graph_expansion.py` |
 
 ## Hotspots publicos (cc>=20, refactor obligatorio)
@@ -103,11 +103,14 @@ Anidamiento >=5 suele indicar decision tree en lugar de composicion declarativa.
 - WIs P1 (god modules) requieren un ADR previo porque tocan contratos publicos y boundary.
 - Cualquier release debe mantener cero hotspots publicos cc>=20 o documentar la excepcion.
 
+
+<!-- ANNALS:append-only -->
+
 ## WI-38 R1 strict — delta tras auditoria de boundary Storage (2026-09-27)
 
 **Objetivo**: auditar TODOS los metodos publicos de `Storage` y eliminar retornos de `sqlite3.Row` / `dict[str, object]` raw sustituyendolos por DTOs `Stored*` inmutables.
 
-**Drifts обнаружилs** (5):
+**Drifts encontrados** (5):
 1. `list_events` retornaba `list[sqlite3.Row]` → fixed con `_row_to_stored_event`.
 2. `list_pending_promotions` retornaba `list[dict[str, Any]]` → fixed con `_row_to_stored_promotion` + DTO `StoredPromotion`.
 3. `list_promotions` retornaba `list[dict[str, Any]]` → fixed idem.
@@ -115,23 +118,83 @@ Anidamiento >=5 suele indicar decision tree en lugar de composicion declarativa.
 5. `get_budget` retornaba `dict[str, Any] | None` → fixed con `_row_to_stored_budget` + DTO `StoredBudget`.
 
 **DTOs nuevos** (en `src/skillgraph/platform/ports/__init__.py`):
-- `StoredPromotion`: 12 campos frozen+slots (proposal_id, idempotency_key, tenant_id, source_project, target_catalog, knowledge_ref, payload, status, attempts, created_at, updated_at, published_at) + `__getitem__` compat legacy.
-- `StoredBudget`: 6 campos frozen+slots (tenant_id, project_id, run_id, max_visits, max_runtime_seconds, max_events) + `__getitem__` compat legacy.
-- `StoredEvent`: añadido `__getitem__` para subscript legacy (`event["payload_json"]` → JSON serializado del payload).
-
-**Helpers de traduccion** (en `src/skillgraph/platform/storage.py`):
-- `_row_to_stored_event(row)`
-- `_row_to_stored_promotion(row)` — deserializa `payload_json` con `json.loads`.
-- `_row_to_stored_budget(row)`
+- `StoredPromotion`: 12 campos frozen+slots + `__getitem__` compat legacy.
+- `StoredBudget`: 6 campos frozen+slots + `__getitem__` compat legacy.
+- `StoredEvent`: añadida `__getitem__` para subscript legacy.
 
 **Tests**:
-- `tests/test_wi38_storage_boundary.py` (5 tests): exhaustivo, audita signatures publicas + retornos runtime.
-- 1114 passed (suite completa), ruff All checks passed.
+- `tests/test_wi38_storage_boundary.py` (5 tests): exhaustivo, audita firmas publicas + retornos runtime.
 
-**Deuda residual (WI-39 follow-up)**:
-- `list_claims_by_predicate` y `list_evidences_for_source` aun retornan `tuple[dict[str, object], ...]`. Requiere nuevos DTOs `StoredClaim` y `StoredEvidence` (fuera de scope de WI-38).
+**Deuda residual (cerrada por WI-39)**:
+- `list_claims_by_predicate` y `list_evidences_for_source` retornaban `tuple[dict[str, object], ...]`.
+
+## WI-39 R1 strict — cierre de frontera Claim/Evidence (2026-09-27)
+
+**Objetivo**: cerrar el ultimo drift R1 que WI-38 dejo abierto, sustituyendo los
+retornos `dict` crudos de la capa de conocimiento por DTOs inmutables.
+
+**Cambios**:
+- DTOs `StoredClaim` y `StoredEvidence` en `platform/ports/__init__.py` (`frozen=True, slots=True`).
+- Mappers privados `_row_to_stored_claim` y `_row_to_stored_evidence` en `storage.py`.
+- `ContextController` y `KnowledgeController` consumen los DTOs por atributo, no por subscript.
+- El `*_json` queda encapsulado dentro del mapper: ningun consumidor deserializa a mano.
+
+**Tests**: `tests/test_wi39_storage_boundary.py` (96 LoC nuevos) fija el contrato
+de la frontera; `tests/test_wi38_storage_boundary.py` se reduce al alcance de WI-38.
+
+**Estado R1 tras WI-39**: cerrado. Todo `sqlite3.Row` que queda en `storage.py`
+esta dentro de un mapper privado `_row_to_*`, que es la frontera correcta.
 
 **Delta LoC**:
 - storage.py: +~356 LoC (DTOs + helpers + metodos refactorizados).
 - ports/__init__.py: +~75 LoC (StoredPromotion + StoredBudget + `__getitem__`).
 - runner.py: ~+0 LoC (sin cambios netos despues de la migration compat).
+
+## WI-40 — cierre de fugas de conexion en la suite (2026-09-27)
+
+**Objetivo**: la suite completa emitia 224 `ResourceWarning: unclosed database`.
+No era ruido: `Storage` expone `close()` y context manager desde v0.15.0, y 159
+creators en 60 ficheros de test nunca lo invocaban.
+
+**Defecto real (1)**: el fixture `storage_cleanup` de `tests/conftest.py` resolvia
+esta clase de fuga, pero era opt-in y solo lo adoptaban 6 ficheros. La disciplina
+se pagaba fichero a fichero en vez de pagarse una vez en el conftest.
+
+**Defecto real (2, encontrado al medir)**: `storage_cleanup` solo ve las
+instancias de `Storage`. Tras volverlo `autouse`, la suite bajo de ~224 a 35
+avisos, NO a cero. Esos 35 los-producia `sqlite3.connect` directo, invisible al
+fixture, por dos vias: helpers que abren la base para inspeccionarla, y el idiom
+`with sqlite3.connect(path) as conn`, que NO cierra (el context manager de
+`sqlite3` solo confirma la transaccion). Un plugin de diagnostico que rastrea
+`sqlite3.connect` atribuyo las 35 a 6 ficheros: `test_runtime_events`,
+`test_redaction`, `test_skill_importer`, `test_h9_coverage_skill_importer`,
+`test_uat_audit` y `test_cli_*`.
+
+**Cambios**:
+- `storage_cleanup` pasa a `autouse=True`: el cierre deja de ser opt-in.
+- Eliminado los 7 marcadores `usefixtures("storage_cleanup")`, que quedan redundantes.
+- `sqlite_cleanup` nuevo fixture `autouse=True` que envuelve `sqlite3.connect` y
+  cierra en teardown lo que el test dejo abierto. Se instrumenta el punto de
+  creacion en vez de parchear los ~10 sitios porque `with sqlite3.connect` es un
+  error sistemico, no un descuido puntual: corregirlo a mano no cierra la clase.
+  Es seguro porque la suite no tiene fixtures `module`/`session` que reutilicen
+  una conexion entre tests (verificado: 0 ocurrencias).
+- `tests/test_wi40_storage_leak.py` (8 tests) fija la invariante.
+- `audits/audit_debt.py`: la cronologia manual se conserva bajo
+  `<!-- ANNALS:append-only -->`; antes, cada ejecucion del auditor sobrescribia el
+  informe completo y destruia el analisis de cierre de WI-38.
+
+**Redundancia evitada**: `Storage.close()` ya es idempotente y suprime
+`sqlite3.ProgrammingError`, asi que el cleanup NO necesita un `try/except`
+adicional. Se descarto esa version por ser codigo muerto.
+
+**Evidencia**:
+- Ciclo TDD rojo→verde verificado en ambos fixtures: revertir `autouse=True`
+  rompe `test_cleanup_runs_around_every_test`; restaurarlo, verde.
+- Suite completa: 1131 passed, 0 `unclosed database` (antes: 224).
+- Diagnostico de fugas: `sin conexiones vivas tras teardown` (antes: 35 en 6
+  ficheros). Evidencia reproducible: plugin en `.pipelinek/wi40_leakdiag.py`.
+- `ruff check` y `ruff format --check` limpios.
+
+**Deuda residual**: ninguna en lifecycle de test. La fuga equivalente en
+produccion esta cerrada por el context manager y por WI-37/WI-15.
