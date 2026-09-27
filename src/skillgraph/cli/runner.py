@@ -198,8 +198,7 @@ def cmd_project_list(args: argparse.Namespace) -> int:
 
 
 def cmd_project_inspect(args: argparse.Namespace) -> int:
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.name)
+    project, err = resolve_project(args, args.name)
     if err is not None:
         return err
 
@@ -318,12 +317,12 @@ def _open_known_project(
         FileNotFoundError: si el proyecto no esta registrado en el
             catalog (con mensaje legible para el operador).
     """
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    p, err = resolver.lookup(project)
+    p, err = resolve_project(args, project)
     if err is not None:
+        data_root = resolve_data_root(args.data_root)
         raise FileNotFoundError(
             f"proyecto {project!r} no encontrado en el catalog "
-            f"(tenant={resolver.tenant_id!r}, data_root={resolver.data_root}); "
+            f"(tenant={DEFAULT_TENANT!r}, data_root={data_root}); "
             f"crealo primero con 'sg project create <name>'"
         )
     storage = Storage(Path(p["db_path"]))
@@ -509,8 +508,7 @@ def _open_project_storage(
     valida la base de datos y cierra el Storage al salir del bloque.
     Dentro del contexto devuelve `(storage, EXIT_OK)` o `(None, exit_code)`.
     """
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
+    project, err = resolve_project(args, args.project)
     if err is not None:
         yield None, err
         return
@@ -541,8 +539,7 @@ def cmd_runs_list(args: argparse.Namespace) -> int:
     with _open_project_storage(args) as (storage, err):
         if err != EXIT_OK or storage is None:
             return err
-        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-        project, _ = resolver.lookup(args.project)
+        project, _ = resolve_project(args, args.project)
         ctl = RunController(
             runs=storage,
             events=storage,
@@ -580,8 +577,7 @@ def cmd_runs_show(args: argparse.Namespace) -> int:
     with _open_project_storage(args) as (storage, err):
         if err != EXIT_OK or storage is None:
             return err
-        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-        project, _ = resolver.lookup(args.project)
+        project, _ = resolve_project(args, args.project)
         ctl = RunController(
             runs=storage,
             events=storage,
@@ -613,8 +609,7 @@ def cmd_runs_logs(args: argparse.Namespace) -> int:
     with _open_project_storage(args) as (storage, err):
         if err != EXIT_OK or storage is None:
             return err
-        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-        project, _ = resolver.lookup(args.project)
+        project, _ = resolve_project(args, args.project)
         ctl = RunController(
             runs=storage,
             events=storage,
@@ -655,8 +650,7 @@ def cmd_runs_cancel(args: argparse.Namespace) -> int:
     with _open_project_storage(args) as (storage, err):
         if err != EXIT_OK or storage is None:
             return err
-        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-        project, _ = resolver.lookup(args.project)
+        project, _ = resolve_project(args, args.project)
         ctl = RunController(
             runs=storage,
             events=storage,
@@ -681,8 +675,7 @@ def cmd_runs_budget(args: argparse.Namespace) -> int:
     with _open_project_storage(args) as (storage, err):
         if err != EXIT_OK or storage is None:
             return err
-        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-        project, _ = resolver.lookup(args.project)
+        project, _ = resolve_project(args, args.project)
         # Validamos existencia del Run con un try/except explicito para
         # emitir un mensaje de error claro cuando es NotFoundError.
         from skillgraph.core.errors import NotFoundError
@@ -731,8 +724,7 @@ def cmd_policy_get(args: argparse.Namespace) -> int:
     with _open_project_storage(args) as (storage, err):
         if err != EXIT_OK or storage is None:
             return err
-        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-        project, _ = resolver.lookup(args.project)
+        project, _ = resolve_project(args, args.project)
         policy = storage.get_policy(tenant_id=project["tenant_id"])
         print(f"tenant_id={project['tenant_id']}")
         print(f"policy={policy or 'none'}")
@@ -749,8 +741,7 @@ def cmd_policy_set(args: argparse.Namespace) -> int:
     with _open_project_storage(args) as (storage, err):
         if err != EXIT_OK or storage is None:
             return err
-        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-        project, _ = resolver.lookup(args.project)
+        project, _ = resolve_project(args, args.project)
         storage.upsert_policy(tenant_id=project["tenant_id"], policy=args.redact_policy)
         print(f"tenant_id={project['tenant_id']} policy={args.redact_policy}")
         return EXIT_OK
@@ -825,8 +816,7 @@ def cmd_pack_load(args: argparse.Namespace) -> int:
     declara quedan disponibles para futuros comandos del proyecto via
     `_build_registry_for_project`.
     """
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
+    project, err = resolve_project(args, args.project)
     if err is not None:
         return err
 
@@ -882,8 +872,7 @@ def cmd_pack_load(args: argparse.Namespace) -> int:
 
 def cmd_brick_register(args: argparse.Namespace) -> int:
     """Registra un brick en un proyecto, validándolo primero."""
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
+    project, err = resolve_project(args, args.project)
     if err is not None:
         return err
 
@@ -1054,8 +1043,7 @@ def cmd_promotion_submit(args: argparse.Namespace) -> int:
     from skillgraph.core.errors import IdentityConflictError
     from skillgraph.governance.promotion import submit_proposal
 
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
+    project, err = resolve_project(args, args.project)
     if err is not None:
         return err
     tenant_id = project["tenant_id"]
@@ -1118,8 +1106,7 @@ def cmd_promotion_submit(args: argparse.Namespace) -> int:
 
 def cmd_promotion_list(args: argparse.Namespace) -> int:
     """Lista propuestas del outbox (todas o solo pendientes)."""
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
+    project, err = resolve_project(args, args.project)
     if err is not None:
         return err
 
@@ -1149,8 +1136,7 @@ def cmd_promotion_reconcile(args: argparse.Namespace) -> int:
     duplicar el claim en el catalogo destino.
     """
 
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
+    project, err = resolve_project(args, args.project)
     if err is not None:
         return err
     tenant_id = project["tenant_id"]
@@ -1158,7 +1144,7 @@ def cmd_promotion_reconcile(args: argparse.Namespace) -> int:
 
     # El apply debe escribir en la base del PROYECTO DESTINO (el outbox
     # vive en origen; el claim promovido vive en destino).
-    dest_project, err = resolver.lookup(target)
+    dest_project, err = resolve_project(args, target)
     if err is not None:
         print(
             f"ERROR: proyecto destino {target!r} no existe; crealo antes de reconciliar.",
@@ -1221,8 +1207,7 @@ def cmd_pack_import(args: argparse.Namespace) -> int:
     from skillgraph.domain.skill_importer import analyze_skill, register_imported_skill
     from skillgraph.platform.storage import Storage
 
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
+    project, err = resolve_project(args, args.project)
     if err is not None:
         return err
 
@@ -1274,8 +1259,7 @@ def cmd_pack_import(args: argparse.Namespace) -> int:
 
 def cmd_backup_create(args: argparse.Namespace) -> int:
     """Crea un backup .zip del data-root (WI-15)."""
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    output = create_backup(resolver.data_root)
+    output = create_backup(resolve_data_root(args.data_root))
     print(f"Backup creado: {output}")
     print(f"Tamano: {output.stat().st_size} bytes")
     return EXIT_OK
@@ -1283,8 +1267,9 @@ def cmd_backup_create(args: argparse.Namespace) -> int:
 
 def cmd_backup_list(args: argparse.Namespace) -> int:
     """Lista backups disponibles en el directorio configurado."""
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    backup_dir = args.dir if args.dir is not None else default_backup_dir(resolver.data_root)
+    backup_dir = (
+        args.dir if args.dir is not None else default_backup_dir(resolve_data_root(args.data_root))
+    )
     infos = list_backups(backup_dir)
     if not infos:
         print(f"Sin backups en {backup_dir}")
@@ -1369,8 +1354,7 @@ def _resolve_run_inputs(
     """
     from skillgraph.runtime.runcontroller import RunBudget, RunController
 
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(args.project)
+    project, err = resolve_project(args, args.project)
     if err is not None:
         return None, None, None, None, None, err
     if not args.plan.is_file():
@@ -1392,7 +1376,7 @@ def _resolve_run_inputs(
         )
         return None, None, None, None, None, EXIT_DB_MISSING
 
-    fixtures_root = args.fixtures_root or agents_root(resolver.data_root)
+    fixtures_root = args.fixtures_root or agents_root(resolve_data_root(args.data_root))
     fixtures_root.mkdir(parents=True, exist_ok=True)
     adapter = _build_adapter(args, fixtures_root)
     storage = Storage(db_path)
@@ -1531,8 +1515,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def _resolve_fixtures_root(args: argparse.Namespace) -> Path:
     """Resuelve el fixtures_root final tras defaults (sigue a cmd_run)."""
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    fixtures_root = args.fixtures_root or agents_root(resolver.data_root)
+    fixtures_root = args.fixtures_root or agents_root(resolve_data_root(args.data_root))
     fixtures_root.mkdir(parents=True, exist_ok=True)
     return fixtures_root
 
@@ -1542,12 +1525,42 @@ def _resolve_fixtures_root(args: argparse.Namespace) -> Path:
 # ---------------------------------------------------------------------------
 
 
+def resolve_project(args: argparse.Namespace, name: str) -> tuple[dict[str, str], int | None]:
+    """Resuelve un proyecto del catalogo, con la raiz por defecto incluida.
+
+    Punto UNICO de construccion del `ProjectResolver` (WI-44). Antes de
+    este helper la construccion `ProjectResolver(data_root=...)` seguida
+    de `.with_default_root()` se repetia 21 veces en el modulo.
+
+    Deliberadamente NO unifica los tres helpers que lo consume. Cada uno
+    reporta el fallo a su manera, y por eso no pueden componerse entre si:
+
+    - `_open_known_project`    lanza FileNotFoundError
+    - `_open_project_storage`  devuelve `(None, exit_code)` con contexto
+    - `_open_project_or_error` devuelve `(None, exit_code)` y valida la DB
+
+    Este helper solo resuelve el nombre. La validacion posterior
+    (existencia de la DB, props del Storage) se queda donde estaba,
+    porque forma parte del contrato de cada uno.
+
+    Propaga el contrato de `ProjectResolver.lookup` sin traducirlo: el
+    error viaja como exit code en la segunda posicion, y el primer
+    elemento es `{}` en fallo. Por eso el consumidor decide mirando
+    `err is not None`, no mirando si el proyecto es truthy.
+
+    Returns:
+        `(proyecto, None)` si el catalogo lo conoce, o `({}, exit_code)`
+        con el error de `ProjectResolver.lookup`.
+    """
+    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+    return resolver.lookup(name)
+
+
 def _open_project_or_error(
     args: argparse.Namespace, project_name: str
 ) -> tuple[dict[str, str] | None, int]:
-    """Helper: resuelve un proyecto y abre su DB."""
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, err = resolver.lookup(project_name)
+    """Helper: resuelve un proyecto y valida que su DB exista."""
+    project, err = resolve_project(args, project_name)
     if err is not None:
         return None, err
     db_path = Path(project["db_path"])
@@ -2180,12 +2193,15 @@ def _dispatch_nested(command: str, args: argparse.Namespace) -> int:
 # líneas es real pero superficial; el contrato divergente es lo que
 # sostiene la diferencia. Forzar una firma única produciría un helper
 # con más ramas que los tres que sustituye, que es exactamente el
-# antipatrón que WI-41 acaba de eliminar del dispatch. Queda como deuda
-# heredar en el siguiente ciclo: extraer `resolve_project(args, name)`
-# y componer sobre él, lo que sí elimina las 21 repeticiones sin
-# unificar contratos. Verificado por AST: los tres hacen exactamente
-# `ProjectResolver(data_root=resolve_data_root(args.data_root))
-#  .with_default_root()`.
+# antipatrón que WI-41 acaba de eliminar del dispatch. La deuda que
+# quedaba era componer los tres sobre un helper `resolve_project(args,
+# name)`, lo que elimina las 21 repeticiones sin unificar contratos.
+# Verificado por AST: los tres construian un ProjectResolver con el
+# data_root resuelto y encadenaban `.with_default_root()`.
+#
+# RESUELTO en WI-44: los tres componen ahora sobre `resolve_project`, y
+# el patron de construccion quedo en un unico sitio. Sus contratos se
+# mantienen distintos a proposito: cada uno reporta el fallo a su manera.
 
 
 if __name__ == "__main__":
