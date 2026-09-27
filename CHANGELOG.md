@@ -12,6 +12,49 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.0] - 2026-09-27 — R1+R2 persistence boundary (WI-32.4+32.5+33)
+
+**Resumen**: sprint completo sobre el audit externo del 2026-09-27 (HEAD pre-v0.15.0 `974055c`), cerrando los hallazgos R1 (dict[str,Any] fuga de persistencia) y R2 (Connection lifecycle). **MINOR bump** sin BREAKING CHANGE: 4 DTOs inmutables nuevos + SqliteUnitOfWork como single owner de la `sqlite3.Connection`. Total: **1109/1109 tests PASS** (+31 desde 1078, medido via `pytest --no-header -q` en HEAD `b42a2a8` en 184s), ruff check+format limpios, release_governance 2/2 PASS.
+
+### Added
+
+- **`StoredRun`** (8 campos, `frozen=True, slots=True`) en `platform/ports`: DTO inmutable para `workflow_runs`. Sustituye `dict[str, Any]` y `sqlite3.Row` en `Storage.list_runs/get_run/load_run` y RunController (consumo via atributos).
+- **`StoredNodeExecution`** (14 campos): DTO inmutable para `node_executions`. Sustituye `dict[str, Any]` en `Storage.list_node_executions`.
+- **`StoredResource`** (12 campos): DTO inmutable para `resources`. Cierra fuga en `Storage.get_resource/list_resources`.
+- **`StoredRelation`** (7 campos): DTO inmutable para `relations`. Cierra fuga en `Storage.dependencies_of/dependents_of`.
+- **`SqliteUnitOfWork`** (`frozen=True, slots=True`) en `platform/uow.py`: fachada que owns la `sqlite3.Connection` y expone 5 bounded-context adapters que la comparten (`SqliteRunAdapter`, `SqliteEventAdapter`, `SqliteKnowledgeAdapter`, `SqliteGovernanceAdapter`, `SqlitePolicyAdapter`). Acceso via `storage.uow.{runs,events,knowledge,governance,policy}`. Cierra el hallazgo "Connection lifecycle" del audit externo (R2).
+
+### Changed
+
+- **`Storage.list_runs`** ahora devuelve `list[StoredRun]` (antes `list[dict[str, Any]]`).
+- **`Storage.get_run`** ahora devuelve `StoredRun` (antes `dict[str, Any]`).
+- **`Storage.load_run`** ahora devuelve `StoredRun` (antes `dict[str, Any]`).
+- **`Storage.list_node_executions`** ahora devuelve `list[StoredNodeExecution]`.
+- **`Storage.get_resource/list_resources`** ahora devuelven `StoredResource` (no `dict`).
+- **`Storage.dependencies_of/dependents_of`** ahora devuelven `list[StoredRelation]`.
+- **`RunController._load_run` y `_node_executions_for`** ahora devuelven DTOs (consumo via atributos). 13 accesos `dict[key]` convertidos.
+- **`Storage.__init__`** ahora crea una `SqliteUnitOfWork` interna; `storage.uow` es property pública.
+- **CLI `runner.py`**: 3 consumers de `list_resources` (`_count_resources`, `_load_registry`, `declare_types_from_pack`) usan atributos del DTO.
+- Cada DTO expone `to_dict()` para compatibilidad con consumers/tests legacy que esperan API dict-based.
+
+### Migration notes
+
+- Consumers de `Storage.list_runs` etc. deben migrar de `row["key"]` a `row.key` (atributo del DTO). Compatibilidad legacy: `row.to_dict()` preserva el dict histórico.
+- `Storage.uow` es la nueva API para acceder a los bounded-context adapters. La API facade (`storage.list_runs`) sigue funcionando sin cambio.
+- `isinstance(storage.uow.runs, RunRepository)` puede NO funcionar porque los adapters no implementan TODOS los metodos del Protocol (algunos delegan via `**kwargs`). Usar `callable(getattr(uow.runs, name))` para verificar presencia de metodos clave.
+
+### Tests
+
+- 13 tests nuevos: `test_run_dto.py` (7) + `test_resource_dto.py` (6).
+- 5 tests existentes adaptados de subscript a atributo: `test_h9_storage_run_reads.py`, `test_h9_runcontroller_characterization.py`, `test_registry_branches.py`, `test_s1_sqlite.py`.
+- 6 tests nuevos para UoW: `test_uow.py` (5 adapters, shared connection, lifecycle, identity stability, facade/adapter equivalence).
+
+### Audit debt (post-WI-32.4+32.5+33)
+
+- `Storage` `dict[str, Any]` returns: **5 → 2** (los 2 restantes son `get_promotion` + 1 governance, fuera del scope del sprint).
+- `Storage` LoC: 2499 → 2716 (+217 por UoW + property `uow` + aliases; refactor pendiente WI-34 para bajar facade a <500 LoC).
+- 47 modulos Python, 17163 LoC, 607 funciones (vs 46/16279/565 pre-WI-32).
+
 ## [0.15.0] - 2026-09-27 — R0 housekeeping + WI-31 (cast Storage Protocol) + WI-35 (docs) (BREAKING)
 
 **Resumen**: cierre de la ronda de housekeeping + refactors sobre la base post-v0.14.8, en modo SDDK autónomo. **MINOR bump** por **1 BREAKING** (QW-B: redaction default `none`→`metadata`, secure-by-default) + **3 feat** (QW-C: `Storage` context manager, WI-31: factor `Storage.knowledge_repository()`, QW-I: snapshot `docs/blueprint/` versionado) + **1 fix** (QW-A: Anthropic default migrated retired model `claude-3-5-sonnet-20241022` → `claude-sonnet-4-6`). WI-31 cubre un code path del `RunController._compile_knowledge` con **0 tests** previos, anade 7 tests nuevos y elimina un `cast(Storage, self._runs)` que era un workaround del type checker. WI-35 documenta el patron SDDK end-to-end para futuras sesiones. Total: **1078/1078 tests PASS** (+30 desde 1048, +10 vs mi memoria previa de 1068; medido via `pytest --collect-only` y `--no-header -q` en HEAD `7e5566e` en 527.95s), ruff check+format limpios, cobertura **95.25%** lines / **90.54%** branches.

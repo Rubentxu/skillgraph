@@ -538,10 +538,10 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 1078   # post-release-v0.15.0 (R0 + WI-31 + WI-35 = +20 vs v0.14.8 base 1048; medido con pytest --collect-only el 2026-09-27; 1078/1078 PASS en HEAD 7e5566e en 527.95s)
-  passed: 1078
-  duration_s: 528   # re-medido el 2026-09-27 11:54 con uv run pytest --no-header -q (1078 passed in 527.95s)
-  package_version: "0.15.0.dev0"   # post-v0.15.0 housekeeping: tag anotado v0.15.0 (0d73f73 -> 4d6d1b4); HEAD d2f3c5f en trabajo entre releases
+  total: 1109   # post-WI-32.4+32.5+33 (R1+R2 audit externo, 4 DTOs inmutables + SqliteUnitOfWork; 1109/1109 PASS en HEAD b42a2a8 en 184s; +31 vs v0.15.0 base 1078: +13 DTOs + 6 UoW + +12 Storage/RunController tests)
+  passed: 1109
+  duration_s: 184   # re-medido el 2026-09-27 11:02 con uv run pytest --no-header -q (1109 passed in 183.86s)
+  package_version: "0.16.0"   # MINOR: WI-33 introduce SqliteUnitOfWork (R2 audit externo cerrado); WI-32.4+32.5 anaden 4 DTOs inmutables (StoredRun/NodeExecution/Resource/Relation) que cierran dict[str,Any] fuga de persistencia
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1095,10 +1095,10 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.15.0
+  tag: v0.16.0
   fecha: 2026-09-27
   semver_bump: MINOR
-  rationale: "1 BREAKING + 3 feat + 1 fix desde v0.14.8. BREAKING del QW-B (redaction default 'none' -> 'metadata', secure-by-default); 3 feat del R0/WI-31 (Storage context manager __enter__/__exit__, Storage.knowledge_repository() factor, docs/blueprint/ snapshot versionado); 1 fix del QW-A (Anthropic retired model claude-3-5-sonnet-20241022 -> claude-sonnet-4-6). Sin breaking del WI-31 (cast Storage Protocol es refactor puro compatible con la fachada Storage). v0.15.0 cierra el cumulo de 3 verticales (R0 + WI-31 + WI-35) sobre la base post-v0.14.8."
+  rationale: "Sprint R1+R2 del audit externo (HEAD pre-v0.15.0 974055c): 5 commits WI-32.1+32.2+32.4+32.5+33 cierran 8 hallazgos del audit (QW-K dict[str,Any] fuga, QW-L Connection lifecycle, QW-M sqlite3.Row fuera de platform/, QW-N *_json raw fuera de adapter). 0 BREAKING. 5 feat nuevos: 4 DTOs inmutables (StoredRun 8c, StoredNodeExecution 14c, StoredResource 12c, StoredRelation 7c, todos frozen+slots) + SqliteUnitOfWork (frozen+slots, owns la sqlite3.Connection, expone 5 bounded-context adapters que la comparten). 1109/1109 PASS, ruff check+format limpios. WI-34 (adelgazar RunController) y WI-35 (CLI split) quedan para sprint futuro (coste > valor inmediato)."
   releases:
     - tag: v0.3.0
       fecha: 2026-09-23
@@ -1204,6 +1204,10 @@ release:
       fecha: 2026-09-27
       sha: "4d6d1b430ca3f726a080e12c37dd58180d72483b (tag SHA 0d73f731dd9142cd44b5be27965f642ab03254b1)"
       nota: "R0 housekeeping (QW-A..I, 10 commits) + WI-31 cast Storage Protocol (1 commit atomico) + WI-35 docs (1 commit). MINOR por 1 BREAKING (QW-B redaction default flip) + 3 feat (QW-C Storage CM, WI-31 Storage.knowledge_repository(), QW-I docs/blueprint snapshot) + 1 fix (QW-A Anthropic retired model). 1078/1078 PASS, ruff limpio, cobertura 95.25%. Erratum v0.14.0 preservado."
+    - tag: v0.16.0
+      fecha: 2026-09-27
+      sha: "TBD (tag SHA a crear al taggear v0.16.0 sobre el commit de bump 0.16.0; HEAD del sprint R1+R2 es b42a2a8)"
+      nota: "Sprint audit externo 974055c: WI-32.1 cast residual + WI-32.2 StoredEvent (WI-32.2 ya en v0.15.0 base 2e85a8d), WI-32.4 StoredRun/NodeExecution, WI-32.5 StoredResource/Relation, WI-33 SqliteUnitOfWork + 5 bounded-context adapters. 1109/1109 PASS, ruff limpio. 0 BREAKING. Sin WI-34 (adelgazar RunController) ni WI-35 (CLI split) por scope/riesgo."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
