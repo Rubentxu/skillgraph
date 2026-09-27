@@ -18,6 +18,8 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
@@ -303,8 +305,12 @@ def _find_active_run_id(storage: Storage, *, tenant_id: str, project_id: str) ->
 # ---------------------------------------------------------------------------
 
 
-def _open_known_project(args: argparse.Namespace, project: str) -> tuple[str, str, Storage]:
-    """Wrapper que valida que el proyecto existe antes de continuar.
+@contextmanager
+def _open_known_project(
+    args: argparse.Namespace,
+    project: str,
+) -> Iterator[tuple[str, str, Storage]]:
+    """Valida el proyecto y posee el Storage durante el bloque `with`.
 
     Raises:
         FileNotFoundError: si el proyecto no esta registrado en el
@@ -318,52 +324,56 @@ def _open_known_project(args: argparse.Namespace, project: str) -> tuple[str, st
             f"(tenant={resolver.tenant_id!r}, data_root={resolver.data_root}); "
             f"crealo primero con 'sg project create <name>'"
         )
-    return p["tenant_id"], project, Storage(Path(p["db_path"]))
+    storage = Storage(Path(p["db_path"]))
+    try:
+        yield p["tenant_id"], project, storage
+    finally:
+        storage.close()
 
 
 def cmd_knowledge_stale(args: argparse.Namespace) -> int:
     """Lista Claims stale del proyecto."""
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
-    tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
-    stale = ctl.list_stale_claims()
-    print(f"stale claims ({len(stale)}):")
-    for c in stale:
-        print(f"  - {c.claim_id}  {c.predicate}={c.object_literal} stale=true")
-    return EXIT_OK
+    with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
+        ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
+        stale = ctl.list_stale_claims()
+        print(f"stale claims ({len(stale)}):")
+        for c in stale:
+            print(f"  - {c.claim_id}  {c.predicate}={c.object_literal} stale=true")
+        return EXIT_OK
 
 
 def cmd_knowledge_invalidate(args: argparse.Namespace) -> int:
     """Invalida Claims dependientes de un source."""
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
-    tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
-    invalidated = ctl.invalidate_from_source(
-        source_id=args.source,
-        max_hops=args.max_hops,
-    )
-    print(f"invalidated {len(invalidated)} claim(s) from source={args.source}")
-    for cid in invalidated:
-        print(f"  - {cid}")
-    return EXIT_OK
+    with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
+        ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
+        invalidated = ctl.invalidate_from_source(
+            source_id=args.source,
+            max_hops=args.max_hops,
+        )
+        print(f"invalidated {len(invalidated)} claim(s) from source={args.source}")
+        for cid in invalidated:
+            print(f"  - {cid}")
+        return EXIT_OK
 
 
 def cmd_knowledge_refresh(args: argparse.Namespace) -> int:
     """Re-valida Claims contra nueva revision."""
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
-    tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
-    reactivated = ctl.refresh_source(
-        source_id=args.source,
-        new_revision=args.revision,
-    )
-    print(f"reactivated {len(reactivated)} claim(s)")
-    for cid in reactivated:
-        print(f"  - {cid}")
-    return EXIT_OK
+    with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
+        ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
+        reactivated = ctl.refresh_source(
+            source_id=args.source,
+            new_revision=args.revision,
+        )
+        print(f"reactivated {len(reactivated)} claim(s)")
+        for cid in reactivated:
+            print(f"  - {cid}")
+        return EXIT_OK
 
 
 def cmd_knowledge_compile(args: argparse.Namespace) -> int:
@@ -373,37 +383,37 @@ def cmd_knowledge_compile(args: argparse.Namespace) -> int:
     from skillgraph.knowledge.context_controller import ContextController
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
-    tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
-    recipe_raw = (
-        json.loads(args.recipe)
-        if args.recipe.startswith("{")
-        else {
-            "obligatory": [{"kind": "source", "value": args.recipe}],
-            "freshness_policy": "strict" if args.strict else "best_effort",
-            "token_budget": args.token_budget,
-            "overflow_strategy": args.overflow,
-        }
-    )
-    recipe = ContextRecipe.from_dict(recipe_ref=args.recipe, raw=recipe_raw)
-    ctx = ContextController(knowledge=ctl)
-    try:
-        handoff = ctx.compile_handoff(
-            recipe=recipe,
-            run_id=args.run or "cli-run",
-            node_execution_id=args.node or "cli-node",
-            source_revision=args.revision or "HEAD",
+    with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
+        ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
+        recipe_raw = (
+            json.loads(args.recipe)
+            if args.recipe.startswith("{")
+            else {
+                "obligatory": [{"kind": "source", "value": args.recipe}],
+                "freshness_policy": "strict" if args.strict else "best_effort",
+                "token_budget": args.token_budget,
+                "overflow_strategy": args.overflow,
+            }
         )
-    except SkillGraphError as exc:
-        print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-        if exc.code in {"sg_stale_knowledge_error"}:
+        recipe = ContextRecipe.from_dict(recipe_ref=args.recipe, raw=recipe_raw)
+        ctx = ContextController(knowledge=ctl)
+        try:
+            handoff = ctx.compile_handoff(
+                recipe=recipe,
+                run_id=args.run or "cli-run",
+                node_execution_id=args.node or "cli-node",
+                source_revision=args.revision or "HEAD",
+            )
+        except SkillGraphError as exc:
+            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
+            if exc.code in {"sg_stale_knowledge_error"}:
+                return EXIT_DOMAIN
+            if exc.code in {"sg_missing_obligatory", "sg_token_budget_exceeded"}:
+                return EXIT_DOMAIN
             return EXIT_DOMAIN
-        if exc.code in {"sg_missing_obligatory", "sg_token_budget_exceeded"}:
-            return EXIT_DOMAIN
-        return EXIT_DOMAIN
-    print(json.dumps(handoff.to_dict(), indent=2, ensure_ascii=False))
-    print(f"--- context_hash: {handoff.context_hash}")
-    return EXIT_OK
+        print(json.dumps(handoff.to_dict(), indent=2, ensure_ascii=False))
+        print(f"--- context_hash: {handoff.context_hash}")
+        return EXIT_OK
 
 
 def cmd_knowledge_trace(args: argparse.Namespace) -> int:
@@ -413,28 +423,28 @@ def cmd_knowledge_trace(args: argparse.Namespace) -> int:
     from skillgraph.knowledge.context_controller import OutcomeTracer
     from skillgraph.knowledge.knowledge_controller import KnowledgeController
 
-    tenant_id, project_id, storage = _open_known_project(args, args.project)
-    ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
-    trace = OutcomeTracer.from_run(
-        knowledge=ctl,
-        run_id=args.run,
-        trace_name=args.name or f"trace-{args.run}",
-    )
-    print(
-        json.dumps(
-            {
-                "trace_id": trace.trace_id,
-                "kind": trace.kind,
-                "name": trace.name,
-                "project_id": trace.project_id,
-                "created_at": trace.created_at,
-                "claim_refs": list(trace.claim_refs),
-                "evidence_refs": list(trace.evidence_refs),
-            },
-            indent=2,
+    with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
+        ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
+        trace = OutcomeTracer.from_run(
+            knowledge=ctl,
+            run_id=args.run,
+            trace_name=args.name or f"trace-{args.run}",
         )
-    )
-    return EXIT_OK
+        print(
+            json.dumps(
+                {
+                    "trace_id": trace.trace_id,
+                    "kind": trace.kind,
+                    "name": trace.name,
+                    "project_id": trace.project_id,
+                    "created_at": trace.created_at,
+                    "claim_refs": list(trace.claim_refs),
+                    "evidence_refs": list(trace.evidence_refs),
+                },
+                indent=2,
+            )
+        )
+        return EXIT_OK
 
 
 # ---------------------------------------------------------------------------
@@ -930,25 +940,34 @@ def _route_runs(args: argparse.Namespace) -> int:
     return EXIT_USAGE
 
 
-def _open_project_storage(args: argparse.Namespace) -> tuple[Storage | None, int]:
-    """Abre el Storage de un proyecto o devuelve exit code de error.
+@contextmanager
+def _open_project_storage(
+    args: argparse.Namespace,
+) -> Iterator[tuple[Storage | None, int]]:
+    """Abre el Storage dentro de un contexto y devuelve exit code de error.
 
-    Helper para `cmd_runs_*`. Centraliza la resolucion del proyecto
-    y la apertura del Storage (los handlers list/show/cancel la
-    comparten). Devuelve (storage, EXIT_OK) o (None, exit_code).
+    Helper para `cmd_runs_*`. Centraliza la resolucion del proyecto,
+    valida la base de datos y cierra el Storage al salir del bloque.
+    Dentro del contexto devuelve `(storage, EXIT_OK)` o `(None, exit_code)`.
     """
     resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
     project, err = resolver.lookup(args.project)
     if err is not None:
-        return None, err
+        yield None, err
+        return
     db_path = Path(project["db_path"])
     if not db_path.exists():
         print(
             f"ERROR: base de datos ausente: {db_path}",
             file=sys.stderr,
         )
-        return None, EXIT_DB_MISSING
-    return Storage(db_path), EXIT_OK
+        yield None, EXIT_DB_MISSING
+        return
+    storage = Storage(db_path)
+    try:
+        yield storage, EXIT_OK
+    finally:
+        storage.close()
 
 
 def cmd_runs_list(args: argparse.Namespace) -> int:
@@ -960,34 +979,34 @@ def cmd_runs_list(args: argparse.Namespace) -> int:
     from skillgraph.runtime.agent import FakeAgentAdapter
     from skillgraph.runtime.runcontroller import RunController
 
-    storage, err = _open_project_storage(args)
-    if err != EXIT_OK or storage is None:
-        return err
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, _ = resolver.lookup(args.project)
-    ctl = RunController(
-        runs=storage,
-        events=storage,
-        policy=storage,
-        adapter=FakeAgentAdapter(Path("/dev/null")),  # list no invoca adapter
-    )
-    runs = ctl.list_runs(
-        tenant_id=project["tenant_id"],
-        project_id=project["name"],
-        state=args.state,
-        limit=args.limit,
-    )
-    if not runs:
-        print("(sin runs)")
-        return EXIT_OK
-    print(f"{'run_id':<40} {'state':<11} {'current_node':<20} {'executed':<10} {'events':<8}")
-    for r in runs:
-        print(
-            f"{r.run_id:<40} {r.state:<11} "
-            f"{(r.current_node or '-'):<20} "
-            f"{','.join(r.executed_nodes):<10} {r.events_emitted:<8}"
+    with _open_project_storage(args) as (storage, err):
+        if err != EXIT_OK or storage is None:
+            return err
+        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+        project, _ = resolver.lookup(args.project)
+        ctl = RunController(
+            runs=storage,
+            events=storage,
+            policy=storage,
+            adapter=FakeAgentAdapter(Path("/dev/null")),  # list no invoca adapter
         )
-    return EXIT_OK
+        runs = ctl.list_runs(
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+            state=args.state,
+            limit=args.limit,
+        )
+        if not runs:
+            print("(sin runs)")
+            return EXIT_OK
+        print(f"{'run_id':<40} {'state':<11} {'current_node':<20} {'executed':<10} {'events':<8}")
+        for r in runs:
+            print(
+                f"{r.run_id:<40} {r.state:<11} "
+                f"{(r.current_node or '-'):<20} "
+                f"{','.join(r.executed_nodes):<10} {r.events_emitted:<8}"
+            )
+        return EXIT_OK
 
 
 def cmd_runs_show(args: argparse.Namespace) -> int:
@@ -999,28 +1018,28 @@ def cmd_runs_show(args: argparse.Namespace) -> int:
     from skillgraph.runtime.agent import FakeAgentAdapter
     from skillgraph.runtime.runcontroller import RunController
 
-    storage, err = _open_project_storage(args)
-    if err != EXIT_OK or storage is None:
-        return err
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, _ = resolver.lookup(args.project)
-    ctl = RunController(
-        runs=storage,
-        events=storage,
-        policy=storage,
-        adapter=FakeAgentAdapter(Path("/dev/null")),  # show no invoca adapter
-    )
-    snap = ctl.show_run(
-        tenant_id=project["tenant_id"],
-        project_id=project["name"],
-        run_id=args.run_id,
-    )
-    print(f"run_id={snap.run_id}")
-    print(f"state={snap.state}")
-    print(f"current_node={snap.current_node or '-'}")
-    print(f"executed_nodes={','.join(snap.executed_nodes) or '-'}")
-    print(f"events_emitted={snap.events_emitted}")
-    return EXIT_OK
+    with _open_project_storage(args) as (storage, err):
+        if err != EXIT_OK or storage is None:
+            return err
+        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+        project, _ = resolver.lookup(args.project)
+        ctl = RunController(
+            runs=storage,
+            events=storage,
+            policy=storage,
+            adapter=FakeAgentAdapter(Path("/dev/null")),  # show no invoca adapter
+        )
+        snap = ctl.show_run(
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+            run_id=args.run_id,
+        )
+        print(f"run_id={snap.run_id}")
+        print(f"state={snap.state}")
+        print(f"current_node={snap.current_node or '-'}")
+        print(f"executed_nodes={','.join(snap.executed_nodes) or '-'}")
+        print(f"events_emitted={snap.events_emitted}")
+        return EXIT_OK
 
 
 def cmd_runs_logs(args: argparse.Namespace) -> int:
@@ -1032,33 +1051,35 @@ def cmd_runs_logs(args: argparse.Namespace) -> int:
     from skillgraph.runtime.agent import FakeAgentAdapter
     from skillgraph.runtime.runcontroller import RunController
 
-    storage, err = _open_project_storage(args)
-    if err != EXIT_OK or storage is None:
-        return err
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, _ = resolver.lookup(args.project)
-    ctl = RunController(
-        runs=storage,
-        events=storage,
-        policy=storage,
-        adapter=FakeAgentAdapter(Path("/dev/null")),  # logs no invoca adapter
-    )
-    logs = ctl.logs_run(
-        tenant_id=project["tenant_id"],
-        project_id=project["name"],
-        run_id=args.run_id,
-    )
-    if args.limit is not None:
-        logs = logs[: args.limit]
-    if not logs:
-        print("(sin eventos)")
+    with _open_project_storage(args) as (storage, err):
+        if err != EXIT_OK or storage is None:
+            return err
+        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+        project, _ = resolver.lookup(args.project)
+        ctl = RunController(
+            runs=storage,
+            events=storage,
+            policy=storage,
+            adapter=FakeAgentAdapter(Path("/dev/null")),  # logs no invoca adapter
+        )
+        logs = ctl.logs_run(
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+            run_id=args.run_id,
+        )
+        if args.limit is not None:
+            logs = logs[: args.limit]
+        if not logs:
+            print("(sin eventos)")
+            return EXIT_OK
+        print(f"{'seq':<6} {'event_kind':<22} {'timestamp':<26} payload")
+        for entry in logs:
+            # Resumen corto del payload (primer nivel clave=valor).
+            kv = ",".join(f"{k}={v!s:.40}" for k, v in entry.event.payload.items())
+            print(
+                f"{entry.sequence:<6} {entry.event.event_kind:<22} {entry.event.timestamp:<26} {kv}"
+            )
         return EXIT_OK
-    print(f"{'seq':<6} {'event_kind':<22} {'timestamp':<26} payload")
-    for entry in logs:
-        # Resumen corto del payload (primer nivel clave=valor).
-        kv = ",".join(f"{k}={v!s:.40}" for k, v in entry.event.payload.items())
-        print(f"{entry.sequence:<6} {entry.event.event_kind:<22} {entry.event.timestamp:<26} {kv}")
-    return EXIT_OK
 
 
 def cmd_runs_cancel(args: argparse.Namespace) -> int:
@@ -1072,24 +1093,24 @@ def cmd_runs_cancel(args: argparse.Namespace) -> int:
     from skillgraph.runtime.agent import FakeAgentAdapter
     from skillgraph.runtime.runcontroller import RunController
 
-    storage, err = _open_project_storage(args)
-    if err != EXIT_OK or storage is None:
-        return err
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, _ = resolver.lookup(args.project)
-    ctl = RunController(
-        runs=storage,
-        events=storage,
-        policy=storage,
-        adapter=FakeAgentAdapter(Path("/dev/null")),  # cancel no invoca adapter
-    )
-    snap = ctl.cancel_run(
-        tenant_id=project["tenant_id"],
-        project_id=project["name"],
-        run_id=args.run_id,
-    )
-    print(f"run_id={snap.run_id} state={snap.state}")
-    return EXIT_OK
+    with _open_project_storage(args) as (storage, err):
+        if err != EXIT_OK or storage is None:
+            return err
+        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+        project, _ = resolver.lookup(args.project)
+        ctl = RunController(
+            runs=storage,
+            events=storage,
+            policy=storage,
+            adapter=FakeAgentAdapter(Path("/dev/null")),  # cancel no invoca adapter
+        )
+        snap = ctl.cancel_run(
+            tenant_id=project["tenant_id"],
+            project_id=project["name"],
+            run_id=args.run_id,
+        )
+        print(f"run_id={snap.run_id} state={snap.state}")
+        return EXIT_OK
 
 
 def cmd_runs_budget(args: argparse.Namespace) -> int:
@@ -1098,41 +1119,41 @@ def cmd_runs_budget(args: argparse.Namespace) -> int:
     Read-only: NO emite eventos. Si el Run no tiene budget, imprime
     `(sin budget)`. Salida key=value parseable con awk/cut.
     """
-    storage, err = _open_project_storage(args)
-    if err != EXIT_OK or storage is None:
-        return err
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, _ = resolver.lookup(args.project)
-    # Validamos existencia del Run con un try/except explicito para
-    # emitir un mensaje de error claro cuando es NotFoundError.
-    from skillgraph.core.errors import NotFoundError
+    with _open_project_storage(args) as (storage, err):
+        if err != EXIT_OK or storage is None:
+            return err
+        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+        project, _ = resolver.lookup(args.project)
+        # Validamos existencia del Run con un try/except explicito para
+        # emitir un mensaje de error claro cuando es NotFoundError.
+        from skillgraph.core.errors import NotFoundError
 
-    try:
-        storage.get_run(
+        try:
+            storage.get_run(
+                tenant_id=project["tenant_id"],
+                project_id=project["name"],
+                run_id=args.run_id,
+            )
+        except NotFoundError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return EXIT_DOMAIN
+
+        row = storage.get_budget(
             tenant_id=project["tenant_id"],
             project_id=project["name"],
             run_id=args.run_id,
         )
-    except NotFoundError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return EXIT_DOMAIN
-
-    row = storage.get_budget(
-        tenant_id=project["tenant_id"],
-        project_id=project["name"],
-        run_id=args.run_id,
-    )
-    if row is None:
-        print("(sin budget)")
+        if row is None:
+            print("(sin budget)")
+            return EXIT_OK
+        print(f"run_id={args.run_id}")
+        print(f"max_visits={row['max_visits'] if row['max_visits'] is not None else '-'}")
+        print(
+            "max_runtime_seconds="
+            f"{row['max_runtime_seconds'] if row['max_runtime_seconds'] is not None else '-'}"
+        )
+        print(f"max_events={row['max_events'] if row['max_events'] is not None else '-'}")
         return EXIT_OK
-    print(f"run_id={args.run_id}")
-    print(f"max_visits={row['max_visits'] if row['max_visits'] is not None else '-'}")
-    print(
-        "max_runtime_seconds="
-        f"{row['max_runtime_seconds'] if row['max_runtime_seconds'] is not None else '-'}"
-    )
-    print(f"max_events={row['max_events'] if row['max_events'] is not None else '-'}")
-    return EXIT_OK
 
 
 def _route_policy(args: argparse.Namespace) -> int:
@@ -1151,15 +1172,15 @@ def cmd_policy_get(args: argparse.Namespace) -> int:
 
     Read-only. Imprime `policy=<valor>` o `policy=none` (default).
     """
-    storage, err = _open_project_storage(args)
-    if err != EXIT_OK or storage is None:
-        return err
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, _ = resolver.lookup(args.project)
-    policy = storage.get_policy(tenant_id=project["tenant_id"])
-    print(f"tenant_id={project['tenant_id']}")
-    print(f"policy={policy or 'none'}")
-    return EXIT_OK
+    with _open_project_storage(args) as (storage, err):
+        if err != EXIT_OK or storage is None:
+            return err
+        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+        project, _ = resolver.lookup(args.project)
+        policy = storage.get_policy(tenant_id=project["tenant_id"])
+        print(f"tenant_id={project['tenant_id']}")
+        print(f"policy={policy or 'none'}")
+        return EXIT_OK
 
 
 def cmd_policy_set(args: argparse.Namespace) -> int:
@@ -1169,14 +1190,14 @@ def cmd_policy_set(args: argparse.Namespace) -> int:
     y delega en Storage.upsert_policy. Persistente: aplica a TODOS los
     Runs futuros del tenant.
     """
-    storage, err = _open_project_storage(args)
-    if err != EXIT_OK or storage is None:
-        return err
-    resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
-    project, _ = resolver.lookup(args.project)
-    storage.upsert_policy(tenant_id=project["tenant_id"], policy=args.redact_policy)
-    print(f"tenant_id={project['tenant_id']} policy={args.redact_policy}")
-    return EXIT_OK
+    with _open_project_storage(args) as (storage, err):
+        if err != EXIT_OK or storage is None:
+            return err
+        resolver = ProjectResolver(data_root=resolve_data_root(args.data_root)).with_default_root()
+        project, _ = resolver.lookup(args.project)
+        storage.upsert_policy(tenant_id=project["tenant_id"], policy=args.redact_policy)
+        print(f"tenant_id={project['tenant_id']} policy={args.redact_policy}")
+        return EXIT_OK
 
 
 def _route_knowledge(args: argparse.Namespace) -> int:

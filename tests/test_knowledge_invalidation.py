@@ -11,6 +11,7 @@ Reglas:
 from __future__ import annotations
 
 import json as _json
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -28,12 +29,17 @@ from skillgraph.platform.storage import Storage
 # ---------------------------------------------------------------------------
 
 
-def _ctl(tmp_path: Path) -> KnowledgeController:
-    return KnowledgeController(
-        knowledge=Storage(tmp_path / "k.sqlite"),
-        tenant_id="t",
-        project_id="p",
-    )
+@pytest.fixture
+def ctl(tmp_path: Path) -> Iterator[KnowledgeController]:
+    storage = Storage(tmp_path / "k.sqlite")
+    try:
+        yield KnowledgeController(
+            knowledge=storage,
+            tenant_id="t",
+            project_id="p",
+        )
+    finally:
+        storage.close()
 
 
 def _src(sid: str = "local:a") -> Source:
@@ -97,9 +103,8 @@ def _evidence(ctl: KnowledgeController, *, eid: str, source_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_invalidate_marks_direct_claims_stale(tmp_path: Path) -> None:
+def test_invalidate_marks_direct_claims_stale(ctl: KnowledgeController) -> None:
     """Source A, claim C1 con source_id=A. Invalidar A -> C1 stale=1."""
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:a"))
     ctl.upsert_entity(entity=_ent("file:a"))
     cid = _claim(ctl, claim_id="c1", entity_id="file:a", source_id="local:a", revision="rev1")
@@ -111,9 +116,8 @@ def test_invalidate_marks_direct_claims_stale(tmp_path: Path) -> None:
     assert ctl.get_claim(claim_id=cid).stale is True
 
 
-def test_invalidate_propagates_via_evidence(tmp_path: Path) -> None:
+def test_invalidate_propagates_via_evidence(ctl: KnowledgeController) -> None:
     """Chain de 2 hops via evidencia compartida."""
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:a"))
     ctl.register_source(source=_src("local:b"))
     ctl.upsert_entity(entity=_ent("file:a"))
@@ -146,7 +150,7 @@ def test_invalidate_propagates_via_evidence(tmp_path: Path) -> None:
     assert c2 in invalidated
 
 
-def test_invalidate_respects_max_hops(tmp_path: Path) -> None:
+def test_invalidate_respects_max_hops(ctl: KnowledgeController) -> None:
     """max_hops=1 capta directos (hop 0) + 1 nivel transitivo (hop 1).
 
     Para demostrar el cap, construimos un grafo de 3 niveles:
@@ -154,7 +158,6 @@ def test_invalidate_respects_max_hops(tmp_path: Path) -> None:
       c1 -> ev1 -> c2 (transitivo 1 nivel, hop 1)
       c2 -> ev2 -> c3 (transitivo 2 niveles, hop 2, FUERA de max_hops=1)
     """
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:a"))
     ctl.register_source(source=_src("local:b"))
     ctl.register_source(source=_src("local:c"))
@@ -203,9 +206,8 @@ def test_invalidate_respects_max_hops(tmp_path: Path) -> None:
     assert c3 not in invalidated  # 2 niveles transitivos: fuera del cap.
 
 
-def test_refresh_reactivates_claims(tmp_path: Path) -> None:
+def test_refresh_reactivates_claims(ctl: KnowledgeController) -> None:
     """Invalidar -> refresh con nueva revision -> reactivadas."""
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:a"))
     ctl.upsert_entity(entity=_ent("file:a"))
     cid = _claim(ctl, claim_id="c1", entity_id="file:a", source_id="local:a", revision="rev1")
@@ -238,16 +240,14 @@ def test_refresh_reactivates_claims(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_invalidate_unknown_source_raises(tmp_path: Path) -> None:
+def test_invalidate_unknown_source_raises(ctl: KnowledgeController) -> None:
     """Source inexistente -> UnknownSourceError."""
-    ctl = _ctl(tmp_path)
     with pytest.raises(UnknownSourceError):
         ctl.invalidate_from_source(source_id="local:nope")
 
 
-def test_refresh_with_same_revision_no_op(tmp_path: Path) -> None:
+def test_refresh_with_same_revision_no_op(ctl: KnowledgeController) -> None:
     """Refresh con misma revision: ninguna reactivacion nueva."""
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:a"))
     ctl.upsert_entity(entity=_ent("file:a"))
     _claim(ctl, claim_id="c1", entity_id="file:a", source_id="local:a", revision="rev1")
@@ -260,9 +260,8 @@ def test_refresh_with_same_revision_no_op(tmp_path: Path) -> None:
     assert reactivated == []
 
 
-def test_hop_limit_exceeded_emits_warning(tmp_path: Path) -> None:
+def test_hop_limit_exceeded_emits_warning(ctl: KnowledgeController) -> None:
     """max_hops=1 con chain de 2 hops -> warning emitido, no excepcion."""
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:a"))
     ctl.register_source(source=_src("local:b"))
     ctl.upsert_entity(entity=_ent("file:a"))
@@ -295,9 +294,8 @@ def test_hop_limit_exceeded_emits_warning(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_invalidate_emits_knowledge_invalidated_event(tmp_path: Path) -> None:
+def test_invalidate_emits_knowledge_invalidated_event(ctl: KnowledgeController) -> None:
     """Event KnowledgeInvalidated se persiste en runtime_events."""
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:a"))
     ctl.upsert_entity(entity=_ent("file:a"))
     _claim(ctl, claim_id="c1", entity_id="file:a", source_id="local:a", revision="r1")
@@ -317,9 +315,8 @@ def test_invalidate_emits_knowledge_invalidated_event(tmp_path: Path) -> None:
     assert rows[0]["resource_ref"] == "source:local:a"
 
 
-def test_refresh_emits_knowledge_refreshed_event(tmp_path: Path) -> None:
+def test_refresh_emits_knowledge_refreshed_event(ctl: KnowledgeController) -> None:
     """Event KnowledgeRefreshed con reactivated_count y lista."""
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:a"))
     ctl.upsert_entity(entity=_ent("file:a"))
     _claim(ctl, claim_id="c1", entity_id="file:a", source_id="local:a", revision="rev1")
@@ -343,9 +340,8 @@ def test_refresh_emits_knowledge_refreshed_event(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_invalidate_with_no_claims_is_noop(tmp_path: Path) -> None:
+def test_invalidate_with_no_claims_is_noop(ctl: KnowledgeController) -> None:
     """Source sin claims: retorna [], NO emite event."""
-    ctl = _ctl(tmp_path)
     ctl.register_source(source=_src("local:alone"))
 
     invalidated = ctl.invalidate_from_source(source_id="local:alone")
