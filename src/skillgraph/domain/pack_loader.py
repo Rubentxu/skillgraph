@@ -31,6 +31,63 @@ from skillgraph.resources.registry import BrickRegistry, BrickType, SpecValidato
 _PRIMITIVE_TYPES = frozenset({"string", "integer", "number", "boolean"})
 
 
+def _matches(field_schema: str, value: object) -> bool:
+    """¿El valor satisface el tipo primitivo declarado?
+
+    Asume que `field_schema` ya es un tipo conocido: quien llama
+    comprueba la pertenencia a `_PRIMITIVE_TYPES` antes de llegar
+    aqui (via `_require_known_type`). El `case _` final no se da por
+    alcanzado, pero se conserva para que anadir un tipo a
+    `_PRIMITIVE_TYPES` sin tocar esta funcion falle ruidosamente en
+    vez de devolver `False` en silencio.
+
+    WI-46: `bool` hereda de `int` en Python, asi que
+    `isinstance(True, int)` es `True`. Un chequeo ingenuo aceptaba un
+    booleano en un campo declarado `integer` (y en `number`, que
+    acepta `(int, float)`). Se excluye `bool` explicitamente: son
+    cuatro tipos primitivos, disjuntos.
+    """
+    match field_schema:
+        case "string":
+            return isinstance(value, str)
+        case "integer":
+            return isinstance(value, int) and not isinstance(value, bool)
+        case "number":
+            return isinstance(value, (int, float)) and not isinstance(value, bool)
+        case "boolean":
+            return isinstance(value, bool)
+        case _:
+            return False
+
+
+def _require_known_type(kind: str, field_name: str, declared: str, label: str) -> None:
+    """Rechaza un tipo declarado que no existe en el registro.
+
+    WI-48. Un esquema mal escrito (`str` por `string`, `int` por
+    `integer`) es un error de DECLARACION, no de dato: se reporta
+    aqui nombrando el campo, el tipo recibido y los que si valen.
+
+    Sin esta comprobacion el fallo se manifestaba de dos formas
+    distintas y ambas malas. En una lista, el guard
+    `if elem_type in _PRIMITIVE_TYPES:` tenia una rama de fallo
+    vacia, asi que la lista entera se aceptaba sin mirar un
+    elemento. En un campo escalar, `_matches` devolvia `False` para
+    un tipo desconocido y caia en el mismo mensaje que un valor
+    erroneo: "esperaba int, recibio int", que no dice nada y parece
+    un bug.
+
+    `label` distingue "tipo" de "tipo de elemento" porque ambos se
+    declaran en sitios distintos y el usuario necesita saber cual de
+    los dos esta mal.
+    """
+    if declared not in _PRIMITIVE_TYPES:
+        accepted = ", ".join(sorted(_PRIMITIVE_TYPES))
+        raise ValidationError(
+            f"{kind}.spec.{field_name}: {label} {declared!r} desconocido; "
+            f"se esperaba uno de: {accepted}"
+        )
+
+
 def _make_schema_validator(kind: str, schema: dict[str, Any]) -> SpecValidator:
     """Genera un validador `SpecValidator` a partir de un esquema declarativo.
 
@@ -52,53 +109,16 @@ def _make_schema_validator(kind: str, schema: dict[str, Any]) -> SpecValidator:
             if key not in spec:
                 raise ValidationError(f"{kind}.spec.{key}: campo obligatorio ausente")
 
-    def _matches(field_schema: str, value: object) -> bool:
-        """¿El valor satisface el tipo primitivo declarado?
-
-        Asume que `field_schema` ya es un tipo conocido: quien llama
-        comprueba la pertenencia a `_PRIMITIVE_TYPES` antes de llegar
-        aqui. El `case _` final no se da por alcanzado, pero se
-        conserva para que anadir un tipo a `_PRIMITIVE_TYPES` sin
-        tocar esta funcion falle ruidosamente en vez de devolver
-        `False` en silencio.
-
-        WI-46: `bool` hereda de `int` en Python, asi que
-        `isinstance(True, int)` es `True`. Un chequeo ingenuo
-        aceptaba un booleano en un campo declarado `integer` (y en
-        `number`, que acepta `(int, float)`). Se excluye `bool`
-        explicitamente: son cuatro tipos primitivos, disjuntos.
-        """
-        match field_schema:
-            case "string":
-                return isinstance(value, str)
-            case "integer":
-                return isinstance(value, int) and not isinstance(value, bool)
-            case "number":
-                return isinstance(value, (int, float)) and not isinstance(value, bool)
-            case "boolean":
-                return isinstance(value, bool)
-            case _:
-                return False
-
     def _reject(field_name: str, expected: str, value: object) -> ValidationError:
         return ValidationError(
             f"{kind}.spec.{field_name}: esperaba {expected}, recibio {type(value).__name__}"
         )
 
     def _check_primitive(field_name: str, field_schema: str, value: object) -> None:
-        # WI-48: se distingue "el valor no es del tipo declarado" de
-        # "el tipo declarado no existe". Antes ambas caian en el mismo
-        # mensaje via `_matches`, que devolvia False para un tipo
-        # desconocido, y el usuario recibia el absurdo "esperaba int,
-        # recibio int": un mensaje que no le dice nada y que parece
-        # un bug. Son dos errores distintos con dos arreglos distintos,
-        # asi que se comprueban por separado.
-        if field_schema not in _PRIMITIVE_TYPES:
-            accepted = ", ".join(sorted(_PRIMITIVE_TYPES))
-            raise ValidationError(
-                f"{kind}.spec.{field_name}: tipo {field_schema!r} desconocido; "
-                f"se esperaba uno de: {accepted}"
-            )
+        # El tipo se valida antes que el valor: son dos errores con
+        # dos arreglos distintos, y comprobarlos en otro orden
+        # confunde a quien lee el mensaje.
+        _require_known_type(kind, field_name, field_schema, "tipo")
         if not _matches(field_schema, value):
             raise _reject(field_name, field_schema, value)
 
@@ -106,21 +126,7 @@ def _make_schema_validator(kind: str, schema: dict[str, Any]) -> SpecValidator:
         if not isinstance(value, list):
             raise _reject(field_name, "lista", value)
         elem_type = field_schema["list_of"]
-        # WI-48: se valida el TIPO DECLARADO antes de mirar un solo
-        # elemento. Antes el guard era `if elem_type in _PRIMITIVE_TYPES:`
-        # y su rama de fallo no hacia nada, con lo que un typo en el
-        # pack (`list_of: "str"` en vez de `"string"`) aceptaba la
-        # lista entera sin comprobar NINGUN elemento. El error
-        # aparecia despues, en el punto de uso, sin relacion con su
-        # causa. Un esquema mal escrito es un error de declaracion y
-        # se reporta como tal, aqui, nombrando el campo, el tipo
-        # recibido y los tipos que si valen.
-        if elem_type not in _PRIMITIVE_TYPES:
-            accepted = ", ".join(sorted(_PRIMITIVE_TYPES))
-            raise ValidationError(
-                f"{kind}.spec.{field_name}: tipo de elemento {elem_type!r} "
-                f"desconocido; se esperaba uno de: {accepted}"
-            )
+        _require_known_type(kind, field_name, elem_type, "tipo de elemento")
         for i, elem in enumerate(value):
             if not _matches(elem_type, elem):
                 raise _reject(f"{field_name}[{i}]", elem_type, elem)

@@ -188,6 +188,24 @@ class TestUnknownTypeIsDistinguishableFromBadValue:
         assert "recibio str" in msg
         assert "desconocido" not in msg
 
+    def test_list_and_scalar_messages_differ(self) -> None:
+        """Tras factorizar, los dos mensajes siguen distinguibles.
+
+        `_require_known_type` sirve a los dos caminos con un `label`.
+        Si ese parametro seara un placeholder, ambos dirian lo mismo
+        y el usuario no sabria si el fallo esta en el tipo del campo o
+        en el tipo de sus elementos.
+        """
+        scalar = _make_schema_validator("Brick", {"fields": {"x": "typo"}})
+        listed = _make_schema_validator("Brick", {"fields": {"x": {"list_of": "typo"}}})
+        with pytest.raises(ValidationError) as si:
+            scalar({"x": 1})
+        with pytest.raises(ValidationError) as li:
+            listed({"x": []})
+        assert "tipo de elemento" in str(li.value)
+        assert "tipo de elemento" not in str(si.value)
+        assert "tipo 'typo' desconocido" in str(si.value)
+
     def test_both_errors_name_the_field(self) -> None:
         """Sin el nombre del campo el mensaje no es accionable."""
         for schema, value in ((("edad"), 5), (("edad"), "x")):
