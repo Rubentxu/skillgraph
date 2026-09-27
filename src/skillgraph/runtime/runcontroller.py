@@ -31,14 +31,11 @@ import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 from skillgraph.core.errors import SkillGraphError, ValidationError
 from skillgraph.core.runtime_types import RunState, is_terminal_run_state
-from skillgraph.platform.ports import EventStore, PolicyStore, RunRepository
-from skillgraph.platform.storage import (
-    Storage,  # cast en _execute_one; KnowledgeController migration a KnowledgeRepository en WI-02b
-)
+from skillgraph.platform.ports import EventStore, KnowledgeRepository, PolicyStore, RunRepository
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
 from skillgraph.runtime.agent import AgentAdapter, AgentResult
 from skillgraph.runtime.engine import EventBuilder, EventLog, RuntimeEvent
@@ -243,6 +240,7 @@ class RunController:
         policy: PolicyStore,
         adapter: AgentAdapter,
         recipe_resolver: Callable[[str], ContextRecipe | None] | None = None,
+        knowledge: KnowledgeRepository | None = None,
         lock_dir: Path | None = None,
         lock_mode: LockMode = "none",
         lock_timeout_seconds: float = 30.0,
@@ -261,6 +259,20 @@ class RunController:
         self._runs = runs
         self._policy = policy
         self._adapter = adapter
+        # WI-31: ``knowledge`` (opcional) es el ``KnowledgeRepository``
+        # que ``_compile_knowledge`` usara cuando el recipe_resolver
+        # devuelva una receta. Si es None (default), el camino
+        # ``recipe_resolver is not None`` se sigue cortocircuitando
+        # al stub ``default-empty-recipe/v1`` (incluido=()) y el
+        # atributo no se usa. Esto elimina el antiguo ``cast(Storage,
+        # self._runs)`` que era un workaround del type checker
+        # para tratar ``RunRepository`` como ``KnowledgeRepository``
+        # (Storage los implementa ambos por structural subtyping).
+        # ``Storage`` satisface los dos Protocols; al separarse en
+        # WI-02b (cuando ``RunRepository`` deja de cumplir duck
+        # typing de knowledge), el caller debera pasar
+        # explícitamente ``knowledge=storage.knowledge_repository()``.
+        self._knowledge: KnowledgeRepository | None = knowledge
         # S6 Etapa 7: configuracion de locks por run_id.
         # `lock_dir=None` + `lock_mode='none'` = no locks (compat
         # pre-S6; tests existentes no se enteran). Cualquier otra
@@ -1125,8 +1137,15 @@ class RunController:
         recipe = self._recipe_resolver(recipe_ref)
         if recipe is None:
             return HandoffKnowledge(recipe_ref=recipe_ref, included=())
+        # WI-31: el ``KnowledgeRepository`` se inyecta por constructor
+        # (``knowledge=...``). Sin el, el code path se cortocircuita al
+        # stub ``default-empty-recipe/v1`` (incluido=()). Esto elimina
+        # el antiguo ``cast(Storage, self._runs)`` que era un workaround
+        # del type checker.
+        if self._knowledge is None:
+            return HandoffKnowledge(recipe_ref=recipe_ref, included=())
         kctl = KnowledgeController(
-            knowledge=cast(Storage, self._runs),
+            knowledge=self._knowledge,
             tenant_id=tenant_id,
             project_id=project_id,
         )

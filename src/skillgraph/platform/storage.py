@@ -343,11 +343,8 @@ class Storage:
         """
         # sqlite3.Connection.close() es idempotente en Python >=3.10,
         # pero por seguridad marcamos una bandera para dobles llamadas.
-        try:
+        with suppress(sqlite3.ProgrammingError):
             self._conn.close()
-        except sqlite3.ProgrammingError:
-            # Ya cerrada: ignorar.
-            pass
 
     def __enter__(self) -> Storage:
         """Soporte ``with Storage(path) as s: ...``.
@@ -389,6 +386,27 @@ class Storage:
         las firmas de ``RunRepository``. El tipo de retorno nominal
         es ``Storage`` para no introducir imports circulares; el
         consumidor lo declara como ``RunRepository``.
+        """
+        return self
+
+    def knowledge_repository(self) -> Storage:
+        """Devuelve una vista ``Storage`` que satisface ``KnowledgeRepository``.
+
+        Equivalente a ``self`` mientras ``Storage`` mantenga todas
+        las firmas de ``KnowledgeRepository`` (Protocol declarado en
+        ``skillgraph.platform.ports``). El tipo de retorno nominal
+        es ``Storage`` por la misma razon que ``run_repository``:
+        evita import circular; el consumidor declara ``knowledge:
+        KnowledgeRepository``.
+
+        WI-31: introducido para reemplazar el ``cast(Storage,
+        self._runs)`` en ``RunController._compile_knowledge``.
+        Mientras ``Storage`` implemente ``KnowledgeRepository`` por
+        structural subtyping, el factor es sinonimo de ``self``.
+        Si en el futuro la composicion cambia (p.ej. se separa
+        ``RunStorage`` y ``KnowledgeStorage``), este factor pasa a
+        devolver la vista correspondiente sin necesidad de tocar
+        RunController.
         """
         return self
 

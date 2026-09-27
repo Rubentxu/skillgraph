@@ -133,7 +133,9 @@ class TestRecipeResolverOptIn:
         """Resolver que no conoce la receta -> stub, sin excepción."""
         s, adapter = storage
         resolver: Callable[[str], object] = lambda ref: None  # noqa: E731
-        ctl = RunController(runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver)
+        ctl = RunController(
+            runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver, knowledge=s
+        )
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         ctl.reconcile_run(run_id=rid, tenant_id=TENANT, project_id=PROJECT)
         h = _handoff_of_last_execution(s)
@@ -164,7 +166,9 @@ class TestRecipeResolverOptIn:
                 overflow_strategy="drop_optional",
             )
 
-        ctl = RunController(runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver)
+        ctl = RunController(
+            runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver, knowledge=s
+        )
         rid = ctl.create_run(
             tenant_id=TENANT,
             project_id=PROJECT,
@@ -195,7 +199,9 @@ class TestRecipeResolverOptIn:
             received.append(ref)
             return None
 
-        ctl = RunController(runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver)
+        ctl = RunController(
+            runs=s, events=s, policy=s, adapter=adapter, recipe_resolver=resolver, knowledge=s
+        )
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         ctl.reconcile_run(run_id=rid, tenant_id=TENANT, project_id=PROJECT)
         assert received == ["default-empty-recipe/v1"]
@@ -216,7 +222,12 @@ class TestRecipeResolverOptIn:
             raise StaleKnowledgeError("claim stale y policy=strict")
 
         ctl = RunController(
-            runs=s, events=s, policy=s, adapter=ExplodingAdapter(), recipe_resolver=resolver
+            runs=s,
+            events=s,
+            policy=s,
+            adapter=ExplodingAdapter(),
+            recipe_resolver=resolver,
+            knowledge=s,
         )
         rid = ctl.create_run(tenant_id=TENANT, project_id=PROJECT, plan=_plan("a"))
         ctl.reconcile_run(run_id=rid, tenant_id=TENANT, project_id=PROJECT)
