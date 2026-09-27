@@ -18,12 +18,13 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from skillgraph.platform.paths import agents_root
@@ -877,39 +878,13 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return EXIT_OK
 
+    handler = _resolve_handler(args)
+    if handler is None:
+        parser.print_help()
+        return EXIT_USAGE
+
     try:
-        if args.command == "init":
-            return cmd_init(args)
-        if args.command == "backup":
-            return cmd_backup(args)
-        if args.command == "project" and args.project_command == "create":
-            return cmd_project_create(args)
-        if args.command == "project" and args.project_command == "list":
-            return cmd_project_list(args)
-        if args.command == "project" and args.project_command == "inspect":
-            return cmd_project_inspect(args)
-        if args.command == "brick":
-            return cmd_brick_register(args)
-        if args.command == "pack" and args.pack_command == "import":
-            return cmd_pack_import(args)
-        if args.command == "pack" and args.pack_command == "load":
-            return cmd_pack_load(args)
-        if args.command == "promotion" and args.promotion_command == "submit":
-            return cmd_promotion_submit(args)
-        if args.command == "promotion" and args.promotion_command == "list":
-            return cmd_promotion_list(args)
-        if args.command == "promotion" and args.promotion_command == "reconcile":
-            return cmd_promotion_reconcile(args)
-        if args.command == "run":
-            return cmd_run(args)
-        if args.command == "runs":
-            return _route_runs(args)
-        if args.command == "policy":
-            return _route_policy(args)
-        if args.command == "knowledge":
-            return _route_knowledge(args)
-        if args.command == "expansion":
-            return _route_expansion(args)
+        return handler(args)
     except SkillGraphError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
         return EXIT_DOMAIN
@@ -919,25 +894,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return EXIT_PROJECT_NOT_FOUND
 
-    parser.print_help()
-    return EXIT_USAGE
-
 
 def _route_runs(args: argparse.Namespace) -> int:
-    """Enruta subcommand `runs` al handler correspondiente."""
-    sub = args.runs_command
-    if sub == "list":
-        return cmd_runs_list(args)
-    if sub == "show":
-        return cmd_runs_show(args)
-    if sub == "logs":
-        return cmd_runs_logs(args)
-    if sub == "cancel":
-        return cmd_runs_cancel(args)
-    if sub == "budget":
-        return cmd_runs_budget(args)
-    print(f"ERROR: runs subcommand no reconocido: {sub!r}", file=sys.stderr)
-    return EXIT_USAGE
+    """Enruta subcommand `runs` al handler correspondiente.
+
+    Eliminado en WI-41: `_DISPATCH` enruta (runs, sub) directamente.
+    Se conserva el nombre por compatibilidad con imports externos.
+    """
+    return _dispatch_nested("runs", args)
 
 
 @contextmanager
@@ -1157,14 +1121,11 @@ def cmd_runs_budget(args: argparse.Namespace) -> int:
 
 
 def _route_policy(args: argparse.Namespace) -> int:
-    """Enruta subcommand `policy` al handler correspondiente."""
-    sub = args.policy_command
-    if sub == "get":
-        return cmd_policy_get(args)
-    if sub == "set":
-        return cmd_policy_set(args)
-    print(f"ERROR: policy subcommand no reconocido: {sub!r}", file=sys.stderr)
-    return EXIT_USAGE
+    """Enruta subcommand `policy` al handler correspondiente.
+
+    Eliminado en WI-41: `_DISPATCH` enruta (policy, sub) directamente.
+    """
+    return _dispatch_nested("policy", args)
 
 
 def cmd_policy_get(args: argparse.Namespace) -> int:
@@ -1201,43 +1162,19 @@ def cmd_policy_set(args: argparse.Namespace) -> int:
 
 
 def _route_knowledge(args: argparse.Namespace) -> int:
-    """Enruta subcommand `knowledge` al handler correspondiente."""
-    sub = args.knowledge_command
-    if sub == "stale":
-        return cmd_knowledge_stale(args)
-    if sub == "invalidate":
-        return cmd_knowledge_invalidate(args)
-    if sub == "refresh":
-        return cmd_knowledge_refresh(args)
-    if sub == "compile":
-        return cmd_knowledge_compile(args)
-    if sub == "trace":
-        return cmd_knowledge_trace(args)
-    parser_local = _build_parser()
-    parser_local.parse_args(["knowledge", "--help"])
-    return EXIT_USAGE  # unreachable
+    """Enruta subcommand `knowledge` al handler correspondiente.
+
+    Eliminado en WI-41: `_DISPATCH` enruta (knowledge, sub) directamente.
+    """
+    return _dispatch_nested("knowledge", args)
 
 
 def _route_expansion(args: argparse.Namespace) -> int:
-    """Enruta subcommand `expansion` al handler correspondiente."""
-    sub = args.expansion_command
-    if sub == "propose":
-        return cmd_expansion_propose(args)
-    if sub == "apply":
-        return cmd_expansion_apply(args)
-    if sub == "validate":
-        return cmd_expansion_validate(args)
-    if sub == "rejections":
-        return cmd_expansion_rejections(args)
-    if sub == "list":
-        return cmd_expansion_list(args)
-    if sub == "show":
-        return cmd_expansion_show(args)
-    if sub == "archive":
-        return cmd_expansion_archive(args)
-    parser_local = _build_parser()
-    parser_local.parse_args(["expansion", "--help"])
-    return EXIT_USAGE  # unreachable
+    """Enruta subcommand `expansion` al handler correspondiente.
+
+    Eliminado en WI-41: `_DISPATCH` enruta (expansion, sub) directamente.
+    """
+    return _dispatch_nested("expansion", args)
 
 
 def _build_registry_for_project(
@@ -2511,6 +2448,127 @@ def cmd_expansion_archive(args: argparse.Namespace) -> int:
             return EXIT_OK
     print(f"ERROR: proposal_id={args.proposal_id!r} no encontrado", file=sys.stderr)
     return EXIT_PROJECT_NOT_FOUND
+
+
+# --- Tabla de dispatch (WI-41) ----------------------------------------------
+# Sustituye el if-chain de 32 ramas que tenia `main` (cc=43, unico hotspot
+# publico del informe de arquitectura) y consolida los cuatro routers
+# `_route_*`, que eran cuatro copias del mismo patron.
+#
+# Una sola tabla declara todo el dispatch. Un comando plano se indexa por
+# su nombre; un grupo, por el par (comando, subcomando). La resolucion es
+# una funcion pura: la misma tupla (comando, subcomando) produce siempre
+# el mismo handler (AGENTS.md 1.1, 11.2).
+#
+# Invariante verificado por `tests/test_wi41_cli_dispatch.py`: todo comando
+# y todo subcomando declarados en `_build_parser` tienen entrada aqui.
+
+Handler = Callable[[argparse.Namespace], int]
+
+_DISPATCH: Final[Mapping[str | tuple[str, str], Handler]] = MappingProxyType(
+    {
+        # --- comandos planos ---
+        "init": cmd_init,
+        "backup": cmd_backup,
+        "brick": cmd_brick_register,
+        "run": cmd_run,
+        # --- proyecto ---
+        ("project", "create"): cmd_project_create,
+        ("project", "list"): cmd_project_list,
+        ("project", "inspect"): cmd_project_inspect,
+        # --- paquetes y bricks ---
+        ("pack", "import"): cmd_pack_import,
+        ("pack", "load"): cmd_pack_load,
+        # --- promocion ---
+        ("promotion", "submit"): cmd_promotion_submit,
+        ("promotion", "list"): cmd_promotion_list,
+        ("promotion", "reconcile"): cmd_promotion_reconcile,
+        # --- runs ---
+        ("runs", "list"): cmd_runs_list,
+        ("runs", "show"): cmd_runs_show,
+        ("runs", "logs"): cmd_runs_logs,
+        ("runs", "cancel"): cmd_runs_cancel,
+        ("runs", "budget"): cmd_runs_budget,
+        # --- politica ---
+        ("policy", "get"): cmd_policy_get,
+        ("policy", "set"): cmd_policy_set,
+        # --- knowledge ---
+        ("knowledge", "stale"): cmd_knowledge_stale,
+        ("knowledge", "invalidate"): cmd_knowledge_invalidate,
+        ("knowledge", "refresh"): cmd_knowledge_refresh,
+        ("knowledge", "compile"): cmd_knowledge_compile,
+        ("knowledge", "trace"): cmd_knowledge_trace,
+        # --- expansion ---
+        ("expansion", "propose"): cmd_expansion_propose,
+        ("expansion", "apply"): cmd_expansion_apply,
+        ("expansion", "validate"): cmd_expansion_validate,
+        ("expansion", "rejections"): cmd_expansion_rejections,
+        ("expansion", "list"): cmd_expansion_list,
+        ("expansion", "show"): cmd_expansion_show,
+        ("expansion", "archive"): cmd_expansion_archive,
+    }
+)
+
+# Comando -> atributo del Namespace que contiene su subcomando.
+# `None` = comando plano, resoluble por nombre.
+_SUBCOMMAND_OF: Final[Mapping[str, str | None]] = MappingProxyType(
+    {
+        "init": None,
+        "backup": None,
+        "project": "project_command",
+        "brick": None,
+        "pack": "pack_command",
+        "promotion": "promotion_command",
+        "run": None,
+        "runs": "runs_command",
+        "policy": "policy_command",
+        "knowledge": "knowledge_command",
+        "expansion": "expansion_command",
+    }
+)
+
+
+def _resolve_handler(args: argparse.Namespace) -> Handler | None:
+    """Resuelve el handler de `args` en la tabla de dispatch.
+
+    Funcion pura: no lee disco, no muta, no depende del reloj. La misma
+    entrada produce siempre la misma salida (AGENTS.md 1.3, 11.1).
+
+    Returns:
+        El handler aplicable, o `None` si el comando o el subcomando no
+        tienen entrada en la tabla. `None` es el unico caso en que `main`
+        imprime la ayuda: las ramas de error de los routers anteriores
+        quedan subsumidas aqui.
+    """
+    command: str = args.command
+    attribute: str | None = _SUBCOMMAND_OF.get(command)
+    if attribute is None:
+        return _DISPATCH.get(command)
+    subcommand: str | None = getattr(args, attribute, None)
+    if subcommand is None:
+        return None
+    return _DISPATCH.get((command, subcommand))
+
+
+def _dispatch_nested(command: str, args: argparse.Namespace) -> int:
+    """Ejecuta el subcomando de `args` dentro del grupo `command`.
+
+    Fachada que preserva los nombres `_route_*` (importables por tests y
+    por codigo externo) ahora que la tabla es la unica fuente de verdad.
+
+    Un subcomando sin entrada es un error de uso: se informa por stderr y
+    se devuelve EXIT_USAGE, igual que antes del refactor.
+
+    Returns:
+        El exit code del handler, o EXIT_USAGE si el subcomando no existe.
+    """
+    attribute: str | None = _SUBCOMMAND_OF.get(command)
+    subcommand: str | None = getattr(args, attribute, None) if attribute else None
+    handler: Handler | None = _DISPATCH.get((command, subcommand))
+    if handler is None:
+        print(f"ERROR: {command} subcommand no reconocido: {subcommand!r}", file=sys.stderr)
+        return EXIT_USAGE
+    return handler(args)
 
 
 if __name__ == "__main__":
