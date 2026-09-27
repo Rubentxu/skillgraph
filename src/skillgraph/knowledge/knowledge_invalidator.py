@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from skillgraph.core.errors import (
     HopLimitExceededWarning,
+    UnknownClaimError,
 )
 from skillgraph.knowledge.graph import Claim, ClaimID, SourceID
 from skillgraph.runtime.engine import now_iso as _now_iso
@@ -92,7 +93,13 @@ def _expand_one_hop(
     for claim_id in frontier_in:
         try:
             controller.get_claim(claim_id=claim_id)
-        except Exception:
+        except UnknownClaimError:
+            # Solo se tolera la ausencia de la claim, no un fallo
+            # arbitrario: antes se tragaba `Exception` entero (AGENTS.md
+            # 11.14.4), asi que un error de I/O o un bug del controller
+            # se manifestaba como "esa claim no existe" y el traversal
+            # se detenia en silencio. Una invalidacion parcial si es
+            # tolerable; un fallo del controller no.
             continue
         for evidence in controller.get_evidences_for_claim(claim_id=claim_id):
             if evidence.evidence_id in visited_evidence:

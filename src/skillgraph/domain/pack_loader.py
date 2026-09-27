@@ -52,34 +52,44 @@ def _make_schema_validator(kind: str, schema: dict[str, Any]) -> SpecValidator:
             if key not in spec:
                 raise ValidationError(f"{kind}.spec.{key}: campo obligatorio ausente")
 
+    def _matches(field_schema: str, value: object) -> bool:
+        """¿El valor satisface el tipo primitivo declarado?
+
+        WI-46: `bool` hereda de `int` en Python, asi que
+        `isinstance(True, int)` es `True`. Un chequeo ingenuo
+        aceptaba un booleano en un campo declarado `integer` (y en
+        `number`, que acepta `(int, float)`). Se excluye `bool`
+        explicitamente: son cuatro tipos primitivos, disjuntos.
+        """
+        match field_schema:
+            case "string":
+                return isinstance(value, str)
+            case "integer":
+                return isinstance(value, int) and not isinstance(value, bool)
+            case "number":
+                return isinstance(value, (int, float)) and not isinstance(value, bool)
+            case "boolean":
+                return isinstance(value, bool)
+            case _:
+                return False
+
+    def _reject(field_name: str, expected: str, value: object) -> ValidationError:
+        return ValidationError(
+            f"{kind}.spec.{field_name}: esperaba {expected}, recibio {type(value).__name__}"
+        )
+
     def _check_primitive(field_name: str, field_schema: str, value: object) -> None:
-        if field_schema == "string" and not isinstance(value, str):
-            raise ValidationError(
-                f"{kind}.spec.{field_name}: esperaba string, recibio {type(value).__name__}"
-            )
-        if field_schema == "integer" and not isinstance(value, int):
-            raise ValidationError(
-                f"{kind}.spec.{field_name}: esperaba integer, recibio {type(value).__name__}"
-            )
-        if field_schema == "number" and not isinstance(value, (int, float)):
-            raise ValidationError(
-                f"{kind}.spec.{field_name}: esperaba number, recibio {type(value).__name__}"
-            )
-        if field_schema == "boolean" and not isinstance(value, bool):
-            raise ValidationError(
-                f"{kind}.spec.{field_name}: esperaba boolean, recibio {type(value).__name__}"
-            )
+        if not _matches(field_schema, value):
+            raise _reject(field_name, field_schema, value)
 
     def _check_list(field_name: str, field_schema: dict[str, Any], value: object) -> None:
         if not isinstance(value, list):
-            raise ValidationError(
-                f"{kind}.spec.{field_name}: esperaba lista, recibio {type(value).__name__}"
-            )
+            raise _reject(field_name, "lista", value)
         elem_type = field_schema["list_of"]
         if elem_type in _PRIMITIVE_TYPES:
             for i, elem in enumerate(value):
-                if elem_type == "string" and not isinstance(elem, str):
-                    raise ValidationError(f"{kind}.spec.{field_name}[{i}]: esperaba string")
+                if not _matches(elem_type, elem):
+                    raise _reject(f"{field_name}[{i}]", elem_type, elem)
 
     def _validate(spec: dict[str, Any]) -> None:
         _check_required(spec)
