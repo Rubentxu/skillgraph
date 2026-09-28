@@ -34,7 +34,7 @@ from typing import Any
 import pytest
 
 from skillgraph.core.errors import IdempotencyError
-from skillgraph.platform.ports import RunRepository
+from skillgraph.platform.ports import RunRepository, StoredRun
 from skillgraph.platform.storage import Storage
 from skillgraph.runtime.engine import RuntimeEvent
 
@@ -214,8 +214,29 @@ def _invoke(target: Any, method: str, kwargs: dict[str, Any]) -> Any:
 
 
 def _normalized_return(method: str, value: Any) -> Any:
+    """Normaliza partes dependientes del reloj de los retornos:
+    created_at/updated_at/started_at/finished_at se marcan como
+    CLOCK cuando existen (el dump semantico ya excluye columnas de
+    reloj; los DTOs de retorno necesitan el mismo tratamiento)."""
     if method == "create_run":
         return "RUN_ID" if isinstance(value, str) and value else repr(value)
+    if method in {"list_runs", "get_run", "load_run"}:
+        runs = value if isinstance(value, list) else [value]
+        return [
+            StoredRun(
+                run_id=r.run_id,
+                tenant_id=r.tenant_id,
+                project_id=r.project_id,
+                state=r.state,
+                plan_json=r.plan_json,
+                current_node=r.current_node,
+                created_at="CLOCK",
+                updated_at="CLOCK",
+            )
+            for r in runs
+        ]
+    if method in {"list_node_executions", "list_events_for_run"}:
+        return f"SEQ_LEN:{len(value)}"
     return value
 
 
