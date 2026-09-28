@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.7"  # release v0.16.7: fix bool coercion en Recipe + refactors detect_changes/_reconcile_run_locked
+__version__ = "0.16.8.dev0"  # post-v0.16.7: backlog cc>=11 vacio; siguiente deuda: god modules P1 (requieren ADR)
 
 from skillgraph.core.errors import (
     IdentityConflictError,
