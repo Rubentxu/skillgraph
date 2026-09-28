@@ -6737,8 +6737,17 @@ delata que no era decision de diseno: el mismo fallo en dos sitios.
   verdad para que la prueba signifique algo.
 - `git sddk-align --ack` exige el UUID que deriva
   `sddk plan roadmap`, no el nombre local del WorkItem. `WI-48` no
-  existe en el ledger; el item activo es el stub
+  existe en el ledger; el item activo es
   `e01ff5ba-754c-4c27-8b60-a73056c9f6d3`.
+
+  **CORRECCION (2026-09-28)**: esta entrada llamo a `e01ff5ba` un
+  "stub" sin titulo ni objetivo. Es FALSO, y
+  la sesion del 28 lo asumio tres veces antes de comprobarlo. El item
+  tiene ciclo `wi-45-uow-coverage`, titulo "Close the coverage gap on
+  platform/uow.py, the persistence owner" y cinco criterios de
+  aceptacion observables (A1-A5). No es un stub: es WI-45, con su
+  estado `active` y su trabajo sin terminar. Ver la entrada del
+  2026-09-28 mas abajo.
 - El gate de `git sddk-close` bloquea `git commit --amend` si el
   closeout del commit anterior no esta emitido. Un `--amend` con
   cambios en el indice falla y deja el commit intacto: hay que cerrar
@@ -6942,3 +6951,114 @@ Framework:                             2.0.1 (resolved)
 Baseline verde:                        1413 passed, 5/5 stages success
 Artefactos sin commitear:              BACKLOG.md, audits/architecture-debt-2026-09-28.md
 ```
+
+## 2026-09-28 (tarde) — CORRECCION: el work item existia y no era un stub
+
+### Que fallo
+
+La sesion de la manana concluyo "no hay nada que retomar" y lo
+reporto tres veces. La conclusion era **falsa**, y la razon de fondo
+no fue un dato malo: fue **no mirar donde estaba el dato**.
+
+Se comprobo `sddk cycle status`, `sddk backlog list` y
+`sddk plan roadmap next`. Los tres dicen "nada". Pero el ledger tiene
+la tabla `work_items_v1`, con 9 filas, y ahi esta `e01ff5ba` con:
+
+- `cycle_id`: `p-74299cf88f51dab9/wi-45-uow-coverage`
+- `title`: "Close the coverage gap on platform/uow.py, the persistence owner"
+- `status`: `active`
+- cinco criterios de aceptacion observables (A1-A5)
+
+Es **WI-45**, no un stub. Tenia titulo, objetivo y criterios. Se
+reporto como "vacio" porque el CLI de roadmap devuelve un resumen sin
+campos, y ese resumen se tomo por el registro completo.
+
+### El fallo de metodo, que es lo que hay que corregir
+
+"`sddk backlog list` dice que no hay items" se tomo como prueba de que
+no hay trabajo. Es una prueba de una sola superficie. El CLI expone
+mas de una docena (`debt`, `stale`, `target`, `capability`, `memory`,
+`vault`, `knowledge`, `graph`, `incs`, `rules`) y solo se miraron tres.
+Ademas `sddk backlog list` lista `backlog_items_v1`, que tiene 2 filas
+historicas en estado `promoted`, **no** `work_items_v1`. Son cosas
+distintas: work item activo y backlog de ideas. Se confundieron.
+
+### El detalle que mas dano hizo: contexto por defecto
+
+`sddk debt report /dev/stdout` respondio con
+`cycle_id: p-52b95ef55999f9de/kernel-cycle-8` y `findings: []`, y
+`sddk debt incs` listo **49 incidentes de otro proyecto**. El subcomando
+no acepta `--root` y resolvio el contexto por su cuenta. Un comando de
+SDDK ejecutado sin `--root` puede senalar al proyecto equivocado y
+devolver un verde falso. El vault de skillgraph
+(`/home/rubentxu/.sddk-knowledge/p-74299cf88f51dab9`) esta **vacio**,
+lo que confirma que esos 49 INC no son suyos.
+
+### Estado real de WI-45 (OBSERVED, medido)
+
+`platform/uow.py` esta al **100%**: 94 statements, 0 missing, 0 branches
+parciales, medido con `pytest tests/test_uow.py
+tests/test_wi45_uow_delegation.py --cov=skillgraph.platform.uow`. El
+work item decia 71%.
+
+**A1 esta cumplido.** Los commits `3237a94` (reparar 7 delegaciones
+rotas de Storage) y `9fa34b6` (recibos de WI-45) ya estan en `main`.
+Lo que queda no es codigo: es **liberia de estado**. El item sigue
+`active` porque nadie lo cerro, no porque quede trabajo.
+
+### Que hacer con esto
+
+1. Cerrar WI-45 con la evidencia de cobertura real, no abrir trabajo
+   nuevo para "llegar al 90%": ya esta en 100.
+2. Los 13 drift de Protocol que se midiaron esta sesion siguen siendo
+   deuda documental valida, pero **no son el work item activo**.
+   Presentarlos como "el siguiente trabajo" fue otro salto, derivado
+   del roadmap vacio que era falso.
+3. Reanudar el release 0.16.2 (B1/B2) es lo que WI-45 decia
+   explicitamente que motivaba el trabajo, y sigue bloqueado por
+   tooling, no por cobertura.
+
+### Conocimiento negativo (anadir al de la manana)
+
+- `sddk <cmd>` sin `--root` puede resolver otro proyecto. Verificar
+  siempre que el `project_id` de la salida sea `p-74299cf88f51dab9`.
+- La tabla del ledger que responde "cual es mi work item" es
+  `work_items_v1`, no el backlog ni el roadmap. Se puede leer
+  directamente en
+  `~/.local/state/sddk/projects/<project-id>/ledger.sqlite`.
+- `uv run run pytest` es un typo silencioso: `uv run` busca un binario
+  llamado `run`, falla, y sale con codigo 0. Un exit 0 no significa que
+  los tests corrieron. Comprobar siempre la linea de resumen.
+- `uv run pytest tests/ --cov` tarda bastante mas que la suite sin
+  cobertura (407s -> mas de 600s). Un `timeout` interno puesto "por
+  seguridad" lo mata y produce un 124 que parece un fallo de tests.
+
+### Evidencia final del cierre (OBSERVED, suite completa con cobertura)
+
+`uv run pytest tests/ -q --cov=src/skillgraph`: **1413 passed in
+1248.66s**, cobertura total **95.43%**. Modulos por debajo del umbral
+del 90% que fija AGENTS.md 6.3:
+
+| Modulo | Cobertura | Nota |
+|---|---:|---|
+| `platform/paths.py` | 80.85% | exento por AGENTS.md 6.3 (rama Windows no se ejecuta en CI) |
+| `governance/backups.py` | 81.59% | **no exento**: unico incumplimiento real del umbral |
+| `runtime/http_adapter.py` | 88.04% | fuera de scope de WI-45 por decision propia ("deuda de red, merece su propio WorkItem") |
+| `platform/uow.py` | **100.00%** | objetivo de WI-45, cumplido |
+
+Con esto A1, A2, A3 y A5 de WI-45 tienen evidencia directa: cobertura
+por encima del umbral, tests que ejercitan la delegacion real contra
+Connection en memoria (`test_wi45_uow_delegation.py`, 37 tests), suite
+verde y sin regresion en ningun modulo. A4 (pipelinek SUCCESS) tambien
+se cumple, verificado en la manana.
+
+**El modulo que si incumple el umbral es `governance/backups.py` al
+81.59%**, y no aparece en ninguna lista de trabajo. No es parte de
+WI-45 y no se ha convertido en work item: se registra como
+descubrimiento, no como trabajo asumido.
+
+Nota sobre la medicion: la suite con instrumentacion de cobertura tarda
+~1250s, tres veces la suite sin cobertura (407s). Ningun comando del
+agente llega a 600s, asi que hay que lanzarla con `setsid nohup` para
+que sobreviva al limite del tool.
+
