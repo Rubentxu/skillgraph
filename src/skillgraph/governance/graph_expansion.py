@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -358,27 +359,65 @@ def _check_cycle_bound(
     Devuelve ("I5",) si se rompe la invariante; () si no hay ciclo o
     el plan declara max_visits adecuado en los nodos origen del ciclo.
     """
-    new_nodes: list[WorkflowNode] = []
-    new_transitions: list[WorkflowTransition] = []
+    new_nodes, new_trans = _split_new_ops(proposal)
+    if not _has_cycle_via_new_transitions(new_nodes, new_trans, plan):
+        return ()
+    cycle_nodes = _cycle_source_nodes(new_nodes, new_trans, plan)
+    if any(_node_without_bound(plan.nodes, new_nodes, name) for name in cycle_nodes):
+        return ("I5",)
+    return ()
+
+
+def _split_new_ops(
+    proposal: GraphExpansionProposal,
+) -> tuple[tuple[WorkflowNode, ...], tuple[WorkflowTransition, ...]]:
+    """Separa las operaciones de la propuesta en nodos y transiciones."""
+    nodes: list[WorkflowNode] = []
+    trans: list[WorkflowTransition] = []
     for op in proposal.operations:
         if isinstance(op, AddNode):
-            new_nodes.append(op.node)
+            nodes.append(op.node)
         elif isinstance(op, AddTransition):
-            new_transitions.append(op.transition)
+            trans.append(op.transition)
+    return tuple(nodes), tuple(trans)
 
-    new_nodes_t = tuple(new_nodes)
-    new_trans_t = tuple(new_transitions)
-    if not _has_cycle_via_new_transitions(new_nodes_t, new_trans_t, plan):
-        return ()
 
-    cycle_nodes = _cycle_source_nodes(new_nodes_t, new_trans_t, plan)
-    for node_name in cycle_nodes:
-        node_in_plan = next((n for n in plan.nodes if n.name == node_name), None)
-        node_new = next((n for n in new_nodes if n.name == node_name), None)
-        node = node_in_plan or node_new
-        if node is None or node.max_visits is None or node.max_visits < 1:
-            return ("I5",)
-    return ()
+def _node_without_bound(
+    plan_nodes: tuple[WorkflowNode, ...],
+    new_nodes: tuple[WorkflowNode, ...],
+    name: str,
+) -> bool:
+    """True si el nodo `name` no declara max_visits utilizable.
+
+    Un nodo del plan manda sobre uno nuevo con el mismo nombre: la
+    propuesta no puede debilitar una declaracion ya existente.
+    Declarar max_visits en solo uno de los dos extremos del ciclo no
+    basta, por eso esto se consulta por nodo y no por ciclo.
+    """
+    node = next((n for n in plan_nodes if n.name == name), None)
+    node = node or next((n for n in new_nodes if n.name == name), None)
+    return node is None or node.max_visits is None or node.max_visits < 1
+
+
+def _edge_map(
+    new_nodes: tuple[WorkflowNode, ...],
+    new_trans: tuple[WorkflowTransition, ...],
+    plan: WorkflowPlan,
+) -> dict[str, list[str]]:
+    """Mapa de adyacencia del grafo resultante: `plan` ++ `new_*`.
+
+    Vive en un solo sitio a proposito. Las dos funciones que analizan
+    ciclos necesitan exactamente el mismo grafo, y con el armado
+    duplicado en ambas cualquier cambio en la forma de las aristas
+    podia dejar a la otra mirando un grafo distinto sin que ningun
+    test lo notara.
+    """
+    by_name = {n.name for n in plan.nodes}
+    by_name.update(n.name for n in new_nodes)
+    edges: dict[str, list[str]] = {n: [] for n in by_name}
+    for t in (*plan.transitions, *new_trans):
+        edges.setdefault(t.source, []).append(t.target)
+    return edges
 
 
 def _has_cycle_via_new_transitions(
@@ -387,40 +426,28 @@ def _has_cycle_via_new_transitions(
     plan: WorkflowPlan,
 ) -> bool:
     """Devuelve True si el conjunto (plan ++ nuevas ops) tiene ciclo."""
-    from collections import deque
+    edges = _edge_map(new_nodes, new_trans, plan)
+    return any(_bfs_from(start, edges) for start in edges)
 
-    by_name = {n.name for n in plan.nodes}
-    by_name.update(n.name for n in new_nodes)
 
-    # Edges: existentes + nuevas
-    edges: dict[str, list[str]] = {n: [] for n in by_name}
-    for t in plan.transitions:
-        edges.setdefault(t.source, []).append(t.target)
-    for t in new_trans:
-        edges.setdefault(t.source, []).append(t.target)
+def _bfs_from(start: str, edges: Mapping[str, list[str]]) -> bool:
+    """Recorre en anchura desde `start`; True si vuelve a un nodo ya visto.
 
-    # BFS: si hay un ciclo, lo detecta retornando True.
-    visited: set[str] = set()
-
-    def bfs_cycle(start: str) -> bool:
-        seen: set[str] = set()
-        q = deque([(start, [start])])
-        while q:
-            node, path = q.popleft()
-            if node in seen:
+    El back-edge se detecta de dos formas, ambas necesarias: `seen`
+    captura el reencuentro por un camino distinto y `path` captura el
+    back-edge directo del ciclo actual.
+    """
+    seen: set[str] = set()
+    queue = deque([(start, (start,))])
+    while queue:
+        node, path = queue.popleft()
+        if node in seen:
+            return True
+        seen.add(node)
+        for nxt in edges.get(node, ()):
+            if nxt in path:
                 return True
-            seen.add(node)
-            for nxt in edges.get(node, []):
-                if nxt in path:  # back-edge -> cycle
-                    return True
-                q.append((nxt, [*path, nxt]))
-        return False
-
-    for n in by_name:
-        if n not in visited:
-            if bfs_cycle(n):
-                return True
-            visited.add(n)
+            queue.append((nxt, (*path, nxt)))
     return False
 
 
@@ -477,13 +504,7 @@ def _cycle_source_nodes(
     plan: WorkflowPlan,
 ) -> tuple[str, ...]:
     """Devuelve los nombres de nodos origen de cualquier ciclo nuevo."""
-    by_name = {n.name for n in plan.nodes}
-    by_name.update(n.name for n in new_nodes)
-    edges: dict[str, list[str]] = {n: [] for n in by_name}
-    for t in plan.transitions:
-        edges.setdefault(t.source, []).append(t.target)
-    for t in new_trans:
-        edges.setdefault(t.source, []).append(t.target)
+    edges = _edge_map(new_nodes, new_trans, plan)
 
     # Encuentra los nodos que son fuente o objetivo de un back-edge.
     in_cycle: set[str] = set()
@@ -675,6 +696,62 @@ class PolicyEngine(Protocol):
     def evaluate(self, ctx: PolicyContext) -> PolicyDecision: ...
 
 
+def _check_p1_max_ops(ctx: PolicyContext) -> tuple[str, ...]:
+    """P1: max operations por propuesta."""
+    n_ops = len(ctx.proposal.operations)
+    max_ops = ctx.settings.max_ops_per_proposal
+    if n_ops > max_ops:
+        return (f"P1: {n_ops} ops > max_ops_per_proposal={max_ops}",)
+    return ()
+
+
+def _check_p2_concurrency(ctx: PolicyContext) -> tuple[str, ...]:
+    """P2: proposals concurrentes sobre el mismo attachment_point.
+
+    Se excluye el propio proposal_id: uno no compite consigo mismo.
+    """
+    mine = ctx.proposal
+    return tuple(
+        f"P2: concurrent proposal {other.proposal_id} on attachment_point={mine.attachment_point}"
+        for other in ctx.concurrent_proposals
+        if other.attachment_point == mine.attachment_point and other.proposal_id != mine.proposal_id
+    )
+
+
+def _check_p3_scope(ctx: PolicyContext) -> tuple[str, ...]:
+    """P3: scope restrictions. Allowlist vacia = todos los scopes."""
+    allowed = ctx.settings.allowed_scopes
+    if allowed and ctx.proposal.scope not in allowed:
+        return (f"P3: scope={ctx.proposal.scope!r} not in allowed_scopes={list(allowed)}",)
+    return ()
+
+
+def _check_p4_forbidden_ops(ctx: PolicyContext) -> tuple[str, ...]:
+    """P4: blacklist de operations. Una violacion por operacion."""
+    forbidden = ctx.settings.forbidden_ops
+    if not forbidden:
+        return ()
+    return tuple(
+        f"P4: op={type(op).__name__} in forbidden_ops={list(forbidden)}"
+        for op in ctx.proposal.operations
+        if type(op).__name__ in forbidden
+    )
+
+
+def _check_p5_budget(ctx: PolicyContext) -> tuple[str, ...]:
+    """P5: budget cap de nodos proyectados tras apply.
+
+    Solo cuentan los AddNode: un AddTransition no anade nodo al plan.
+    """
+    projected = len(ctx.plan.nodes) + sum(
+        1 for op in ctx.proposal.operations if isinstance(op, AddNode)
+    )
+    max_nodes = ctx.settings.max_nodes_per_project
+    if projected > max_nodes:
+        return (f"P5: projected_nodes={projected} > max_nodes_per_project={max_nodes}",)
+    return ()
+
+
 @dataclass(frozen=True, slots=True)
 class DefaultPolicyEngine:
     """Policy engine por defecto: reglas P1..P5 (slice-3 §2.3 spec).
@@ -692,48 +769,14 @@ class DefaultPolicyEngine:
 
     def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         violations: list[str] = []
-
-        # P1: max operations.
-        max_ops = ctx.settings.max_ops_per_proposal
-        if len(ctx.proposal.operations) > max_ops:
-            violations.append(
-                f"P1: {len(ctx.proposal.operations)} ops > max_ops_per_proposal={max_ops}"
-            )
-
-        # P2: concurrent proposals on same attachment_point.
-        for other in ctx.concurrent_proposals:
-            if (
-                other.attachment_point == ctx.proposal.attachment_point
-                and other.proposal_id != ctx.proposal.proposal_id
-            ):
-                violations.append(
-                    f"P2: concurrent proposal {other.proposal_id} "
-                    f"on attachment_point={ctx.proposal.attachment_point}"
-                )
-
-        # P3: scope restrictions.
-        allowed = ctx.settings.allowed_scopes
-        if allowed and ctx.proposal.scope not in allowed:
-            violations.append(
-                f"P3: scope={ctx.proposal.scope!r} not in allowed_scopes={list(allowed)}"
-            )
-
-        # P4: blacklist de operations.
-        forbidden = ctx.settings.forbidden_ops
-        for op in ctx.proposal.operations:
-            if type(op).__name__ in forbidden:
-                violations.append(f"P4: op={type(op).__name__} in forbidden_ops={list(forbidden)}")
-
-        # P5: budget cap (nodes proyectados despues de apply).
-        current_node_count = len(ctx.plan.nodes)
-        new_nodes = sum(1 for op in ctx.proposal.operations if isinstance(op, AddNode))
-        projected = current_node_count + new_nodes
-        max_nodes = ctx.settings.max_nodes_per_project
-        if projected > max_nodes:
-            violations.append(
-                f"P5: projected_nodes={projected} > max_nodes_per_project={max_nodes}"
-            )
-
+        for rule in (
+            _check_p1_max_ops,
+            _check_p2_concurrency,
+            _check_p3_scope,
+            _check_p4_forbidden_ops,
+            _check_p5_budget,
+        ):
+            violations.extend(rule(ctx))
         return PolicyDecision(
             accepted=not violations,
             reason="OK" if not violations else "; ".join(violations),
