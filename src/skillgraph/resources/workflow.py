@@ -160,19 +160,42 @@ class WorkflowPlan:
 
     def __post_init__(self) -> None:
         names = {n.name for n in self.nodes}
+        self._validate_shape(names)
+        self._validate_endpoints(names)
+        self._validate_declared_outcomes()
+
+    def _validate_shape(self, names: frozenset[str] | set[str]) -> None:
+        """Invariantes de forma: hay nodos y `initial` apunta a uno de ellos.
+
+        El orden es observable (con plan vacio e `initial` vacio a la vez
+        gana "sin nodos"). Ver tests/test_wi52_guard_chain_contracts.py.
+        """
         if not names:
             raise ValidationError("WorkflowPlan sin nodos")
         if not self.initial:
             raise ValidationError("WorkflowPlan.initial vacio")
         if self.initial not in names:
             raise ValidationError(f"WorkflowPlan.initial {self.initial!r} no es un nodo del plan")
+
+    def _validate_endpoints(self, names: frozenset[str] | set[str]) -> None:
+        """Toda transicion conecta dos nodos existentes del plan.
+
+        `source` se valida antes que `target`: con ambas aristas malas gana
+        `source`.
+        """
         for t in self.transitions:
             if t.source not in names:
                 raise ValidationError(f"WorkflowTransition.source {t.source!r} no es nodo")
             if t.target not in names:
                 raise ValidationError(f"WorkflowTransition.target {t.target!r} no es nodo")
-        # H4: validar que las transiciones usen outcomes declarados si el
-        # nodo los declaro (DecisionNode o ActionNode con outcomes explicitos).
+
+    def _validate_declared_outcomes(self) -> None:
+        """H4: las transiciones usan outcomes declarados por su nodo origen.
+
+        Un nodo que no declara `outcomes` no restringe nada: es el caso por
+        defecto, de ahi que la comprobacion sea `if src.outcomes` y no una
+        comparacion contra `None`.
+        """
         by_name = {n.name: n for n in self.nodes}
         for t in self.transitions:
             src = by_name[t.source]

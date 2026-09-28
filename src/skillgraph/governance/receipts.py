@@ -36,7 +36,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 from skillgraph.core.errors import ValidationError
 from skillgraph.knowledge.graph import Evidence, Source
@@ -50,6 +50,26 @@ ReceiptScope = Literal["command", "tests", "file", "package", "directory", "boun
 RECEIPT_VERDICTS: frozenset[str] = frozenset({"pass", "fail"})
 RECEIPT_SCOPES: frozenset[str] = frozenset(
     {"command", "tests", "file", "package", "directory", "bounded_context"}
+)
+
+# Campos obligatorios de `ValidationReceipt`, en el orden EXACTO en que se
+# validan. Ese orden es contrato observable (ver
+# tests/test_wi52_guard_chain_contracts.py): con varios campos invalidos a la
+# vez gana el primero. Los contadores se validan entre ambos bloques, asi que
+# no se pueden fusionar en uno solo.
+#
+# El genero del mensaje se fija aqui por el mismo motivo: "revision vacia" va
+# en femenino y el resto en masculino.
+_REQUIRED_IDENTITY_FIELDS: Final[tuple[tuple[str, str, str], ...]] = (
+    ("receipt_id", "receipt_id", "vacio"),
+    ("command", "command", "vacio"),
+    ("revision", "revision", "vacia"),
+    ("timestamp", "timestamp", "vacio"),
+)
+
+_REQUIRED_ARTIFACT_FIELDS: Final[tuple[tuple[str, str, str], ...]] = (
+    ("artifact_path", "artifact_path", "vacio"),
+    ("scope", "scope", "vacio"),
 )
 
 
@@ -93,16 +113,28 @@ class ValidationReceipt:
     extra_metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if not self.receipt_id:
-            raise ValidationError("receipt_id vacio")
-        if not self.command:
-            raise ValidationError("command vacio")
-        if not self.revision:
-            raise ValidationError("revision vacia")
-        if not self.timestamp:
-            raise ValidationError("timestamp vacio")
+        self._require_fields(_REQUIRED_IDENTITY_FIELDS)
         if self.verdict not in RECEIPT_VERDICTS:
             raise ValidationError(f"verdict invalido: {self.verdict!r}")
+        self._validate_counters()
+        self._require_fields(_REQUIRED_ARTIFACT_FIELDS)
+
+    def _require_fields(self, fields: tuple[tuple[str, str, str], ...]) -> None:
+        """Exige que cada campo de `fields` tenga valor no vacio.
+
+        `fields` son triplas (atributo, etiqueta, mensaje de vacio). El orden
+        de recorrido decide que error gana cuando faltan varios.
+        """
+        for name, label, empty_msg in fields:
+            _require_non_empty(getattr(self, name), field=label, empty_msg=empty_msg)
+
+    def _validate_counters(self) -> None:
+        """Invariantes de `tests_run` / `tests_passed`.
+
+        `bool` es subclase de `int`: `True` cuenta como 1. Se preserva ese
+        comportamiento (esta fijado por test) en vez de rechazarlo, porque
+        cambiarlo es una decision de contrato, no un refactor de forma.
+        """
         if self.tests_run < 0:
             raise ValidationError(f"tests_run negativo: {self.tests_run}")
         if self.tests_passed < 0:
@@ -111,10 +143,6 @@ class ValidationReceipt:
             raise ValidationError(
                 f"tests_passed ({self.tests_passed}) > tests_run ({self.tests_run})"
             )
-        if not self.artifact_path:
-            raise ValidationError("artifact_path vacio")
-        if not self.scope:
-            raise ValidationError("scope vacio")
 
     @property
     def is_pass(self) -> bool:
