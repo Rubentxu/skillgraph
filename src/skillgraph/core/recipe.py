@@ -29,6 +29,34 @@ FreshnessPolicy = Literal["strict", "best_effort"]
 OverflowStrategy = Literal["drop_optional", "fail", "truncate_finding"]
 
 
+def _parse_selector_item(item: object, where: str, i: int) -> ObligatorySelector:
+    """Parsea un elemento {kind, value, label} con tipos estrictos.
+
+    `where` e `i` solo aparecen en los mensajes de error: apuntan al
+    elemento exacto que falla dentro de la receta.
+    """
+    if not isinstance(item, dict):
+        raise ValidationError(f"recipe.{where}[{i}] debe ser dict")
+    kind = item.get("kind")
+    value = item.get("value")
+    label = item.get("label", "")
+    if not isinstance(kind, str):
+        raise ValidationError(f"recipe.{where}[{i}].kind debe ser str")
+    if not isinstance(value, str):
+        raise ValidationError(f"recipe.{where}[{i}].value debe ser str")
+    if not isinstance(label, str):
+        raise ValidationError(f"recipe.{where}[{i}].label debe ser str")
+    # El smart constructor de ObligatorySelector valida el Literal.
+    return ObligatorySelector(kind=kind, value=value, label=label)
+
+
+def _parse_selectors(items: object, where: str) -> tuple[ObligatorySelector, ...]:
+    """Parsea una lista de selectores; `where` nombra el campo en errores."""
+    if not isinstance(items, list):
+        raise ValidationError(f"recipe.{where} debe ser list, recibio {type(items).__name__}")
+    return tuple(_parse_selector_item(it, where, i) for i, it in enumerate(items))
+
+
 @dataclass(frozen=True, slots=True)
 class ObligatorySelector:
     """Selector por entity_id, predicate, o source_id.
@@ -99,45 +127,20 @@ class ContextRecipe:
           token_budget: int
           overflow_strategy: "drop_optional" | "fail" | "truncate_finding"
           revision: int
+
+        El orden de validacion es contrato observable: relation_selectors
+        se comprueba antes que los selectors, y obligatory antes que
+        optional. Ver tests/test_wi53_recipe_contracts.py.
         """
         if not isinstance(raw, dict):
             raise ValidationError("recipe raw debe ser dict")
 
-        def _selectors(items: object, where: str) -> tuple[ObligatorySelector, ...]:
-            if not isinstance(items, list):
-                raise ValidationError(
-                    f"recipe.{where} debe ser list, recibio {type(items).__name__}"
-                )
-            out: list[ObligatorySelector] = []
-            for i, it in enumerate(items):
-                if not isinstance(it, dict):
-                    raise ValidationError(f"recipe.{where}[{i}] debe ser dict")
-                kind = it.get("kind")
-                value = it.get("value")
-                label = it.get("label", "")
-                if not isinstance(kind, str):
-                    raise ValidationError(f"recipe.{where}[{i}].kind debe ser str")
-                if not isinstance(value, str):
-                    raise ValidationError(f"recipe.{where}[{i}].value debe ser str")
-                if not isinstance(label, str):
-                    raise ValidationError(f"recipe.{where}[{i}].label debe ser str")
-                out.append(
-                    ObligatorySelector(
-                        kind=kind,  # type: ignore[arg-type]
-                        value=value,
-                        label=label,
-                    )
-                )
-            return tuple(out)
-
-        obligatory_raw = raw.get("obligatory", [])
-        optional_raw = raw.get("optional", [])
         rel_raw = raw.get("relation_selectors", [])
         if not isinstance(rel_raw, list) or not all(isinstance(x, str) for x in rel_raw):
             raise ValidationError("recipe.relation_selectors debe ser list[str]")
 
-        obligatory = _selectors(obligatory_raw, "obligatory")
-        optional = _selectors(optional_raw, "optional")
+        obligatory = _parse_selectors(raw.get("obligatory", []), "obligatory")
+        optional = _parse_selectors(raw.get("optional", []), "optional")
 
         return cls(
             recipe_ref=recipe_ref,
