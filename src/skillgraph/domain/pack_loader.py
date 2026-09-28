@@ -21,6 +21,7 @@ Restricciones del blueprint respetadas:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from skillgraph.core.errors import ValidationError
@@ -88,6 +89,96 @@ def _require_known_type(kind: str, field_name: str, declared: str, label: str) -
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _FieldContext:
+    """Identidad del tipo al que pertenece una regla de campo.
+
+    Los mensajes de error son `"<kind>.spec.<field>"`: sin el `kind`
+    los errores de dos packs distintos son indistinguibles, y sin el
+    campo el pack author no sabe que arreglar. Este valor lo lleva
+    explicito en vez de capturarlo del closure, para que las reglas
+    sean funciones de modulo (medibles por separado) y no metodos
+    disfrazados.
+    """
+
+    kind: str
+
+
+def _reject(ctx: _FieldContext, field_name: str, expected: str, value: object) -> ValidationError:
+    """Construye el `ValidationError` de un valor que no casa."""
+    return ValidationError(
+        f"{ctx.kind}.spec.{field_name}: esperaba {expected}, recibio {type(value).__name__}"
+    )
+
+
+def _check_required(ctx: _FieldContext, required: tuple[str, ...], spec: dict[str, Any]) -> None:
+    """Falla si falta algun campo declarado en `required`."""
+    for key in required:
+        if key not in spec:
+            raise ValidationError(f"{ctx.kind}.spec.{key}: campo obligatorio ausente")
+
+
+def _check_primitive(ctx: _FieldContext, field_name: str, field_schema: str, value: object) -> None:
+    """Valida un campo declarado con un tipo primitivo.
+
+    El tipo se valida antes que el valor: son dos errores con dos
+    arreglos distintos, y comprobarlos en otro orden confunde a quien
+    lee el mensaje.
+    """
+    _require_known_type(ctx.kind, field_name, field_schema, "tipo")
+    if not _matches(field_schema, value):
+        raise _reject(ctx, field_name, field_schema, value)
+
+
+def _check_list(ctx: _FieldContext, field_name: str, elem_type: str, value: object) -> None:
+    """Valida un campo `{"list_of": T}`: la lista, y cada elemento."""
+    if not isinstance(value, list):
+        raise _reject(ctx, field_name, "lista", value)
+    _require_known_type(ctx.kind, field_name, elem_type, "tipo de elemento")
+    for i, elem in enumerate(value):
+        if not _matches(elem_type, elem):
+            raise _reject(ctx, f"{field_name}[{i}]", elem_type, elem)
+
+
+def _check_field(ctx: _FieldContext, field_name: str, field_schema: Any, value: object) -> None:
+    """Aplica la regla que corresponde a la forma del esquema.
+
+    El esquema de un campo admite tres formas y solo tres: un tipo
+    primitivo, `{"list_of": T}` o `{"refs": [...]}`. Como el dominio
+    es cerrado, se decide con `match` en vez de con una cadena de
+    `isinstance` anidados, que era lo que producia los 5 niveles.
+
+    Args:
+        ctx: kind propietario, para el mensaje de error.
+        field_name: nombre del campo, para el mensaje de error.
+        field_schema: lo declarado en `fields` para ese campo.
+        value: el valor de la instancia.
+
+    Raises:
+        ValidationError: si la forma no esta admitida, o si el valor
+            no satisface la regla declarada.
+    """
+    match field_schema:
+        case str():
+            _check_primitive(ctx, field_name, field_schema, value)
+        case {"list_of": elem_type}:
+            _check_list(ctx, field_name, elem_type, value)
+        case {"refs": _}:
+            # Validacion estructural: el campo es lista o string con
+            # nombre de instancia; NO verificamos la FK aqui, porque
+            # eso es responsabilidad del motor y no del pack.
+            pass
+        case dict():
+            raise ValidationError(
+                f"{ctx.kind}: esquema de campo '{field_name}' no soportado: {field_schema!r}"
+            )
+        case _:
+            raise ValidationError(
+                f"{ctx.kind}: esquema de campo '{field_name}' invalido: "
+                f"{type(field_schema).__name__}"
+            )
+
+
 def _make_schema_validator(kind: str, schema: dict[str, Any]) -> SpecValidator:
     """Genera un validador `SpecValidator` a partir de un esquema declarativo.
 
@@ -101,61 +192,16 @@ def _make_schema_validator(kind: str, schema: dict[str, Any]) -> SpecValidator:
     El validador resultante NO ejecuta codigo del pack: solo aplica
     reglas estructurales declaradas.
     """
-    required = list(schema.get("required", []))
+    ctx = _FieldContext(kind=kind)
+    required = tuple(schema.get("required", ()))
     fields = dict(schema.get("fields", {}))
 
-    def _check_required(spec: dict[str, Any]) -> None:
-        for key in required:
-            if key not in spec:
-                raise ValidationError(f"{kind}.spec.{key}: campo obligatorio ausente")
-
-    def _reject(field_name: str, expected: str, value: object) -> ValidationError:
-        return ValidationError(
-            f"{kind}.spec.{field_name}: esperaba {expected}, recibio {type(value).__name__}"
-        )
-
-    def _check_primitive(field_name: str, field_schema: str, value: object) -> None:
-        # El tipo se valida antes que el valor: son dos errores con
-        # dos arreglos distintos, y comprobarlos en otro orden
-        # confunde a quien lee el mensaje.
-        _require_known_type(kind, field_name, field_schema, "tipo")
-        if not _matches(field_schema, value):
-            raise _reject(field_name, field_schema, value)
-
-    def _check_list(field_name: str, field_schema: dict[str, Any], value: object) -> None:
-        if not isinstance(value, list):
-            raise _reject(field_name, "lista", value)
-        elem_type = field_schema["list_of"]
-        _require_known_type(kind, field_name, elem_type, "tipo de elemento")
-        for i, elem in enumerate(value):
-            if not _matches(elem_type, elem):
-                raise _reject(f"{field_name}[{i}]", elem_type, elem)
-
     def _validate(spec: dict[str, Any]) -> None:
-        _check_required(spec)
+        _check_required(ctx, required, spec)
         for field_name, field_schema in fields.items():
             if field_name not in spec:
                 continue  # Solo validamos presencia si esta en required
-            value = spec[field_name]
-            if isinstance(field_schema, str):
-                _check_primitive(field_name, field_schema, value)
-            elif isinstance(field_schema, dict):
-                if "list_of" in field_schema:
-                    _check_list(field_name, field_schema, value)
-                elif "refs" in field_schema:
-                    # Validacion estructural: el campo es lista o string
-                    # con nombre de instancia; NO verificamos FK aqui
-                    # (eso es responsabilidad del motor, no del pack).
-                    pass
-                else:
-                    raise ValidationError(
-                        f"{kind}: esquema de campo '{field_name}' no soportado: {field_schema!r}"
-                    )
-            else:
-                raise ValidationError(
-                    f"{kind}: esquema de campo '{field_name}' invalido: "
-                    f"{type(field_schema).__name__}"
-                )
+            _check_field(ctx, field_name, field_schema, spec[field_name])
 
     return _validate
 

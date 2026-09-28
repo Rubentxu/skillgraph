@@ -5,12 +5,12 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **48** modulos Python, **18002** LoC, **635** funciones.
+- **48** modulos Python, **18048** LoC, **636** funciones.
 - **5** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **0** funciones privadas con cc>=20 (refactor opcional).
 - **11** funciones >80 LoC (legibilidad mejorable).
-- **2** funciones con anidamiento >=5 niveles.
+- **0** funciones con anidamiento >=5 niveles.
 
 ## Archivos grandes (>800 LoC)
 
@@ -50,12 +50,7 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 
 ## Anidamiento profundo (>=5 niveles)
 
-Anidamiento >=5 suele indicar decision tree en lugar de composicion declarativa.
-
-| Nesting | Funcion | Path |
-|--------:|---------|------|
-| 5 | `_validate` | `src/skillgraph/domain/pack_loader.py` |
-| 5 | `_make_schema_validator` | `src/skillgraph/domain/pack_loader.py` |
+- Ninguna funcion con anidamiento >=5. ✓
 
 ## Recomendaciones (derivadas de la medicion)
 
@@ -85,8 +80,7 @@ cobertura; ver la tabla de arriba. Prioridad baja.
 
 **P4 - Anidamiento >=5 niveles** (decision tree en vez de composicion):
 
-- `_validate` (`src/skillgraph/domain/pack_loader.py`): 5 niveles.
-- `_make_schema_validator` (`src/skillgraph/domain/pack_loader.py`): 5 niveles.
+- Ninguno.
 
 ### Politica recomendada
 
