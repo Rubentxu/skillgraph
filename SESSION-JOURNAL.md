@@ -6791,3 +6791,154 @@ Latest tag:                          v0.16.2 -> 92e06f3
 Development head:                    6343a64 (22 commits por delante de origin/main)
 Working tree:                        clean
 ```
+
+## 2026-09-28 — Pre-flight de reanudacion + barrido de contratos Protocol/impl
+
+### Resumen
+
+Sesion abierta para "retomar las tareas de la sesion anterior con
+sddk". El pre-flight encontro que **no hay nada que retomar**: WI-48
+cerro limpio con su commit (`5b9c7c7`), `sddk cycle status` responde
+`no active cycle` y `sddk backlog list` no tiene items vivos. El
+roadmap de SDDK sigue siendo el stub `e01ff5ba` sin titulo ni
+objetivo, como ya aviso la entrada anterior.
+
+Lo que si produjo la sesion es un **barrido de conformidad entre los
+5 Protocols de `platform/ports` y `Storage`**, y tres correcciones a
+mis propias predicciones. No se toco codigo de produccion.
+
+### Estado verificado (OBSERVED)
+
+- Baseline verde: `pipelinek run` con los 5 stages en `success` y
+  `RunFinished outcome=success` (seq 189). `1413 passed in 407.93s`.
+  `ruff check src tests`: `All checks passed!`
+- sha256 de `.pipeline.kts`: `0665345fda259a4d07eafd07e904874595f90fbad744d6553a7fb2a19d07eca4`
+- HEAD `5b9c7c7`, 23 commits por delante de `origin/main`, arbol limpio.
+- Deuda re-derivada (`audits/architecture-debt-2026-09-28.md`): la
+  tabla del 2026-09-27 estaba obsoleta. Hoy hay **0 hotspots cc>=20**,
+  publicos y privados. Los P0 estan cerrados.
+- Las dos lineas abiertas de WI-48 quedan cerradas por observacion:
+  existe un Domain Pack real con `list_of` (`tests/fixtures/packs/narrative-core.md:34`)
+  y carga bien; y el `continue` de `pack_loader.py:137` es una decision
+  documentada, no un agujero.
+
+### El hallazgo: 27 discrepancias, de las que 13 son utiles
+
+Barrido bidireccional de los 5 Protocols contra `Storage` por
+introspeccion en runtime. 27 firmas difieren, y se dividen en dos
+clases que **no** se pueden tratar igual:
+
+**Clase A (13, deuda real): drift de tipo de retorno.** Los Protocols
+declaran `dict[str, Any] | None` donde `Storage` ya devuelve un DTO
+`Stored*` frozen con slots. Afecta a: `KnowledgeRepository` (9 metodos),
+`PromotionRepository.get_promotion` y `list_pending_promotions`,
+`PolicyStore.get_budget`, `EventStore.list_events`. Es el residuo de
+WI-38/WI-39: los DTOs entraron en `Storage` y nadie propago el cambio a los
+Protocols.
+
+**Clase B (14, NO es deuda): el Protocol es mas laxo a proposito.**
+Los 5 metodos `_atomically` y 9 de Knowledge declaran `event: Any`,
+`source: Any`, `claim: Any` frente a `RuntimeEvent`, `Source`, `Claim`.
+El motivo es legitimo: `ports/` no puede importar los DTOs sin ciclo,
+y `Any` es la valvula de escape. **No tocar.**
+
+Excepcion dentro de la clase B, si real: `RunRepository.create_run_atomically`
+declara `run_id: str | None` y `Storage` exige `str` plano. Mismo
+genero documental, menor.
+
+### Por que nadie lo detecto
+
+`tests/test_wi38_storage_boundary.py:146` incluye `get_budget` en su
+lista, pero comprueba que `Storage` **no** devuelva `dict`/`Row`.
+Detecta la mitad buena del refactor y es ciego a que el Protocol no
+siguio el cambio. El audit compara `Storage` contra una lista de tipos
+prohibidos, nunca contra el Protocol. El test que falta es exactamente
+el barrido bidireccional de arriba.
+
+### Tres correcciones propias (por que estan aqui)
+
+1. **"Hay 27 bugs"** -> son 13 utiles. Las 14 de parametro son
+   deliberadas. Confundir diseno con defecto habria producido un
+   work item que rompia los Protocols.
+2. **"Un consumidor reventara con `TypeError`"** -> falso. Los DTOs
+   declaran `__getitem__` de compatibilidad a proposito (WI-38 lo
+   anadio a proposito), y `runcontroller.py:558` sigue usando
+   `budget_row["max_visits"]`. Verificado contra una base de datos
+   real, no contra un objeto construido a mano: devuelve 5. La
+   severidad real es **deuda documental**, no bug activo.
+3. **"Los P1 exigen un ADR enorme"** -> el seam ya esta escrito. Los
+   5 Protocols estan declarados y tipados (63 metodos). Extraer
+   `PolicyStore` son 4 metodos de SQL puro sobre `self._conn`, sin
+   estado compartido. Ademas las factorias `run_repository()` y
+   `knowledge_repository()` **devuelven `self`**: son fachada, no
+   extraccion real. El trabajo P1 es rellenar la frontera, no
+   diseñarla.
+
+### Falsificacion que importa
+
+La prediccion del `TypeError` se comprobo antes de reportarla, y fue
+falsa. Un DTO con `slots` no es un dict: un consumidor nuevo que use
+`budget["x"]` funciona, uno que haga `budget.update(...)` o
+`json.dumps(budget)` si revienta. Ese es el fallo que sigue lurking,
+y sigue sin test.
+
+### Conocimiento negativo (util para no repetirlo)
+
+- Un timeout propio (`600s`) matando `pipelinek` a mitad deja un
+  `pytest` huerfano con su `wrapper.sh`. El siguiente run falla con
+  `INFRASTRUCTURE: Canonical shell '...' could not be reconciled`, que
+  parece un fallo del repo y no lo es. Hay que limpiar los procesos
+  antes de relanzar, y budgeting con margen: la suite completa tardo
+  407s, el propio script documenta hasta 750s.
+- `| tail -N` dentro de un comando en background bufferiza hasta el
+  final: el watchdog de stall ve "sin progreso" durante toda la suite.
+  Para observar, filtrar con `grep` en streaming o `stdbuf -oL`.
+- El paso 1 de `pipeline.kts` escribe JSONL de eventos en stdout, no
+  texto. Para consultar el journal hay que parsear `payload` (una
+  lista JSON) y la tabla se llama `events` con columna `payload`, no
+  `data`/`outcome`.
+- Ejecutar la suite reescribe `tests/uat-evidence/UAT-08/09.json` (solo
+  el stamp de revision). Side effect conocido; revertir antes de
+  cerrar.
+- `sddk cycle status --no-infer --cycle <nombre>` responde
+  `STORAGE_NOT_FOUND` para los ciclos que aparecen en el ledger: los
+  eventos de transicion se emiten sin crear registro de ciclo. El
+  ledger no es un indice de ciclos consultables.
+- `sddk plan roadmap next` no acepta `--root`: sus subcomandos resuelven
+  el contexto por su cuenta. `sddk backlog render` si acepta.
+
+### Blocker abierto (NO es codigo)
+
+1. **No hay work item.** El roadmap es el stub `e01ff5ba` y esta
+   sesion lo confirma, no lo arregla. Elegir trabajo aqui seria
+   inventarlo.
+2. **23 commits sin publicar.** `git.push` es `human_gate`. Hay un tag
+   `v0.16.2` ya publicado y 23 commits detras, con 5 fixes y 4
+   refactors. Es bastante historia sin backup remoto.
+
+### Candidatos medidos (para la decision, no son una recomendacion)
+
+| Candidato | Tamano real | Seam | Coste |
+|---|---|---|---|
+| 13 drift de Protocol (clase A) | 13 anotaciones | ninguno: es escribir el contrato real | bajo |
+| Test de conformidad Protocol<->impl | ~1 test | protege los 13 y vigila la clase B | bajo |
+| Extraer `PolicyStore` | 4 metodos | Protocol ya declarado | medio |
+| Extraer `RunRepository` | 19 metodos | Protocol ya declarado | alto (137 tests tocan Storage) |
+| `runner.py` | 34 handlers | `_DISPATCH` ya existe (WI-41) | medio |
+| `runcontroller.py` | 32 metodos | no obvio | medio |
+
+### Shas y estado para reanudar
+
+```
+HEAD:                                  5b9c7c7
+Commits sin publicar:                  23 (origin/main...HEAD)
+Latest tag:                            v0.16.2 -> 92e06f3
+Workspace version:                     0.16.2.dev0
+SDDK project/workspace:                p-74299cf88f51dab9 / w-65c5e70e84b3c9144de10d74
+SDDK adoption:                         status: complete
+SDDK work item activo (stub):          e01ff5ba-754c-4c27-8b60-a73056c9f6d3 (vacio)
+Framework:                             2.0.1 (resolved)
+.pipeline.kts sha256:                  0665345fda259a4d07eafd07e904874595f90fbad744d6553a7fb2a19d07eca4
+Baseline verde:                        1413 passed, 5/5 stages success
+Artefactos sin commitear:              BACKLOG.md, audits/architecture-debt-2026-09-28.md
+```
