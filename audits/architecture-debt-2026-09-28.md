@@ -5,7 +5,7 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **48** modulos Python, **18048** LoC, **636** funciones.
+- **48** modulos Python, **18180** LoC, **652** funciones.
 - **5** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **0** funciones privadas con cc>=20 (refactor opcional).
@@ -22,7 +22,7 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 | 2357 | `src/skillgraph/cli/runner.py` |
 | 1400 | `src/skillgraph/runtime/runcontroller.py` |
 | 927 | `src/skillgraph/platform/ports/__init__.py` |
-| 819 | `src/skillgraph/governance/graph_expansion.py` |
+| 862 | `src/skillgraph/governance/graph_expansion.py` |
 
 ## Hotspots publicos (cc>=20, refactor obligatorio)
 
@@ -68,7 +68,7 @@ P0 sin que nadie tenga que acordarse de borrarla.
 - `src/skillgraph/cli/runner.py` (2357 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/runtime/runcontroller.py` (1400 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/platform/ports/__init__.py` (927 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
-- `src/skillgraph/governance/graph_expansion.py` (819 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
+- `src/skillgraph/governance/graph_expansion.py` (862 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 
 **P2 - Hotspots privados cc>=20** (opcional, valor pedagogico):
 
