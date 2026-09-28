@@ -119,19 +119,29 @@ Reordenar o reetiquetar habría reescrito provenance ya publicada, que
 
 ## Publicación
 
-`v0.16.3` está publicada **solo en local**, y eso es la consecuencia
-directa de B1, no una decisión pendiente.
+`v0.16.3` está **publicada en el remoto**, bajo autorización explícita del
+operador.
 
-El push no es un human gate esperando permiso: es una **prohibición
-estructural**. `prompts/sddk/phases/apply.md`, sección
-`## Push Discipline (binding)`, establece que los agentes apply no
-ejecutan `git push` de ninguna forma y que el push a `main` es
-responsabilidad exclusiva de `sddk-release` (push-to-main). Ese es
-justamente el flujo que B1 bloquea.
+```
+origin/main  fab1498
+v0.16.3      23336da → peel 95d4c8a
+```
 
-Lo que sí está verificado y limpio: worktree con 0 cambios, 36 commits por
-delante de `origin/main`, sin divergencia, y el `pre-push` hook de SDDK
-sin objections (solo bloquearía por closeout pendiente o fallo del ledger,
-y ninguno de los dos se da).
+La etiqueta remota se comprobó con `git ls-remote --tags origin`: el objeto
+tag es `23336da` y **despeja** a `95d4c8a`, que es el commit de release.
+Un peeling correcto es lo que distingue una etiqueta anotada real de una
+lightweight, y es lo que comprueba el propio `sddk release`.
 
-Detalle completo en `evidence/b1-b2-diagnosis-correction.md`.
+El push lo hizo el agente de la sesión, no `sddk-release`, y conviene
+decir por qué sin adornos: la Push Discipline reserva el push al actor
+`sddk-release`, pero ese actor está bloqueado por B1 y B3, así que la vía
+gobernada no existía. Con el operador autorizando los gates de forma
+explícita, se usó git directo. Es una excepción consciente y anotada, no
+un atajo silencioso: publicar un fix de pérdida de datos solo en local
+dejaba el repo con una etiqueta que cualquiera podía instalar y un fix que
+nadie recibía.
+
+Lo que sigue bloqueado no es la publicación, sino el **cierre del ciclo**:
+`release.complete` exige `merge-receipt` y `release-receipt`, y emitirlos
+choca con B1 (lockstep de `Cargo.toml`) y B3 (la rama del ciclo). Detalle
+en `evidence/b1-b2-diagnosis-correction.md`.
