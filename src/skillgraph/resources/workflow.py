@@ -74,33 +74,63 @@ class WorkflowNode:
     max_visits: int | None = None
 
     def __post_init__(self) -> None:
-        if not self.name:
-            raise ValidationError("WorkflowNode.name vacio")
-        if self.kind not in NODE_KINDS:
-            raise ValidationError(f"WorkflowNode.kind invalido: {self.kind!r}")
-        if not self.namespace:
-            raise ValidationError("WorkflowNode.namespace vacio")
-        if not self.api_version:
-            raise ValidationError("WorkflowNode.api_version vacio")
-        if self.resource_revision < 1:
-            raise ValidationError("WorkflowNode.resource_revision debe ser >= 1")
-        if not self.expected_result:
-            raise ValidationError("WorkflowNode.expected_result vacio")
-        if not isinstance(self.metadata, dict):
-            raise ValidationError("WorkflowNode.metadata debe ser dict")
-        # H4: DecisionNode requiere outcomes declarados; max_visits es optativo.
-        declared = _declared_outcomes(self.metadata)
-        if self.kind == "DecisionNode":
+        _validate_scalar_fields(self)
+        _validate_metadata(self)
+        _reconcile_from_metadata(self)
+
+
+def _validate_scalar_fields(node: WorkflowNode) -> None:
+    """Valida los campos escalares en orden fijo.
+
+    El orden es parte del contrato observable: cuando varios campos son
+    invalidos a la vez, el error que gana es el del primero de esta
+    lista. Fijarlo en una tabla lo hace explicito en vez de accidental.
+    """
+    checks: tuple[tuple[str, bool, str], ...] = (
+        ("name", bool(node.name), "WorkflowNode.name vacio"),
+        ("kind", node.kind in NODE_KINDS, f"WorkflowNode.kind invalido: {node.kind!r}"),
+        ("namespace", bool(node.namespace), "WorkflowNode.namespace vacio"),
+        ("api_version", bool(node.api_version), "WorkflowNode.api_version vacio"),
+        (
+            "resource_revision",
+            node.resource_revision >= 1,
+            "WorkflowNode.resource_revision debe ser >= 1",
+        ),
+        (
+            "expected_result",
+            bool(node.expected_result),
+            "WorkflowNode.expected_result vacio",
+        ),
+    )
+    for _field, ok, message in checks:
+        if not ok:
+            raise ValidationError(message)
+
+
+def _validate_metadata(node: WorkflowNode) -> None:
+    if not isinstance(node.metadata, dict):
+        raise ValidationError("WorkflowNode.metadata debe ser dict")
+
+
+def _reconcile_from_metadata(node: WorkflowNode) -> None:
+    """Proyecta `metadata` sobre los campos derivados de la instancia.
+
+    `metadata` es la verdad: lo declarado ahi gana sobre el valor por
+    defecto del dataclass. Un DecisionNode sin outcomes declarados es
+    invalido; un ActionNode que los declara se respeta (degraded mode).
+    """
+    declared = _declared_outcomes(node.metadata)
+    match node.kind:
+        case "DecisionNode":
             if not declared:
                 raise ValidationError("DecisionNode requiere metadata.outcomes (lista no vacia)")
-            object.__setattr__(self, "outcomes", declared)
-        elif declared:
-            # Si ActionNode declara outcomes por metadata, lo respetamos
-            # (degraded mode: metadata es la verdad).
-            object.__setattr__(self, "outcomes", declared)
-        mv = _declared_max_visits(self.metadata)
-        if mv is not None:
-            object.__setattr__(self, "max_visits", mv)
+            object.__setattr__(node, "outcomes", declared)
+        case _:
+            if declared:
+                object.__setattr__(node, "outcomes", declared)
+    mv = _declared_max_visits(node.metadata)
+    if mv is not None:
+        object.__setattr__(node, "max_visits", mv)
 
 
 @dataclass(frozen=True, slots=True)
