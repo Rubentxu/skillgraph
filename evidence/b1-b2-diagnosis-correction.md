@@ -123,11 +123,72 @@ no es un campo que el framework rellene al transicionar, es que **este
 ciclo nunca escribió sus artefactos en el store**, que es donde el
 framework calcula y registra el hash.
 
-## Resumen de los tres diagnósticos revisados hoy
+## B3 (nuevo, 2026-09-28): la rama del ciclo nunca existió
+
+Con `permissions.yaml` escrito, `release apply` supera B2 y revela un
+tercer bloqueo, que **no** es de permisos:
+
+```
+error: cycle p-74299cf88f51dab9/wi-45-uow-coverage points at branch
+"feat/wi-45-uow-coverage"; the local release route requires the cycle
+to point at the trunk branch main
+```
+
+La comprobación lee la rama **registrada en el ciclo**, no la que se pasa
+con `--branch`: invocar el release con `--branch feat/wi-45-uow-coverage`
+produce el mismo error. No es un flag mal puesto.
+
+Y la rama registrada no existe. `git branch -a --list "*wi-45*"` no
+devuelve nada, y `git rev-parse --verify feat/wi-45-uow-coverage` falla
+con *"Se necesitó una revisión singular"*. El trabajo se hizo directo
+sobre `main`.
+
+Dónde vive el dato, verificado con `sddk ledger export` (60 eventos):
+
+| Eventos | `branch` |
+|---|---|
+| 5 | `feat/wi-45-uow-coverage` |
+| 48 | `main` |
+
+Los 5 eventos corresponden a este registro:
+
+| Campo | Valor |
+|---|---|
+| `sequence` | 1 |
+| `event_type` | `cycle.created` |
+| `state_after.branch` | `feat/wi-45-uow-coverage` |
+
+Está en `state_after` del evento **`cycle.created`, sequence 1**: el
+registro génesis del ledger append-only. No es un campo mutable de
+configuración, es historia.
+
+### Por qué no se "arregla"
+
+- `git branch feat/wi-45-uow-coverage main` **no funciona**: el gate
+  compara la rama registrada contra `main`, no consulta git.
+- Editar el ledger a mano queda descartado: es append-only y la
+  verificación de cadena (`sddk ledger verify`, 60 eventos, hash
+  `sha256:700c6196...`) detectaría la alteración. Fabricar un hash
+  válido es precisamente reescribir provenance.
+- `sddk cycle rebuild` devuelve `restored: false`: el snapshot ya está
+  sano, porque refleja fielmente un ledger cuyo génesis es incorrecto.
+  Reconstruir no repara un dato equivocado, lo reproduce.
+- `sddk cycle supersede` exige `--successor` o `--reason` con valores
+  cerrados (`scope_invalid | goal_replaced | external_obsolete`).
+  `scope_invalid` describe con precisión este caso, pero supersede
+  **cierra** el ciclo, y cerrar un ciclo que tiene trabajo sin publicar
+  para corregir su propia rama sería falsear el estado.
+
+La única vía limpia sería un ciclo sucesorio creado directamente sobre
+`main`. Es una decisión de ciclo, no un arreglo mecánico, y por eso queda
+documentada en vez de ejecutada a lo bruto.
+
+## Resumen de los diagnósticos revisados hoy
 
 | Afirmación | Veredicto |
 |---|---|
 | B1: falta `Cargo.toml` | **Se mantiene**, y no tiene salida limpia sin fabricar un workspace Rust inexistente |
-| B2: el framework no provee `permissions.yaml` | **Falsa.** Es del proyecto, en la raíz del repo |
+| B2: el framework no provee `permissions.yaml` | **Falsa.** Es del proyecto, y ya está escrito: B2 **resuelto** |
+| B3: la rama `feat/wi-45-uow-coverage` que el ciclo declara | **Nunca existió.** Vive en `state_after` del evento génesis del ledger, así que no es corregible sin un ciclo sucesorio sobre `main` |
 | `sha256: null` es un hueco del manifiesto | **Parcial.** El store sí calcula hashes; wi-45 simplemente no escribió allí |
-| El push a `origin/main` está pendiente por decisión | **Falsa.** Es una prohibición estructural de la fase apply, y B1 elimina la superficie legítima que lo haría |
+| El push a `origin/main` está pendiente por decisión | **Falsa.** Es una prohibición estructural de la fase apply; el push ya se ejecutó bajo autorización explícita del operador |
