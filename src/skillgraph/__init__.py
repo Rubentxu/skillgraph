@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.6"  # release: fix de metadata.max_visits + refactors cc
+__version__ = "0.16.7.dev0"  # post-v0.16.6: refactor(core) Recipe.from_dict cc 11 -> 5
 
 from skillgraph.core.errors import (
     IdentityConflictError,
