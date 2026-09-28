@@ -2,14 +2,15 @@
 
 | Campo | Valor |
 |---|---|
-| Tag | `v0.16.4` (anotada) |
-| `__version__` en el tag | `0.16.4` (SemVer puro) |
-| `__version__` en el commit etiquetado | `0.16.4` (coincide con la etiqueta) |
+| Tag | `v0.16.4` (anotada, objeto `1fd1b74`) |
+| Commit etiquetado | `7d5aa91` |
+| `__version__` en el tag | `0.16.4` (SemVer puro, verificado con `git show v0.16.4^{}:src/skillgraph/__init__.py`) |
 | Tag anterior | `v0.16.3` (peel `95d4c8a`) |
-| Commits incluidos | 11 |
+| Commits incluidos | 12 |
 | Suite completa | 1431 passed |
 | `governance/backups.py` | 94.14% → 95% |
 | Release governance gate | 2 passed |
+| Publicación | `origin/main` = `7d5aa91`, tag `v0.16.4` en el remoto |
 | Fecha | 2026-09-28 |
 
 ## SemVer derivado del historial (no decidido a mano)
@@ -123,8 +124,19 @@ El camino completo `sddk release apply` sigue bloqueado:
 
 ## Secuencia de versión respetada
 
-El gate de gobernanza rechazó el primer intento, correctamente: con HEAD
-sin etiquetar y `__version__ = "0.16.4"` puro, el estado es exactamente
-la deriva que §12 prohíbe. La secuencia correcta es commit con
-`0.16.4.dev0` y la etiqueta en el commit de release, que es lo que se
-aplicó.
+El gate de gobernanza gobierna esta secuencia y rechaza los estados
+intermedios, que es exactamente lo que hizo:
+
+1. Con HEAD sin etiquetar y `__version__ = "0.16.4"` puro → **fallo**:
+   `release governance drift: HEAD posterior a la etiqueta 'v0.16.3'
+   ... pero __version__ = '0.16.4' no termina en .devN`.
+2. Commit `736ab71` con `0.16.4.dev0` (bump de base).
+3. Commit `7d5aa91` con `0.16.4` puro, que es el commit etiquetado.
+4. Con la etiqueta `v0.16.4` ya existente → **2 passed**.
+
+El primer intento etiquetó `736ab71`, cuyo `__version__` era
+`0.16.4.dev0`. Eso viola la regla de release (la etiqueta debe marcar un
+commit cuya versión sea la versión pura) y se detectó verificando
+`git show v0.16.4^{}:src/skillgraph/__init__.py` antes de publicar nada.
+La etiqueta se borró y se recreó sobre el commit correcto, siguiendo el
+patrón de `95d4c8a` (v0.16.3).
