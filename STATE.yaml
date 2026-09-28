@@ -541,7 +541,7 @@ tests:
   total: 1431   # post-fix(audit) + refactor(backups): 1422 -> 1431 (+9 tests: 4 de exactitud de auditoria, 5 de politica de recoleccion; +2 preexistentes contados aparte)
   passed: 1431
   duration_s: 644   # re-medido el 2026-09-28 con `uv run pytest -q` con cobertura (1431 passed in 644.38s; la anterior de 1215s era de un run con fallos de gobernanza)
-  package_version: "0.16.7.dev0"   # post-v0.16.6: refactor(core) Recipe.from_dict cc 11 -> 5 con red de contrato de 50 tests verificada por mutacion; trampas bool (token_budget=True, revision=True) documentadas y pendientes de fix
+  package_version: "0.16.7"   # release v0.16.7: fix(core) Recipe token_budget/revision rechazan bool + refactors detect_changes cc 11 -> 5 y _reconcile_run_locked cc 11 -> 5 con red y verificacion por mutacion; 1639 tests, pipelinek genuino verificado, 0 funciones >= cc=20 y 0 >= cc=11
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
