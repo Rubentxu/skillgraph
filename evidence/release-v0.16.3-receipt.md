@@ -119,6 +119,19 @@ Reordenar o reetiquetar habría reescrito provenance ya publicada, que
 
 ## Publicación
 
-Pendiente de push a `origin/main`. El worktree estaba limpio y HEAD es
-35 commits por delante de `origin/main`, sin divergencia. El push queda
-en human gate por configuración, no por bloqueo técnico.
+`v0.16.3` está publicada **solo en local**, y eso es la consecuencia
+directa de B1, no una decisión pendiente.
+
+El push no es un human gate esperando permiso: es una **prohibición
+estructural**. `prompts/sddk/phases/apply.md`, sección
+`## Push Discipline (binding)`, establece que los agentes apply no
+ejecutan `git push` de ninguna forma y que el push a `main` es
+responsabilidad exclusiva de `sddk-release` (push-to-main). Ese es
+justamente el flujo que B1 bloquea.
+
+Lo que sí está verificado y limpio: worktree con 0 cambios, 36 commits por
+delante de `origin/main`, sin divergencia, y el `pre-push` hook de SDDK
+sin objections (solo bloquearía por closeout pendiente o fallo del ledger,
+y ninguno de los dos se da).
+
+Detalle completo en `evidence/b1-b2-diagnosis-correction.md`.
