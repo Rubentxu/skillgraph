@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.4.dev0"  # bump de base tras v0.16.3; etiqueta en el commit de release
+__version__ = "0.16.4"  # fix(audit) + refactor(backups); la etiqueta nace en este commit
 
 from skillgraph.core.errors import (
     IdentityConflictError,

@@ -4,7 +4,7 @@
 |---|---|
 | Tag | `v0.16.4` (anotada) |
 | `__version__` en el tag | `0.16.4` (SemVer puro) |
-| `__version__` actual en HEAD | `0.16.4.dev0` (trabajo posterior a la etiqueta) |
+| `__version__` en el commit etiquetado | `0.16.4` (coincide con la etiqueta) |
 | Tag anterior | `v0.16.3` (peel `95d4c8a`) |
 | Commits incluidos | 11 |
 | Suite completa | 1431 passed |
