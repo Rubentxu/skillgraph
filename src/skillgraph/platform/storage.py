@@ -22,7 +22,7 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from skillgraph.core.errors import IdentityConflictError, ValidationError
+from skillgraph.core.errors import ValidationError
 from skillgraph.knowledge.graph import (
     Claim,
     Entity,
@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from skillgraph.platform.event_store import SqliteEventStore
     from skillgraph.platform.knowledge_repository import SqliteKnowledgeRepository
     from skillgraph.platform.policy_store import SqlitePolicyStore
+    from skillgraph.platform.promotion_repository import SqlitePromotionRepository
     from skillgraph.platform.run_repository import SqliteRunRepository
     from skillgraph.runtime.engine import RuntimeEvent
 
@@ -495,6 +496,7 @@ class Storage:
         self._policy_store: SqlitePolicyStore | None = None
         self._knowledge_repository: SqliteKnowledgeRepository | None = None
         self._event_store: SqliteEventStore | None = None
+        self._promotion_repository: SqlitePromotionRepository | None = None
         self._migrate()
         # WI-33 (R2 audit externo): el ``SqliteUnitOfWork`` owns la
         # conexion y expone 5 bounded-context adapters que la
@@ -886,6 +888,24 @@ class Storage:
             state=state,
             current_node=current_node,
         )
+
+    def promotion_repository(self) -> SqlitePromotionRepository:
+        """Devuelve el componente REAL del cluster promotions (WI-56).
+
+        Una unica instancia por ``Storage`` (cacheada): identidad
+        estable y conexion compartida. El SQL del outbox de promocion
+        (H7) vive en ``platform/promotion_repository.py`` desde el
+        corte 5 de WI-56/ADR-0016. Los helpers atomicos de eventos
+        permanecen en ``Storage`` (H9/H10). ``getattr`` por los dobles
+        de test que heredan sin ``__init__``.
+        """
+        if getattr(self, "_promotion_repository", None) is None:
+            from skillgraph.platform.promotion_repository import (
+                SqlitePromotionRepository,
+            )
+
+            self._promotion_repository = SqlitePromotionRepository(self)
+        return self._promotion_repository
 
     def event_store(self) -> SqliteEventStore:
         """Devuelve el componente REAL del cluster events (WI-56).
@@ -1521,81 +1541,39 @@ class Storage:
     def register_promotion(
         self,
         *,
-        proposal_id: str,
-        idempotency_key: str,
-        tenant_id: str,
-        source_project: str,
-        target_catalog: str,
-        knowledge_ref: str,
-        payload: dict[str, Any],
-    ) -> None:
-        """Inserta una propuesta de promocion en el outbox (status=PENDING).
+        proposal_id: Any,
+        idempotency_key: Any,
+        tenant_id: Any,
+        source_project: Any,
+        target_catalog: Any,
+        knowledge_ref: Any,
+        payload: Any,
+    ) -> Any:
+        """Delegado WI-56: el SQL vive en SqlitePromotionRepository."""
+        return self.promotion_repository().register_promotion(
+            proposal_id=proposal_id,
+            idempotency_key=idempotency_key,
+            tenant_id=tenant_id,
+            source_project=source_project,
+            target_catalog=target_catalog,
+            knowledge_ref=knowledge_ref,
+            payload=payload,
+        )
 
-        Si `idempotency_key` ya existe, lanza `IdentityConflictError`
-        (la promocion ya fue registrada; no se duplica).
-        """
-        import json as _json
+    def get_promotion(
+        self,
+        proposal_id: Any,
+    ) -> Any:
+        """Delegado WI-56: el SQL vive en SqlitePromotionRepository."""
+        return self.promotion_repository().get_promotion(
+            proposal_id,
+        )
 
-        with self._tx() as cur:
-            existing = cur.execute(
-                "SELECT proposal_id FROM promotion_outbox WHERE idempotency_key = ?",
-                (idempotency_key,),
-            ).fetchone()
-            if existing is not None:
-                raise IdentityConflictError(
-                    f"Promocion duplicada: idempotency_key={idempotency_key!r} "
-                    f"ya registrada como proposal_id={existing['proposal_id']!r}"
-                )
-            cur.execute(
-                """
-                INSERT INTO promotion_outbox
-                    (proposal_id, idempotency_key, tenant_id, source_project,
-                     target_catalog, knowledge_ref, payload_json, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
-                """,
-                (
-                    proposal_id,
-                    idempotency_key,
-                    tenant_id,
-                    source_project,
-                    target_catalog,
-                    knowledge_ref,
-                    _json.dumps(payload, sort_keys=True),
-                ),
-            )
-
-    def get_promotion(self, proposal_id: str) -> StoredPromotion | None:
-        """Devuelve la propuesta por id, o None si no existe.
-
-        WI-38 (R1 strict): devuelve ``StoredPromotion`` (frozen + slots)
-        en vez de ``dict[str, Any]``. El campo ``payload`` se deserializa
-        en el DTO (no raw json).
-        """
-        row = self._conn.execute(
-            "SELECT * FROM promotion_outbox WHERE proposal_id = ?",
-            (proposal_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return _row_to_stored_promotion(row)
-
-    def list_pending_promotions(self) -> list[StoredPromotion]:
-        """Lista propuestas con status IN ('PENDING', 'IN_PROGRESS') para reconciliacion.
-
-        Equivalente a ``list_promotions(status="PENDING")`` mas los registros
-        ``IN_PROGRESS`` (los dejados por un crash previo). Conservado para
-        compatibilidad con callers existentes.
-
-        WI-38 (R1 strict): devuelve ``list[StoredPromotion]`` (frozen + slots).
-        """
-        rows = self._conn.execute(
-            """
-            SELECT * FROM promotion_outbox
-            WHERE status IN ('PENDING', 'IN_PROGRESS')
-            ORDER BY created_at ASC
-            """
-        ).fetchall()
-        return [_row_to_stored_promotion(r) for r in rows]
+    def list_pending_promotions(
+        self,
+    ) -> Any:
+        """Delegado WI-56: el SQL vive en SqlitePromotionRepository."""
+        return self.promotion_repository().list_pending_promotions()
 
     # ----- lecturas del ciclo de vida de un Run (H9-BSlice3-S1) -----
 
@@ -1673,74 +1651,39 @@ class Storage:
 
     def list_promotions(
         self,
-        status: str | None = None,
-    ) -> list[StoredPromotion]:
-        """Lista propuestas del outbox, opcionalmente filtradas por ``status``.
-
-        - ``status=None`` -> todas las propuestas, ordenadas por ``created_at`` ASC.
-        - ``status='PENDING'`` -> solo PENDING; equivalente a la rama
-          ``list_promotions(status='PENDING')`` (sin IN_PROGRESS).
-        - Cualquier otro status valido (``IN_PROGRESS``, ``PUBLISHED``,
-          ``FAILED``) filtra exactamente por ese valor.
-
-        Lanza ``ValidationError`` si ``status`` no esta en
-        ``PROMOTION_STATUSES``. No expone SQL al caller.
-
-        WI-38 (R1 strict): devuelve ``list[StoredPromotion]``.
-        """
-        if status is not None and status not in PROMOTION_STATUSES:
-            raise ValidationError(
-                f"status de promocion invalido: {status!r}; validos={sorted(PROMOTION_STATUSES)}"
-            )
-
-        if status is None:
-            rows = self._conn.execute(
-                "SELECT * FROM promotion_outbox ORDER BY created_at ASC"
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT * FROM promotion_outbox WHERE status = ? ORDER BY created_at ASC",
-                (status,),
-            ).fetchall()
-        return [_row_to_stored_promotion(r) for r in rows]
-
-    def mark_promotion_in_progress(self, proposal_id: str) -> bool:
-        """Pasa de PENDING a IN_PROGRESS. Devuelve True si transiciono."""
-        cur = self._conn.execute(
-            """
-            UPDATE promotion_outbox
-            SET status = 'IN_PROGRESS', attempts = attempts + 1,
-                updated_at = datetime('now')
-            WHERE proposal_id = ? AND status = 'PENDING'
-            """,
-            (proposal_id,),
+        status: Any = None,
+    ) -> Any:
+        """Delegado WI-56: el SQL vive en SqlitePromotionRepository."""
+        return self.promotion_repository().list_promotions(
+            status,
         )
-        return cur.rowcount > 0
 
-    def mark_promotion_published(self, proposal_id: str) -> bool:
-        """Pasa de IN_PROGRESS a PUBLISHED. Devuelve True si transiciono."""
-        cur = self._conn.execute(
-            """
-            UPDATE promotion_outbox
-            SET status = 'PUBLISHED', updated_at = datetime('now'),
-                published_at = datetime('now')
-            WHERE proposal_id = ? AND status = 'IN_PROGRESS'
-            """,
-            (proposal_id,),
+    def mark_promotion_in_progress(
+        self,
+        proposal_id: Any,
+    ) -> Any:
+        """Delegado WI-56: el SQL vive en SqlitePromotionRepository."""
+        return self.promotion_repository().mark_promotion_in_progress(
+            proposal_id,
         )
-        return cur.rowcount > 0
 
-    def mark_promotion_failed(self, proposal_id: str) -> bool:
-        """Marca FAILED para inspeccion manual."""
-        cur = self._conn.execute(
-            """
-            UPDATE promotion_outbox
-            SET status = 'FAILED', updated_at = datetime('now')
-            WHERE proposal_id = ? AND status IN ('PENDING', 'IN_PROGRESS')
-            """,
-            (proposal_id,),
+    def mark_promotion_published(
+        self,
+        proposal_id: Any,
+    ) -> Any:
+        """Delegado WI-56: el SQL vive en SqlitePromotionRepository."""
+        return self.promotion_repository().mark_promotion_published(
+            proposal_id,
         )
-        return cur.rowcount > 0
+
+    def mark_promotion_failed(
+        self,
+        proposal_id: Any,
+    ) -> Any:
+        """Delegado WI-56: el SQL vive en SqlitePromotionRepository."""
+        return self.promotion_repository().mark_promotion_failed(
+            proposal_id,
+        )
 
 
 # --- Helpers de conversion row -> ADT -------------------------------------
