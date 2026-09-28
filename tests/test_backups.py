@@ -23,7 +23,9 @@ from skillgraph.governance.backups import (
     BACKUP_FORMAT_VERSION,
     BackupEntry,
     BackupManifest,
+    _collect_agent_files,
     _collect_files,
+    _collect_project_dbs,
     create_backup,
     default_backup_dir,
     list_backups,
@@ -550,3 +552,101 @@ class TestCollectFiles:
         files, tenants, projects = _collect_files(tmp_path / "no-existe")
         assert files == []
         assert (tenants, projects) == (0, 0)
+
+
+# ---------------------------------------------------------------------------
+# TestCollectProjectDbs — extraccion de politica (WI-46, cc 14 -> 4)
+# ---------------------------------------------------------------------------
+
+
+class TestCollectProjectDbs:
+    """`_collect_project_dbs` es la politica de "que proyecto cuenta" aislada.
+
+    `_collect_files` decidia en un solo cuerpo: recorrer tenants, contar,
+    filtrar directorios, buscar la base y decidir si se incluye. Con
+    cc=14 era la funcion mas compleja de `backups.py`, y es justamente
+    la que decide que datos sobreviven a un backup. Merece poder
+    probarse sin montar un arbol de datos completo.
+    """
+
+    def test_counts_projects_without_database(self, tmp_path: Path) -> None:
+        """Un directorio de proyecto cuenta aunque no tenga `project.sqlite`.
+
+        Es la distincion sutil que la extraccion deja explicita: el
+        conteo es de directorios, la inclusion de ficheros es de
+        bases existentes. Un proyecto sin DB no aporta datos, pero si
+        cuenta como proyecto del tenant.
+        """
+        root = tmp_path / "tenants" / "acme" / "projects"
+        (root / "con-db").mkdir(parents=True)
+        (root / "con-db" / "project.sqlite").write_bytes(b"")
+        (root / "sin-db").mkdir(parents=True)
+
+        dbs, tenants, projects = _collect_project_dbs(tmp_path)
+
+        # El helper devuelve rutas completas; el proyecto sin DB no aporta fichero.
+        assert [p.parent.name for p in dbs] == ["con-db"]
+        assert tenants == 1
+        assert projects == 2
+
+    def test_tenant_without_projects_is_counted_but_yields_nothing(self, tmp_path: Path) -> None:
+        """Tenant sin `projects/` cuenta como tenant y no aporta ficheros."""
+        (tmp_path / "tenants" / "sin-projects").mkdir(parents=True)
+
+        dbs, tenants, projects = _collect_project_dbs(tmp_path)
+
+        assert dbs == []
+        assert tenants == 1
+        assert projects == 0
+
+    def test_deterministic_ordering(self, tmp_path: Path) -> None:
+        """El orden no depende del inode del sistema de ficheros.
+
+        Dos llamadas seguidas dan la misma lista: un manifest de backup
+        tiene que ser reproducible para poder comparar hashes.
+        """
+        projects = tmp_path / "tenants" / "acme" / "projects"
+        for name in ("zeta", "alfa", "medio"):
+            (projects / name).mkdir(parents=True)
+            (projects / name / "project.sqlite").write_bytes(b"")
+
+        first, _, _ = _collect_project_dbs(tmp_path)
+        second, _, _ = _collect_project_dbs(tmp_path)
+
+        assert [p.parent.name for p in first] == ["alfa", "medio", "zeta"]
+        assert first == second
+
+    def test_missing_tenants_dir(self, tmp_path: Path) -> None:
+        """Sin `tenants/`: no hay nada que contar, y no es un error."""
+        dbs, tenants, projects = _collect_project_dbs(tmp_path)
+        assert (dbs, tenants, projects) == ([], 0, 0)
+
+
+# ---------------------------------------------------------------------------
+# TestCollectAgentFiles — extraccion de politica (WI-46)
+# ---------------------------------------------------------------------------
+
+
+class TestCollectAgentFiles:
+    """`_collect_agent_files` aísla la regla "los fixtures de agente son datos"."""
+
+    def test_recurses_and_excludes_pycache(self, tmp_path: Path) -> None:
+        """Entra en subdirectorios; `__pycache__` queda fuera a cualquier nivel."""
+        agents = tmp_path / "agents"
+        deep = agents / "pack" / "sub" / "deep"
+        deep.mkdir(parents=True)
+        (deep / "SKILL.md").write_text("x", encoding="utf-8")
+        cache = deep / "__pycache__"
+        cache.mkdir()
+        (cache / "m.pyc").write_bytes(b"\x00")
+
+        found = _collect_agent_files(tmp_path)
+
+        # Ruta completa: el fichero esta anidado, no en la raiz de `agents/`.
+        assert [p.name for p in found] == ["SKILL.md"]
+        assert found[0].parts[-3:] == ("sub", "deep", "SKILL.md")
+
+    def test_empty_directory_yields_nothing(self, tmp_path: Path) -> None:
+        """Directorio sin ficheros: lista vacia, sin ruido."""
+        (tmp_path / "agents" / "vacio").mkdir(parents=True)
+        assert _collect_agent_files(tmp_path) == []

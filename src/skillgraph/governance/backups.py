@@ -151,6 +151,66 @@ def _sqlite_backup_to(src_db: Path, dst_file: Path) -> None:
         src.close()
 
 
+def _collect_project_dbs(data_root: Path) -> tuple[list[Path], int, int]:
+    """Recorre `tenants/<tenant>/projects/<project>/project.sqlite`.
+
+    Returns (databases, tenant_count, project_count). El conteo es de
+    directorios, no de bases: un proyecto sin `project.sqlite` cuenta
+    como proyecto del tenant pero no aporta ficheros al backup.
+
+    El recorrido va en orden lexicografico para que el manifest sea
+    reproducible entre ejecuciones.
+
+    Args:
+        data_root: raiz del data root; se espera `tenants/` debajo.
+
+    Returns:
+        Las bases encontradas en orden, el numero de tenants y el
+        numero de directorios de proyecto.
+    """
+    tenants_dir = data_root / "tenants"
+    if not tenants_dir.exists():
+        return [], 0, 0
+
+    dbs: list[Path] = []
+    tenant_count = 0
+    project_count = 0
+    for tenant_path in sorted(tenants_dir.iterdir()):
+        if not tenant_path.is_dir():
+            continue
+        tenant_count += 1
+        projects_dir = tenant_path / "projects"
+        if not projects_dir.exists():
+            continue
+        for proj_path in sorted(projects_dir.iterdir()):
+            if not proj_path.is_dir():
+                continue
+            project_count += 1
+            proj_db = proj_path / "project.sqlite"
+            if proj_db.exists():
+                dbs.append(proj_db)
+    return dbs, tenant_count, project_count
+
+
+def _collect_agent_files(data_root: Path) -> list[Path]:
+    """Recolecta los ficheros de `agents/`: fixtures que si son datos.
+
+    Decision documentada: los fixtures de agente se guardan porque sin
+    ellos el dominio de un pack no es reconstruible. `__pycache__`
+    queda excluido a cualquier nivel porque no es dato.
+
+    Args:
+        data_root: raiz del data root; se espera `agents/` debajo.
+
+    Returns:
+        Ficheros en orden lexicografico, sin directorios ni caches.
+    """
+    agents = data_root / "agents"
+    if not agents.exists():
+        return []
+    return [f for f in sorted(agents.rglob("*")) if f.is_file() and "__pycache__" not in f.parts]
+
+
 def _collect_files(data_root: Path) -> tuple[list[Path], int, int]:
     """Recolecta archivos a incluir en el backup.
 
@@ -163,35 +223,16 @@ def _collect_files(data_root: Path) -> tuple[list[Path], int, int]:
     - backups/ (recursividad)
     - pycache, .tmp
     """
-    files: list[Path] = []
     if not data_root.exists():
-        return files, 0, 0
+        return [], 0, 0
+
+    files: list[Path] = []
     cat = catalog_path(data_root)
     if cat.exists():
         files.append(cat)
-    tenants_dir = data_root / "tenants"
-    tenant_count = 0
-    project_count = 0
-    if tenants_dir.exists():
-        for tenant_path in sorted(tenants_dir.iterdir()):
-            if not tenant_path.is_dir():
-                continue
-            tenant_count += 1
-            projects_dir = tenant_path / "projects"
-            if not projects_dir.exists():
-                continue
-            for proj_path in sorted(projects_dir.iterdir()):
-                if not proj_path.is_dir():
-                    continue
-                project_count += 1
-                proj_db = proj_path / "project.sqlite"
-                if proj_db.exists():
-                    files.append(proj_db)
-    agents = data_root / "agents"
-    if agents.exists():
-        for f in sorted(agents.rglob("*")):
-            if f.is_file() and "__pycache__" not in f.parts:
-                files.append(f)
+    dbs, tenant_count, project_count = _collect_project_dbs(data_root)
+    files.extend(dbs)
+    files.extend(_collect_agent_files(data_root))
     return files, tenant_count, project_count
 
 
