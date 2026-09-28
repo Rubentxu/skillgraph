@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.8.dev0"  # post-v0.16.7: backlog cc>=11 vacio; siguiente deuda: god modules P1 (requieren ADR)
+__version__ = "0.16.8"  # release v0.16.8: WI-56 (ADR-0016)
 
 from skillgraph.core.errors import (
     IdentityConflictError,

@@ -12,6 +12,36 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.8] - 2026-09-28 — WI-56: descomposición de Storage en repositorios reales (ADR-0016)
+
+**Resumen**: ciclo SDDK `wi-56-storage-decomposition` (path A-lite). Patrón strangler en 5 cortes sobre el god-module `platform/storage.py` (2837 → 1807 LoC, −36%): cada cluster de SQL sale a un componente real con conexión compartida y su red de contrato escrita ANTES (RED honesto: solo fallaba la identidad del facade). **Cero ediciones en callers** (REQ-WI56-1/I1): los delegados del facade conservan firma explícita y forwarding idéntico (guard WI-45). Solo forma: 0 `feat`, 0 `fix`, 0 breaking → **PATCH**. Total: **1754/1754 tests no-UAT PASS**, ruff limpio.
+
+### Changed
+
+- **`SqliteRunRepository`** (`platform/run_repository.py`, corte 1 `ce0f291`): runs, node_executions y `list_events_for_run`. Net: `test_wi56_run_repository_contracts.py`.
+- **`SqlitePolicyStore`** (`platform/policy_store.py`, corte 2 `7001479`): tenant_policies y run_budgets. Net: `test_wi56_policy_store_contracts.py`.
+- **`SqliteKnowledgeRepository`** (`platform/knowledge_repository.py`, corte 3 `c125715`): 31 métodos del cluster knowledge (resources/relations, sources, entities, claims, evidences, findings, traces). Net: `test_wi56_knowledge_repository_contracts.py` (36 tests).
+- **`SqliteEventStore`** (`platform/event_store.py`, corte 4 `6895725`): record/list/fetch/ensure_schema. `list_events_for_run` se puentea desde run_repository (ya migrado en corte 1) para satisfacer el Protocol completo. Net: `test_wi56_event_store_contracts.py` (15 tests).
+- **`SqlitePromotionRepository`** (`platform/promotion_repository.py`, corte 5 `f439c74`): outbox H7 (register/get/list + 3 transiciones). Net: `test_wi56_promotion_repository_contracts.py` (13 tests).
+- `Storage.run_repository()/policy_store()/knowledge_repository()/event_store()/promotion_repository()`: accessors cacheados que devuelven el componente REAL (antes: shim `-> self` por structural subtyping, WI-31).
+- SQL vivo restante en `storage.py`: únicamente DDL (`_SCHEMA_SQL`), `_migrate` y los helpers atómicos `_insert_event_in_tx`/`_atomic_state_and_event`.
+
+### Migration notes
+
+- Los componentes comparten la conexión vía `Storage._conn` (decisión ADR-0016) y resuelven `_tx`/`_atomic` del dueño del schema en tiempo de llamada: el monkeypatching de H9/H10 sobre `storage._insert_event_in_tx` sigue funcionando (helpers atómicos permanecen en `Storage` por decisión del ciclo).
+- `PromotionRepository` NO es `runtime_checkable`: la verificación estructural se hace por presencia de métodos.
+- `Storage.list_promotions` sigue sin aceptar `limit`; el adapter del UoW recorta en memoria (contrato de puerto preservado).
+
+### Tests
+
+- +64 tests nuevos en las 5 redes de contrato WI-56 (dos bases idénticas sembradas, dump semántico sin columnas de reloj, UUIDs normalizados, spy de ruta atómica, guard de firmas explícitas).
+- Suite no-UAT: 1720 (post-corte 3) → 1754 (post-corte 5).
+
+### Audit debt
+
+- `architecture-debt-2026-09-28.md` regenerado: 53 módulos / 19442 LoC; `storage.py` sale del top-3 de god modules; `knowledge_repository.py` (986 LoC) entra en la lista como componente extraído (no deuda nueva del ciclo).
+- 1 finding `low` persistido en el debt-report del ciclo: flake preexistente de orden aleatorio en `test_wi56_knowledge_repository_contracts.py::list_resources` (no reproducible en 2 tiradas ni con orden fijo; seguimiento aparte).
+
 ## [0.16.0] - 2026-09-27 — R1+R2 persistence boundary (WI-32.4+32.5+33)
 
 **Resumen**: sprint completo sobre el audit externo del 2026-09-27 (HEAD pre-v0.15.0 `974055c`), cerrando los hallazgos R1 (dict[str,Any] fuga de persistencia) y R2 (Connection lifecycle). **MINOR bump** sin BREAKING CHANGE: 4 DTOs inmutables nuevos + SqliteUnitOfWork como single owner de la `sqlite3.Connection`. Total: **1109/1109 tests PASS** (+31 desde 1078, medido via `pytest --no-header -q` en HEAD `b42a2a8` en 184s), ruff check+format limpios, release_governance 2/2 PASS.
