@@ -425,24 +425,56 @@ class RunController:
         """Cuerpo de reconcile_run ejecutado dentro del lock."""
         run = self._load_run(tenant_id, project_id, run_id)
         plan = plan_from_json(run.plan_json)
-        state = run.state
 
         # UAT-06: si un NodeExecution quedo RUNNING sin finished_at,
         # lo devolvemos a READY (interrupcion).
         self._recover_interrupted(tenant_id, project_id, run_id)
 
-        if is_terminal_run_state(state):
+        if is_terminal_run_state(run.state):
             return self._snapshot(tenant_id, project_id, run_id)
 
         # Activar el run si estaba CREATED.
-        if state == "CREATED":
+        if run.state == "CREATED":
             self._set_run_state(tenant_id, project_id, run_id, "ACTIVE", plan.initial)
 
-        # Calcular frontier.
-        frontier = self._calculate_frontier(tenant_id, project_id, run_id, plan)
+        match self._execute_frontier(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            plan=plan,
+        ):
+            case "node_failed":
+                # FAILED terminal: paramos. La transicion y su evento
+                # ya ocurrieron dentro de _execute_frontier.
+                return self._snapshot(tenant_id, project_id, run_id)
+            case "frontier_consumed":
+                pass
 
-        # Ejecutar cada nodo de la frontier.
-        for node_name in frontier:
+        self._finalize_settled_run(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            plan=plan,
+        )
+        return self._snapshot(tenant_id, project_id, run_id)
+
+    def _execute_frontier(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        plan: WorkflowPlan,
+    ) -> Literal["node_failed", "frontier_consumed"]:
+        """Ejecuta los nodos de la frontier actual, uno como maximo por
+        diseno (ver comentario al final del bucle).
+
+        Devuelve "node_failed" si un nodo fallo (el run ya esta en
+        FAILED, con su evento emitido atomicamente) o
+        "frontier_consumed" si la pasada termino sin fallo, agote la
+        frontier de golpe o el puntero se quedo sin sucesor.
+        """
+        for node_name in self._calculate_frontier(tenant_id, project_id, run_id, plan):
             ok = self._execute_one(
                 tenant_id=tenant_id,
                 project_id=project_id,
@@ -451,7 +483,6 @@ class RunController:
                 node_name=node_name,
             )
             if ok is False:
-                # FAILED terminal: paramos.
                 # H9-run-lifecycle: la transicion a FAILED y la emision
                 # del evento `RunCompleted(state=FAILED)` viven en una
                 # sola transaccion via `Storage.transition_run_state_atomically`.
@@ -465,7 +496,7 @@ class RunController:
                     current_node=node_name,
                     at=node_name,
                 )
-                return self._snapshot(tenant_id, project_id, run_id)
+                return "node_failed"
 
             # Si el nodo completado no tiene sucesor, el run termina.
             last = self._latest_node_execution(tenant_id, project_id, run_id, node_name)
@@ -482,34 +513,48 @@ class RunController:
             # propiedad del blueprint: cada pasada del bucle es
             # determinista y reversible.
 
+        return "frontier_consumed"
+
+    def _finalize_settled_run(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        plan: WorkflowPlan,
+    ) -> None:
+        """Cierra el run si su frontier quedo vacia.
+
+        Si queda frontier, el run sigue ACTIVE y no se emite nada: el
+        caller decide si lanza otra pasada.
+        """
         # Si frontier vacia -> terminamos.
         # Caso H4 budget exhausted: current con self-loop y max_visits
         # agotado -> FAILED. Caso DAG normal -> COMPLETED.
         prev_current = self._load_run(tenant_id, project_id, run_id).current_node
         new_frontier = self._calculate_frontier(tenant_id, project_id, run_id, plan)
-        if not new_frontier:
-            if self._is_budget_exhausted(plan, tenant_id, project_id, run_id, prev_current):
-                # H9-run-lifecycle: FAILED por budget agotado. Transicion
-                # + evento atomicos.
-                self._transition_run_state_with_event(
-                    tenant_id=tenant_id,
-                    project_id=project_id,
-                    run_id=run_id,
-                    state="FAILED",
-                    current_node=prev_current,
-                    at=prev_current,
-                )
-            else:
-                # H9-run-lifecycle: COMPLETED. Transicion + evento atomicos.
-                self._transition_run_state_with_event(
-                    tenant_id=tenant_id,
-                    project_id=project_id,
-                    run_id=run_id,
-                    state="COMPLETED",
-                    current_node=None,
-                )
-
-        return self._snapshot(tenant_id, project_id, run_id)
+        if new_frontier:
+            return
+        if self._is_budget_exhausted(plan, tenant_id, project_id, run_id, prev_current):
+            # H9-run-lifecycle: FAILED por budget agotado. Transicion
+            # + evento atomicos.
+            self._transition_run_state_with_event(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+                state="FAILED",
+                current_node=prev_current,
+                at=prev_current,
+            )
+        else:
+            # H9-run-lifecycle: COMPLETED. Transicion + evento atomicos.
+            self._transition_run_state_with_event(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=run_id,
+                state="COMPLETED",
+                current_node=None,
+            )
 
     def _is_budget_exhausted(
         self,
