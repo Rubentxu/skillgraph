@@ -5,11 +5,11 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **48** modulos Python, **18180** LoC, **652** funciones.
+- **48** modulos Python, **18257** LoC, **657** funciones.
 - **5** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **0** funciones privadas con cc>=20 (refactor opcional).
-- **11** funciones >80 LoC (legibilidad mejorable).
+- **10** funciones >80 LoC (legibilidad mejorable).
 - **0** funciones con anidamiento >=5 niveles.
 
 ## Archivos grandes (>800 LoC)
@@ -20,7 +20,7 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 |----:|------|
 | 2837 | `src/skillgraph/platform/storage.py` |
 | 2357 | `src/skillgraph/cli/runner.py` |
-| 1400 | `src/skillgraph/runtime/runcontroller.py` |
+| 1445 | `src/skillgraph/runtime/runcontroller.py` |
 | 927 | `src/skillgraph/platform/ports/__init__.py` |
 | 862 | `src/skillgraph/governance/graph_expansion.py` |
 
@@ -40,7 +40,6 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 | 143 | `_execute_one` | `src/skillgraph/runtime/runcontroller.py` |
 | 116 | `extract_file_signatures` | `src/skillgraph/knowledge/file_signature.py` |
 | 101 | `analyze_skill` | `src/skillgraph/domain/skill_importer.py` |
-| 95 | `_reconcile_run_locked` | `src/skillgraph/runtime/runcontroller.py` |
 | 92 | `cmd_expansion_apply` | `src/skillgraph/cli/runner.py` |
 | 90 | `compile_handoff` | `src/skillgraph/knowledge/context_controller.py` |
 | 89 | `_resolve_run_inputs` | `src/skillgraph/cli/runner.py` |
@@ -66,7 +65,7 @@ P0 sin que nadie tenga que acordarse de borrarla.
 
 - `src/skillgraph/platform/storage.py` (2837 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/cli/runner.py` (2357 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
-- `src/skillgraph/runtime/runcontroller.py` (1400 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
+- `src/skillgraph/runtime/runcontroller.py` (1445 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/platform/ports/__init__.py` (927 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/governance/graph_expansion.py` (862 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 
@@ -74,7 +73,7 @@ P0 sin que nadie tenga que acordarse de borrarla.
 
 - Ninguno.
 
-**P3 - Funciones largas >80 LoC**: 11 en total.
+**P3 - Funciones largas >80 LoC**: 10 en total.
 En su mayoria son orquestadores con baja cc y helpers atomicos con
 cobertura; ver la tabla de arriba. Prioridad baja.
 
