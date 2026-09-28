@@ -30,6 +30,8 @@ import pytest
 
 from skillgraph.cli.runner import (
     DEFAULT_TENANT,
+    _reconcile_summaries,
+    _select_promotion_failpoint,
     cmd_expansion_show,
     cmd_init,
     cmd_pack_load,
@@ -206,6 +208,79 @@ class TestPromotionSubmitErrors:
         captured = capsys.readouterr()
         assert rc == 4
         assert "no existe" in captured.err.lower() or "nope" in captured.err
+
+
+# ---------------------------------------------------------------------------
+# Tests de las piezas extraidas de cmd_promotion_reconcile (WI-47)
+# ---------------------------------------------------------------------------
+
+
+class TestPromotionReconcileHelpers:
+    """`_reconcile_summaries` y `_trigger_promotion_failpoint` por separado.
+
+    `cmd_promotion_reconcile` media cc=14 mezclando tres cosas: resolver
+    proyectos, disparar el failpoint de crash, y resumir el resultado.
+    Los failpoints no son capturables in-process (son `os._exit`), asi que
+    su *selección* sí debe ser comprobable aunque su ejecución no lo sea.
+    """
+
+    def test_summaries_count_published_and_failed(self) -> None:
+        """El resumen cuenta PUBLISHED y FAILED sobre los resultados."""
+        results = [
+            {"proposal_id": "p1", "status": "PUBLISHED"},
+            {"proposal_id": "p2", "status": "FAILED"},
+            {"proposal_id": "p3", "status": "PUBLISHED"},
+        ]
+        assert _reconcile_summaries(results) == (2, 1)
+
+    def test_summaries_of_empty_is_zero_zero(self) -> None:
+        """Sin propuestas, el resumen es (0, 0): no es un caso especial."""
+        assert _reconcile_summaries([]) == (0, 0)
+
+    def test_summaries_ignore_unknown_statuses(self) -> None:
+        """Un estado inesperado ni suma como publicado ni como fallido.
+
+        El conteo no decide el exit code por estado desconocido: decide
+        por `failed == 0`. Contar solo los dos estados conocidos evita
+        que un estado nuevo infle elPublished sin querer.
+        """
+        results = [
+            {"proposal_id": "p1", "status": "PUBLISHED"},
+            {"proposal_id": "p2", "status": "IN_PROGRESS"},
+        ]
+        assert _reconcile_summaries(results) == (1, 0)
+
+    def test_failpoint_ignores_unset_variable(self, monkeypatch) -> None:
+        """Sin variable de entorno, no hay failpoint: se devuelve None."""
+        monkeypatch.delenv("SKILLGRAPH_FAILPOINT_PROMOTION", raising=False)
+        assert _select_promotion_failpoint() is None
+
+    def test_failpoint_ignores_unknown_value(self, monkeypatch) -> None:
+        """Un valor desconocido no dispara nada: solo los nombres conocidos."""
+        monkeypatch.setenv("SKILLGRAPH_FAILPOINT_PROMOTION", "no-existe")
+        assert _select_promotion_failpoint() is None
+
+    def test_failpoint_selects_each_documented_name(self, monkeypatch) -> None:
+        """Los tres nombres documentados se reconocen y se normalizan.
+
+        `after_apply_first` estaba documentado en el comentario del
+        comando pero sin implementacion: el escenario post-crash que
+        justificaba el failpoint no existia. Ahora la seleccion lo
+        cubre y el bucle lo ejecuta.
+        """
+        for name in ("before_apply", "mid_apply", "after_apply_first"):
+            monkeypatch.setenv("SKILLGRAPH_FAILPOINT_PROMOTION", name)
+            assert _select_promotion_failpoint() == name
+
+    def test_failpoint_whitespace_and_case_are_tolerated(self, monkeypatch) -> None:
+        """Un valor con espacios o mayusculas sigue reconociendose.
+
+        La variable la escribe un shell a mano en los UAT, no codigo
+        con tipado; ser estricto aqui solo produce fallos de test
+        desconcertantes.
+        """
+        monkeypatch.setenv("SKILLGRAPH_FAILPOINT_PROMOTION", "  MID_APPLY  ")
+        assert _select_promotion_failpoint() == "mid_apply"
 
 
 # ---------------------------------------------------------------------------

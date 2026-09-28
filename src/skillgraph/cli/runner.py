@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, NoReturn
 
 if TYPE_CHECKING:
     from skillgraph.platform.paths import agents_root
@@ -1128,6 +1128,139 @@ def cmd_promotion_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# Nombres de failpoint reconocidos en `sg promotion reconcile` (H8/UAT-13).
+# Valor cerrado: un nombre desconocido no dispara nada, para que un typo en
+# la variable de entorno no tumbe un run real por accidente.
+PROMOTION_FAILPOINTS: Final[frozenset[str]] = frozenset(
+    {"before_apply", "mid_apply", "after_apply_first"}
+)
+
+# Variable de entorno que el UAT usa para simular un crash.
+_PROMOTION_FAILPOINT_ENV = "SKILLGRAPH_FAILPOINT_PROMOTION"
+
+# Codigo de salida de un crash simulado. Distinto de cualquier EXIT_* del
+# CLI para que un "crash" no se confunda con un error de dominio.
+_FAILPOINT_EXIT_CODE = 9
+
+
+def _select_promotion_failpoint() -> str | None:
+    """Normaliza el failpoint pedido por el entorno, o None si no hay.
+
+    Decision pura salvo por la lectura de entorno: separar la *decision*
+    del `os._exit` es lo que hace comprobable el failpoint, porque el
+    efecto termina el proceso y no se puede observar desde pytest.
+
+    Returns:
+        El nombre normalizado si es uno de `PROMOTION_FAILPOINTS`;
+        None si la variable no esta, vacia o trae un nombre desconocido.
+    """
+    raw = os.environ.get(_PROMOTION_FAILPOINT_ENV)
+    if raw is None:
+        return None
+    name = raw.strip().lower()
+    return name if name in PROMOTION_FAILPOINTS else None
+
+
+def _abort_with_failpoint(name: str) -> NoReturn:
+    """Escribe el failpoint en stderr y termina el proceso.
+
+    El codigo de salida es `_FAILPOINT_EXIT_CODE`, el mismo que usaban
+    los failpoints inline antes de extraerse. Se conserva para no romper
+    los asserts de los tests subprocess de UAT-13.
+
+    Args:
+        name: nombre del failpoint, ya validado.
+
+    Raises:
+        SystemExit: nunca; el proceso termina con `os._exit`.
+    """
+    sys.stderr.write(f"FAILPOINT: {name}\n")
+    sys.stderr.flush()
+    os._exit(_FAILPOINT_EXIT_CODE)
+
+
+def _apply_pending_promotions(
+    storage: Storage,
+    dest_storage: Storage,
+    *,
+    tenant_id: str,
+    target_project: str,
+) -> list[dict[str, str]]:
+    """Aplica cada propuesta pendiente y devuelve su estado final.
+
+    El apply escribe en la base del PROYECTO DESTINO: el outbox vive en
+    origen y el claim promovido vive en destino. La idempotencia es del
+    storage destino (upserts), no de este bucle, asi que re-invocar el
+    comando tras un crash completa la operacion sin duplicar.
+
+    Los failpoint se disparan aqui porque son los unicos puntos donde el
+    estado queda a medio camino:
+    - `before_apply`: tras leer las pendientes, antes de aplicar ninguna.
+    - `mid_apply`: tras marcar IN_PROGRESS, antes del apply de negocio.
+    - `after_apply_first`: DENTRO del apply de la primera, entre el
+      efecto de negocio y el marcado PUBLISHED. Es el unico punto real
+      de estado partido: el claim ya esta en destino y el outbox sigue
+      sin publicar. Colocarlo despues de `apply_proposal` no serviria
+      de nada, porque ahi el outbox ya quedo PUBLISHED.
+
+    Args:
+        storage: outbox de origen (donde viven las propuestas).
+        dest_storage: base destino (donde se registran los claims).
+        tenant_id: tenant de la promocion.
+        target_project: nombre del proyecto destino.
+
+    Returns:
+        Una entrada `{"proposal_id", "status"}` por propuesta aplicada.
+    """
+    from skillgraph.governance.promotion import apply_proposal
+
+    base_apply = _default_claim_importer(
+        dest_storage, tenant_id=tenant_id, target_project=target_project
+    )
+    failpoint = _select_promotion_failpoint()
+    if failpoint == "before_apply":
+        _abort_with_failpoint(failpoint)
+
+    crashed = False
+
+    def apply_fn(payload: dict) -> bool:
+        """Aplica al destino y, si toca, deja el estado partido."""
+        nonlocal crashed
+        ok = base_apply(payload)
+        if failpoint == "after_apply_first" and not crashed:
+            crashed = True
+            _abort_with_failpoint(failpoint)
+        return ok
+
+    results: list[dict[str, str]] = []
+    for proposal in storage.list_pending_promotions():
+        if failpoint == "mid_apply":
+            storage.mark_promotion_in_progress(proposal["proposal_id"])
+            _abort_with_failpoint(failpoint)
+
+        final_status = apply_proposal(storage, proposal["proposal_id"], apply_fn=apply_fn)
+        results.append({"proposal_id": proposal["proposal_id"], "status": final_status})
+    return results
+
+
+def _reconcile_summaries(results: list[dict[str, str]]) -> tuple[int, int]:
+    """Cuenta (publicadas, fallidas) sobre los resultados del reconcile.
+
+    Funcion pura: no toca storage ni imprime. Solo cuenta los dos estados
+    que el comando conoce, de modo que un estado nuevo no altera el
+    recuento por accidente.
+
+    Args:
+        results: entradas `{"proposal_id", "status"}` del reconcile.
+
+    Returns:
+        Par (published, failed). La lista vacia da (0, 0).
+    """
+    published = sum(1 for r in results if r["status"] == "PUBLISHED")
+    failed = sum(1 for r in results if r["status"] == "FAILED")
+    return published, failed
+
+
 def cmd_promotion_reconcile(args: argparse.Namespace) -> int:
     """Reconcilia propuestas PENDING/IN_PROGRESS: aplica sin duplicar.
 
@@ -1135,7 +1268,6 @@ def cmd_promotion_reconcile(args: argparse.Namespace) -> int:
     re-invocar `promotion reconcile` completa la operacion sin
     duplicar el claim en el catalogo destino.
     """
-
     project, err = resolve_project(args, args.project)
     if err is not None:
         return err
@@ -1154,42 +1286,19 @@ def cmd_promotion_reconcile(args: argparse.Namespace) -> int:
     dest_storage = Storage(Path(dest_project["db_path"]))
     storage = Storage(Path(project["db_path"]))
     try:
-        apply_fn = _default_claim_importer(
-            dest_storage, tenant_id=tenant_id, target_project=dest_project["name"]
+        results = _apply_pending_promotions(
+            storage,
+            dest_storage,
+            tenant_id=tenant_id,
+            target_project=dest_project["name"],
         )
-        # FAILPOINT de prueba (H8): simula un crash a mitad del apply.
-        # SKILLGRAPH_FAILPOINT_PROMOTION=before_apply  -> os._exit(9) tras
-        #   leer las pendientes pero ANTES de aplicar cualquiera.
-        # SKILLGRAPH_FAILPOINT_PROMOTION=after_apply_first -> os._exit(9)
-        #   justo despues de aplicar la primera (claim ya en destino pero
-        #   outbox sin marcar PUBLISHED: el estado exacto post-crash).
-        failpoint = os.environ.get("SKILLGRAPH_FAILPOINT_PROMOTION")
-        if failpoint == "before_apply":
-            sys.stderr.write("FAILPOINT: before_apply\n")
-            sys.stderr.flush()
-            os._exit(9)
-        results: list[dict[str, str]] = []
-        for proposal in storage.list_pending_promotions():
-            from skillgraph.governance.promotion import apply_proposal
-
-            # FAILPOINT mid_apply: el apply de negocio ya se ejecuto
-            # (o se ejecutaria ahora) pero el outbox sigue sin marcar
-            # PUBLISHED. Simula crash exactamente entre ambos efectos.
-            if failpoint == "mid_apply":
-                storage.mark_promotion_in_progress(proposal["proposal_id"])
-                sys.stderr.write("FAILPOINT: mid_apply\n")
-                sys.stderr.flush()
-                os._exit(9)
-            final_status = apply_proposal(storage, proposal["proposal_id"], apply_fn=apply_fn)
-            results.append({"proposal_id": proposal["proposal_id"], "status": final_status})
     finally:
         storage.close()
         dest_storage.close()
     if not results:
         print("(nada que reconciliar)")
         return EXIT_OK
-    published = sum(1 for r in results if r["status"] == "PUBLISHED")
-    failed = sum(1 for r in results if r["status"] == "FAILED")
+    published, failed = _reconcile_summaries(results)
     for r in results:
         print(f"{r['proposal_id']}: {r['status']}")
     print(f"Reconciliadas: {len(results)} (PUBLISHED={published}, FAILED={failed})")

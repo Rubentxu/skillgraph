@@ -254,3 +254,64 @@ class TestUat13PublicPath:
         r = _sg(data_root, "promotion", "reconcile", "orig", "--target", "dest")
         assert r.returncode == 0
         assert _dest_counts(dest_db, "claim-crash") == (1, 1, 1)
+
+    def test_promotion_survives_after_first_apply_crash(self, tmp_path: Path) -> None:
+        """CASO UAT-13: crash DESPUES de aplicar la primera propuesta.
+
+        Este failpoint estaba documentado en el comentario del comando
+        desde H8 pero no tenia implementacion: el escenario post-crash
+        que justificaba el failpoint (claim ya en destino, outbox sin
+        marcar PUBLISHED) no existia en el codigo. Ahora si.
+
+        Es el caso mas dificil de los tres, porque el estado queda
+        partido a la mitad de dos efectos: el claim YA esta en destino
+        pero la propuesta sigue pendiente en el outbox de origen. La
+        reanudacion tiene que ser idempotente sobre destino.
+        """
+        data_root = tmp_path / "data"
+        assert _sg(data_root, "init").returncode == 0
+        assert _sg(data_root, "project", "create", "orig").returncode == 0
+        assert _sg(data_root, "project", "create", "dest").returncode == 0
+        _seed_claim(data_root, "orig", "claim-postcrash")
+        assert (
+            _sg(data_root, "promotion", "submit", "orig", "claim-postcrash", "dest").returncode == 0
+        )
+
+        # CRASH: el claim llega a destino, el outbox no se actualiza.
+        r = _sg(
+            data_root,
+            "promotion",
+            "reconcile",
+            "orig",
+            "--target",
+            "dest",
+            env_extra={"SKILLGRAPH_FAILPOINT_PROMOTION": "after_apply_first"},
+        )
+        assert r.returncode == 9, f"esperado crash exit 9, rc={r.returncode}"
+        assert "FAILPOINT: after_apply_first" in r.stderr
+
+        orig_db = data_root / "tenants" / "default" / "projects" / "orig" / "project.sqlite"
+        dest_db = data_root / "tenants" / "default" / "projects" / "dest" / "project.sqlite"
+
+        # Estado partido: el claim YA esta en destino (1,1,1) pero la
+        # propuesta sigue sin marcar PUBLISHED en el outbox.
+        assert _dest_counts(dest_db, "claim-postcrash") == (1, 1, 1)
+        db = sqlite3.connect(orig_db)
+        try:
+            st = db.execute(
+                "SELECT status FROM promotion_outbox WHERE proposal_id='promo-claim-postcrash'"
+            ).fetchone()[0]
+        finally:
+            db.close()
+        assert st != "PUBLISHED", "el failpoint deberia dejar el outbox sin publicar"
+
+        # REANUDACIÓN: el reconcile reintenta y no duplica el claim.
+        r = _sg(data_root, "promotion", "reconcile", "orig", "--target", "dest")
+        assert r.returncode == 0, r.stderr
+        assert "PUBLISHED" in r.stdout
+        assert _dest_counts(dest_db, "claim-postcrash") == (1, 1, 1)
+
+        # Idempotente: un tercer reconcile sigue sin duplicar.
+        r = _sg(data_root, "promotion", "reconcile", "orig", "--target", "dest")
+        assert r.returncode == 0
+        assert _dest_counts(dest_db, "claim-postcrash") == (1, 1, 1)
