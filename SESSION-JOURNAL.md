@@ -7062,3 +7062,78 @@ Nota sobre la medicion: la suite con instrumentacion de cobertura tarda
 agente llega a 600s, asi que hay que lanzarla con `setsid nohup` para
 que sobreviva al limite del tool.
 
+## 2026-09-28 (tarde 2) — Estado real de WI-45: RELEASE_PENDING, no "active"
+
+### Correccion de la entrada anterior
+
+Escribi que WI-45 sigue `active` "porque nadie lo cerro". Es
+impreciso, y el matiz cambia que hay que hacer. El work item esta
+`active`, pero **el ciclo esta en `RELEASE_PENDING`, fase `release`**.
+Son dos objetos distintos: `work_items_v1.status` y `cycles.status`.
+El trabajo no esta sin cerrar, esta **bloqueado en la puerta de
+release**, y el bloqueo es real y esta documentado.
+
+### Lo que el ciclo exige (OBSERVED, leido del ledger)
+
+`cycles.manifest_json` para `p-74299cf88f51dab9/wi-45-uow-coverage`:
+
+- `path: b-direct`, `branch: feat/wi-45-uow-coverage`
+- `status: RELEASE_PENDING`, `phase: release`
+- artefactos `verification-report` e `implementation-receipt`: **ambos
+  existen en disco** (`evidence/wi-45-verification-report.md`,
+  `evidence/wi-45-implementation-receipt.md`) pero con **`sha256: null`
+  y `producer: null` en el manifiesto**. Ese es el hueco concreto.
+- gates ya superados: `implementation-complete`, `tests-pass`,
+  `policy-compliant`, los tres `passed`.
+
+### El frontier legal (OBSERVED, `sddk cycle next`)
+
+Dos transiciones, ninguna satisfecha todavia:
+
+- `release.complete` (Release -> Archive): exige `no-pending-effects`,
+  `release-uat-approved`, `merge-receipt` y `release-receipt`.
+- `release.recover` (Release -> Build): exige solo el gate
+  `release-recovery-authorized` y el requisito
+  `release-failure-evidence`.
+
+**`release.recover` es la salida.** Es la unica que no depende de que
+el release funcione, y `evidence/wi-45-release-failure-evidence.md`
+ya existe precisamente para alimentarla. La entrada anterior daba por
+hecho que el ciclo no se podia mover; no es cierto, hay un camino
+gobernado y su evidencia esta en disco.
+
+### B1 y B2 re-verificados hoy (OBSERVED, no heredados)
+
+Sobre el framework actual **2.0.1** (el documento de ayer citaba
+1.171.2, asi que hacia falta volver a comprobarlo):
+
+- **B1 se reproduce**: `sddk release plan --tag v0.16.2` ->
+  `VERSION LOCKSTEP ERROR: could not read .../Cargo.toml`. No hay
+  `Cargo.toml` y no hay por que haberlo.
+- **B2 se reproduce**: no existe `permissions.yaml`, y
+  `find $FRAMEWORK -name permissions.yaml` sobre 2.0.1 no devuelve
+  nada. El framework no lo provee.
+
+Los dos bloqueantes son de tooling de SDDK para proyectos Python, no
+de calidad del trabajo. El documento de ayer rechazo correctamente
+fabricar un `Cargo.toml` o un `permissions.yaml` en vez de hacerlo.
+
+### A2 verificado por inspeccion (OBSERVED)
+
+`tests/test_wi45_uow_delegation.py` y `tests/test_uow.py` no usan
+mocks, patches ni monkeypatch. Las dos apariciones de la palabra
+"mock" estan en docstrings que **afirman** lo contrario
+("Sin mocks: A2 lo exige"). A2 se cumple de verdad.
+
+### Que queda, con precision
+
+1. `release.recover` con su gate `release-recovery-authorized` y el
+   `release-failure-evidence` ya escrito. Es la accion que desbloquea
+   el ciclo, y escribe un recibo en el ledger gobernado: es decision
+   del operador, no una mia.
+2. Los artefactos del manifiesto con `sha256: null`. Mientras el
+   manifiesto no los referencie con hash, `release.complete` no puede
+   cerrarse aunque el release funcionase.
+3. Push de los commits sin publicar: `git.push` es `human_gate`.
+
+
