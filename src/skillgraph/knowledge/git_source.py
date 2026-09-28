@@ -230,28 +230,18 @@ class GitSource:
     ) -> list[ChangedFile]:
         """Diff entre dos commits, filtrado por pathspecs guardados.
 
-        `until_commit` por defecto = HEAD del repo.
+        `until_commit` por defecto = HEAD del repo. El filtro por
+        pathspecs se aplica DESPUES del diff completo; `old`/`new` del
+        tree change dictan el estado (added/modified/deleted).
         """
         c1, c2 = self._resolve_commit_pair(since_commit, until_commit)
-
-        changes: list[ChangedFile] = []
         Repo, _, tree_changes = _import_dulwich()
         repo = Repo(str(self.repo_root))
-        for ch in tree_changes(repo.object_store, c1.tree, c2.tree):
-            path = _resolve_change_path(ch)
-            if path is None:
-                continue
-            old_sha = ch.old.sha.decode() if ch.old and ch.old.sha else None
-            new_sha = ch.new.sha.decode() if ch.new and ch.new.sha else None
-            changes.append(
-                ChangedFile(
-                    path=path,
-                    old_blob_sha=old_sha,
-                    new_blob_sha=new_sha or "",
-                    status=_classify_change_status(old_sha, new_sha),
-                )
-            )
-
+        changes = [
+            cf
+            for ch in tree_changes(repo.object_store, c1.tree, c2.tree)
+            if (cf := _changed_file_from(ch)) is not None
+        ]
         if self.pathspecs:
             changes = [
                 c for c in changes if any(_matches_pathspec(c.path, ps) for ps in self.pathspecs)
@@ -328,6 +318,26 @@ def _collect_blob_shas(repo: object, tree_sha: bytes) -> dict[str, str]:
         root = entry.path
         _visit(entry.sha, root)
     return out
+
+
+def _changed_file_from(ch: object) -> ChangedFile | None:
+    """Convierte un tree change de dulwich en `ChangedFile`, o None.
+
+    Un tree change sin path en old ni new no es representable como
+    cambio de fichero y se descarta (comportamiento observado, fijado
+    por la red de contrato de detect_changes).
+    """
+    path = _resolve_change_path(ch)
+    if path is None:
+        return None
+    old_sha = ch.old.sha.decode() if ch.old and ch.old.sha else None  # type: ignore[attr-defined]
+    new_sha = ch.new.sha.decode() if ch.new and ch.new.sha else None  # type: ignore[attr-defined]
+    return ChangedFile(
+        path=path,
+        old_blob_sha=old_sha,
+        new_blob_sha=new_sha or "",
+        status=_classify_change_status(old_sha, new_sha),
+    )
 
 
 def _matches_pathspec(path: str, pathspec: str) -> bool:
