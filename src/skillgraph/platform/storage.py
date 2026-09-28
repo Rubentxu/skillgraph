@@ -46,6 +46,7 @@ from skillgraph.platform.uow import SqliteUnitOfWork
 from skillgraph.resources.bricks import Brick
 
 if TYPE_CHECKING:
+    from skillgraph.platform.policy_store import SqlitePolicyStore
     from skillgraph.platform.run_repository import SqliteRunRepository
     from skillgraph.runtime.engine import RuntimeEvent
 
@@ -485,9 +486,11 @@ class Storage:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA foreign_keys = ON")
-        # WI-56 corte 1: cache del componente real del cluster runs
-        # (se instancia lazy en run_repository()).
+        # WI-56 cortes 1-2: cache de los componentes reales del
+        # cluster runs y del cluster policy/budget (lazy en sus
+        # factorias).
         self._run_repository: SqliteRunRepository | None = None
+        self._policy_store: SqlitePolicyStore | None = None
         self._migrate()
         # WI-33 (R2 audit externo): el ``SqliteUnitOfWork`` owns la
         # conexion y expone 5 bounded-context adapters que la
@@ -905,9 +908,72 @@ class Storage:
         """Devuelve una vista ``Storage`` que satisface ``EventStore``."""
         return self
 
-    def policy_store(self) -> Storage:
-        """Devuelve una vista ``Storage`` que satisface ``PolicyStore``."""
-        return self
+    def policy_store(self) -> SqlitePolicyStore:
+        """Devuelve el componente REAL del cluster policy/budget (WI-56).
+
+        Una unica instancia por ``Storage`` (cacheada): identidad
+        estable, conexion compartida, SQL viviendo en
+        ``platform/policy_store.py``. El facade conserva delegados
+        con firma explicita (I1: cero ediciones en callers).
+        """
+        if getattr(self, "_policy_store", None) is None:
+            from skillgraph.platform.policy_store import SqlitePolicyStore
+
+            self._policy_store = SqlitePolicyStore(self)
+        return self._policy_store
+
+    # ----- delegados policy/budget (WI-56 corte 2) -----------------
+    # El SQL vive en ``SqlitePolicyStore``; delegados con firma
+    # explicita preservan la API del facade.
+
+    def get_policy(
+        self,
+        *,
+        tenant_id: str,
+    ) -> str | None:
+        """Delegado WI-56: el SQL vive en ``SqlitePolicyStore.get_policy``."""
+        return self.policy_store().get_policy(tenant_id=tenant_id)
+
+    def upsert_policy(
+        self,
+        *,
+        tenant_id: str,
+        policy: str,
+    ) -> None:
+        """Delegado WI-56: el SQL vive en ``SqlitePolicyStore.upsert_policy``."""
+        return self.policy_store().upsert_policy(tenant_id=tenant_id, policy=policy)
+
+    def upsert_budget(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        max_visits: int | None,
+        max_runtime_seconds: int | None,
+        max_events: int | None,
+    ) -> None:
+        """Delegado WI-56: el SQL vive en ``SqlitePolicyStore.upsert_budget``."""
+        return self.policy_store().upsert_budget(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            max_visits=max_visits,
+            max_runtime_seconds=max_runtime_seconds,
+            max_events=max_events,
+        )
+
+    def get_budget(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+    ) -> StoredBudget | None:
+        """Delegado WI-56: el SQL vive en ``SqlitePolicyStore.get_budget``."""
+        return self.policy_store().get_budget(
+            tenant_id=tenant_id, project_id=project_id, run_id=run_id
+        )
 
     # ----- ciclo de vida -----
 
@@ -2007,100 +2073,6 @@ class Storage:
         if row is None:
             return None
         return _row_to_stored_event(row)
-
-    # ----- presupuestos por Run (S4 Etapa 7) -----
-
-    def upsert_budget(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-        run_id: str,
-        max_visits: int | None,
-        max_runtime_seconds: int | None,
-        max_events: int | None,
-    ) -> None:
-        """Inserta o reemplaza el budget de un Run (idempotente).
-
-        `None` significa "sin limite" para esa categoria. La PK sobre
-        `run_id` + la politica REPLACE garantiza idempotencia aunque
-        se llame dos veces con los mismos parametros (UAT-07):
-        la UNIQUE constraint rechaza el duplicado si lo hubiera.
-        """
-        self._conn.execute(
-            """
-            INSERT OR REPLACE INTO run_budgets
-                (run_id, tenant_id, project_id,
-                 max_visits, max_runtime_seconds, max_events)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                run_id,
-                tenant_id,
-                project_id,
-                max_visits,
-                max_runtime_seconds,
-                max_events,
-            ),
-        )
-
-    def get_budget(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-        run_id: str,
-    ) -> StoredBudget | None:
-        """Devuelve el DTO de un RunBudget, o None si no existe.
-
-        No lanza NotFoundError: ausencia de budget significa "sin
-        limites" (compat con Runs anteriores a S4).
-
-        WI-38 (R1 strict): devuelve ``StoredBudget`` (frozen + slots)
-        en vez de ``dict[str, Any]``.
-        """
-        row = self._conn.execute(
-            "SELECT max_visits, max_runtime_seconds, max_events, "
-            "       tenant_id, project_id, run_id "
-            "FROM run_budgets "
-            "WHERE tenant_id = ? AND project_id = ? AND run_id = ?",
-            (tenant_id, project_id, run_id),
-        ).fetchone()
-        return None if row is None else _row_to_stored_budget(row)
-
-    # ----- politicas por tenant (S5 Etapa 7) -----
-
-    def get_policy(self, *, tenant_id: str) -> str | None:
-        """Devuelve la politica de redaccion del tenant, o None.
-
-        None significa: no hay politica configurada explicitamente;
-        el caller debe usar el default seguro ("metadata"). Asi la
-        politica se aplica a TODOS los tenants aunque no la hayan
-        configurado, sin necesidad de un INSERT en el seed.
-        """
-        row = self._conn.execute(
-            "SELECT redaction_policy FROM tenant_policies WHERE tenant_id = ?",
-            (tenant_id,),
-        ).fetchone()
-        return None if row is None else str(row["redaction_policy"])
-
-    def upsert_policy(self, *, tenant_id: str, policy: str) -> None:
-        """Crea o reemplaza la politica de redaccion del tenant.
-
-        Idempotente (INSERT OR REPLACE sobre la PK). El caller
-        debe haber validado `policy` con `validate_policy`
-        (storage NO valida la politica; eso vive en el modulo
-        `redaction` por la regla "Storage encapsula SQL, no reglas
-        de negocio").
-        """
-        self._conn.execute(
-            """
-            INSERT OR REPLACE INTO tenant_policies
-                (tenant_id, redaction_policy, updated_at)
-            VALUES (?, ?, datetime('now'))
-            """,
-            (tenant_id, policy),
-        )
 
     # ----- lecturas del ciclo de vida de un Run (H9-BSlice3-S1) -----
 
