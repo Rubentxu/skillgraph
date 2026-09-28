@@ -7152,6 +7152,15 @@ comprueba. Se declara con contenido real o no se declara.
 
 Ver `evidence/b1-b2-diagnosis-correction.md`. B1 no cambia.
 
+### Errata del commit 9c0985e (OBSERVED)
+
+El mensaje de ese commit contiene "El结论 util se conserva", con un
+caracter chino en mitad de la frase. Es un defecto mio de redaccion, no
+afecta al contenido de los ficheros ni a la evidencia. Se deja
+constancia en vez de reescribir historia: el commit es correcto en su
+contenido y el defecto es visible, que es mejor que un amend que
+borre el rastro.
+
 ### A2 verificado por inspeccion (OBSERVED)
 
 `tests/test_wi45_uow_delegation.py` y `tests/test_uow.py` no usan
