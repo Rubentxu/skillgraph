@@ -62,15 +62,21 @@ def test_audit_produces_markdown_report() -> None:
         assert h in text, f"falta seccion {h!r} en {out_path}"
 
 
-def test_audit_includes_post_wi22_recommendations() -> None:
-    """El reporte refleja las decisiones D-52..D-60 (cierre previo) y los P0..P3 actuales."""
+def test_audit_includes_derived_recommendations() -> None:
+    """El reporte deriva las recomendaciones de la medicion, no de prosa a mano.
+
+    Este test antes afirmaba que el reporte contenia "main() cc=43" y un
+    bloque P0 fijo. Era verdad cuando se escribio, pero los refactors de
+    WI-23..WI-27 dejaron obsoletas esas cifras mientras el test seguia
+    exigiendo el texto viejo: el test blindaba la mentira. Ahora exige la
+    estructura derivada. La exactitud de las cifras la comprueba
+    ``test_audit_debt_accuracy.py``.
+    """
     proc = _run_audit()
     out_path = Path(proc.stdout.strip())
     text = out_path.read_text()
-    # Comprobacion de contenido: top-3 hotspots publicos deben quedar citados.
-    assert "main" in text, "falta mencion de main() cc=43"
-    assert "runner.py" in text, "falta path runner.py"
-    # Recomendaciones por prioridad.
+    assert "derivadas de la medicion" in text, "la seccion de recomendaciones no dice ser derivada"
+    # Las cuatro prioridades se generan desde las metricas del informe.
     for prio in ("**P0", "**P1", "**P2", "**P3"):
         assert prio in text, f"falta bloque {prio}"
 

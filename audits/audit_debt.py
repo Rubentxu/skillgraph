@@ -107,6 +107,25 @@ def read_annals(path: pathlib.Path) -> list[str]:
     return text[marker_at + len(ANNALS_MARKER) :].strip("\n").split("\n")
 
 
+def max_public_cc(files: list[dict]) -> int:
+    """Mayor cc entre funciones publicas de todos los archivos.
+
+    Se usa para poder decir "el maximo medido es N" cuando no hay
+    hotspots, en vez de dejar el P0 sin ninguna cifra. Funcion pura:
+    no lee disco ni escribe nada.
+
+    Args:
+        files: salida de ``audit_file`` por cada modulo de ``src/``.
+
+    Returns:
+        El mayor cc publico, o 0 si no hay ninguna funcion publica.
+    """
+    return max(
+        (func["cc"] for f in files for func in f["funcs"] if not func["is_private"]),
+        default=0,
+    )
+
+
 def main() -> int:
     if not SRC_ROOT.exists():
         print(f"FATAL: {SRC_ROOT} no existe; ejecuta desde la raiz del repo.", file=sys.stderr)
@@ -235,54 +254,73 @@ def main() -> int:
         lines.append("- Ninguna funcion con anidamiento >=5. ✓")
     lines.append("")
 
-    lines.append("## Recomendaciones (post-WI-22 cierre previo)")
+    lines.append("## Recomendaciones (derivadas de la medicion)")
     lines.append("")
-    lines.append("### Cerradas en este ciclo WI-23..WI-27 (housekeeping) — 5 WIs")
-    lines.append("- `_validate` (pack_loader): cc 22→7 — 3 helpers extraidos.")
-    lines.append("- `validate` (graph_expansion): cc 24→4 — 3 helpers extraidos.")
-    lines.append("- `parse_markdown` (resources.parser): cc 17→2 — 4 helpers extraidos.")
-    lines.append("- `take` (runtime.locks.RunLock): cc 16→5 — 4 helpers extraidos.")
-    lines.append("- `record_validation_receipt`: cc 14→5 — 4 helpers con `empty_msg` kwarg.")
-    lines.append("- `traverse_invalidations`: cc 13→5 — 3 helpers (seed/expand/warn).")
-    lines.append(
-        "- `HttpAgentAdapter.invoke`: cc 12→7 — sentinel `RetryableHttpStatus` + 1 helper."
-    )
-    lines.append("- `compile_handoff_from_scopes`: cc 12→1 — triada validate/enforce/build_synth.")
+    lines.append("Esta seccion se genera desde las metricas de este mismo informe. No")
+    lines.append("hay cifras escritas a mano: si una funcion baja de cc=20, desaparece de")
+    lines.append("P0 sin que nadie tenga que acordarse de borrarla.")
     lines.append("")
-    lines.append("### Pendientes por prioridad")
-    lines.append("")
+
+    # P0: hotspots publicos medidos. Si no hay ninguno, se dice.
     lines.append("**P0 - Hotspots publicos cc>=20** (refactor obligatorio):")
-    lines.append("- `main` (runner.py): cc=43, 58 LoC — CLI entry point: NO refactor surgical.")
-    lines.append(
-        "- `cmd_run` (runner.py): cc=22, 122 LoC — candidate a `_dispatch_run_subcommand(...)`."
-    )
-    lines.append(
-        "- `_make_schema_validator` (pack_loader.py): cc=22, 77 LoC — factory de closures; refactor interno factible."
-    )
     lines.append("")
-    lines.append("**P1 - God modules** (>800 LoC, deuda estructural mayor):")
-    lines.append(
-        "- H-01 storage.py (2407 LoC): reposicionar por dominio (knowledge/governance/receipts)."
-    )
-    lines.append("- H-02 cli/runner.py (2477 LoC): extraer sub-comandos a modulos individuales.")
-    lines.append("- runcontroller.py (1357 LoC): separar reconciliacion de ejecucion.")
+    if hotspots_public:
+        for cc, ln, p, n in hotspots_public:
+            lines.append(f"- `{n}` (`{p}`): cc={cc}, {ln} LoC.")
+    else:
+        lines.append(
+            f"- Ninguno. Ninguna funcion publica de `src/` alcanza cc=20 "
+            f"(maximo medido: {max_public_cc(files)})."
+        )
     lines.append("")
-    lines.append("**P2 - Hotspots privados cc>=20** (refactor opcional, valor pedagogico):")
-    lines.append("- Sin acciones automaticas; decidir caso por caso.")
+
+    # P1: god modules medidos, con LoC leido del arbol.
+    lines.append("**P1 - God modules** (>800 LoC, deuda estructural):")
     lines.append("")
-    lines.append(
-        "**P3 - Funciones largas >80 LoC**: ver tabla arriba. En su mayoria son orquestadores."
-    )
+    if god_files:
+        for loc, p in god_files:
+            lines.append(
+                f"- `{p}` ({loc} LoC): requiere ADR previo, porque tocarlo "
+                "afecta a contratos publicos y frontera de dominio."
+            )
+    else:
+        lines.append("- Ninguno.")
     lines.append("")
+
+    # P2: hotspots privados medidos.
+    lines.append("**P2 - Hotspots privados cc>=20** (opcional, valor pedagogico):")
+    lines.append("")
+    if hotspots_private:
+        for cc, ln, p, n in hotspots_private:
+            lines.append(f"- `{n}` (`{p}`): cc={cc}, {ln} LoC.")
+    else:
+        lines.append("- Ninguno.")
+    lines.append("")
+
+    # P3: funciones largas, medidas.
+    lines.append(f"**P3 - Funciones largas >80 LoC**: {len(longest_funcs)} en total.")
+    lines.append("En su mayoria son orquestadores con baja cc y helpers atomicos con")
+    lines.append("cobertura; ver la tabla de arriba. Prioridad baja.")
+    lines.append("")
+
+    # Anidamiento: es la senal de decision tree, la mas accionable tras P0.
+    lines.append("**P4 - Anidamiento >=5 niveles** (decision tree en vez de composicion):")
+    lines.append("")
+    if deeply_nested:
+        for d, p, n in deeply_nested:
+            lines.append(f"- `{n}` (`{p}`): {d} niveles.")
+    else:
+        lines.append("- Ninguno.")
+    lines.append("")
+
     lines.append("### Politica recomendada")
     lines.append("")
-    lines.append("- WIs P0 siguen el patron helper-extraction ya establecido (D-52..D-60).")
-    lines.append(
-        "- WIs P1 (god modules) requieren un ADR previo porque tocan contratos publicos y boundary."
-    )
-    lines.append(
-        "- Cualquier release debe mantener cero hotspots publicos cc>=20 o documentar la excepcion."
-    )
+    lines.append("- Los WIs de complejidad siguen el patron helper-extraction ya")
+    lines.append("  establecido (D-52..D-60): extraer helpers atomicos y medibles.")
+    lines.append("- Los WIs P1 (god modules) requieren un ADR previo porque tocan")
+    lines.append("  contratos publicos y frontera de dominio.")
+    lines.append("- Cualquier release mantiene cero hotspots publicos cc>=20, o")
+    lines.append("  documenta la excepcion de forma explicita.")
     lines.append("")
 
     out_path = AUDITS_DIR / f"architecture-debt-{today}.md"

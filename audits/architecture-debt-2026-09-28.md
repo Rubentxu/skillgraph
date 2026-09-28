@@ -57,40 +57,45 @@ Anidamiento >=5 suele indicar decision tree en lugar de composicion declarativa.
 | 5 | `_validate` | `src/skillgraph/domain/pack_loader.py` |
 | 5 | `_make_schema_validator` | `src/skillgraph/domain/pack_loader.py` |
 
-## Recomendaciones (post-WI-22 cierre previo)
+## Recomendaciones (derivadas de la medicion)
 
-### Cerradas en este ciclo WI-23..WI-27 (housekeeping) — 5 WIs
-- `_validate` (pack_loader): cc 22→7 — 3 helpers extraidos.
-- `validate` (graph_expansion): cc 24→4 — 3 helpers extraidos.
-- `parse_markdown` (resources.parser): cc 17→2 — 4 helpers extraidos.
-- `take` (runtime.locks.RunLock): cc 16→5 — 4 helpers extraidos.
-- `record_validation_receipt`: cc 14→5 — 4 helpers con `empty_msg` kwarg.
-- `traverse_invalidations`: cc 13→5 — 3 helpers (seed/expand/warn).
-- `HttpAgentAdapter.invoke`: cc 12→7 — sentinel `RetryableHttpStatus` + 1 helper.
-- `compile_handoff_from_scopes`: cc 12→1 — triada validate/enforce/build_synth.
-
-### Pendientes por prioridad
+Esta seccion se genera desde las metricas de este mismo informe. No
+hay cifras escritas a mano: si una funcion baja de cc=20, desaparece de
+P0 sin que nadie tenga que acordarse de borrarla.
 
 **P0 - Hotspots publicos cc>=20** (refactor obligatorio):
-- `main` (runner.py): cc=43, 58 LoC — CLI entry point: NO refactor surgical.
-- `cmd_run` (runner.py): cc=22, 122 LoC — candidate a `_dispatch_run_subcommand(...)`.
-- `_make_schema_validator` (pack_loader.py): cc=22, 77 LoC — factory de closures; refactor interno factible.
 
-**P1 - God modules** (>800 LoC, deuda estructural mayor):
-- H-01 storage.py (2407 LoC): reposicionar por dominio (knowledge/governance/receipts).
-- H-02 cli/runner.py (2477 LoC): extraer sub-comandos a modulos individuales.
-- runcontroller.py (1357 LoC): separar reconciliacion de ejecucion.
+- Ninguno. Ninguna funcion publica de `src/` alcanza cc=20 (maximo medido: 14).
 
-**P2 - Hotspots privados cc>=20** (refactor opcional, valor pedagogico):
-- Sin acciones automaticas; decidir caso por caso.
+**P1 - God modules** (>800 LoC, deuda estructural):
 
-**P3 - Funciones largas >80 LoC**: ver tabla arriba. En su mayoria son orquestadores.
+- `src/skillgraph/platform/storage.py` (2837 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
+- `src/skillgraph/cli/runner.py` (2248 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
+- `src/skillgraph/runtime/runcontroller.py` (1400 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
+- `src/skillgraph/platform/ports/__init__.py` (927 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
+- `src/skillgraph/governance/graph_expansion.py` (819 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
+
+**P2 - Hotspots privados cc>=20** (opcional, valor pedagogico):
+
+- Ninguno.
+
+**P3 - Funciones largas >80 LoC**: 11 en total.
+En su mayoria son orquestadores con baja cc y helpers atomicos con
+cobertura; ver la tabla de arriba. Prioridad baja.
+
+**P4 - Anidamiento >=5 niveles** (decision tree en vez de composicion):
+
+- `_validate` (`src/skillgraph/domain/pack_loader.py`): 5 niveles.
+- `_make_schema_validator` (`src/skillgraph/domain/pack_loader.py`): 5 niveles.
 
 ### Politica recomendada
 
-- WIs P0 siguen el patron helper-extraction ya establecido (D-52..D-60).
-- WIs P1 (god modules) requieren un ADR previo porque tocan contratos publicos y boundary.
-- Cualquier release debe mantener cero hotspots publicos cc>=20 o documentar la excepcion.
+- Los WIs de complejidad siguen el patron helper-extraction ya
+  establecido (D-52..D-60): extraer helpers atomicos y medibles.
+- Los WIs P1 (god modules) requieren un ADR previo porque tocan
+  contratos publicos y frontera de dominio.
+- Cualquier release mantiene cero hotspots publicos cc>=20, o
+  documenta la excepcion de forma explicita.
 
 
 <!-- ANNALS:append-only -->
