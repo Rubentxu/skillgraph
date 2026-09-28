@@ -36,10 +36,18 @@ def _declared_outcomes(metadata: dict[str, Any]) -> tuple[str, ...]:
 
 
 def _declared_max_visits(metadata: dict[str, Any]) -> int | None:
+    """Lee el limite de visitas declarado, o None si no se declaro.
+
+    `bool` se excluye a proposito: en Python `isinstance(True, int)` es
+    True, asi que un chequeo ingenuo acepta un booleano como limite.
+    Y como `True == 1`, el efecto no es un error visible sino un nodo
+    que se queda con una sola visita sin que nadie lo haya pedido.
+    Mismo motivo por el que `_matches` separa `bool` de `integer`.
+    """
     raw = metadata.get(MAX_VISITS_KEY)
     if raw is None:
         return None
-    if not isinstance(raw, int) or raw < 1:
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 1:
         raise ValidationError(
             f"WorkflowNode.metadata[{MAX_VISITS_KEY!r}] debe ser int >= 1 o ausente"
         )
