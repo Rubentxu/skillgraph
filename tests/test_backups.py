@@ -17,12 +17,13 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.core.errors import ValidationError
+from skillgraph.core.errors import IntegrityError, ValidationError
 from skillgraph.governance.backups import (
     BACKUP_DIR_NAME,
     BACKUP_FORMAT_VERSION,
     BackupEntry,
     BackupManifest,
+    _collect_files,
     create_backup,
     default_backup_dir,
     list_backups,
@@ -341,3 +342,211 @@ class TestDefaults:
     def test_default_backup_dir_under_data_root(self) -> None:
         result = default_backup_dir(Path("/tmp/some-root"))
         assert result == Path("/tmp/some-root/backups")
+
+
+# ---------------------------------------------------------------------------
+# TestWALConsistency
+# ---------------------------------------------------------------------------
+
+
+class TestWALConsistency:
+    """El backup debe capturar los datos confirmados, no solo el fichero.
+
+    El proyecto abre sus conexiones en WAL (`platform/storage.py`), asi que
+    los datos confirmados viven en el fichero `-wal` hasta el checkpoint.
+    Copiar el `.sqlite` a pelo se lleva el fichero principal vacio.
+
+    Sin este test, `create` + `verify` + `restore` coinciden entre si y dan
+    un backup "valido" que no contiene ninguna tabla.
+    """
+
+    @staticmethod
+    def _wal_data_root(root_dir: Path) -> Path:
+        """Data-root con un project.sqlite en WAL y un writer concurrente."""
+        root = root_dir / "data"
+        root.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(catalog_path(root)))
+        conn.execute("CREATE TABLE tenants(id TEXT)")
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.commit()
+        conn.execute("INSERT INTO tenants VALUES ('t1')")
+        conn.commit()
+        conn.close()
+        proj = project_dir(root, "demo")
+        proj.mkdir(parents=True)
+        conn = sqlite3.connect(str(proj / "project.sqlite"))
+        conn.execute("CREATE TABLE runs(id INTEGER)")
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.commit()
+        for i in range(200):
+            conn.execute("INSERT INTO runs VALUES (?)", (i,))
+        conn.commit()
+        return root
+
+    def test_committed_rows_survive_round_trip(self, tmp_path: Path) -> None:
+        """Filas confirmadas deben sobrevivir a create -> restore."""
+        root = self._wal_data_root(tmp_path)
+        # Segundo writer: deja la transaccion viva al respaldar, que es el
+        # estado normal de cualquier data-root en produccion.
+        writer = sqlite3.connect(str(project_dir(root, "demo") / "project.sqlite"))
+        writer.execute("BEGIN IMMEDIATE")
+        writer.execute("INSERT INTO runs VALUES (999)")
+        writer.commit()
+        expected = 201
+        writer.close()
+
+        zip_path = create_backup(root)
+        restored = tmp_path / "restored"
+        restored.mkdir()
+        restore_backup(zip_path, restored, overwrite=True)
+
+        db = sqlite3.connect(str(project_dir(restored, "demo") / "project.sqlite"))
+        try:
+            got = db.execute("SELECT count(*) FROM runs").fetchone()[0]
+        finally:
+            db.close()
+        assert got == expected, f"PERDIDA DE DATOS: {expected} -> {got}"
+
+    def test_snapshot_includes_wal_only_data(self, tmp_path: Path) -> None:
+        """El manifest no debe describir el fichero principal sin consolidar.
+
+        Se mantiene un writer abierto durante el backup: es lo que mantiene
+        los datos en el `-wal`. Si `create_backup` copiara el fichero a pelo,
+        el manifest describiria el fichero principal, que no los contiene.
+        """
+        root = self._wal_data_root(tmp_path)
+        proj_db = project_dir(root, "demo") / "project.sqlite"
+        writer = sqlite3.connect(str(proj_db))
+        writer.execute("BEGIN IMMEDIATE")
+        writer.execute("INSERT INTO runs VALUES (999)")
+        writer.commit()
+        # `writer` sigue abierto a proposito: no hay checkpoint mientras viva.
+        wal = proj_db.with_name(proj_db.name + "-wal")
+        assert wal.exists() and wal.stat().st_size > 0, "el test necesita WAL pendiente"
+
+        zip_path = create_backup(root)
+        writer.close()
+
+        with zipfile.ZipFile(zip_path) as zf:
+            manifest = json.loads(zf.read("manifest.json"))
+        entry = next(e for e in manifest["entries"] if e["relpath"].endswith("project.sqlite"))
+        assert entry["size_bytes"] > 4096, (
+            "el backup copio el fichero principal sin consolidar el WAL: "
+            f"manifest={entry['size_bytes']} (4096 = cabecera vacia de sqlite)"
+        )
+
+    def test_catalog_rows_also_survive(self, tmp_path: Path) -> None:
+        """El catalogo tambien es WAL: aplica la misma regla."""
+        root = self._wal_data_root(tmp_path)
+        conn = sqlite3.connect(str(catalog_path(root)))
+        conn.execute("PRAGMA journal_mode = WAL")
+        for i in range(50):
+            conn.execute("INSERT INTO tenants VALUES (?)", (f"t{i}",))
+        conn.commit()
+        conn.close()
+
+        zip_path = create_backup(root)
+        restored = tmp_path / "restored2"
+        restored.mkdir()
+        restore_backup(zip_path, restored, overwrite=True)
+
+        db = sqlite3.connect(str(catalog_path(restored)))
+        try:
+            got = db.execute("SELECT count(*) FROM tenants").fetchone()[0]
+        finally:
+            db.close()
+        assert got == 51, f"PERDIDA DE DATOS en catalog: 51 -> {got}"
+
+    def test_corrupt_database_raises_instead_of_writing_partial(self, tmp_path: Path) -> None:
+        """Una base ilegible debe fallar, no entrar en el ZIP a medias.
+
+        Un snapshot parcial pasaria verify y restore (el hash es el del
+        fichero a medias) y solo reventaria al usarse, que es peor que no
+        tener backup.
+        """
+        root = self._wal_data_root(tmp_path)
+        broken = project_dir(root, "broken")
+        broken.mkdir(parents=True)
+        (broken / "project.sqlite").write_bytes(b"esto no es una base de sqlite")
+
+        with pytest.raises(IntegrityError) as exc:
+            create_backup(root)
+        assert "broken" in str(exc.value)
+
+    def test_corrupt_database_leaves_no_zip_behind(self, tmp_path: Path) -> None:
+        """Si el snapshot falla, no debe quedar un backup utilizable."""
+        root = self._wal_data_root(tmp_path)
+        broken = project_dir(root, "broken")
+        broken.mkdir(parents=True)
+        (broken / "project.sqlite").write_bytes(b"no soy sqlite")
+        out = tmp_path / "out.zip"
+
+        with pytest.raises(IntegrityError):
+            create_backup(root, output_path=out)
+        assert not out.exists(), "quedo un backup parcial en disco"
+
+
+# ---------------------------------------------------------------------------
+# TestCollectFiles
+# ---------------------------------------------------------------------------
+
+
+class TestCollectFiles:
+    """`_collect_files` decide que entra en el backup: es politica, no detalle.
+
+    Las ramas sin cubrir eran skips defensivos y el caso `agents/`, que es
+    una decision documentada: los fixtures de agente son datos y se guardan.
+    """
+
+    def test_agents_fixtures_are_included(self, tmp_path: Path) -> None:
+        """`agents/` entra en el backup: es una decision, no un descuido."""
+        root = _make_data_root(tmp_path)
+        agents = root / "agents"
+        (agents / "pack").mkdir(parents=True)
+        (agents / "pack" / "skill.md").write_text("contenido", encoding="utf-8")
+
+        zip_path = create_backup(root)
+        with zipfile.ZipFile(zip_path) as zf:
+            names = zf.namelist()
+        assert "agents/pack/skill.md" in names
+
+    def test_pycache_is_excluded(self, tmp_path: Path) -> None:
+        """`__pycache__` no es dato: no debe entrar en el backup."""
+        root = _make_data_root(tmp_path)
+        cache = root / "agents" / "pack" / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "x.pyc").write_bytes(b"\x00")
+
+        zip_path = create_backup(root)
+        with zipfile.ZipFile(zip_path) as zf:
+            names = zf.namelist()
+        assert not [n for n in names if "__pycache__" in n]
+
+    def test_stray_files_are_skipped(self, tmp_path: Path) -> None:
+        """Ficheros sueltos y tenants sin proyectos no cuentan ni se guardan."""
+        root = _make_data_root(tmp_path)
+        # Un fichero suelto donde se espera un directorio de tenant.
+        (root / "tenants" / "notas.txt").write_text("x", encoding="utf-8")
+        # Un tenant sin directorio `projects/`.
+        (root / "tenants" / "vacio").mkdir(parents=True)
+        # Un proyecto sin `project.sqlite`.
+        (root / "tenants" / "default" / "projects" / "sin-db").mkdir(parents=True)
+
+        zip_path = create_backup(root)
+        with zipfile.ZipFile(zip_path) as zf:
+            names = zf.namelist()
+        assert "tenants/notas.txt" not in names
+        assert not [n for n in names if n.startswith("tenants/vacio/")]
+        assert not [n for n in names if "sin-db" in n]
+
+        with zipfile.ZipFile(zip_path) as zf:
+            manifest = json.loads(zf.read("manifest.json"))
+        # Solo cuenta `default` como tenant y `demo` como proyecto.
+        assert manifest["tenant_count"] == 2, "vacio cuenta como tenant"
+        assert manifest["project_count"] == 2, "sin-db cuenta como proyecto"
+
+    def test_missing_data_root_returns_empty(self, tmp_path: Path) -> None:
+        """Raiz inexistente: coleccion vacia, no excepcion."""
+        files, tenants, projects = _collect_files(tmp_path / "no-existe")
+        assert files == []
+        assert (tenants, projects) == (0, 0)

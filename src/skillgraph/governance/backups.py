@@ -23,13 +23,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-from skillgraph.core.errors import ValidationError
+from skillgraph.core.errors import IntegrityError, ValidationError
 from skillgraph.platform.paths import (
     DEFAULT_TENANT,
     catalog_path,
@@ -118,6 +119,17 @@ def _sqlite_backup_to(src_db: Path, dst_file: Path) -> None:
 
     Garantiza atomicidad aunque haya writers concurrentes (a diferencia
     de copia cruda de archivo, que puede capturar pagina a medio escribir).
+
+    Ademas es la unica forma de capturar los datos cuando la base esta en
+    WAL: los datos confirmados viven en el fichero `-wal` hasta el
+    checkpoint, y copiar el `.sqlite` a pelo se lleva un fichero vacio.
+
+    Raises:
+        IntegrityError: si la base no es un SQLite legible.
+
+    Nota: `sqlite3.connect` es perezoso, no falla al abrir un fichero que
+    no es una base; el error sale al leer. Por eso solo se captura alrededor
+    de la copia, no de la conexion.
     """
     dst_file.parent.mkdir(parents=True, exist_ok=True)
     if dst_file.exists():
@@ -130,6 +142,11 @@ def _sqlite_backup_to(src_db: Path, dst_file: Path) -> None:
                 src.backup(dst)
         finally:
             dst.close()
+    except sqlite3.Error as exc:
+        # Un snapshot parcial seria peor que ninguno: un ZIP con una base
+        # a medias pasa verify y restore, y solo falla al usarlo.
+        dst_file.unlink(missing_ok=True)
+        raise IntegrityError(f"fallo el snapshot consistente de {src_db}: {exc}") from exc
     finally:
         src.close()
 
@@ -212,22 +229,39 @@ def create_backup(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     files, tenant_count, project_count = _collect_files(data_root)
     entries: list[BackupEntry] = []
-    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+    # Staging: los .sqlite se consolidan primero con la API .backup(). El
+    # staging va fuera del data-root para que _collect_files no lo incluya
+    # en el propio backup.
+    #
+    # El snapshot ocurre ANTES de abrir el ZIP a proposito: si un .sqlite
+    # esta corrupto, el backup falla sin dejar un .zip a medias que pasaria
+    # verify y solo reventaria al restaurarse.
+    with tempfile.TemporaryDirectory(prefix="sg-backup-") as staging_name:
+        staging = Path(staging_name)
+        staged: list[tuple[str, Path]] = []
         for src in files:
             rel = src.relative_to(data_root).as_posix()
-            sha = _hash_file_sha256(src)
-            size = src.stat().st_size
-            entries.append(BackupEntry(relpath=rel, sha256=sha, size_bytes=size))
-            zf.write(src, arcname=rel)
-        manifest = BackupManifest(
-            format_version=BACKUP_FORMAT_VERSION,
-            created_at=datetime.now(UTC).isoformat(),
-            data_root=str(data_root),
-            tenant_count=tenant_count,
-            project_count=project_count,
-            entries=tuple(entries),
-        )
-        zf.writestr("manifest.json", json.dumps(manifest.to_dict(), indent=2))
+            source = src
+            if src.suffix == ".sqlite":
+                # Copia cruda perderia los datos que viven en el -wal.
+                source = staging / rel
+                _sqlite_backup_to(src, source)
+            staged.append((rel, source))
+        with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+            for rel, source in staged:
+                sha = _hash_file_sha256(source)
+                size = source.stat().st_size
+                entries.append(BackupEntry(relpath=rel, sha256=sha, size_bytes=size))
+                zf.write(source, arcname=rel)
+            manifest = BackupManifest(
+                format_version=BACKUP_FORMAT_VERSION,
+                created_at=datetime.now(UTC).isoformat(),
+                data_root=str(data_root),
+                tenant_count=tenant_count,
+                project_count=project_count,
+                entries=tuple(entries),
+            )
+            zf.writestr("manifest.json", json.dumps(manifest.to_dict(), indent=2))
     return output_path
 
 
