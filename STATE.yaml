@@ -541,7 +541,7 @@ tests:
   total: 1422   # post-fix(backups) WAL: 1413 -> 1422 (+9 tests de regresion de backup)
   passed: 1422
   duration_s: 1215   # re-medido el 2026-09-28 con `uv run pytest --no-header -q` con cobertura (1422 passed in 1214.65s)
-  package_version: "0.16.3"   # fix(backups): snapshot consistente de SQLite en WAL; 1422 tests, cobertura total 95.98%, backups.py 81.59% -> 94.14%
+  package_version: "0.16.3.dev0"   # post-v0.16.3 (fix(backups) WAL liberado en v0.16.3); 1422 tests, cobertura total 95.98%, backups.py 81.59% -> 94.14%
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
