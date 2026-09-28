@@ -7112,11 +7112,45 @@ Sobre el framework actual **2.0.1** (el documento de ayer citaba
   `Cargo.toml` y no hay por que haberlo.
 - **B2 se reproduce**: no existe `permissions.yaml`, y
   `find $FRAMEWORK -name permissions.yaml` sobre 2.0.1 no devuelve
-  nada. El framework no lo provee.
+  nada.
 
 Los dos bloqueantes son de tooling de SDDK para proyectos Python, no
 de calidad del trabajo. El documento de ayer rechazo correctamente
 fabricar un `Cargo.toml` o un `permissions.yaml` en vez de hacerlo.
+
+### CORRECCION de B2: no es del framework (2026-09-28)
+
+La linea de arriba ("El framework no lo provee") **es falsa**, y la repito
+en el commit 63349db sin comprobarla. Era una inferencia: `find
+$FRAMEWORK` no lo encuentra, y de ahi sale "el framework no lo provee".
+No se leyo quien lo pide.
+
+El binario 2.0.1 lo dice literalmente:
+
+```
+cannot load the agent permission registry:
+create permissions.yaml at the repository root with an `agents` mapping
+```
+
+Y el error apunta al **cwd del repositorio**, no a `$FRAMEWORK`:
+
+```
+error: failed to read permissions registry
+  /var/.../skillgraph/permissions.yaml: No such file or directory
+```
+
+Es un archivo **del proyecto**, en la raiz del repo. `find $FRAMEWORK` no
+iba a encontrarlo nunca. No es un defecto del framework ni algo que haya
+que esperar a que upstream lo arregle: es un archivo que este repositorio
+no declara y que su propia adopcion exige.
+
+**Cambia la accion:** B2 no se reporta upstream, se declara aqui. Y la
+razon para no redactarlo a ciegas se mantiene, pero es otra: es un
+registro default-deny agente -> fases, asi que inventarlo para que
+`release apply` pase es fabricar la propia autorizacion que el gate
+comprueba. Se declara con contenido real o no se declara.
+
+Ver `evidence/b1-b2-diagnosis-correction.md`. B1 no cambia.
 
 ### A2 verificado por inspeccion (OBSERVED)
 

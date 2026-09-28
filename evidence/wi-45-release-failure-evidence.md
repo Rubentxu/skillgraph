@@ -39,6 +39,17 @@ error: failed to read permissions registry
   No such file or directory (os error 2)
 ```
 
+> **CORREGIDO el 2026-09-28.** Este diagnóstico era falso. `permissions.yaml`
+> es un archivo **del proyecto**, en la raíz del repositorio, no del framework:
+> el binario dice literalmente `create permissions.yaml at the repository root
+> with an 'agents' mapping`, y la ruta del error es el cwd del repo. El
+> `find $FRAMEWORK` de abajo buscó en el sitio equivocado y por eso no lo
+> encontró. No es un defecto del framework. Ver
+> `evidence/b1-b2-diagnosis-correction.md`. La conclusión operativa (no
+> fabricarlo a ciegas) se mantiene, pero por otro motivo: es un registro
+> default-deny y redactarlo para desbloquear el release sería fabricar la
+> autorización.
+
 El framework 1.171.2 **no provee** `permissions.yaml`
 (`find $FRAMEWORK -name permissions.yaml` → sin resultados).
 

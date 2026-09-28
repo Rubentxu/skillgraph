@@ -47,7 +47,7 @@ breaking change.
 | Id | Blocker | Estado |
 |---|---|---|
 | B1 | `sddk release plan` exige `Cargo.toml` (VERSION LOCKSTEP) | **VIGENTE en SDDK 2.0.1** |
-| B2 | `sddk release apply` exige `permissions.yaml` | **VIGENTE en SDDK 2.0.1** |
+| B2 | `sddk release apply` exige `permissions.yaml` | **VIGENTE en SDDK 2.0.1, pero NO es un defecto del framework** |
 
 Ambos se verificaron **ejecutando el comando real**, no leyendo strings:
 
@@ -59,6 +59,16 @@ error: VERSION LOCKSTEP ERROR: could not read .../Cargo.toml: No such file or di
 El binario `sddk` 2.0.1 contiene 3 referencias a `Cargo.toml`, 2 a
 `permissions.yaml` y **0 a `pyproject.toml`**. Son límites de un framework
 escrito en Rust.
+
+> **CORRECCIÓN 2026-09-28 (B2).** La conclusión de abajo era falsa.
+> `permissions.yaml` **no lo provee el framework**: es un archivo del
+> proyecto, en la raíz del repositorio. El propio binario lo dice
+> (`create permissions.yaml at the repository root with an 'agents'
+> mapping`) y la ruta del error es el cwd del repo, no `$FRAMEWORK`.
+> Buscarlo dentro del framework no podía encontrarlo. La tabla de arriba
+> decía "VIGENTE", y es cierto que el comando falla, pero la clasificación
+> como límite del framework no lo es: se arregla declarando el registro en
+> este repositorio. Ver `evidence/b1-b2-diagnosis-correction.md`.
 
 **No se fabricó ningún artefacto** (ni `Cargo.toml`, ni `permissions.yaml`,
 ni receipts, ni manifiestos) para sortearlos. En su lugar se usó la
