@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.5"  # release: refactors de complejidad verificados
+__version__ = "0.16.5.dev0"  # post-v0.16.5: trabajo posterior a la etiqueta
 
 from skillgraph.core.errors import (
     IdentityConflictError,
