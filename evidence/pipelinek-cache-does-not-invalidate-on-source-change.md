@@ -63,3 +63,59 @@ los tests fuera del mecanismo cacheable, pero ambas son decisiones
 sobre la CI local y tocan la autoridad de verificación del proyecto:
 un `pipelinek` que no ejecuta lo que dice ejecutar es peor que uno
 lento. Queda abierto.
+
+## Reconfirmado 2026-09-28 (commit `dfc70c8`)
+
+El defecto sigue vigente y **es peligroso por su forma**, no por lo
+que falla: un run que no ejecutó nada y aun así termina en
+`Pipeline finished with SUCCESS`.
+
+Lo observado tras el refactor de `pack_loader` (HEAD `dfc70c8`):
+
+```
+$ pipelinek run --db .pipelinek/db.sqlite --control-root .pipelinek/control .pipeline.kts
+Pipeline finished with SUCCESS      <- exit code 0
+```
+
+Un verde de este tipo es **falso**. La inspeccion del journal
+(`events` filtrado por el ultimo `CompilationStarted`) da:
+
+```
+run_id: f9db5154-8345-49c3-acd8-eab2dd902bcc | eventos: 12
+StageFinished  discover-repo  -> success
+StageFinished  sync-deps      -> success
+StageFinished  unit-tests     -> success      <- sin StepStarted
+StageFinished  evidence       -> success
+RunFinished                     -> success
+```
+
+Sin `StepStarted` ni `EchoOutputCaptured` en `unit-tests`: es un cache
+hit, no una ejecucion. El ultimo run **real** de esa misma base es de
+las 06:57Z con **1413 tests**, mientras que el codigo de `dfc70c8`
+tiene **1455**. Es decir: la CI verde de las 15:19Z nunca vio este
+cambio.
+
+## Workaround verificado: journal y control-root nuevos
+
+Un `--db` y un `--control-root` limpios fuerzan la ejecucion real,
+porque la clave de cache cuelga del estado del control root y no del
+script:
+
+```bash
+pipelinek run --db "$SCRATCH/pipeline-fresh.sqlite" \
+              --control-root "$SCRATCH/pipeline-control" .pipeline.kts
+```
+
+Es lo que se debe usar mientras el defecto siga abierto: el
+`Pipeline finished with SUCCESS` de un control root limpio sí es
+evidencia, y se distingue de un cache hit porque el journal muestra
+`StepStarted` + `EchoOutputCaptured` con la cuenta de tests.
+
+## Regla operativa mientras tanto
+
+`Pipeline finished with SUCCESS` **no basta**. Antes de citar un run
+como evidencia hay que comprobar en el journal que el stage
+`unit-tests` emitio `StepStarted` y `EchoOutputCaptured`. Si no los
+emitio, el verde es decorativo y la verificacion real se hace
+replicando los comandos del script.
+
