@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.2.dev0"  # post-v0.16.2: el recibo es un commit posterior
+__version__ = "0.16.3"  # fix(backups): snapshot consistente de SQLite en WAL
 
 from skillgraph.core.errors import (
     IdentityConflictError,
