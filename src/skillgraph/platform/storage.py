@@ -19,7 +19,6 @@ import json
 import sqlite3
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, suppress
-from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -47,6 +46,7 @@ from skillgraph.platform.uow import SqliteUnitOfWork
 from skillgraph.resources.bricks import Brick
 
 if TYPE_CHECKING:
+    from skillgraph.platform.event_store import SqliteEventStore
     from skillgraph.platform.knowledge_repository import SqliteKnowledgeRepository
     from skillgraph.platform.policy_store import SqlitePolicyStore
     from skillgraph.platform.run_repository import SqliteRunRepository
@@ -494,6 +494,7 @@ class Storage:
         self._run_repository: SqliteRunRepository | None = None
         self._policy_store: SqlitePolicyStore | None = None
         self._knowledge_repository: SqliteKnowledgeRepository | None = None
+        self._event_store: SqliteEventStore | None = None
         self._migrate()
         # WI-33 (R2 audit externo): el ``SqliteUnitOfWork`` owns la
         # conexion y expone 5 bounded-context adapters que la
@@ -886,6 +887,24 @@ class Storage:
             current_node=current_node,
         )
 
+    def event_store(self) -> SqliteEventStore:
+        """Devuelve el componente REAL del cluster events (WI-56).
+
+        Antes devolvia ``self`` (structural subtyping con el
+        Protocol ``EventStore``); desde el corte 4 de WI-56/ADR-0016
+        devuelve la instancia real de ``SqliteEventStore`` (cacheada):
+        identidad estable, conexion compartida, SQL viviendo en
+        ``platform/event_store.py``. Los helpers atomicos
+        ``_insert_event_in_tx`` / ``_atomic_state_and_event`` siguen
+        en ``Storage`` (H9/H10). ``getattr`` por los dobles de test
+        que heredan sin ``__init__``.
+        """
+        if getattr(self, "_event_store", None) is None:
+            from skillgraph.platform.event_store import SqliteEventStore
+
+            self._event_store = SqliteEventStore(self)
+        return self._event_store
+
     def knowledge_repository(self) -> SqliteKnowledgeRepository:
         """Devuelve el componente REAL del cluster knowledge (WI-56).
 
@@ -906,10 +925,6 @@ class Storage:
 
             self._knowledge_repository = SqliteKnowledgeRepository(self)
         return self._knowledge_repository
-
-    def event_store(self) -> Storage:
-        """Devuelve una vista ``Storage`` que satisface ``EventStore``."""
-        return self
 
     def policy_store(self) -> SqlitePolicyStore:
         """Devuelve el componente REAL del cluster policy/budget (WI-56).
@@ -1439,6 +1454,12 @@ class Storage:
 
     # ----- Events (H3 Slice 4) -----
 
+    # ----- delegados del cluster events (WI-56 corte 4) ----------
+    # El SQL vive en ``SqliteEventStore``; delegados con firma
+    # explicita preservan la API del facade (I1: cero ediciones en
+    # callers). Los helpers atomicos _insert_event_in_tx y
+    # _atomic_state_and_event siguen AQUI (H9/H10 los parchean).
+
     def record_event(
         self,
         *,
@@ -1453,46 +1474,19 @@ class Storage:
         correlation_id: str | None = None,
         timestamp: str | None = None,
     ) -> int:
-        """Registra un evento en `runtime_events`. Devuelve su sequence.
-
-        `payload` se serializa como JSON. `timestamp` por defecto = now UTC.
-        """
-        import json as _json
-        from datetime import datetime
-
-        ts = timestamp or datetime.now(UTC).replace(microsecond=0).isoformat()
-        try:
-            with self._tx() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO runtime_events
-                        (event_id, tenant_id, project_id, event_kind, run_id,
-                         resource_ref, causation_id, correlation_id,
-                         payload_json, timestamp, schema_version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        event_id,
-                        tenant_id,
-                        project_id,
-                        event_kind,
-                        run_id,
-                        resource_ref,
-                        causation_id,
-                        correlation_id,
-                        _json.dumps(dict(payload), ensure_ascii=False),
-                        ts,
-                        1,
-                    ),
-                )
-                return cur.lastrowid or 0
-        except sqlite3.IntegrityError as exc:
-            # WI-02b: traducimos a IntegrityError del core para que
-            # EventLog (y futuros consumidores) no necesiten
-            # importar sqlite3.
-            from skillgraph.core.errors import IntegrityError as _IntegrityError
-
-            raise _IntegrityError(f"constraint UNIQUE(event_id) violada: {event_id!r}") from exc
+        """Delegado WI-56: ver ``SqliteEventStore.record_event``."""
+        return self.event_store().record_event(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            event_id=event_id,
+            event_kind=event_kind,
+            resource_ref=resource_ref,
+            payload=payload,
+            run_id=run_id,
+            causation_id=causation_id,
+            correlation_id=correlation_id,
+            timestamp=timestamp,
+        )
 
     def list_events(
         self,
@@ -1502,23 +1496,25 @@ class Storage:
         resource_ref: str | None = None,
         event_kind: str | None = None,
     ) -> list[StoredEvent]:
-        """Lista eventos filtrados por (tenant, project) + resource_ref/kind.
+        """Delegado WI-56: ver ``SqliteEventStore.list_events``."""
+        return self.event_store().list_events(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_ref=resource_ref,
+            event_kind=event_kind,
+        )
 
-        WI-38 (R1 strict): devuelve ``list[StoredEvent]`` (frozen + slots)
-        en vez de ``list[sqlite3.Row]``. Mapea via ``_row_to_stored_event``
-        para cerrar la fuga de Row fuera de ``platform/``.
-        """
-        q = "SELECT * FROM runtime_events WHERE tenant_id = ? AND project_id = ?"
-        params: list[Any] = [tenant_id, project_id]
-        if resource_ref is not None:
-            q += " AND resource_ref = ?"
-            params.append(resource_ref)
-        if event_kind is not None:
-            q += " AND event_kind = ?"
-            params.append(event_kind)
-        q += " ORDER BY sequence ASC"
-        rows = self._conn.execute(q, params).fetchall()
-        return [_row_to_stored_event(r) for r in rows]
+    def ensure_schema(self) -> None:
+        """Delegado WI-56: ver ``SqliteEventStore.ensure_schema``."""
+        return self.event_store().ensure_schema()
+
+    def fetch_event_raw(
+        self,
+        *,
+        event_id: str,
+    ) -> StoredEvent | None:
+        """Delegado WI-56: ver ``SqliteEventStore.fetch_event_raw``."""
+        return self.event_store().fetch_event_raw(event_id=event_id)
 
     # ----- H7 promocion entre bases (UAT-13) -----
 
@@ -1600,34 +1596,6 @@ class Storage:
             """
         ).fetchall()
         return [_row_to_stored_promotion(r) for r in rows]
-
-    def ensure_schema(self) -> None:
-        """Idempotente: aplica el schema de ``runtime_events``.
-
-        WI-02b: ``EventLog`` ya no toca la conexion directamente; delega
-        en este metodo del ``EventStore`` Protocol. La migracion ocurre
-        en el ``__init__`` de ``Storage`` (``migrate()`` ya invoca
-        ``_SCHEMA_SSQL`` sobre ``runtime_events``), por lo que aqui
-        simplemente ejecutamos ``executescript`` reentrante (los
-        ``CREATE TABLE IF NOT EXISTS`` son idempotentes).
-        """
-        with self._tx() as cur:
-            cur.executescript(_SCHEMA_SQL)
-
-    def fetch_event_raw(self, *, event_id: str) -> StoredEvent | None:
-        """WI-02b: lookup directo por ``event_id``.
-
-        WI-32.2: devuelve ``StoredEvent`` (DTO inmutable). El adapter
-        SQLite mapea ``Row -> StoredEvent`` aqui; el resto del runtime
-        nunca ve ``sqlite3.Row``. Ver ``platform/ports.py`` para el DTO.
-        """
-        row = self._conn.execute(
-            "SELECT * FROM runtime_events WHERE event_id = ?",
-            (event_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return _row_to_stored_event(row)
 
     # ----- lecturas del ciclo de vida de un Run (H9-BSlice3-S1) -----
 
