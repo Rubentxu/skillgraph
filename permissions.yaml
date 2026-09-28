@@ -1,0 +1,35 @@
+# Registro de permisos de agentes (SDDK).
+#
+# Formato verificado empiricamente el 2026-09-28 con
+# `sddk permission check`, no deducido de la documentacion.
+#
+# Default-deny es real: un registro ausente o vacio deniega todo. Este
+# archivo no es decorativo, es lo que permite que `sddk release apply`
+# supere la lectura del registry. Ver
+# `evidence/permissions-registry-schema.md` para la determinacion.
+#
+# La clave es `capabilities`, no `allowed_capabilities`. Con la clave
+# equivocada el chequeo devuelve `allowed: false` sin avisar.
+#
+# `phases` es restrictivo y se verifica: con `phases: [apply]`, pedir la
+# misma capacidad en `release` o `archive` devuelve `allowed: false`.
+# Por eso el permiso de release se declara para la fase `release` y no
+# para `apply`.
+
+agents:
+  apply-agent:
+    phases: [apply]
+    capabilities:
+      - core.workflow-orchestration@v1
+      - core.contract-review@v1
+
+  # El actor real de la Push Discipline: `release permission denied:
+  # agent sddk-release is not declared in the permission registry`. El
+  # nombre lo dicta el binario, no una suposicion.
+  sddk-release:
+    phases: [release]
+    capabilities:
+      - core.release-planning@v1
+      - git.inspect
+      - git.tag
+      - git.push

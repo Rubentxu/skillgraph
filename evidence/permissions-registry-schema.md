@@ -63,6 +63,36 @@ La superficie **`sddk git tag`** sí funciona sin lockstep: se usó para
 crear etiquetas en ciclos anteriores que acabaron `CLOSED`. Ese es el
 camino que el recibo de release ya identificó como honesto.
 
+## Resuelto el 2026-09-28: qué capacidades exige de verdad el release
+
+Con `permissions.yaml` escrito, `sddk release apply` dejó de fallar en
+parseo y pasó a **autorización**, que es la comprobación que faltaba. Las
+capacidades que el flujo de release exige, descubiertas iterativamente
+contra el binario (cada intento revelaba la siguiente):
+
+```
+core.release-planning@v1
+git.inspect
+git.tag
+git.push
+```
+
+Las tres últimas no estaban en el inventario de "capacidades que declara
+el binario" documentado antes: aquel solo recogía las `core.*` y omitía
+las `git.*` que el flujo de release además exige.
+
+El **actor** tampoco se adivina: lo dicta el propio error, que dice
+literalmente `agent sddk-release is not declared in the permission
+registry`. Escribir `release-agent` fue un intento fallido mío que el
+error corrigió.
+
+Sobre el alcance por fase: `phases` es restrictivo y se comprobó. Con
+`phases: [apply]`, pedir la misma capacidad en `release` o `archive`
+devuelve `allowed: false`. Por eso el permiso de release se declara para
+la fase `release` y no para `apply`, y por eso dos agentes con nombres
+parecidos no son intercambiables: `apply-agent` y `sddk-release` viven
+en fases distintas.
+
 ## Resumen para la decisión
 
 | Pregunta | Respuesta verificada |
@@ -70,8 +100,9 @@ camino que el recibo de release ya identificó como honesto.
 | ¿Es un archivo del framework? | No. Del proyecto, en la raíz del repo |
 | ¿`adopt apply` lo genera? | No, no tiene subcomando para eso |
 | ¿Cuál es el esquema? | `agents: { <nombre>: { phases: [...], capabilities: [...] } }` |
-| ¿Bastaría con escribirlo? | No. B1 seguiría bloqueando el release |
+| ¿Bastaría con escribirlo? | Sí para B2. B1 sigue bloqueando `release plan` |
 | ¿Es default-deny de verdad? | Sí: registro vacío deniega todo |
+| ¿El actor se adivina? | No. Lo dicta el error: `sddk-release` |
 
 La decisión que queda es de política, no de técnica: si el repositorio
 declara o no un registro de permisos para sus agentes, y con qué
