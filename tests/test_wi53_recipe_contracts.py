@@ -220,22 +220,24 @@ class TestFromDictCoercions:
     def test_revision_str_se_coacciona(self) -> None:
         assert _load({"revision": "3"}).revision == 3
 
-    def test_revision_bool_se_acepta_como_1(self) -> None:
-        """TRAMPA bool, estado observado antes del fix.
+    def test_revision_bool_rechazada(self) -> None:
+        """FIX (patron 21087d1): `bool` no es revision.
 
-        `bool` es subclase de `int`: `revision=True` pasa la validacion
-        `revision >= 1` porque True == 1.
+        Antes `revision=True` pasaba como revision 1 porque bool es
+        subclase de int. Ahora se rechaza con error tipado.
         """
-        assert _load({"revision": True}).revision == 1
+        with pytest.raises(ValidationError, match=r"recipe\.revision debe ser int, no bool"):
+            _load({"revision": True})
 
-    def test_token_budget_bool_se_acepta_como_1(self) -> None:
-        """TRAMPA bool, estado observado antes del fix.
+    def test_token_budget_bool_rechazado(self) -> None:
+        """FIX (patron 21087d1): `bool` no es presupuesto.
 
-        `token_budget=True` produce un presupuesto de 1 caracter en
-        silencio. Nadie configura eso a proposito; es el mismo patron de
-        fallo que metadata.max_visits (fix 21087d1).
+        Antes `token_budget=True` producia un presupuesto de 1 caracter
+        en silencio. Nadie configura eso a proposito: era la trampa de
+        subtipado, no una feature.
         """
-        assert _load({"token_budget": True}).token_budget == 1
+        with pytest.raises(ValidationError, match=r"recipe\.token_budget debe ser int, no bool"):
+            _load({"token_budget": True})
 
     def test_bool_en_selectores_y_relaciones_rechazado(self) -> None:
         """El resto del schema ya rechaza bool: el hueco es solo escalar."""

@@ -29,6 +29,25 @@ FreshnessPolicy = Literal["strict", "best_effort"]
 OverflowStrategy = Literal["drop_optional", "fail", "truncate_finding"]
 
 
+def _coerce_int(raw: dict[str, object], *, field: str, default: int) -> int:
+    """Smart coercion de escalar entero desde el dict crudo.
+
+    `bool` se rechaza explicitamente: en Python `isinstance(True, int)`
+    es True, asi que `int(True)` seria 1 y un `token_budget=True` o una
+    `revision=True` pasarian en silencio con valores absurdos. Es el
+    mismo patron de fallo que metadata.max_visits (fix 21087d1).
+
+    Las demas coercions observadas se preservan (deterministas y fijadas
+    por test): `int('8000')` se acepta y `int(2.9)` trunca a 2.
+    """
+    if field not in raw:
+        return default
+    value = raw[field]
+    if isinstance(value, bool):
+        raise ValidationError(f"recipe.{field} debe ser int, no bool: {value!r}")
+    return int(value)
+
+
 def _parse_selector_item(item: object, where: str, i: int) -> ObligatorySelector:
     """Parsea un elemento {kind, value, label} con tipos estrictos.
 
@@ -148,9 +167,9 @@ class ContextRecipe:
             optional=optional,
             relation_selectors=tuple(rel_raw),
             freshness_policy=raw.get("freshness_policy", "best_effort"),  # type: ignore[arg-type]
-            token_budget=int(raw.get("token_budget", 8000)),
+            token_budget=_coerce_int(raw, field="token_budget", default=8000),
             overflow_strategy=raw.get("overflow_strategy", "drop_optional"),  # type: ignore[arg-type]
-            revision=int(raw.get("revision", 1)),
+            revision=_coerce_int(raw, field="revision", default=1),
         )
 
 
