@@ -42,6 +42,104 @@ Tipos:
 - `architecture-debt-2026-09-28.md` regenerado: 53 módulos / 19442 LoC; `storage.py` sale del top-3 de god modules; `knowledge_repository.py` (986 LoC) entra en la lista como componente extraído (no deuda nueva del ciclo).
 - 1 finding `low` persistido en el debt-report del ciclo: flake preexistente de orden aleatorio en `test_wi56_knowledge_repository_contracts.py::list_resources` (no reproducible en 2 tiradas ni con orden fijo; seguimiento aparte).
 
+### Fixed
+
+- **`.jcode-scratch/` no estaba ignorado** (`8eda4ea`). Es el directorio de scratch del agente, donde se escriben los journals de `pipelinek` con journal fresco y los recibos en curso. Al no estar ignorado, cada verificación dejaba entradas no versionadas en `git status --porcelain`, y ese árbol limpio es requisito explícito del paso 1 del checklist de release de SDDK (`prompts/sddk/phases/release.md`). Es decir: el propio acto de verificar bloqueaba la release que estaba verificando. Verificado con `git check-ignore -v`.
+
+### Housekeeping
+
+- `STATE.yaml` declaraba 27 releases pero su lista terminaba en v0.16.0: siete releases ya publicadas (v0.16.1 a v0.16.7) no estaban registradas. Rehechas con SHA, fecha y nota reales, cada SHA verificado contra `git rev-list -1 <tag>` y `git rev-parse <tag>`. El bloque `release:` cabecera pasa de v0.16.0 a v0.16.8 con el SemVer derivado del historial.
+
+## [0.16.7] - 2026-09-28 — complejidad de `detect_changes` y `reconcile_run`
+
+**PATCH**. Sin `feat`, sin `fix` de contrato, sin breaking.
+
+### Fixed
+
+- Rechazo de `bool` en `Recipe.token_budget` y `Recipe.revision`: un booleano se colaba como número por el camino de la subclase de `int` en Python.
+
+### Changed
+
+- `GitSource.detect_changes`: cc 11 → 5.
+- `_reconcile_run_locked`: cc 11 → 5.
+
+Ambos refactors con red de contrato escrita antes del cambio, y la auditoría de deuda regenerada después.
+
+## [0.16.6] - 2026-09-28 — cadenas de guardas de plan y recibo
+
+**PATCH**.
+
+### Changed
+
+- Las dos cadenas de guardas restantes (`_make_schema_validator` y la validación de recibo) bajan de complejidad ciclomática, cada una con su test de contrato fijado antes del refactor.
+- Fix del límite `max_visits`.
+- Receipts de CI publicados por cada refactor, con el journal de `pipelinek` que demuestra que los tests se ejecutaron.
+
+## [0.16.5] - 2026-09-28 — cierre de los dos hotspots reales de la auditoría
+
+**PATCH**. 1455 tests PASS.
+
+### Changed
+
+- `cmd_promotion_reconcile` (CLI): cc 14 → 7, con `_select_promotion_failpoint`, `_abort_with_failpoint`, `_apply_pending_promotions` y `_reconcile_summaries` extraídas.
+- `_make_schema_validator` (dominio): cc 13 → 3, anidamiento 5 → 0. Las reglas pasan a funciones de módulo con contexto explícito y el despacho a `match`/`case`, que es lo que corresponde a un dominio cerrado (regla 2.1 de `AGENTS.md`).
+
+### Added
+
+- Failpoint `after_apply_first`, que estaba **documentado pero no existía**. No es cosmético: simula la caída en el punto más peligroso de la promoción (la claim ya está en el destino pero el outbox aún no está `PUBLISHED`), y con él hay un test de subprocess que prueba el estado de split real y que la reconciliación lo reanuda de forma idempotente.
+
+### Fixed
+
+- La CI verde ya no se acepta como evidencia sin comprobar el journal: un run con `StageFinished` y cero `StepStarted` es un cache hit que no ejecutó un solo test. Se fija la regla operativa de que un verde no es evidencia hasta que el journal muestra `StepStarted` + `EchoOutputCaptured` en el stage de tests.
+
+## [0.16.4] - 2026-09-28 — correctivo de v0.16.3
+
+**PATCH**.
+
+- Release correctiva: `v0.16.3` se publicó con package metadata defectuosa. La provenance no se reescribe; la versión buena es esta.
+- `governance/backups.py`: la política de recolección se aísla del resto de la función (cc 14 → 3).
+- `audits/audit_debt.py`: las recomendaciones se derivan de la medición, no de prosa congelada en el informe.
+- Primera release hecha por el camino manual documentado, tras confirmarse que `sddk release plan` exige un `Cargo.toml` que este proyecto (Python) no tiene ni debe tener.
+
+## [0.16.3] - 2026-09-28 — snapshot consistente en WAL y criterio de CI verde
+
+**PATCH**.
+
+### Fixed
+
+- `sg backup create` hacía una copia cruda del fichero SQLite. Con el WAL activo, esa copia puede no contener transacciones ya confirmadas. Ahora usa el snapshot consistente de la API `Connection.backup()`.
+
+### Documentation
+
+- «Un pipeline en verde no prueba que los tests hayan pasado»: el cache hit de `pipelinek` producía `Pipeline finished with SUCCESS` sin ejecutar un solo test. Con la base de v0.16.2 eran 1413 tests los realmente ejecutados frente a 1455 existentes.
+- Corrección de B2: `permissions.yaml` ausente **no** es una carencia del framework. Es un archivo del proyecto, en la raíz del repositorio, y el binario lo dice literalmente. El `find $FRAMEWORK` de la sesión anterior buscó en el sitio equivocado.
+- Errata del mensaje de `9c0985e` (un carácter chino en mitad de una frase), registrada en vez de reescribir historia.
+
+## [0.16.2] - 2026-09-27 — clasificación de errores por tipo y CI con rutas absolutas
+
+**PATCH**.
+
+### Fixed
+
+- Los errores de `knowledge` se clasificaban por texto del mensaje en vez de por tipo. Un cambio de redacción rompía la clasificación en silencio.
+- `bool` se aceptaba donde el esquema declara `integer`/`number`, porque en Python `bool` es subclase de `int`.
+- `bare except` estrecho a los tipos que realmente puede lanzar.
+- 7 delegaciones de `Storage` rotas dentro de `SqliteUnitOfWork`.
+- CI: `.pipeline.kts` pasa a estar versionado (AGENTS.md exige que el gate de CI local canónico esté en control de versiones) y sus `sh(...)` usan rutas absolutas. El motor no resuelve el cwd del script, así que las rutas relativas se ejecutaban contra `/`.
+
+## [0.16.1] - 2026-09-27 — cierre de conexiones en el CLI y límite estricto de DTO
+
+**PATCH**.
+
+### Fixed
+
+- Los handlers del CLI no cerraban las conexiones SQLite de las que eran propietarios: se acumulaban hasta el final del proceso.
+- `NameError` en `agents_root` dentro de `sg run`, detectado por un test E2E y no por la suite unitaria.
+
+### Changed
+
+- WI-38, R1: límite estricto de DTO en `list_promotions`, `get_promotion` y `get_budget`.
+
 ## [0.16.0] - 2026-09-27 — R1+R2 persistence boundary (WI-32.4+32.5+33)
 
 **Resumen**: sprint completo sobre el audit externo del 2026-09-27 (HEAD pre-v0.15.0 `974055c`), cerrando los hallazgos R1 (dict[str,Any] fuga de persistencia) y R2 (Connection lifecycle). **MINOR bump** sin BREAKING CHANGE: 4 DTOs inmutables nuevos + SqliteUnitOfWork como single owner de la `sqlite3.Connection`. Total: **1109/1109 tests PASS** (+31 desde 1078, medido via `pytest --no-header -q` en HEAD `b42a2a8` en 184s), ruff check+format limpios, release_governance 2/2 PASS.

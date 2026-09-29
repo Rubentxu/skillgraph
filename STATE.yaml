@@ -1095,10 +1095,10 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.16.0
-  fecha: 2026-09-27
-  semver_bump: MINOR
-  rationale: "Sprint R1+R2 del audit externo (HEAD pre-v0.15.0 974055c): 5 commits WI-32.1+32.2+32.4+32.5+33 cierran 8 hallazgos del audit (QW-K dict[str,Any] fuga, QW-L Connection lifecycle, QW-M sqlite3.Row fuera de platform/, QW-N *_json raw fuera de adapter). 0 BREAKING. 5 feat nuevos: 4 DTOs inmutables (StoredRun 8c, StoredNodeExecution 14c, StoredResource 12c, StoredRelation 7c, todos frozen+slots) + SqliteUnitOfWork (frozen+slots, owns la sqlite3.Connection, expone 5 bounded-context adapters que la comparten). 1109/1109 PASS, ruff check+format limpios. WI-34 (adelgazar RunController) y WI-35 (CLI split) quedan para sprint futuro (coste > valor inmediato)."
+  tag: v0.16.8
+  fecha: 2026-09-29
+  semver_bump: PATCH
+  rationale: "Ciclo SDDK WI-56 (path A-lite), commit 8eda4ea. Descomposicion del god-module platform/storage.py (2837 -> 1807 LoC, -36%) en 5 repositorios SQLite reales mediante patron strangler (ADR-0016): SqliteRunRepository, SqlitePolicyStore, SqliteKnowledgeRepository, SqliteEventStore y SqlitePromotionRepository. Cada corte tiene su red de contrato escrita ANTES (RED honesto: solo fallaba la identidad del facade) y cero ediciones en callers (REQ-WI56-1/I1). Incluye 8eda4ea chore(repo): .jcode-scratch/ ignorado, auditoria de deuda del dia y evidencia UAT de UAT-08/09 alineada con HEAD. SemVer derivado del historial v0.16.7..8eda4ea: 5 refactor, 2 test, 5 chore, 1 docs, 0 feat, 0 fix, 0 breaking => PATCH (unica forma valida). 1754/1754 tests no-UAT PASS, ruff check+format limpios, release governance gate 2 passed. Detalle del sprint R1+R2 que abrio la linea 0.16.x en v0.16.0 (WI-32/33, DTOs inmutables + SqliteUnitOfWork) conservado en la entrada v0.16.0 del historial de releases."
   releases:
     - tag: v0.3.0
       fecha: 2026-09-23
@@ -1208,6 +1208,38 @@ release:
       fecha: 2026-09-27
       sha: "e99df3a0e83972fd9f2a99fbdbe172346d3aeffa (tag SHA e99df3a0e83972fd9f2a99fbdbe172346d3aeffa sobre commit e99df3a0e83972fd9f2a99fbdbe172346d3aeffa; sprint R1+R2 HEAD base b42a2a8)"
       nota: "Sprint audit externo 974055c: WI-32.1 cast residual + WI-32.2 StoredEvent (WI-32.2 ya en v0.15.0 base 2e85a8d), WI-32.4 StoredRun/NodeExecution, WI-32.5 StoredResource/Relation, WI-33 SqliteUnitOfWork + 5 bounded-context adapters. 1109/1109 PASS, ruff limpio. 0 BREAKING. Sin WI-34 (adelgazar RunController) ni WI-35 (CLI split) por scope/riesgo."
+    - tag: v0.16.1
+      fecha: 2026-09-27
+      sha: "4cb641c7e1476b04110d26243fee20482be5c5db (tag SHA c2d6daf2ed864fd626f5a86cb83982aa5c96f85f)"
+      nota: "PATCH. fix(cli): cierre de conexiones SQLite propiedad en los handlers + fix(cli) agents_root NameError en sg run detectado por E2E (WI-37) + refactor(storage) R1 strict DTO boundary en list_promotions/get_promotion/get_budget (WI-38)."
+    - tag: v0.16.2
+      fecha: 2026-09-27
+      sha: "92e06f3e3c78e727de057d965f09305636e58762 (tag SHA 92432933241535d2e4531dab518217d973694a00)"
+      nota: "PATCH. 4 fix: errores de knowledge clasificados por tipo y no por texto del mensaje, rechazo de bool donde se declara integer/number, narrowing de bare except, y 7 delegaciones de Storage rotas en SqliteUnitOfWork. Ademas fix(ci): .pipeline.kts versionado y rutas absolutas en sh(). B1 (Cargo.toml) documentado como bloqueante real del release planner."
+    - tag: v0.16.3
+      fecha: 2026-09-28
+      sha: "95d4c8a3ffb370877e384011e040a3a79ba4af6d (tag SHA 23336da097465862a9e14c77a1b4bd9236fcee87)"
+      nota: "PATCH. fix(backups): snapshot consistente de SQLite en WAL en vez de copia cruda. docs(ci): un pipeline en verde no prueba que los tests hayan pasado (el cache hit de pipelinek no ejecutaba tests). B2 corregido: permissions.yaml es un archivo del proyecto, no una carencia del framework."
+    - tag: v0.16.4
+      fecha: 2026-09-28
+      sha: "7d5aa91cf9f12c88d7a83be5518098ae1cf6cbc6 (tag SHA 1fd1b740668118afa343453dab1cf7cd7fc248b0)"
+      nota: "PATCH correctivo de v0.16.3 (package metadata defectuosa). refactor(backups): politica de recoleccion aislada, cc 14 -> 3. fix(audit): las recomendaciones se derivan de la medicion, no de prosa congelada. Primera release hecha por el camino manual documentado tras confirmarse B1."
+    - tag: v0.16.5
+      fecha: 2026-09-28
+      sha: "15258c0b0edf32d0b5b2ade9fb8f1755d7f9de6b (tag SHA 50aaa1f4bade05668327bd89e2bb74660b46e5e3)"
+      nota: "PATCH. refactor(cli) cmd_promotion_reconcile cc 14 -> 7 con el failpoint after_apply_first implementado (estaba documentado pero no existia). refactor(domain) _make_schema_validator cc 13 -> 3, nesting 5 -> 0. test(ci): se fija la regla de que un verde no es evidencia hasta que el journal muestra StepStarted. 1455 passed. Cierra los 2 hotspots reales que exponia la auditoria corregida."
+    - tag: v0.16.6
+      fecha: 2026-09-28
+      sha: "ba9f70660a2ddf995c399a81a331d0b8584cfb20 (tag SHA 146c4e9e602285b47a51e32e43d190619b3e0028)"
+      nota: "PATCH. fix de max_visits + refactors de complejidad ciclomatica sobre las cadenas de guardas de plan y recibo, cada uno con su test de contrato escrito antes del refactor. Receipts de CI publicados por refactor."
+    - tag: v0.16.7
+      fecha: 2026-09-28
+      sha: "0fc701805685c22a8186bfc2a309aa783cd83281 (tag SHA 0de54ceb4ffe112e6661e81a31ebb6d7839cfcb6)"
+      nota: "PATCH. fix(core): rechazo de bool en Recipe.token_budget y Recipe.revision. refactor: GitSource.detect_changes cc 11 -> 5 y _reconcile_run_locked cc 11 -> 5, ambos con red de contrato previa. Auditoria de deuda regenerada."
+    - tag: v0.16.8
+      fecha: 2026-09-29
+      sha: "8eda4ea4b411f64aa19f999abab44d6be0bc252f (tag SHA 8eda4ea4b411f64aa19f999abab44d6be0bc252f; commit base del ciclo WI-56 4d64ad6)"
+      nota: "PATCH. Ciclo WI-56 (ADR-0016): descomposicion del god-module platform/storage.py (2837 -> 1807 LoC) en 5 repositorios reales mediante patron strangler, cada uno con su red de contrato escrita antes (RED honesto) y cero ediciones en callers. Incluye chore(repo): .jcode-scratch/ ignorado, sin lo cual el propio acto de verificar dejaba el arbol sucio y bloqueaba el paso 1 del checklist de release de SDDK."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
