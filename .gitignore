@@ -46,3 +46,9 @@ audits/*-audit-bundle.tar.gz
 # gate de CI local canonico. Ignorarlo dejaba la verificacion fuera del
 # control de versiones. Solo se ignoran sus artefactos de ejecucion.
 .pipelinek/
+
+# Scratch del agente: journals y artefactos temporales de verificacion
+# (pipelinek con journal fresco, receipts en curso). No son deliverable
+# y su presencia dejaba `git status --porcelain` sucio, que es requisito
+# del checklist de release de SDDK.
+.jcode-scratch/
