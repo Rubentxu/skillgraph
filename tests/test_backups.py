@@ -131,6 +131,50 @@ class TestBackupManifest:
                 }
             )
 
+    def test_from_dict_rejects_bool_size_bytes(self) -> None:
+        """WI-49: `size_bytes: true` seria int(1) silencioso en Python.
+
+        El manifest es un fichero declarado que from_dict lee en el
+        camino de restore; un booleano en un campo entero debe ser un
+        ValidationError, no un tamano 1 que nadie escribio.
+        """
+        with pytest.raises(ValidationError, match="size_bytes"):
+            BackupManifest.from_dict(
+                {
+                    "format_version": BACKUP_FORMAT_VERSION,
+                    "created_at": "x",
+                    "data_root": "x",
+                    "tenant_count": 0,
+                    "project_count": 0,
+                    "entries": [{"relpath": "a.sqlite", "sha256": "abc", "size_bytes": True}],
+                }
+            )
+
+    def test_from_dict_rejects_bool_counts(self) -> None:
+        """WI-49: tenant_count/project_count tampoco aceptan booleanos."""
+        with pytest.raises(ValidationError, match="tenant_count"):
+            BackupManifest.from_dict(
+                {
+                    "format_version": BACKUP_FORMAT_VERSION,
+                    "created_at": "x",
+                    "data_root": "x",
+                    "tenant_count": True,
+                    "project_count": 0,
+                    "entries": [],
+                }
+            )
+        with pytest.raises(ValidationError, match="project_count"):
+            BackupManifest.from_dict(
+                {
+                    "format_version": BACKUP_FORMAT_VERSION,
+                    "created_at": "x",
+                    "data_root": "x",
+                    "tenant_count": 0,
+                    "project_count": False,
+                    "entries": [],
+                }
+            )
+
 
 # ---------------------------------------------------------------------------
 # TestCreateBackup

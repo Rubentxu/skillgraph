@@ -89,7 +89,7 @@ class BackupManifest:
             BackupEntry(
                 relpath=str(e["relpath"]),
                 sha256=str(e["sha256"]),
-                size_bytes=int(e["size_bytes"]),  # type: ignore[arg-type]
+                size_bytes=_declared_int(e["size_bytes"], "manifest.entries[].size_bytes"),
             )
             for e in entries_raw  # type: ignore[union-attr]
         )
@@ -97,10 +97,24 @@ class BackupManifest:
             format_version=str(data["format_version"]),
             created_at=str(data["created_at"]),
             data_root=str(data["data_root"]),
-            tenant_count=int(data["tenant_count"]),  # type: ignore[arg-type]
-            project_count=int(data["project_count"]),  # type: ignore[arg-type]
+            tenant_count=_declared_int(data["tenant_count"], "manifest.tenant_count"),
+            project_count=_declared_int(data["project_count"], "manifest.project_count"),
             entries=entries,
         )
+
+
+def _declared_int(value: object, field: str) -> int:
+    """Lee un entero declarado del manifest rechazando bool.
+
+    WI-49: `int(True)` es 1 en Python, asi que un manifest con
+    `"size_bytes": true` pasaba como tamano 1 en el camino de restore
+    sin error visible. El manifest es un fichero declarado que puede
+    estar corrompido o editado a mano: un booleano donde se declara
+    un entero es un ValidationError, no una coercion silenciosa.
+    """
+    if isinstance(value, bool):
+        raise ValidationError(f"{field} debe ser int, no bool: {value!r}")
+    return int(value)  # type: ignore[arg-type]
 
 
 def _hash_file_sha256(path: Path) -> str:
