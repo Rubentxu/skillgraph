@@ -12,6 +12,22 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.9] - 2026-10-01 — WI-49: rechazo de bool en enteros declarados
+
+**Resumen**: ciclo SDDK `wi-49-bool-int-declared-coercions` (identidad `p-b7740b96d79ec013`). Cierra la clase de defecto que wi-46 dejó abierta (`isinstance(True, int)` es `True`, así que `int(True)` = 1 y un booleano declarado donde se espera un entero pasaba en silencio): tres superficies más donde la coerción ciega aceptaba `bool` — **plan** (`resourceRevision: true` → revisión 1 que nadie declaró), **backups** (manifest con `size_bytes: true` → tamaño 1 en restore) y **receipts** (`tests_run=True`/`tests_passed=True` aceptados por la dataclass pese al docstring que los "preservaba"; solo el cross-check `tests_passed > tests_run` mordía en una dirección, y el lector defensivo `_payload_to_receipt` coercaba antes de validar). 3 `fix`, 0 `feat`, 0 breaking → **PATCH**.
+
+### Fixed
+
+- `fix(plan)` `8ba12f3`: `_resource_revision` rechaza `bool` con `ParseError` que nombra el `source`; se preservan las coercions fijadas por test (`int('3')` acepta, `int(2.9)` trunca, ausencia → 0). Mismo patrón que `recipe._coerce_int`.
+- `fix(backups)` `e95c5e9`: `BackupManifest.from_dict` usa `_declared_int` (rechazo explícito de `bool` con mensaje que nombra el campo) para `size_bytes`, `tenant_count` y `project_count`; elimina tres `# type: ignore[arg-type]`.
+- `fix(receipts)` `6160ed5`: `ValidationReceipt._validate_counters` rechaza `bool` en `tests_run`/`tests_passed` (revierte la decisión de "preservar" la coerción, que el cross-check no cubría) y `_payload_to_receipt` valida antes de coercer, cumpliendo su propio contrato defensivo (fila corrupta → excepción → fila omitida).
+
+### Contexto
+
+- La sesión abrió con recuperación de contexto SDDK tras cambio de identidad (`p-74299cf88f51dab9` → `p-b7740b96d79ec013`, remote normalizado); detalle y cierre documental de los ciclos archivados en `evidence/sddk-context-recovery-2026-10-01.md`.
+- Deuda registrada como P2 en el ledger anterior (`cmd_promotion_reconcile` cc=14, `_make_schema_validator` cc=13/anidamiento 5) verificada **caducada**: miden cc=7/1 y cc=3/2 tras los refactors posteriores.
+- push pendiente de aprobación del operador.
+
 ## [0.16.8] - 2026-09-28 — WI-56: descomposición de Storage en repositorios reales (ADR-0016)
 
 **Resumen**: ciclo SDDK `wi-56-storage-decomposition` (path A-lite). Patrón strangler en 5 cortes sobre el god-module `platform/storage.py` (2837 → 1807 LoC, −36%): cada cluster de SQL sale a un componente real con conexión compartida y su red de contrato escrita ANTES (RED honesto: solo fallaba la identidad del facade). **Cero ediciones en callers** (REQ-WI56-1/I1): los delegados del facade conservan firma explícita y forwarding idéntico (guard WI-45). Solo forma: 0 `feat`, 0 `fix`, 0 breaking → **PATCH**. Total: **1754/1754 tests no-UAT PASS**, ruff limpio.

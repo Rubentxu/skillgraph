@@ -541,7 +541,7 @@ tests:
   total: 1431   # post-fix(audit) + refactor(backups): 1422 -> 1431 (+9 tests: 4 de exactitud de auditoria, 5 de politica de recoleccion; +2 preexistentes contados aparte)
   passed: 1431
   duration_s: 644   # re-medido el 2026-09-28 con `uv run pytest -q` con cobertura (1431 passed in 644.38s; la anterior de 1215s era de un run con fallos de gobernanza)
-  package_version: "0.16.8.dev0"   # trabajo post-release v0.16.8 (regla AGENTS §12): bump .dev0 tras el tag; la release v0.16.8 (WI-56, ADR-0016, storage.py 2837 -> 1807 LoC, 1754 tests no-UAT, ruff limpio) esta publicada en el tag anotado
+  package_version: "0.16.9"   # release v0.16.9 (WI-49): rechazo explicito de bool en enteros declarados — plan_loader.resourceRevision (ParseError con source), BackupManifest.from_dict (size_bytes/tenant_count/project_count) y ValidationReceipt (tests_run/tests_passed, escritor y lector defensivo); 3 fix -> PATCH; misma clase de defecto que 21087d1 y dbe7f81
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
