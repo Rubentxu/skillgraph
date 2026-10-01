@@ -104,6 +104,33 @@ transitions: []
     assert plan.nodes[0].expected_result == "text"
 
 
+def test_rejects_bool_resource_revision(tmp_path: Path) -> None:
+    """WI-49: `resourceRevision: true` no puede convertirse en revision 1.
+
+    `int(True)` es 1 y el resultado pasaria el invariante `>= 1` de
+    WorkflowNode en silencio: el plan queda con revision 1 que nadie
+    declaro. Misma clase de fallo que metadata.max_visits (fix
+    21087d1) y Recipe.token_budget (fix dbe7f81): bool hereda de int
+    y la coercion ciega acepta un booleano sin error visible.
+    """
+    bool_yaml = """---
+initial: root
+nodes:
+  - name: root
+    kind: ActionNode
+    namespace: shared
+    apiVersion: skillgraph.dev/v1alpha1
+    resourceRevision: true
+    expectedResult: text
+transitions: []
+---
+"""
+    path = _write_plan(tmp_path, bool_yaml, name="bool-revision.md")
+    with pytest.raises(ParseError, match="bool") as excinfo:
+        load_plan_file(path)
+    assert "bool-revision.md" in str(excinfo.value)
+
+
 def test_load_plan_file_empty_transitions(tmp_path: Path) -> None:
     """`transitions: []` (o ausente) es valido."""
     minimal = """---

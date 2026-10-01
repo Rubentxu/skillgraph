@@ -90,6 +90,29 @@ def _plan_from_dict(data: dict[str, Any], *, source: str) -> WorkflowPlan:
     return WorkflowPlan(nodes=nodes, transitions=transitions, initial=initial)
 
 
+def _resource_revision(data: dict[str, Any], source: str) -> int:
+    """Lee `resourceRevision`/`resource_revision` rechazando bool.
+
+    WI-49: `int(True)` es 1 y el resultado pasaria el invariante
+    `>= 1` de WorkflowNode en silencio: el plan queda con una
+    revision que nadie declaro. Misma clase de fallo que
+    metadata.max_visits (fix 21087d1) y Recipe.token_budget (fix
+    dbe7f81).
+
+    Las demas coercions se preservan (deterministas y fijadas por
+    test, igual que `recipe._coerce_int`): `int('3')` acepta y
+    `int(2.9)` trunca. La ausencia del campo sigue devolviendo 0.
+    """
+    raw = data.get("resourceRevision")
+    if raw is None:
+        raw = data.get("resource_revision")
+    if raw is None:
+        return 0
+    if isinstance(raw, bool):
+        raise ParseError(f"plan {source}: resourceRevision debe ser int, no bool: {raw!r}")
+    return int(raw)
+
+
 def _node_from_dict(data: Any, source: str) -> WorkflowNode:
     if not isinstance(data, dict):
         raise ParseError(f"plan {source}: nodo invalido {data!r}")
@@ -98,7 +121,7 @@ def _node_from_dict(data: Any, source: str) -> WorkflowNode:
         kind=data["kind"],
         namespace=data["namespace"],
         api_version=data.get("apiVersion") or data.get("api_version") or "",
-        resource_revision=int(data.get("resourceRevision") or data.get("resource_revision") or 0),
+        resource_revision=_resource_revision(data, source),
         expected_result=data.get("expectedResult") or data.get("expected_result") or "",
         capabilities=tuple(data.get("capabilities") or ()),
         metadata=dict(data.get("metadata") or {}),
