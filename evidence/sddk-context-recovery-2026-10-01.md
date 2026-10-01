@@ -58,11 +58,21 @@ de pertenencia: `git merge-base --is-ancestor <sha> HEAD` → exit 0.
 | `wi-42-release-blocker-python` | establecido que el release planner SDDK exige `Cargo.toml` (no soporta Python); documento `audits/release-blocker-python-workspace.md` | documental | sí | **CLOSED / documented** (la limitación persiste; el camino manual está acreditado en `evidence/absorbed-cycles-release-receipt.md`) |
 | `wi-43-extract-cli-parser` | parser CLI (409 LoC) extraído a módulo propio | `src/skillgraph/cli/parser.py` | sí | **CLOSED / superseded-by-release** |
 | `wi-44-resolve-project` | resolución de proyecto centralizada en un único helper (elimina 21 construcciones repetidas) | `e55fc81`, `5885269` | sí | **CLOSED / superseded-by-release** |
-| `wi-46-bool-integer-validation` | **sin trabajo**: 0 commits, 0 specs, 0 menciones en el repo | — | — | **DEFERRED / not started** — NO se cierra como absorbed porque no hay trabajo que absorber. Candidato a re-crear como ciclo en la identidad `p-b7740b96d79ec013` si el operador lo prioriza |
+| `wi-46-bool-integer-validation` | sustancia hecha y publicada: exclusión `bool` en `Recipe.token_budget`/`revision` (`dbe7f81`), `metadata.max_visits` (`21087d1`) y `_matches` de pack_loader (etiquetado WI-46 en código); TODO ancestro de v0.16.8 | `dbe7f81`, `21087d1` | sí | **CLOSED / superseded-by-release** (ver CORRECCIÓN más abajo) |
 
-Nota de honestidad: cerrar wi-46 como "absorbed" habría sido un verde
-falso del tipo que este repositorio prohíbe; se deja DEFERRED con su
-contexto para que el próximo `cycle start` pueda retomarlo.
+**CORRECCIÓN (2026-10-01 22:15, misma sesión).** El veredicto inicial
+de esta tabla para wi-46 —"DEFERRED / not started"— quedó falsificado
+por evidencia encontrada minutos después, y se corrige aquí con
+constancia en vez de reescribirlo en silencio. La búsqueda original
+(solo `specs/`, `evidence/`, CURRENT.md y `git log --grep wi-46`) no
+encontró nada porque los fixes nunca llevaron el nombre del ciclo: el
+trabajo se identifica por etiquetas WI-46 en docstrings de
+`src/skillgraph/domain/pack_loader.py` y por los mensajes de los
+commits `dbe7f81`/`21087d1`. Lección registrada: el barrido de
+cerramiento debe incluir grep de etiquetas WI-\* en `src/`, no solo en
+documentación. La continuación real del hilo se abrió como ciclo
+`p-b7740b96d79ec013/wi-49-bool-int-declared-coercions` (3 fixes más en
+la misma clase de defecto, release v0.16.9).
 
 ## 3. B4 re-evaluado sobre la build actual (sddk 2.5.3)
 

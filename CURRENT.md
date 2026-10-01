@@ -928,9 +928,10 @@ SDDK + ledger previo + git), no desde memoria. Detalle completo:
   (12 ciclos, 84 eventos) queda archivado, sin migrar.
 - **Cierre documental de los 6 ciclos OPEN de la identidad anterior**:
   wi-31/wi-41/wi-42/wi-43/wi-44 CLOSED (trabajo verificado dentro de
-  v0.16.8 vía `merge-base --is-ancestor`); wi-46
-  (bool-integer-validation) DEFERRED/not-started: sin trabajo que
-  absorber, candidato a `cycle start` en la identidad nueva.
+  v0.16.8 vía `merge-base --is-ancestor`); wi-46 CLOSED
+  (superseded-by-release: su sustancia salió en `dbe7f81`/`21087d1` y
+  las etiquetas WI-46 de pack_loader — veredicto inicial DEFERRED
+  corregido con constancia en la nota de evidence, §2).
 - **B4 mitigado en build actual**: `sddk debt report` ya no fabrica el
   reporte ajeno; falla honesta (fail-closed, "debt detection is not
   implemented"). Los debt gates siguen sin ser evidencia válida;

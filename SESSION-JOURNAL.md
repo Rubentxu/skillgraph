@@ -7218,8 +7218,11 @@ mocks, patches ni monkeypatch. Las dos apariciones de la palabra
 - `evidence/sddk-context-recovery-2026-10-01.md`: nota de estado con
   migración de identidad, cierre documental por ciclo y re-evaluación
   de B4. Secciones correspondientes en CURRENT.md.
-- Nota de honestidad: wi-46 (bool-integer-validation) NO se cierra como
-  absorbed (0 trabajo); queda DEFERRED como candidato de `cycle start`.
+- Nota de honestidad: wi-46 se cerró inicialmente como DEFERRED; esa
+  afirmación quedó falsificada minutos después (la sustancia salió en
+  `dbe7f81`/`21087d1` y en etiquetas WI-46 de pack_loader) y se
+  corrigió con constancia en la nota de evidence §2. Lección: el
+  barrido de cerramiento debe incluir grep de etiquetas WI-* en `src/`.
 
 ### Descubrimientos
 
