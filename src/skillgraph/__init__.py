@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.8"  # release v0.16.8: WI-56 (ADR-0016)
+__version__ = "0.16.8.dev0"  # trabajo post-release v0.16.8 (regla AGENTS §12)
 
 from skillgraph.core.errors import (
     IdentityConflictError,

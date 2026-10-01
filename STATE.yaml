@@ -541,7 +541,7 @@ tests:
   total: 1431   # post-fix(audit) + refactor(backups): 1422 -> 1431 (+9 tests: 4 de exactitud de auditoria, 5 de politica de recoleccion; +2 preexistentes contados aparte)
   passed: 1431
   duration_s: 644   # re-medido el 2026-09-28 con `uv run pytest -q` con cobertura (1431 passed in 644.38s; la anterior de 1215s era de un run con fallos de gobernanza)
-  package_version: "0.16.8"   # release v0.16.8: WI-56 descomposicion de Storage en repositorios reales (ADR-0016): 5 cortes (runs/policy/knowledge/events/promotions), 5 redes de contrato (100 tests), cero ediciones en callers, helpers atomicos H9/H10 preservados; 1754 tests no-UAT, ruff limpio; storage.py 2837 -> 1807 LoC
+  package_version: "0.16.8.dev0"   # trabajo post-release v0.16.8 (regla AGENTS §12): bump .dev0 tras el tag; la release v0.16.8 (WI-56, ADR-0016, storage.py 2837 -> 1807 LoC, 1754 tests no-UAT, ruff limpio) esta publicada en el tag anotado
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
