@@ -7343,3 +7343,54 @@ siguiendo la numeración del repo: WI-49 libre).
   **array JSON**, no lista separada por comas ni flag repetible.
 - Shas de referencia para reanudar: tag `v0.16.9` → `600279a`; HEAD
   `b808076` (`0.16.9.dev0`); push pendiente del operador.
+
+## 2026-10-01 (II) — WI-50: ADR-0017 y cierre de la grieta de no-atomicidad
+
+### Resumen
+
+Segunda pasada `autonomo` del día. La cola volvió a resolverse con
+medición: sin regresiones; deuda P2 caducada (verificada en la pasada
+anterior); roadmap stub. La única deuda pendiente con ADR abierto era
+la grieta de no-atomicidad `workflow_runs`↔`runtime_events`
+(pendiente #2 de CURRENT.md desde v0.14.0). La auditoría completa de
+escritores de estado y de `EventLog.append` en el runcontroller
+concluye que **la grieta ya no existe**: los pares estado+evento
+semánticos (8 combinaciones: create/FAILED×2/COMPLETED/CANCELLED +
+start/complete/fail de NodeExecution) viven en TX única vía las
+variantes `*_atomically` (H9/H10) sobre la conexión compartida de
+ADR-0016, con inyección de fallos verificada en
+`test_h9_run_lifecycle_atomic.py` y `test_h10_runcontroller_atomic_integration.py`.
+
+### Decisiones registradas
+
+- **D-69**: (1) pares estado+evento atómicos por variante
+  `*_atomically` — la alternativa "WAL transactions coordinando" del
+  pendiente original quedó superada; (2) escrituras de estado sin
+  evento (activación CREATED→ACTIVE, avance de puntero) son
+  intencionales y se ratifica la separación Storage↔emisor
+  (decisión 2026-09-23 18:24); (3) eventos advisory
+  (BudgetExceeded/HandoffCreated/NodeScheduled) se persisten
+  individualmente y su ventana de crash converge por
+  `_recover_interrupted` + reconcile determinista; (4) regla hacia
+  adelante: toda transición nueva con evento nace como variante
+  atómica. Detalle y mapa completo: `docs/blueprint/adr/ADR-0017-run-state-event-atomicity.md`.
+
+### Cambios
+
+- `docs/blueprint/adr/ADR-0017-run-state-event-atomicity.md`: nueva.
+- `CURRENT.md`: pendiente #2 → CERRADA con resumen de la decisión.
+- `STATE.yaml`: `current_workitem` WI-30 → WI-50 (estaba obsoleto
+  desde v0.14.8); `next_workitem` → null (sin trabajo derivable: la
+  operación decide push/pipelinek/nueva spec).
+
+### Evidencia
+
+- Barrido verificado en código: 2 únicos llamadores restantes de
+  `_set_run_state` sin evento emparejado; 3 `append` advisory; 8 pares
+  atómicos; 0 escrituras WAITING en runtime. Sin cambios de código:
+  los tests existentes (inyección de fallos H9/H10, cancel en
+  test_runcontroller) ya fijan la invariante.
+- Docs-only: sin release (no hay capacidad nueva; `0.16.9.dev0`
+  satisface §12).
+- Ciclo SDDK `p-b7740b96d79ec013/wi-50-run-state-event-atomicity`
+  (ver cierre más abajo si aplica).

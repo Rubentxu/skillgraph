@@ -88,11 +88,16 @@ Refactor sin bump: `6c8c17f` (extract pure helpers from ContextController).
 
 1. **S7+ del blueprint v1**: no definido en `external/blueprint-v1/`.
    Etapa 7 cierra con "futuros horizontes abiertos".
-2. **Grieta de no-atomicidad workflow_runs ↔ runtime_events**: conocida,
-   preservada por construcción (decisión arquitectónica con ADR pendiente).
-   Los locks de S6 v0.14.0 mitigan interleaving a nivel de proceso,
-   no cierran la grieta transaccional (que requeriría SQLite WAL
-   transactions coordinando INSERT/UPDATE + event append).
+2. **Grieta de no-atomicidad workflow_runs ↔ runtime_events**: **CERRADA**
+   por ADR-0017 (2026-10-01, ciclo wi-50): todo par estado+evento
+   semántico se escribe en TX única vía las variantes `*_atomically`
+   (H9/H10, sobre la conexión compartida de ADR-0016), con inyección
+   de fallos verificada en tests; las escrituras de estado sin evento
+   (activación, avance de puntero) son intencionales, y los eventos
+   advisory (BudgetExceeded/HandoffCreated/NodeScheduled) convergen
+   por `_recover_interrupted` + reconcile determinista. La premisa
+   original ("requeriría SQLite WAL transactions coordinando") quedó
+   superada por las variantes H9/H10.
 3. **Concurrencia real entre procesos**: probada con `multiprocessing`
    en `test_locks.py` (2 procesos se serializan en el mismo run),
    pero no certificada con proveedores reales ni bajo carga.
