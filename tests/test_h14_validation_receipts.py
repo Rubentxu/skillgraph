@@ -342,6 +342,21 @@ class TestReceiptDataclassValidation:
         with pytest.raises(ValidationError, match="tests_passed negativo"):
             ValidationReceipt(**_valid_receipt_kwargs(tests_passed=-1))  # type: ignore[arg-type]
 
+    def test_tests_run_bool_rechaza(self) -> None:
+        """WI-49: bool hereda de int; `True` pasaria el chequeo `< 0` como 1.
+
+        `record_validation_receipt(tests_run=True)` debe ser un
+        ValidationError, no un recibo con 1 test corrido que nadie
+        ejecuto. Misma clase que resourceRevision/max_visits.
+        """
+        with pytest.raises(ValidationError, match="tests_run debe ser int, no bool"):
+            ValidationReceipt(**_valid_receipt_kwargs(tests_run=True))  # type: ignore[arg-type]
+
+    def test_tests_passed_bool_rechaza(self) -> None:
+        """WI-49: `tests_passed=True` tampoco es un contador valido."""
+        with pytest.raises(ValidationError, match="tests_passed debe ser int, no bool"):
+            ValidationReceipt(**_valid_receipt_kwargs(tests_passed=True))  # type: ignore[arg-type]
+
     def test_tests_passed_mayor_que_run_rechaza(self) -> None:
         with pytest.raises(ValidationError, match=r"tests_passed .* > tests_run"):
             ValidationReceipt(**_valid_receipt_kwargs(tests_run=3, tests_passed=4))  # type: ignore[arg-type]

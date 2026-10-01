@@ -131,10 +131,17 @@ class ValidationReceipt:
     def _validate_counters(self) -> None:
         """Invariantes de `tests_run` / `tests_passed`.
 
-        `bool` es subclase de `int`: `True` cuenta como 1. Se preserva ese
-        comportamiento (esta fijado por test) en vez de rechazarlo, porque
-        cambiarlo es una decision de contrato, no un refactor de forma.
+        WI-49: `bool` se rechaza explicitamente. Antes se preservaba
+        la coercion (`True` cuenta como 1), pero solo el cross-check
+        `tests_passed > tests_run` la detectaba en una direccion:
+        `tests_run=True` con `tests_passed<=1` pasaba en silencio y
+        `tests_passed=True` siempre. Misma clase de fallo que
+        resourceRevision (plan_loader) y metadata.max_visits.
         """
+        for name in ("tests_run", "tests_passed"):
+            value = getattr(self, name)
+            if isinstance(value, bool):
+                raise ValidationError(f"{name} debe ser int, no bool: {value!r}")
         if self.tests_run < 0:
             raise ValidationError(f"tests_run negativo: {self.tests_run}")
         if self.tests_passed < 0:
@@ -441,6 +448,21 @@ def list_applicable_receipts(
     return tuple(out)
 
 
+def _declared_counter(payload: dict[str, Any], field: str) -> int:
+    """Lee un contador del payload rechazando bool.
+
+    WI-49: `_payload_to_receipt` es defensiva ("tipo incorrecto ->
+    excepcion"), pero `int(True)` es 1 y el booleano llegaba a la
+    guarda de la dataclass ya convertido, asi que pasaba. El rechazo
+    tiene que ocurrir antes de la coercion para que la fila quedada
+    en un estado tampered/corrupto se omita como promete el caller.
+    """
+    value = payload[field]
+    if isinstance(value, bool):
+        raise ValidationError(f"{field} debe ser int, no bool: {value!r}")
+    return int(value)  # type: ignore[arg-type]
+
+
 def _payload_to_receipt(payload: dict[str, Any]) -> ValidationReceipt:
     """Reconstruye un ValidationReceipt desde su payload JSON.
 
@@ -453,8 +475,8 @@ def _payload_to_receipt(payload: dict[str, Any]) -> ValidationReceipt:
         revision=payload["revision"],
         timestamp=payload["timestamp"],
         verdict=payload["verdict"],  # type: ignore[arg-type]
-        tests_run=int(payload["tests_run"]),
-        tests_passed=int(payload["tests_passed"]),
+        tests_run=_declared_counter(payload, "tests_run"),
+        tests_passed=_declared_counter(payload, "tests_passed"),
         artifact_path=payload["artifact_path"],
         scope=payload["scope"],
         dependency_revisions=dict(payload.get("dependency_revisions", {})),
