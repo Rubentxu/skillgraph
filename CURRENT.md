@@ -906,3 +906,47 @@ excepcion en CURRENT/CHANGELOG.
 - ruff: All checks passed.
 - commit `8006c58`, 45 ahead of origin/main.
 
+
+## Recuperación de contexto SDDK — 2026-10-01
+
+Tras corte de sesión, el contexto se reconstruyó desde autoridad (CLI
+SDDK + ledger previo + git), no desde memoria. Detalle completo:
+`evidence/sddk-context-recovery-2026-10-01.md`.
+
+- **Drift de gobernanza corregido**: `7e6df87` quedó post-tag
+  `v0.16.8` con `__version__` puro (gate en rojo). Corregido en
+  `2a3732b`: bump a `0.16.8.dev0` (regla AGENTS §12), STATE.yaml y
+  cabecera actualizados; gate 2/2 PASS. Suelto del 29-sep commiteado
+  en `18e77d3` (recibos absorbed-cycles, bloqueador B4, capacidad
+  `cycle_supersede`, evidencia UAT-08/09). Suite completa 1754/1754
+  (hook pre-commit).
+- **Migración de identidad SDDK**: el remote normalizó su casing
+  (`Rubentxu` → `rubentxu`) y el CLI 2.5.3 deriva otra identidad.
+  Decisión del operador: re-adoptar limpio → `sddk adopt apply`
+  complete en `p-b7740b96d79ec013`; vault y perfil creados y
+  validados; 0 ciclos activos. El historial de `p-74299cf88f51dab9`
+  (12 ciclos, 84 eventos) queda archivado, sin migrar.
+- **Cierre documental de los 6 ciclos OPEN de la identidad anterior**:
+  wi-31/wi-41/wi-42/wi-43/wi-44 CLOSED (trabajo verificado dentro de
+  v0.16.8 vía `merge-base --is-ancestor`); wi-46
+  (bool-integer-validation) DEFERRED/not-started: sin trabajo que
+  absorber, candidato a `cycle start` en la identidad nueva.
+- **B4 mitigado en build actual**: `sddk debt report` ya no fabrica el
+  reporte ajeno; falla honesta (fail-closed, "debt detection is not
+  implemented"). Los debt gates siguen sin ser evidencia válida;
+  alternativa: `audits/audit_debt.py`.
+- **pipelinek NO concluyente en sesión agéntica** (addendum en
+  `evidence/sddk-context-recovery-2026-10-01.md` §6): run 1 = FAILURE
+  falso (motor da por muerto el paso a los ~10s; el pytest real siguió
+  y terminó en exit 0), run 2 = SUCCESS sospechoso (unit-tests "pass"
+  en 10,2s sin `EchoOutputCaptured`; imposible para 1754 tests).
+  Causas documentadas: binario sin gobernar (shim activo 0.43.0; el
+  canon AGENTS.md v0.39.0 no está instalado) + interferencia de la
+  capa de ficheros del entorno agéntico con la supervisión por cookie
+  del engine. Verificación de la sesión: ejecución directa
+  (1754/1754, ruff, gate 2/2). Decisión pendiente del operador: fijar
+  versión canónica y run de control fuera del entorno agéntico.
+- **Próximos pasos legales**: push pendiente de aprobación del
+  operador (2 commits); siguiente trabajo = `sddk cycle start`
+  (candidatos: wi-46, deuda P2 `cmd_promotion_reconcile` cc=14 /
+  `_make_schema_validator` cc=13).

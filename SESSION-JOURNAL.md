@@ -7180,3 +7180,93 @@ mocks, patches ni monkeypatch. Las dos apariciones de la palabra
 3. Push de los commits sin publicar: `git.push` es `human_gate`.
 
 
+
+## 2026-10-01 — Recuperación de contexto SDDK, migración de identidad y cierre documental
+
+### Resumen
+
+- Consigna del operador: "recuperamos contexto de trabajo con sddk de
+  este proyecto para evaluar como continuar". Reconstrucción desde
+  autoridad: `sddk adopt status` (absent en la identidad resuelta),
+  ledger de la identidad anterior `p-74299cf88f51dab9` (12 ciclos:
+  7 CLOSED, 6 OPEN en explore), git (tag `v0.16.8` en `df72bcc` =
+  `origin/main`; HEAD `7e6df87` con suelto sin commitear).
+- **Drift de gobernanza detectado**: `__version__ = "0.16.8"` puro en
+  HEAD post-tag → `test_release_governance` en rojo (1 failed). Es la
+  primera vez que el gate caza la deriva en vivo tras v0.14.1.
+- Decisiones del operador (cuestionario): (1) arreglar y commitear,
+  (2) re-adoptar SDDK limpio, (3) cierre documental de los 6 ciclos
+  OPEN.
+
+### Cambios aplicados
+
+- `chore(release)` `2a3732b`: bump `0.16.8.dev0` + STATE.yaml
+  (`package_version`) + cabecera CURRENT.md. Gate 2/2 PASS; hook
+  pre-commit con suite completa 1754/1754 en 76.63s.
+- `docs(evidence)` `18e77d3`: recibos `absorbed-cycles-{release,merge}`
+  (wi-45-uow-coverage, stored-claim-evidence-boundary,
+  wi-40-test-connection-lifecycle absorbidos en v0.16.8),
+  `blocker-B4-debt-report-context.md`, capacidad
+  `surface.cycle_state#cycle_supersede` en `permissions.yaml`,
+  refresco UAT-08/09.
+- SDDK: `sddk adopt apply` → complete en `p-b7740b96d79ec013`
+  (remote normalizado `rubentxu` en minúsculas cambió la derivación
+  del project_id). Vault y perfil creados; `vault validate` 0 errores;
+  `cycle status` → NoActiveCycle. Historial de `p-74299` archivado sin
+  migrar (decisión del operador frente a la opción frágil de
+  re-vincular por casing).
+- `evidence/sddk-context-recovery-2026-10-01.md`: nota de estado con
+  migración de identidad, cierre documental por ciclo y re-evaluación
+  de B4. Secciones correspondientes en CURRENT.md.
+- Nota de honestidad: wi-46 (bool-integer-validation) NO se cierra como
+  absorbed (0 trabajo); queda DEFERRED como candidato de `cycle start`.
+
+### Descubrimientos
+
+- **B4 mitigado en sddk 2.5.3**: `debt report` ya no resuelve contexto
+  ajeno; falla con error tipado ("debt detection is not implemented in
+  this build") y explica el falso verde previo. Los debt gates siguen
+  sin valer como evidencia (no hay detección); el auditor propio
+  `audits/audit_debt.py` sigue siendo la alternativa canónica.
+- El `project_id` de SDDK se deriva del remote URL **con casing**, un
+  simple cambio `Rubentxu` → `rubentxu` genera una identidad nueva.
+  Para proyectos con remote renormalizado: decidir conscientemente
+  entre re-adoptar limpio (historial archivado) o re-vincular
+  (frágil, depende del algoritmo de derivación de cada build).
+- El hook pre-commit ejecuta la suite COMPLETA (1754 tests, ~77s),
+  no un smoke: el coste por commit es alto pero cada commit queda
+  verificado de verdad.
+
+### Estado de salida
+
+- HEAD `18e77d3`, working tree limpio, ruff limpio, gate de
+  gobernanza verde.
+- SDDK: adoptado limpio en `p-b7740b96d79ec013`, 0 ciclos activos.
+- Pendiente operador: push (2 commits) y elección del siguiente ciclo.
+
+### Addendum pipelinek (mismo día, post-commits)
+
+La CI local canónica no puede darse por verificado en sesión agéntica
+(detalle completo en `evidence/sddk-context-recovery-2026-10-01.md`
+§6):
+
+- Run 1: FAILURE falso — el motor declaró `StepFailed` de
+  `unit-tests` a los ~10s con captura vacía, pero el pytest real
+  siguió vivo y escribió exit 0 en `result.txt` ~2 min después.
+- Run 2: SUCCESS sospechoso — mismo paso "terminado" en 10,2s sin
+  `EchoOutputCaptured`; 1754 tests no caben en 10s (mínimo real
+  observado: 76s). Verde sin evidencia de ejecución.
+- Causas documentadas: binario pipelinek sin gobernar (shim asdf
+  activo 0.43.0; canon AGENTS.md v0.39.0 no instalado; ni mise.toml
+  ni .tool-versions fijan versión) + interferencia de la capa de
+  ficheros del entorno agéntico con la supervisión por cookie del
+  engine (mensajes del recolector de ficheros aparecen DENTRO de la
+  captura de los pasos).
+- Verificación sustituta de la sesión, por ejecución directa: pytest
+  1754/1754 (x2), ruff limpio, gate de gobernanza 2/2. Precedente
+  aplicado: `evidence/pipelinek-cache-does-not-invalidate-on-source-change.md`
+  (mismo patrón de verde falso ya perseguido en v0.16.5).
+- DECISION PENDIENTE DEL OPERADOR: fijar versión canónica de
+  pipelinek y run de control fuera del entorno agéntico; AGENTS.md no
+  se toca sin su conforme (§10: excepciones requieren entrada en este
+  diario y aprobación).
