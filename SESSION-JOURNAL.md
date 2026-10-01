@@ -7459,3 +7459,41 @@ dispatch (WI-41) y `__all__` — cero ediciones en callers.
   ruff marque F401 (noqa justificado documentado en el import).
 - Siguiente corte (WI-53): `runs` (166 LoC) o `promotion` (129),
   según ADR-0018.
+
+## 2026-10-02 — WI-53: estrangulamiento CLI, corte 2 (runs)
+
+### Resumen
+
+Continuación directa del corte 1. Cluster `runs` (5 handlers
+`cmd_runs_*`, 171 LoC) sale a `cli/commands/runs.py`;
+`_open_project_storage` —compartida (4 usos fuera del cluster,
+medido)— pasa a `cli/support.py` con alias en runner. **runner.py
+1727 → 1525 LoC** (acumulado desde v0.16.9: 2357 → 1525, −35%).
+
+### Cambios
+
+- Nuevo `src/skillgraph/cli/commands/runs.py` (lazy imports de
+  RunController/FakeAgentAdapter preservados verbatim).
+- `cli/support.py` gana `_open_project_storage` (+ imports
+  `contextmanager`/`Iterator`/`Storage`).
+- `tests/test_wi53_cli_runs_strangler.py`: identidad de los 5 handlers
+  + placement de la helper compartida.
+- Cirugía por **límites AST** (decorator_list incluido) — lección del
+  off-by-one del corte 1 aplicada; el script además compila los tres
+  ficheros antes de escribir.
+
+### Evidencia
+
+- RED honesto (collection error pre-extracción). Afectados 48/48
+  (identity + cli_branches + cli_run_uat + H4 + wi52 identity). Suite
+  completa PASS por hook. ruff/format limpios.
+
+### Descubrimientos
+
+- La falsa alarma de la cirugía: `resolve_project` menciona
+  `_open_project_storage` en su DOCSTRING; una guarda ingenua por
+  substring aborta. Las guardas de脚本 deben buscar `def <name>`, no
+  el nombre pelado.
+- runner queda a 1525 LoC; para bajar de 800 faltan los clusters
+  promotion/pack/knowledge/project/backup/policy + consolidar helpers
+  no-cmd (siguientes cortes WI-54+).
