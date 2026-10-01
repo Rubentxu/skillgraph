@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.9"  # release v0.16.9: WI-49 bool/int en enteros declarados
+__version__ = "0.16.9.dev0"  # trabajo post-release v0.16.9 (regla AGENTS §12)
 
 from skillgraph.core.errors import (
     IdentityConflictError,
