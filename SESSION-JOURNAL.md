@@ -7273,3 +7273,51 @@ La CI local canónica no puede darse por verificado en sesión agéntica
   pipelinek y run de control fuera del entorno agéntico; AGENTS.md no
   se toca sin su conforme (§10: excepciones requieren entrada en este
   diario y aprobación).
+
+### WI-49 — rechazo de bool en enteros declarados (release v0.16.9)
+
+#### Resumen
+
+Consigna `autonomo`: continuar roadmap/deuda a criterio. Cola
+resuelta con evidencia: sin regresiones; la deuda P2 del ledger
+archivado está caducada (`cmd_promotion_reconcile` cc=7/1,
+`_make_schema_validator` cc=3/2 — medidas hoy con AST, no asumidas);
+roadmap SDDK = stub (conocimiento negativo ya registrado). Encaja la
+auditoría de la clase bool/int (wi-46): el barrido encontró 3 fugas
+reales más en superficies con input declarado, y wi-46 resultó tener
+sustancia publicada (veredicto DEFERRED de hoy corregido con
+constancia en `evidence/sddk-context-recovery-2026-10-01.md` §2).
+
+#### Ciclo SDDK
+
+`p-b7740b96d79ec013/wi-49-bool-int-declared-coercions` (cycle.start
+en la identidad nueva; el roadmap SDDK es stub, nombre elegido
+siguiendo la numeración del repo: WI-49 libre).
+
+#### Commits atómicos
+
+- `8ba12f3` fix(plan): `_resource_revision` rechaza bool; RED primero
+  (el test pasaba de rojo por construir el nodo con revision 1).
+- `e95c5e9` fix(backups): `_declared_int` en `BackupManifest.from_dict`;
+  elimina 3 `type: ignore[arg-type]`.
+- `6160ed5` fix(receipts): guarda bool en `_validate_counters`
+  (revierte la "preservación" que el cross-check no cubría) y
+  `_declared_counter` en el lector defensivo.
+- `da3f375` docs(state): corrección del veredicto wi-46.
+- `ef35a27` chore(release): bump 0.16.9 + CHANGELOG + STATE + CURRENT.
+
+#### Evidencia
+
+- RED honesto: 5 tests nuevos, 4 FAILED pre-fix; el 5º (`tests_run=True`)
+  pasaba por el cross-check `tests_passed (6) > tests_run (True)` —
+  se endureció el `match` a la guarda explícita. Los tests que pasan
+  por la razón equivocada no son verdes.
+- Tests afectados: 129 passed. Suite: 1759 collected, PASS en cada
+  commit (hook). ruff check/format: limpios.
+- SemVer: 3 fix, 0 feat, 0 breaking → PATCH v0.16.9 (recibo:
+  `evidence/release-v0.16.9-receipt.md`). Tag anotado local; push
+  pendiente del operador.
+- Superficies revisadas y fuera de alcance por diseño: coerciones
+  internas de engine/runcontroller (datos ya tipados en runtime) e
+  `int(self.stale)` de ports/knowledge_repository (codificación
+  intencional bool→0/1 para SQLite).
