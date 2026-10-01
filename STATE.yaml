@@ -126,8 +126,8 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-50   # ciclo wi-50-run-state-event-atomicity (identidad p-b7740): auditoria de escritores estado/evento + ADR-0017; cierra el pendiente #2 (grieta de no-atomicidad). Docs-only, sin release.
-  next_workitem: null   # sin trabajo derivado: roadmap SDDK = stub; deuda P2 del ledger archivado verificada caducada (2026-10-01); operador decide (push v0.16.9, version canonica pipelinek, o spec nueva)
+  current_workitem: WI-52   # corte 1 del estrangulamiento H-02 (ADR-0018): cluster expansion -> cli/commands/expansion.py + cli/support.py; runner.py 2357 -> ~1756 LoC, cero ediciones en callers, red de identidad (test_wi52_cli_expansion_strangler.py)
+  next_workitem: WI-53   # siguiente corte del estrangulamiento CLI (runs/promotion/pack/knowledge) segun orden valor/riesgo de ADR-0018
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
       fecha: 2026-09-26

@@ -7410,3 +7410,52 @@ ADR-0016, con inyección de fallos verificada en
   `--evidence-refs` espera array JSON.
 - Sin cambios de código y sin release: docs-only, `0.16.9.dev0`
   satisface §12. Push de v0.16.9..HEAD sigue pendiente del operador.
+
+## 2026-10-01 (III) — WI-52: estrangulamiento CLI, corte 1 (expansion)
+
+### Resumen
+
+Tercera pasada `autonomo`. Ejecuta el primer corte de H-02 bajo
+**ADR-0018** (patrón ADR-0016 trasladado al CLI): los clusters
+`cmd_<dominio>` salen a `cli/commands/<dominio>.py`, los helpers
+compartidos a `cli/support.py`, y `runner` conserva alias para
+dispatch (WI-41) y `__all__` — cero ediciones en callers.
+
+### Cambios
+
+- `docs/blueprint/adr/ADR-0018-cli-strangler.md`: estrategia, mapa de
+  clusters medido por AST, alternativas rechazadas, orden de cortes.
+- Corte 1 — `expansion` (el mayor: 7 handlers, 256 LoC + 7 helpers de
+  uso exclusivo verificado por grep de call-sites):
+  - Nuevo `src/skillgraph/cli/commands/expansion.py` (+ paquete
+    `commands`).
+  - Nuevo `src/skillgraph/cli/support.py`: `EXIT_*`, `ProjectResolver`,
+    `resolve_project`, `_open_project_or_error`, I/O de plan.
+  - `runner.py` **2357 → ~1756 LoC**; su `__all__` (API pública del
+    CLI) intacto vía re-import.
+- `tests/test_wi52_cli_expansion_strangler.py`: red de identidad
+  (7 × `runner.cmd_expansion_* is commands.expansion.cmd_expansion_*`
+  + runner no redefine helpers movidos + sin ciclo runner↔commands).
+
+### Evidencia
+
+- RED honesto: collection error antes de la extracción.
+- Tests afectados: 131/131 (H4 expansion ×4, wi51 contracts,
+  cli_branches, cli_run_uat). Suite completa: PASS por hook.
+- Auditoría regenerada: 0 hotspots cc>=20 se mantiene; runner sale de
+  la cima del ranking de god files.
+- Docs-only + refactor: sin release (refactor sin bump, precedente
+  v0.14.x).
+
+### Descubrimientos
+
+- **El hook de suite completa cazó un near-miss real**: el corte por
+  rangos dejó truncado `ProjectResolver.lookup` (dos `return` finales
+  fuera del rango) — error de desempaquetado `NoneType` que los tests
+  UAT-07 expusieron de inmediato. Sin el hook, ese verde parcial
+  habría salido. La inversión en hook-costoso se paga.
+- `runner.__all__` exporta la API del CLI (`EXIT_*`, `ProjectResolver`,
+  `cmd_*`): los estrangulamientos deben mantener el re-import aunque
+  ruff marque F401 (noqa justificado documentado en el import).
+- Siguiente corte (WI-53): `runs` (166 LoC) o `promotion` (129),
+  según ADR-0018.
