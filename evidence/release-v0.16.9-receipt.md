@@ -2,16 +2,17 @@
 
 | Campo | Valor |
 |---|---|
-| Tag | `v0.16.9` (anotada, local) |
-| Commit etiquetado | ver `git rev-parse v0.16.9^{commit}` (commit `docs(release)` de sincronización) |
-| `origin/main` | **pendiente de push** (decisión del operador; regla WI-01) |
+| Tag | `v0.16.9` (anotada) |
+| Objeto de etiqueta remoto | `ce35d9c393ff186374d6192cd9da3b037bd22f74` |
+| Peel remoto de la etiqueta | `600279a1e1acfcfa94c7538b5e679f973b0e2997` |
+| `origin/main` | `cdbfbb2548ca03240a26585b6daadaa79fb31549` (fast-forward `df72bcc..cdbfbb2`, 27 commits, verificado con `git ls-remote` tras el push) |
 | `__version__` en el tag | `0.16.9` (SemVer puro, verificado con `git show v0.16.9^{}:src/skillgraph/__init__.py` **antes** de etiquetar) |
 | Tag anterior | `v0.16.8` (peel `df72bcc`, en remoto) |
 | Commits incluidos | 14 (`2e85c1e..HEAD-del-tag`, ver `git rev-list --count v0.16.8..v0.16.9`) |
 | Suite completa | **1759 tests collected** (1754 + 5 nuevos de WI-49); PASS verificado por el hook pre-commit en cada fix y en el bump |
 | Release governance gate | 2 passed (`mise exec -- uv run pytest tests/test_release_governance.py`) |
-| Publicación | **local**; push y tag remoto pendientes del operador |
-| Fecha | 2026-10-01 |
+| Publicación | `origin/main` = `cdbfbb2`, etiqueta `v0.16.9` en el remoto con peel verificado (push aprobado por el operador, 2026-10-02) |
+| Fecha | 2026-10-01 (tag) / 2026-10-02 (push) |
 
 ## SemVer derivado del historial (no decidido a mano)
 

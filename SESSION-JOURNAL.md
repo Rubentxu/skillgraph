@@ -7548,6 +7548,9 @@ Acumulado H-02 desde v0.16.9: **2357 → 610 LoC (−74%)**.
 
 - HEAD `a1f2...` (ver git log), árbol limpio, `0.16.9.dev0`.
 - Refactor sin bump: los 4 cortes viajan en la próxima release.
-- Push acumulado pendiente del operador.
+- Push acumulado EJECUTADO el 2026-10-02 con aprobación del operador
+  ("sube"): `df72bcc..cdbfbb2` (27 commits) + tag `v0.16.9` en remoto,
+  peel verificado con `git ls-remote`. Recibo actualizado con hashes
+  remotos.
 - Siguiente: WI-56 = estrangulamiento de runcontroller.py o
   knowledge_repository.py (patrón replicable, requiere ADR).
