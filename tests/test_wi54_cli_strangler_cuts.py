@@ -9,6 +9,7 @@ helpers privados; los compartidos (`_default_claim_importer`,
 
 from __future__ import annotations
 
+import skillgraph.cli.commands.knowledge as knowledge
 import skillgraph.cli.commands.pack as pack
 import skillgraph.cli.commands.promotion as promotion
 from skillgraph.cli import runner
@@ -56,6 +57,31 @@ class TestPackStranglerIdentity:
 
     def test_registry_builder_shared_in_support(self) -> None:
         assert runner._build_registry_for_project is _build_registry_for_project
+
+
+class TestKnowledgeStranglerIdentity:
+    """Corte 5: los 5 handlers cmd_knowledge_* salen a cli.commands.knowledge;
+    _open_known_project (3 usos fuera del cluster) vive en support."""
+
+    def test_stale_identity(self) -> None:
+        assert runner.cmd_knowledge_stale is knowledge.cmd_knowledge_stale
+
+    def test_invalidate_identity(self) -> None:
+        assert runner.cmd_knowledge_invalidate is knowledge.cmd_knowledge_invalidate
+
+    def test_refresh_identity(self) -> None:
+        assert runner.cmd_knowledge_refresh is knowledge.cmd_knowledge_refresh
+
+    def test_compile_identity(self) -> None:
+        assert runner.cmd_knowledge_compile is knowledge.cmd_knowledge_compile
+
+    def test_trace_identity(self) -> None:
+        assert runner.cmd_knowledge_trace is knowledge.cmd_knowledge_trace
+
+    def test_known_project_opener_is_cluster_private(self) -> None:
+        """Los '3 usos fuera' eran comentarios: es exclusiva del cluster."""
+        assert hasattr(knowledge, "_open_known_project")
+        assert not hasattr(runner, "_open_known_project")
 
     def test_runner_has_no_private_copies(self) -> None:
         import inspect
