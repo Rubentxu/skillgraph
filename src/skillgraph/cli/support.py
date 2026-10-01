@@ -254,3 +254,9 @@ def _open_project_storage(
         yield storage, EXIT_OK
     finally:
         storage.close()
+
+
+# Variable de entorno que el UAT usa para simular un crash.
+
+# Codigo de salida de un crash simulado. Distinto de cualquier EXIT_* del
+# CLI para que un "crash" no se confunda con un error de dominio.
