@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +21,7 @@ from skillgraph.platform.paths import (
     catalog_path,
     resolve_data_root,
 )
+from skillgraph.platform.storage import Storage
 from skillgraph.resources.catalog import open_catalog
 from skillgraph.resources.plan_loader import load_plan_file
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
@@ -222,3 +225,32 @@ def _write_plan_to_storage(project_dir: Path, plan: WorkflowPlan) -> None:
     path = _plan_path(project_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_json.dumps(payload, indent=2, sort_keys=True))
+
+
+@contextmanager
+def _open_project_storage(
+    args: argparse.Namespace,
+) -> Iterator[tuple[Storage | None, int]]:
+    """Abre el Storage dentro de un contexto y devuelve exit code de error.
+
+    Helper para `cmd_runs_*`. Centraliza la resolucion del proyecto,
+    valida la base de datos y cierra el Storage al salir del bloque.
+    Dentro del contexto devuelve `(storage, EXIT_OK)` o `(None, exit_code)`.
+    """
+    project, err = resolve_project(args, args.project)
+    if err is not None:
+        yield None, err
+        return
+    db_path = Path(project["db_path"])
+    if not db_path.exists():
+        print(
+            f"ERROR: base de datos ausente: {db_path}",
+            file=sys.stderr,
+        )
+        yield None, EXIT_DB_MISSING
+        return
+    storage = Storage(db_path)
+    try:
+        yield storage, EXIT_OK
+    finally:
+        storage.close()
