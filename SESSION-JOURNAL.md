@@ -7394,3 +7394,19 @@ ADR-0016, con inyección de fallos verificada en
   satisface §12).
 - Ciclo SDDK `p-b7740b96d79ec013/wi-50-run-state-event-atomicity`
   (ver cierre más abajo si aplica).
+
+#### Cierre SDDK obligatorio
+
+- Ciclo `wi-50-run-state-event-atomicity`: **CLOSED** por `supersede`
+  (razón `external-obsolete`, evidence-refs a la ADR-0017), estado
+  verificado con `cycle status`.
+- Nuevo hallazgo de framework registrado en backlog
+  (`bl-bl-01M3WMW8ME000387S9TNRGMC00`): el admission event
+  `require_approval` usa ID determinista SIN cycle_id, así que el
+  segundo `supersede` del mismo proyecto choca con
+  `duplicate_event_id` (fail-soft). Flujo que funciona: (1) intento de
+  supersede crea la request aunque el evento falle soft, (2) `approval
+  grant` sobre la request existente, (3) supersede de nuevo. Además,
+  `--evidence-refs` espera array JSON.
+- Sin cambios de código y sin release: docs-only, `0.16.9.dev0`
+  satisface §12. Push de v0.16.9..HEAD sigue pendiente del operador.
