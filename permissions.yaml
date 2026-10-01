@@ -33,3 +33,18 @@ agents:
       - git.inspect
       - git.tag
       - git.push
+
+  # El orquestador cierra ciclos. Sin esto, `wi-04-housekeeping-traceability`
+  # quedo BLOCKED desde 2026-09-26 por un `approval.capability.requested`
+  # de `surface.cycle_state#cycle_supersede` que expiro a las 17:57 sin
+  # respuesta. El trabajo ya habia salido como v0.14.5; lo que faltaba era
+  # solo registrar el cierre.
+  #
+  # `surface.cycle_state` es de solo lectura sobre el estado del ciclo.
+  # `cycle_supersede` cierra con sucesor o con razon, ambas append-only.
+  # No concede escritura de artefactos ni acceso a git.
+  sddk-orchestrator:
+    phases: [explore, specify, design, tasks, apply, verify, release, archive]
+    capabilities:
+      - surface.cycle_state#cycle_supersede
+      - core.workflow-orchestration@v1
