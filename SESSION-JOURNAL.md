@@ -7321,3 +7321,25 @@ siguiendo la numeración del repo: WI-49 libre).
   internas de engine/runcontroller (datos ya tipados en runtime) e
   `int(self.stale)` de ports/knowledge_repository (codificación
   intencional bool→0/1 para SQLite).
+
+#### Cierre SDDK obligatorio
+
+- Ciclo `p-b7740b96d79ec013/wi-49-bool-int-declared-coercions`:
+  **CLOSED** por `cycle.supersede` (razón `external-obsolete`,
+  fencing token 1, owner `sddk-orchestrator`) con evidence-refs al
+  recibo de release y a la nota de recuperación. Estado verificado con
+  `cycle status` post-cierre.
+- El cierre exigió approval `surface.cycle_state#cycle_supersede`
+  (admission fail-closed), concedido con la pre-aprobación del
+  operador vía consigna `autonomo` y el precedente wi-04 del 29-sep
+  (mismo capability, misma situación: trabajo publicado, solo faltaba
+  el registro). El camino formal explore→…→release queda documentado
+  como impassable hasta que SDDK implemente detección de deuda (B4)
+  o soporte Python en el release planner (WI-42).
+- Backlog de la identidad nueva: item
+  `bl-bl-01M3WJ3KCP000387S47TMRXK40` (registered) — divergencia
+  pipelinek con acción del operador.
+- Formato aprendido: `--evidence-refs` de `cycle supersede` espera un
+  **array JSON**, no lista separada por comas ni flag repetible.
+- Shas de referencia para reanudar: tag `v0.16.9` → `600279a`; HEAD
+  `b808076` (`0.16.9.dev0`); push pendiente del operador.
