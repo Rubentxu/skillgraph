@@ -7497,3 +7497,57 @@ medido)— pasa a `cli/support.py` con alias en runner. **runner.py
 - runner queda a 1525 LoC; para bajar de 800 faltan los clusters
   promotion/pack/knowledge/project/backup/policy + consolidar helpers
   no-cmd (siguientes cortes WI-54+).
+
+## 2026-10-02 (II) — WI-54/WI-55: cortes 3-6 del estrangulamiento CLI — H-02 RESUELTO
+
+### Resumen
+
+Un ciclo SDDK (`wi-54-cli-strangler-cuts-3-5`, ampliado con wi-55),
+4 cortes atómicos bajo ADR-0018. **`runner.py` 1525 → 610 LoC y SALE
+de la tabla de god files del audit** (5 archivos >800, antes 6).
+Acumulado H-02 desde v0.16.9: **2357 → 610 LoC (−74%)**.
+
+### Cortes
+
+- Corte 3 (`commands/promotion.py`): 3 cmds + 7 helpers + constantes
+  de failpoint. Los 5 helpers que el análisis inicial marcó
+  "compartidos" resultaron exclusivos (los usos fuera eran
+  docstrings/comentarios): reubicados al componente por regla
+  ADR-0018; el test fija la ubicación correcta.
+- Corte 4 (`commands/pack.py`): 2 cmds; `_build_registry_for_project`
+  (compartido con cmd_init) → support.
+- Corte 5 (`commands/knowledge.py`): 5 cmds;
+  `_open_known_project` exclusiva (los "3 usos fuera" eran
+  COMENTARIOS, líneas 266/773/775 del runner viejo).
+- Corte 6 (`commands/run.py`, ciclo wi-55): `cmd_run` + 5 helpers de
+  orquestación; runner cruza el umbral (<800 LoC, fijado por test).
+
+### Evidencia
+
+- RED honesto en cada corte. Afectados 131 (promoción 42, pack 25,
+  knowledge 31, identity 59 acumuladas). Suite completa PASS por hook
+  en cada commit. ruff/format/gate 2/2. Audit regenerado: god files
+  6 → 5 (storage 1807, runcontroller 1445, knowledge_repository 986,
+  ports 927, graph_expansion 862).
+
+### Descubrimientos
+
+- **El análisis de uso cruzado debe excluir comentarios y docstrings**:
+  dos falsos "compartidos" (promotion ×5, knowledge ×1) detectados por
+  el propio ruff al limpiar alias sin uso. La secuencia honesta:
+  extraer → ruff elimina alias sin uso → el test de placement se
+  corrige a la realidad medida, no al análisis previo.
+- Los decoradores (`@contextmanager`) NO están en
+  `FunctionDef.lineno`: los cortes AST deben incluir
+  `decorator_list`. Dos decoradores perdidos y restaurados (el
+  segundo con su test UAT expuesto en el acto).
+- El patrón ADR-0016→0018 es replicable directamente para los
+  siguientes god modules (runcontroller, knowledge_repository).
+
+### Estado de salida
+
+- HEAD `a1f2...` (ver git log), árbol limpio, `0.16.9.dev0`.
+- Refactor sin bump: los 4 cortes viajan en la próxima release.
+- Push acumulado pendiente del operador.
+- Siguiente: WI-56 = estrangulamiento de runcontroller.py o
+  knowledge_repository.py (patrón replicable, requiere ADR).
