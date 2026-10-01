@@ -30,7 +30,6 @@ if TYPE_CHECKING:
 from skillgraph import (
     BrickRegistry,
     ResourceIdentity,
-    load_defaults,
     parse_file,
 )
 from skillgraph.cli.commands.expansion import (
@@ -41,6 +40,10 @@ from skillgraph.cli.commands.expansion import (
     cmd_expansion_rejections,
     cmd_expansion_show,
     cmd_expansion_validate,
+)
+from skillgraph.cli.commands.pack import (
+    cmd_pack_import,
+    cmd_pack_load,
 )
 from skillgraph.cli.commands.promotion import (
     cmd_promotion_list,
@@ -69,6 +72,7 @@ from skillgraph.cli.support import (
     EXIT_USAGE,
     EXIT_VALIDATION,
     ProjectResolver,
+    _build_registry_for_project,
     _open_project_storage,
     resolve_project,
 )
@@ -78,7 +82,6 @@ from skillgraph.core.errors import (
     UnknownKindError,
     ValidationError,
 )
-from skillgraph.domain.pack_loader import declare_types_from_pack
 from skillgraph.governance.backups import (
     create_backup,
     default_backup_dir,
@@ -467,113 +470,6 @@ def _route_expansion(args: argparse.Namespace) -> int:
     return _dispatch_nested("expansion", args)
 
 
-def _build_registry_for_project(
-    storage: Storage, *, tenant_id: str, project_id: str
-) -> BrickRegistry:
-    """Registry del nucleo + tipos declarados por los Domain Packs
-    persistidos del proyecto (H8, ADR-0013-anexo).
-
-    Los packs adoptados viven en la tabla `resources` con
-    kind='DomainPack'; aqui se re-declaran sus tipos sobre
-    `load_defaults()`. Sin ejecutar codigo del pack: la declaracion
-    es solo el schema declarativo (declare_types_from_pack).
-    """
-    import json as _json
-
-    from skillgraph.resources.bricks import Brick
-
-    reg = load_defaults()
-    for row in storage.list_resources(
-        tenant_id=tenant_id, project_id=project_id, kind="DomainPack"
-    ):
-        try:
-            spec = _json.loads(row.spec_json or "{}")
-        except (ValueError, TypeError):
-            spec = {}
-        try:
-            declare_types_from_pack(
-                reg,
-                Brick(
-                    identity=ResourceIdentity(
-                        tenant_id=tenant_id,
-                        project_id=project_id,
-                        namespace=row.namespace,
-                        kind="DomainPack",
-                        name=row.name,
-                    ),
-                    api_version=row.api_version,
-                    kind="DomainPack",
-                    spec=spec or {},
-                ),
-            )
-        except SkillGraphError:
-            # Un pack corrupto no debe impedir arrancar el comando:
-            # los tipos core siguen disponibles. Se omite el pack.
-            continue
-    return reg
-
-
-def cmd_pack_load(args: argparse.Namespace) -> int:
-    """Carga un Domain Pack en un proyecto (H8, UAT-12 ruta publica).
-
-    Persiste el pack como resource kind='DomainPack'. Los tipos que
-    declara quedan disponibles para futuros comandos del proyecto via
-    `_build_registry_for_project`.
-    """
-    project, err = resolve_project(args, args.project)
-    if err is not None:
-        return err
-
-    db_path = Path(project["db_path"])
-    registry: BrickRegistry = load_defaults()
-    identity = ResourceIdentity(
-        tenant_id=project["tenant_id"],
-        project_id=args.project,
-        namespace="(pending)",
-        kind="(pending)",
-        name="(pending)",
-    )
-    try:
-        pack = parse_file(args.path, identity=identity)
-    except ParseError as exc:
-        print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-        return EXIT_PARSE
-
-    # Solo se acepta un DomainPack; validar que sus tipos son declarables
-    # ANTES de persistir (fail-fast, sin dejar pack roto persistido).
-    if pack.kind != "DomainPack":
-        print(
-            f"ERROR ({ValidationError.code}): se esperaba kind='DomainPack', recibio {pack.kind!r}",
-            file=sys.stderr,
-        )
-        return EXIT_VALIDATION
-    try:
-        declared = declare_types_from_pack(registry, pack)
-    except ValidationError as exc:
-        print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-        return EXIT_VALIDATION
-
-    storage = Storage(db_path)
-    try:
-        # Re-declaracion contra el registry del proyecto ya persistido:
-        # evita shadowing con packs cargados previamente.
-        project_reg = _build_registry_for_project(
-            storage, tenant_id=project["tenant_id"], project_id=args.project
-        )
-        try:
-            declare_types_from_pack(project_reg, pack)
-        except ValidationError as exc:
-            print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-            return EXIT_VALIDATION
-        uid = storage.upsert_resource(pack)
-    finally:
-        storage.close()
-    print(f"Domain Pack cargado: {pack.identity.namespace}/{pack.identity.name}")
-    print(f"Tipos declarados: {', '.join(declared)}")
-    print(f"UID: {uid}")
-    return EXIT_OK
-
-
 def cmd_brick_register(args: argparse.Namespace) -> int:
     """Registra un brick en un proyecto, validándolo primero."""
     project, err = resolve_project(args, args.project)
@@ -619,67 +515,6 @@ def cmd_brick_register(args: argparse.Namespace) -> int:
 # Nombres de failpoint reconocidos en `sg promotion reconcile` (H8/UAT-13).
 # Valor cerrado: un nombre desconocido no dispara nada, para que un typo en
 # la variable de entorno no tumbe un run real por accidente.
-
-
-def cmd_pack_import(args: argparse.Namespace) -> int:
-    """H5 skill_import: asimila una skill externa sin ejecutar su codigo.
-
-    Pipeline: IMPORT -> ANALYZE -> STRUCTURE -> VALIDATE -> REGISTER.
-    Conserva el material original (Source con content_hash + locator)
-    y emite un informe de estructuracion en JSON. Las partes ambiguas
-    permanecen senaladas; NO se presentan como decisiones verificadas.
-    """
-    from skillgraph.domain.skill_importer import analyze_skill, register_imported_skill
-    from skillgraph.platform.storage import Storage
-
-    project, err = resolve_project(args, args.project)
-    if err is not None:
-        return err
-
-    skill_path = args.path
-    if not skill_path.exists():
-        print(f"ERROR: skill path no existe: {skill_path}", file=sys.stderr)
-        return EXIT_VALIDATION
-
-    # IMPORT + ANALYZE + STRUCTURE + VALIDATE
-    report = analyze_skill(skill_path)
-
-    # REGISTER: persistir el Source en el storage del proyecto.
-    db_path = Path(project["db_path"])
-    if not db_path.exists():
-        print(f"ERROR: base de datos ausente: {db_path}", file=sys.stderr)
-        return EXIT_DB_MISSING
-    storage = Storage(db_path)
-    try:
-        register_imported_skill(
-            storage=storage,
-            tenant_id=project["tenant_id"],
-            project_id=project["name"],
-            report=report,
-        )
-    finally:
-        storage.close()
-
-    # Reporte: stdout o --report path.
-    payload = json.dumps(report.to_dict(), indent=2, ensure_ascii=False)
-    if args.report is not None:
-        args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(payload, encoding="utf-8")
-        print(f"Fuente conservada: source_id={report.source_id}")
-        print(f"Content hash: {report.content_hash}")
-        print(
-            f"Archivos: {report.files_total} "
-            f"(estructurados={len(report.files_structured)}, "
-            f"ambiguos={len(report.entries_ambiguous)})"
-        )
-        print(f"Scripts detectados (NO ejecutados): {len(report.scripts_detected)}")
-        print(
-            f"Capacidades extraidas (senales, no verificadas): {len(report.capabilities_extracted)}"
-        )
-        print(f"Informe escrito en: {args.report}")
-    else:
-        print(payload)
-    return EXIT_OK
 
 
 def cmd_backup_create(args: argparse.Namespace) -> int:

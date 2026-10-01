@@ -9,8 +9,10 @@ helpers privados; los compartidos (`_default_claim_importer`,
 
 from __future__ import annotations
 
+import skillgraph.cli.commands.pack as pack
 import skillgraph.cli.commands.promotion as promotion
 from skillgraph.cli import runner
+from skillgraph.cli.support import _build_registry_for_project
 
 
 class TestPromotionStranglerIdentity:
@@ -40,6 +42,20 @@ class TestSharedHelpersPlacement:
         assert hasattr(promotion, "_select_promotion_failpoint")
         assert hasattr(promotion, "_source_to_payload")
         assert hasattr(promotion, "_entity_to_payload")
+
+
+class TestPackStranglerIdentity:
+    """Corte 4: cmd_pack_* sale a cli.commands.pack; el builder compartido
+    (1 uso fuera del cluster: cmd_init) vive en support."""
+
+    def test_load_identity(self) -> None:
+        assert runner.cmd_pack_load is pack.cmd_pack_load
+
+    def test_import_identity(self) -> None:
+        assert runner.cmd_pack_import is pack.cmd_pack_import
+
+    def test_registry_builder_shared_in_support(self) -> None:
+        assert runner._build_registry_for_project is _build_registry_for_project
 
     def test_runner_has_no_private_copies(self) -> None:
         import inspect

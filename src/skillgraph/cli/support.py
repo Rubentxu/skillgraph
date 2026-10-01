@@ -16,12 +16,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from skillgraph import BrickRegistry, ResourceIdentity, load_defaults
+from skillgraph.core.errors import SkillGraphError
+from skillgraph.domain.pack_loader import declare_types_from_pack
 from skillgraph.platform.paths import (
     DEFAULT_TENANT,
     catalog_path,
     resolve_data_root,
 )
 from skillgraph.platform.storage import Storage
+from skillgraph.resources.bricks import Brick
 from skillgraph.resources.catalog import open_catalog
 from skillgraph.resources.plan_loader import load_plan_file
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
@@ -260,3 +264,47 @@ def _open_project_storage(
 
 # Codigo de salida de un crash simulado. Distinto de cualquier EXIT_* del
 # CLI para que un "crash" no se confunda con un error de dominio.
+
+
+def _build_registry_for_project(
+    storage: Storage, *, tenant_id: str, project_id: str
+) -> BrickRegistry:
+    """Registry del nucleo + tipos declarados por los Domain Packs
+    persistidos del proyecto (H8, ADR-0013-anexo).
+
+    Los packs adoptados viven en la tabla `resources` con
+    kind='DomainPack'; aqui se re-declaran sus tipos sobre
+    `load_defaults()`. Sin ejecutar codigo del pack: la declaracion
+    es solo el schema declarativo (declare_types_from_pack).
+    """
+    import json as _json
+
+    reg = load_defaults()
+    for row in storage.list_resources(
+        tenant_id=tenant_id, project_id=project_id, kind="DomainPack"
+    ):
+        try:
+            spec = _json.loads(row.spec_json or "{}")
+        except (ValueError, TypeError):
+            spec = {}
+        try:
+            declare_types_from_pack(
+                reg,
+                Brick(
+                    identity=ResourceIdentity(
+                        tenant_id=tenant_id,
+                        project_id=project_id,
+                        namespace=row.namespace,
+                        kind="DomainPack",
+                        name=row.name,
+                    ),
+                    api_version=row.api_version,
+                    kind="DomainPack",
+                    spec=spec or {},
+                ),
+            )
+        except SkillGraphError:
+            # Un pack corrupto no debe impedir arrancar el comando:
+            # los tipos core siguen disponibles. Se omite el pack.
+            continue
+    return reg
