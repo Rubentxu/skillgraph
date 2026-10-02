@@ -73,6 +73,7 @@ def _informe(**cambios: object) -> cpb.InformeBuild:
         "py_typed_en_wheel": True,
         "scripts_declarados": (("skillgraph", "skillgraph.cli:main"),),
         "scripts_publicados": (("skillgraph", "skillgraph.cli:main"),),
+        "targets_no_resolubles": frozenset(),
         "rutas_sdist": frozenset(
             {
                 "src/skillgraph/__init__.py",
@@ -148,6 +149,40 @@ class TestC2EntryPoint:
         publicados = (("skillgraph", "skillgraph.cli:main"), ("sg", "skillgraph.cli:main"))
         informe = _informe(scripts_publicados=publicados)
         assert cpb.CODIGO_SCRIPT_SOBRANTE in cpb.codigos_de(cpb.evaluar_scripts(informe))
+
+    def test_target_que_no_resuelve_se_detecta(self) -> None:
+        """El agujero que la comparacion declarado/publicado no cubre.
+
+        Lo publicado se DERIVA de lo declarado: si `pyproject.toml` dice
+        `skillgraph.cli:principal`, el artefacto publica
+        `skillgraph.cli:principal` y los dos lados coinciden perfectamente
+        mientras el comando no existe. Medido como mutacion M3 en WI-97:
+        el contrato pasaba sin cambios y el CLI era inalcanzable.
+        """
+        informe = _informe(targets_no_resolubles=frozenset({"skillgraph.cli:principal"}))
+        assert cpb.CODIGO_TARGET_NO_RESOLUBLE in cpb.codigos_de(cpb.evaluar_scripts(informe))
+
+    def test_un_target_no_resoluble_no_oculta_uno_correcto(self) -> None:
+        """El campo es un conjunto: un solo fallo no silencia al resto."""
+        informe = _informe(
+            scripts_declarados=(
+                ("skillgraph", "skillgraph.cli:main"),
+                ("sg", "skillgraph.cli:principal"),
+            ),
+            scripts_publicados=(
+                ("skillgraph", "skillgraph.cli:main"),
+                ("sg", "skillgraph.cli:principal"),
+            ),
+            targets_no_resolubles=frozenset({"skillgraph.cli:principal"}),
+        )
+        problemas = cpb.evaluar_scripts(informe)
+        assert cpb.codigos_de(problemas) == frozenset({cpb.CODIGO_TARGET_NO_RESOLUBLE})
+
+    def test_todos_los_targets_declarados_resuelven_hoy(self) -> None:
+        """La invariante contra el arbol real: los targets del repo existen."""
+        from skillgraph import cli
+
+        assert callable(cli.main)
 
     def test_nombre_duplicado_no_se_cola(self) -> None:
         """`entry_points.txt` duplicado no debe pasar por publicado."""
@@ -307,6 +342,22 @@ class TestC4Sdist:
             )
         )
         assert cpb.CODIGO_SDIST_SIN_DECLARAR not in cpb.codigos_de(cpb.evaluar_sdist(informe))
+
+    def test_ruta_esencial_ausente_se_detecta(self) -> None:
+        """El punto ciego que la mutacion M5 abrio.
+
+        Quitar `tests` del `only-include` reduce el sdist y nada lo nota: una
+        lista mas corta no contradice a nada, solo deja de entregar. Sin esta
+        invariante, el sdist podia dejar de poder probarse en silencio.
+        """
+        informe = _informe(
+            rutas_sdist=RUTAS_SANAS - {"tests/test_cli_uat.py"},
+            rutas_declaradas=frozenset(
+                {"src", "tests", "bench", "docs/blueprint", "README.md", "pyproject.toml"}
+            ),
+        )
+        codigos = cpb.codigos_de(cpb.evaluar_sdist(informe))
+        assert cpb.CODIGO_SDIST_ESENCIAL_AUSENTE in codigos
 
 
 # --- Orquestacion del checker --------------------------------------------

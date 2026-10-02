@@ -54,12 +54,14 @@ from typing import Final
 CODIGO_VERSION_DRIFT: Final = "sg_build_version_drift"
 CODIGO_SCRIPT_FALTANTE: Final = "sg_build_script_faltante"
 CODIGO_SCRIPT_SOBRANTE: Final = "sg_build_script_sobrante"
+CODIGO_TARGET_NO_RESOLUBLE: Final = "sg_build_target_no_resoluble"
 CODIGO_MODULO_FALTANTE: Final = "sg_build_modulo_faltante"
 CODIGO_MODULO_SOBRANTE: Final = "sg_build_modulo_sobrante"
 CODIGO_PY_TYPED_AUSENTE: Final = "sg_build_py_typed_ausente"
 CODIGO_SDIST_NO_VERSIONADO: Final = "sg_build_sdist_no_versionado"
 CODIGO_SDIST_FALTA: Final = "sg_build_sdist_falta"
 CODIGO_SDIST_SIN_DECLARAR: Final = "sg_build_sdist_sin_declarar"
+CODIGO_SDIST_ESENCIAL_AUSENTE: Final = "sg_build_sdist_esencial_ausente"
 
 # Ficheros que el backend anade por definicion y que, por tanto, no son
 # deriva del `include` declarado: la licencia que declara `project.license`,
@@ -69,6 +71,21 @@ CODIGO_SDIST_SIN_DECLARAR: Final = "sg_build_sdist_sin_declarar"
 # merced. Se nombran, que es lo unico que hace falta para que el contrato sea
 # exacto. Medido en WI-97 sobre hatchling 1.32.4.
 EXTRAS_BACKEND: Final[frozenset[str]] = frozenset({".gitignore", "LICENSE", "PKG-INFO"})
+
+# Rutas que tienen que estar EN el sdist para que este sirva para lo que
+# existe. Una lista corta y justificada, no una lista de inventario: el sdist
+# de este repo existe para que otra persona reconstruya y PROBAR el paquete
+# desde el fuente.
+#   * src/skillgraph — sin el no hay paquete.
+#   * tests           — sin el el artefacto se instala pero no se verifica.
+#   * docs/blueprint  — la suite versionada lee `docs/blueprint/plan/UAT.md`
+#     (tests/test_cli_uat.py); sin el, esos UAT pierden cobertura en silencio.
+# Medido en WI-97: quitar `tests` del `only-include` reducia el sdist y
+# ningun check de git lo notaba, porque una lista reducida no contradice a
+# nada: solo deja de entregar.
+RUTAS_ESENCIALES_SDIST: Final[frozenset[str]] = frozenset(
+    {"src/skillgraph", "tests", "docs/blueprint"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +109,7 @@ class InformeBuild:
     py_typed_en_wheel: bool
     scripts_declarados: tuple[tuple[str, str], ...]
     scripts_publicados: tuple[tuple[str, str], ...]
+    targets_no_resolubles: frozenset[str]
     rutas_sdist: frozenset[str]
     rutas_versionadas: frozenset[str]
     rutas_declaradas: frozenset[str]
@@ -164,6 +182,15 @@ def evaluar_scripts(informe: InformeBuild) -> tuple[Problema, ...]:
                     f"{declarados[nombre]!r} y el artefacto trae {publicados[nombre]!r}",
                 )
             )
+    for target in sorted(informe.targets_no_resolubles):
+        problemas.append(
+            Problema(
+                CODIGO_TARGET_NO_RESOLUBLE,
+                f"el target declarado no resuelve a nada invocable: {target!r}. "
+                f"El artefacto lo publica igual, y comparar lo declarado con lo "
+                f"publicado no lo nota: el segundo se deriva del primero",
+            )
+        )
     return tuple(problemas)
 
 
@@ -243,6 +270,16 @@ def evaluar_sdist(informe: InformeBuild) -> tuple[Problema, ...]:
                     CODIGO_SDIST_FALTA,
                     f"ruta declarada en `include` y ausente del sdist: {declarada!r}. "
                     f"Declararla es una promesa que el artefacto no cumple",
+                )
+            )
+    for esencial in sorted(RUTAS_ESENCIALES_SDIST):
+        if not _cubre(esencial, reales):
+            problemas.append(
+                Problema(
+                    CODIGO_SDIST_ESENCIAL_AUSENTE,
+                    f"ruta esencial ausente del sdist: {esencial!r}. El sdist "
+                    f"existe para que otro pueda reconstruir y probar el paquete "
+                    f"desde el fuente",
                 )
             )
     for no_declarada in sorted(_raices_no_declaradas(reales, informe.rutas_declaradas)):
@@ -480,6 +517,9 @@ def construir_y_medir(raiz: Path, destino: Path) -> InformeBuild:
             py_typed_en_wheel="skillgraph/py.typed" in nombres,
             scripts_declarados=_scripts_declarados(raiz),
             scripts_publicados=_scripts_publicados_de_texto(texto_entry_points(zf_path=wheel)),
+            targets_no_resolubles=frozenset(
+                t for _, t in _scripts_declarados(raiz) if not _target_resuelve(t)
+            ),
             rutas_sdist=_rutas_de_sdist(sdist),
             rutas_versionadas=_rutas_versionadas(raiz),
             rutas_declaradas=_include_declarado(raiz),
@@ -492,6 +532,25 @@ def texto_entry_points(*, zf_path: Path) -> str:
     with zipfile.ZipFile(zf_path) as zf:
         candidatas = [n for n in zf.namelist() if n.endswith(".dist-info/entry_points.txt")]
         return zf.read(candidatas[0]).decode("utf-8") if candidatas else ""
+
+
+def _target_resuelve(target: str) -> bool:
+    """¿El target `modulo:atributo` importa y es invocable?
+
+    Comparar lo declarado con lo publicado no basta: lo publicado SE DERIVA
+    de lo declarado, asi que un target equivocado aparece identico en los dos
+    lados. Solo importar el modulo distingue «declaro algo que existe» de
+    «declaro algo que no existe y el backend lo copia sin mirarlo».
+    """
+    modulo, _, atributo = target.partition(":")
+    if not modulo or not atributo:
+        return False
+    try:
+        import importlib
+
+        return callable(getattr(importlib.import_module(modulo), atributo))
+    except (ImportError, AttributeError, ValueError, TypeError):
+        return False
 
 
 def _informe_de_error(mensaje: str) -> InformeBuild:
@@ -511,6 +570,7 @@ def _informe_de_error(mensaje: str) -> InformeBuild:
         py_typed_en_wheel=False,
         scripts_declarados=(),
         scripts_publicados=(),
+        targets_no_resolubles=frozenset(),
         rutas_sdist=frozenset(),
         rutas_versionadas=frozenset(),
         rutas_declaradas=frozenset(),
