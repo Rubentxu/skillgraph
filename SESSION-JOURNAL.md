@@ -8571,3 +8571,55 @@ Tres mutaciones, cada una cazada por su test:
 - `kind="visits"` en vez de `"events"` -> 1 failed, en el test de `policy=none`
 
 Sin cambios en `src/`. Ciclo SDDK `wi-77-budget-max-events`.
+
+---
+
+## 2026-10-02 — WI-78: la serializacion legacy de los DTO esta medio cosida
+
+Ultimo pendiente mio del contrato AGENTS §6.3 (core >=90 %). Medido con
+el instrumento de WI-75:
+
+- `platform/ports/dto.py` 89 % (lineas 65, 289, 294-297, 301, 338,
+  345-346, 350, 397, 402, 439, 444)
+- `runtime/http_adapter.py` 88 % (adaptador externo, ramas de red)
+
+**Primera suposicion, FALSA.** Crei que las lineas sin cubrir eran las
+claves legacy de `__getitem__` (`payload_json`, `object_literal_json`,
+`stale`). Mirando los numeros de linea exactos son otras: `raise
+KeyError` en el `__getitem__` de 5 DTO, el metodo `get(key, default)` de
+dos, y **`to_dict()` entero en 4 de los 9 DTO**.
+
+Eso si importa. `to_dict()` es la API dict-legacy y la cobertura es
+asimétrica: hay roundtrip para StoredEvent, StoredRun,
+StoredNodeExecution, StoredResource y StoredRelation, y **ninguno** para
+StoredClaim, StoredEvidence, StoredPromotion y StoredBudget. Ningun
+codigo de produccion los llama (superficie de compatibilidad, como los
+shims de WI-76), pero aqui la mitad SI esta verificada: no es un falso
+exito, es una red a medio coser. Un nombre de columna mal puesto en
+cualquiera de los cuatro pasaria inadvertido.
+
+**Ademas aparecio una contradiccion.** El docstring de
+`StoredBudget.to_dict` dice "preservando TODAS las columnas" y devuelve
+3 de 6: omite `tenant_id`, `project_id` y `run_id`. No se corrige: no
+hay consumidor que diga cual de las dos cosas es correcta (un UPDATE
+puede acotarse con la identidad y no necesitarla en el payload, y eso
+seria legitimo). El test fija el COMPORTAMIENTO REAL y afirma
+explicitamente que las tres claves de identidad NO estan, para que si
+alguien "arregla" el metodo el test lo delate en vez de que gane el
+docstring en silencio. La contradiccion se reporta para decision de
+producto.
+
+`tests/test_wi78_dto_serialization.py`, 13 tests, sin tocar src/:
+4 roundtrip con la misma forma que los existentes (nombre historico de
+columna, `stale` como int, round-trip por `json.loads`), el caso raro de
+StoredBudget, 4 de compat dict (`get` con default, `KeyError`) y 4 de
+serializabilidad por `json.dumps`.
+
+Tres mutaciones, cada una cazada por su test:
+- `object_literal_json` -> `object_literal` -> 1 failed
+- anadir las 3 claves de identidad a StoredBudget -> 1 failed
+- `get()` devolviendo None en vez del default -> 2 failed
+
+Ciclo SDDK `wi-78-dto-serialization`. Sin cambios en `src/`: solo red,
+asi que **sin ADR**. Commit tipo `test(platform)`.
+Evidencia: `evidence/sddk-wi78-verify-2026-10-02.md`.
