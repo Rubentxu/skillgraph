@@ -7755,6 +7755,46 @@ deriva `_conn`). Costura sin friccion.
   operador). Siguiente: fases 2b/2c opcionales de ADR-0020, fase 2 de
   ADR-0019 (snapshot/recovery, requiere diseno), o push.
 
+## 2026-10-02 (IX) — Cierre del arco god-files: hallazgo facade-vs-logica
+
+### Resumen
+
+Novena pasada (cierre). Refutacion definitiva de los dos siguientes
+cortes mecanicos candidatos:
+
+1. **ADR-0019 fase 2 (snapshot/recovery) NO PROCEDE**: `_load_run`,
+   `_recover_interrupted` y `_snapshot` son YA delegaciones finas de
+   una linea al puerto `self._runs` (recon AST). Extraerlas a un
+   "motor" seria mover delegaciones de sitio (barajar). La reduccion
+   real de runcontroller queda en la FASE 3 (reconciliation:
+   `_execute_frontier`, ramas de terminacion) que si tiene logica
+   sustancial y requiere diseno con decision del operador.
+2. **storage.py (1807 LoC) es fachada por diseno (ADR-0016)**:
+   medido — de 80 metodos de la clase, **65 son delegados puros
+   (81%)** y los 15 con cuerpo son exactamente la infraestructura que
+   ADR-0016 conservo deliberadamente (`__init__`, `_migrate`,
+   `_atomic`, `_atomic_state_and_event`, `_insert_event_in_tx`,
+   5 accessors, `uow`, `close`). Cero logica de negocio propia.
+   Partirla romperia el contrato cero-edicion-en-callers sin valor.
+
+### Clasificacion honesta de los god files restantes
+
+| Fichero | LoC | Naturaleza real | Accion pendiente |
+|---|---:|---|---|
+| storage.py | 1807 | fachada de delegacion (ADR-0016), 81% delegados | ninguna mecanica; romperla = churn |
+| runcontroller.py | 1289 | fase 2 refutada (thin delegates); fase 3 real = reconciliation engine | diseno con operador |
+| ports/__init__.py | 927 | hub de Protocols | partir arriesga ciclos de import |
+
+### Estado de salida del arco autonomo
+
+- El frente god-files queda AGOTADO de cortes mecanicos seguros: lo
+  que resta exige decisiones de diseno (fase 3 de ADR-0019, split de
+  ports) o aceptar los residuos documentados.
+- Acumulado SIN push: 18 commits (v0.16.9 + ADR-0017..0021 + H-02 +
+  investigacion WI-57 + WI-58/59/60/61/62).
+- Pendiente del operador: push; decision sobre fase 3 de ADR-0019;
+  pipelinek version canonica; bugs upstream SDDK (backlog).
+
 ## 2026-10-02 (VIII) — WI-62: ADR-0021, subsistema policy fuera de graph_expansion
 
 ### Resumen
