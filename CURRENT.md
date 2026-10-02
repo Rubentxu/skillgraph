@@ -1,5 +1,45 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-02 cerrado — WI-87 y WI-88, release `v0.16.14`.**
+> Versión activa `0.16.14.dev0`; tag `v0.16.14` en `3cfce09`. 2451 passed.
+> Dos decisiones del operador cerradas, ambas con ADR y ambas medidas antes
+> de tocar nada.
+>
+> **WI-88 — los errores de uso devuelven `EXIT_USAGE` y el 2 queda libre**
+> (`1a0c38b`, ADR-0016): `argparse` abortaba con **2**, y 2 ya era
+> `EXIT_BAD_NAME`, que `runner.py:131` devuelve vivo. Tres fallos sin
+> relación —nombre de proyecto inválido, comando inexistente, subcomando
+> sin argumentos— devolvían el mismo número, y `EXIT_USAGE` (1), que el
+> propio contrato declaraba, **no se producía nunca**. La taxonomía de
+> errores era inservible para scripting. `parser.py` usa ahora
+> `_UsageParser`; la tabla de códigos se mueve a `cli/exit_codes.py`, un
+> módulo hoja, porque `support.py` arrastra `Storage` y `pack_loader` y el
+> parser es autocontenido por diseño. 8 tests cambian de 2 a 1 a propósito,
+> 2 se quedan — uno de ellos pasa a ser el guardián del 2.
+>
+> **WI-87 — el vocabulario de estados se deriva de su ADT** (`d47b7af`,
+> ADR-0015): `core/runtime_types.py` **ya tenía** `TERMINAL_RUN_STATES`, y
+> `storage.py` reimplementaba su complemento a mano, sin relación
+> verificada. Añadir un estado a `RunState` sin tocar el segundo fichero lo
+> hacía terminal, y UAT-06 (reanudar tras crash) creaba un **segundo run**
+> para el mismo trabajo, en silencio. El `CHECK` de SQLite se genera ahora
+> desde `PROMOTION_STATUSES`, de modo que la base de datos y el validador no
+> pueden divergir.
+>
+> **Dos formas de cerrar un defecto por error, ambas Cometidas en este
+> bloque.** La primera medición de (f) dio exit 1 en los tres casos y
+> habría permitido declarar la premisa caducada: se había medido
+> `/usr/bin/sg` (la herramienta Unix de grupos) en vez del console script
+> `skillgraph`. Y la primera lista de tests afectados decía «medidos uno a
+> uno, no contados» y contaba 6 sobre un `grep | head -20` leído como
+> lista completa: eran 10.
+>
+> **Sigue abierto**: `audits/architecture-debt-*.md` sigue ensuciando
+> `git status` en cada corrida de la suite (medido con md5: 9 tests verdes
+> cambian el fichero); `list_file_signatures_for_source` no está muerto —
+> 4 consumidores reales — pero su `cc 10` sigue sin medirse; y los commits
+> siguen **sin push**, que no está autorizado.
+
 > **WI-80 cerrado — un rechazo ilegible ya no se presenta como `PROPOSED`
 > sin avisar** (2026-10-02, commit `eb19942`): cierra el punto (h) de
 > `next_workitem`, que **dos bloques dieron por cerrado sin ejecutar**.

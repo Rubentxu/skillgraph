@@ -541,7 +541,7 @@ tests:
   total: 2451   # re-medido 2026-10-02 (bloque WI-88): 2451 passed, suite completa. Desglose medido con un worktree en d47b7af (2430) y `pytest --collect-only` en los dos arboles: 26 tests nuevos, 5 "borrados" que son en realidad los 5 RENOMBRADOS (3 en test_cli_branches.py, 1 en TestCliExitUsage, 1 en test_wi79), luego neto +21. De los 26: 18 en test_wi88_usage_exit_code.py, 4 reapariciones por el renombre, 1 renombre de wi79, y +3 en test_wi47_broad_except_guard.py porque ese guard enumera modulos con rglob y genera un caso por modulo: aparecen por el modulo nuevo exit_codes.py y por el segundo ambito que introduce la clase _UsageParser en parser.py. O sea: la cobertura arquitectural se aplico sola al codigo nuevo.
   passed: 2451
   duration_s: 104.26   # re-medido 2026-10-02: 2451 passed in 104.26s.
-  package_version: "0.16.14"   # release v0.16.14. El tag se crea sobre el commit que lleva la version pura, que es lo que exige tests/test_release_governance.py::test_version_matches_git_tag (rama 1: HEAD en etiqueta y __version__ sin sufijo).
+  package_version: "0.16.14.dev0"   # trabajo post-release v0.16.14 (AGENTS 12). El tag v0.16.14 esta en 3cfce09; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1098,12 +1098,16 @@ release:
   tag: v0.16.14
   fecha: 2026-10-02
   semver_bump: PATCH
-  rationale: "Bloque WI-86 + WI-80 (2 commits de trabajo, cf6539b..eb19942). SemVer derivado del historial: 0 feat, 1 fix (eb19942, rechazo ilegible presentado como PROPOSED sin avisar), 1 refactor (cf6539b, 5 consumidores de mappers dejan de pasar por el facade storage), 1 docs, 1 chore => PATCH. Sin capacidad observable nueva; si cambia la salida de `expansion list`, y para mejor. 2416 passed (2394 en v0.16.12), ruff y format limpios, CI canonica SUCCESS. En el mismo bloque se corrigio un registro FALSO: el bloque anterior anoto 'WI-65-fase-1' como siguiente trabajo sin verificar su premisa, y WI-65 ya lo habia entregado ADR-0022 (storage.py 613 LoC / 15 metodos, 5 mixins vivos). Con esa correccion el proyecto queda con 27 ciclos SDDK CLOSED y 0 abiertos. Decision de criterio que queda RETIRADA: 'no tocar el contrato externo' confundia cambiar un contrato con corregir una afirmacion falsa. El tag se crea sobre el commit que lleva el SemVer puro, que es lo que exige tests/test_release_governance.py::test_version_matches_git_tag."
+  rationale: "Bloque WI-87 + WI-88 (3 commits de trabajo, d47b7af..1a0c38b, mas 0a3fd1a de lint). SemVer derivado del historial: 0 feat, 1 fix (1a0c38b), 1 refactor (d47b7af), 1 docs, 1 style, 1 chore => PATCH. Sin capacidad observable nueva, pero el contrato externo de la CLI cambia en algo que un script necesita: antes rc==2 no distinguia un nombre de proyecto invalido de un comando mal escrito, y EXIT_USAGE (1) no se producia nunca; ahora 1 significa uso y 2 significa una sola cosa. 2451 passed (2430 en v0.16.13), ruff y format limpios. WI-87 no cambia comportamiento observable hoy (el CHECK y la constante ya coincidian): lo que cambia es que ya no PUEDEN dejar de coincidir, porque salen de la misma expresion. Con un solo fix en el historial, el bump lo triggera ese. CIERRE DE DOS DECISIONES DEL OPERADOR: (d) propiedad de dominio del vocabulario, resuelta con ADR-0015; (f) exit code de argparse, resuelta con ADR-0016. La medicion de (f) casi la cerro por el motivo equivocado: la primera ejecucion dio exit 1 en los tres casos y habria permitido declararla caducada, pero se habia medido /usr/bin/sg (la herramienta Unix de grupos) en vez del console script `skillgraph`. Leccion de bloque, no de codigo: medir el programa equivocado es la forma mas barata de cerrar un defecto por error."
   # Reconciliado con git el 2026-10-02 (WI-74): cada `sha` es el de su
   # etiqueta y resuelve a un commit real. Donde el valor anterior no
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.16.14
+      fecha: 2026-10-02
+      sha: "3cfce09b96033411b79ae48bfcd9efb77fb9102b"
+      nota: "WI-87 (vocabulario de estados derivado de su ADT, ADR-0015) + WI-88 (errores de uso devuelven EXIT_USAGE, ADR-0016); cierra las decisiones (d) y (f) del operador"
     - tag: v0.3.0
       fecha: 2026-09-23
       sha: "f1c9f2ef74e6926f183156c807a051c80e7fb60d"
