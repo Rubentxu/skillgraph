@@ -1,24 +1,26 @@
 # CURRENT — puntero operativo
 
-> **WI-65 fase 1 COMPLETA** (2026-10-02, commit `9c104ac`): las 65
-> delegación de `Storage` pasan a cinco mixin por componente en
-> `src/skillgraph/platform/storage_delegations.py` (Knowledge 31
-> metodos/329 LoC, Runs 19/267, Promotions 7/66, Events 4/52, Policy
-> 4/45), cuerpos movidos verbatim por AST. `storage.py` 1807 → **1024
-> LoC**. Se eligió mixin y no `__getattr__` porque este rompe el tipado
-> estatico que AGENTS.md §4.1 exige; cero ediciones en callers. Dos
-> regresiones cazadas y corregidas en el corte: (a) `ruff --fix` borro
-> por F401 los DTO `StoredClaim`/`StoredEvidence`/`StoredRelation`/
-> `StoredResource` que 7 modulos re-importan desde `storage` (el shim
-> del corte 1 de WI-56), reventando 61 tests; restaurados y declarados
-> en `__all__` con 4 tests de guarda. (b) El helper `_public_methods`
-> de `test_persistence_ports.py` filtraba por
-> `__qualname__.startswith("Storage")`, que con herencia da por roto un
-> `Storage` que sí cumple el Protocol. Verificación: **1917 passed**
-> (1880 previos + 37 nuevos), ruff y format limpios. **Nota honesta:**
-> el audit pasa de 3 a 4 archivos >800 LoC porque el módulo nuevo tiene
-> 915; la cohesión mejora pero el umbral bruto empeora. Fase 2 (DDL y
-> helpers `_tx`/`_atomic`, ~747 LoC de módulo) pendiente.
+> **H-01 CERRADO — WI-65 completo** (2026-10-02, commits `9c104ac` y
+> `2f5f7e4`, ADR-0022): la god class `Storage` (1807 LoC, 80 métodos)
+> deja de figurar como god module. `storage.py` queda en **623 LoC**
+> tras dos fases: los 65 métodos de delegación pasan a cinco mixin por
+> componente (`storage_delegations.py`, fase 1) y los 12 mappers
+> fila→DTO + `_uid` y el DDL salen a `row_mappers.py` y `schema.py`
+> (fase 2). **No se mueven** `_tx`/`_atomic`/`_migrate`/
+> `_insert_event_in_tx`/`_atomic_state_and_event`: ADR-0016 exige que
+> los atómicos H9/H10 compartan `self._conn` sin duplicarlo. Tres
+> regresiones reales presas y corregidas por la red: (a) `ruff --fix`
+> borró por F401 los DTO re-exportados que 7 módulos importan desde
+> `storage` (61 tests caídos); (b) el helper `_public_methods` de
+> `test_persistence_ports.py` quedó obsoleto con la herencia y daba
+> por roto un `Storage` que sí cumple el Protocol; (c) los mappers
+> **construyen** DTOs, así que bajo `if TYPE_CHECKING:` ruff pasa
+> limpio y el `NameError` solo salta al ejecutar (133 tests caídos) —
+> la red que lo fija se verificó que **falla** al reintroducir el bug.
+> Verificación: **1950 passed** (1880 originales + 70 nuevos), ruff y
+> format limpios. Quedan 3 god modules: `runcontroller.py` (1289),
+> `ports/__init__.py` (927) y `storage_delegations.py` (915, cinco
+> clases cohesivas en vez de una god class).
 > Última verificación: 2026-10-02 (Europe/Madrid) — **CI local canónica
 > REAL** con el binario pineado: `1880 passed in 85.34s`, `All checks
 > passed!`, 8 StepStarted/StepFinished/EchoOutputCaptured, 5/5 stages,
