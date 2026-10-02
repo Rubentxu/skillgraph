@@ -1,50 +1,83 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-02 (quinta tanda) cerrado — WI-92, SIN release.**
-> Versión activa `0.16.17.dev0`; último tag `v0.16.17` en `321fa10`. 2499 passed.
-> **Sin release y a propósito**: el bloque entrega 1 `test` + 1 `docs`, y por la
-> regla de SemVer del CHANGELOG (`refactor`/`test`/`docs`/`chore` no bumpean) no
-> hay nada que liberar. Forzar una release por un `test` sería inflar el
-> historial; no liberar trabajo verificado sí sería dejándolo a medias, y no es
-> el caso.
+> **Bloque 2026-10-02 (sexta tanda) cerrado — WI-93, release `v0.16.18`.**
+> Versión activa `0.16.18.dev0`; último tag `v0.16.18`. 2529 passed.
 >
-> **WI-92 — lo que WI-90 registró como deuda, medido: era falso** (`5b591c2`).
-> WI-90 cerró el round-trip de `FileSignature` y dejó anotados **sin medir**
-> dos sitios con «el mismo patrón de inverso manual». Medidos, los dos son
-> falsos como se enunciaron:
+> **WI-93 — el contrato de cobertura que el repo declara en dos sitios, y no
+> exigía ninguno** (`3866454`, `66be602`). El repositorio tenía **dos**
+> contratos sobre cobertura y la CI canónica no comprobaba **ninguno**:
 >
-> - `runtime/agent.py:51` `from_fixture` **no** es un inverso de un `to_dict`:
->   es un cargador de fixtures con `isinstance` explícito y errores **tipados**
->   (`ValidationError`, `OutcomeInvalidError`).
-> - `governance/receipts.py:466` sí tiene un par asimétrico real —el escritor
->   usa `to_payload()` público y el lector es `_payload_to_receipt`, privado y
->   a mano— pero **las claves cuadran**: 11 del dataclass, 11 de `to_payload`,
->   11 del lector. Y el caller captura `(KeyError, ValueError, TypeError)` y
->   hace `continue`, que es justo lo que promete el docstring.
+> - `pyproject.toml [tool.coverage.report] fail_under = 80` lo comprueba
+>   `coverage report`, pero **sólo si alguien invoca `scripts/coverage.sh` a
+>   mano**. La pipeline no tenía stage de cobertura.
+> - `AGENTS.md §6.3` pone suelos **por módulo** (core ≥90 %, CLI ≥70 %,
+>   `paths.py` ≥60 %) que `coverage report` **no puede expresar**: sólo admite
+>   un umbral global. Ninguna herramienta del repo lo comprobaba.
 >
-> **Lo que queda no es un defecto sino un riesgo latente**, y eso sí se cierra:
-> nada verificaba que las tres listas siguieran siendo la misma. Con una clave
-> de más el campo se pierde en silencio; con una de menos el lector levanta
-> `KeyError` y el caller descarta la fila **sin dejar rastro** — un receipt que
-> debería aplicarse no aplica y nadie se entera.
+> Una cifra que se declara y que ninguna herramienta puede verificar no es un
+> contrato: es un deseo con tipografía de ley.
 >
-> **Segundo guard**: el bloque vivo de este fichero es el puntero que lee
-> primero la próxima sesión, así que sus citas `fichero.py:NNN` tienen que
-> resolver. Las de bloques anteriores **no** se comprueban: son la foto de un
-> código que ya no existe, y corregirlas sería **falsificar la historia**. De
-> 57 citas de la fuente de verdad, **52 resuelven**; las 3 rotas están todas en
-> registros históricos que describen código ya refactorizado.
+> **La premisa heredada, medida.** `scripts/coverage.sh` excluía la cobertura
+> de la CI *a propósito*, con un motivo escrito en su cabecera: «la
+> instrumentación de subproceso **multiplica** el tiempo de suite». Era una
+> decisión documentada, no un descuido — pero su motivo era una afirmación sin
+> medir. Medida dos veces en el mismo árbol: `pytest` a pelo **~110 s** frente
+> a la receta completa **203 s**. Delta **+93 s**, ~1,85× el stage. **No
+> multiplica: cuesta un minuto y medio más.** El párrafo queda retirado y
+> marcado SUPERSEDIDO, conservado como historia.
 >
-> **Medición de la medición**: la primera versión del script resolvió
-> `run_repository.py` contra `src/skillgraph/run_repository.py`, que no existe
-> —el fichero está en `platform/`— y reportó 19 referencias «sin fichero» en
-> `STATE.yaml`. El resultado parecía alarmantemente malo porque el resolver
-> estaba mal, no los datos.
+> **El hueco real que encontró el checker**: `runtime/http_adapter.py` medía
+> **88,04 %**, por debajo del 90 % que le corresponde por ser módulo del core.
+> Sus 19 sentencias sin cubrir no eran código inalcanzable — eran guardas de
+> entrada y de respuesta malformada, alcanzables. El módulo ya traía
+> failpoints y un `client` inyectable **precisamente** para probarlas sin red;
+> los tests de red existentes usan `respx` con cliente inyectado, y por eso la
+> rama de **producción** que construye su propio `httpx.Timeout` no la tocaba
+> nadie. Medido después: **88,04 % → 99 %** (sólo queda la línea 424, que el
+> propio código marca como defensiva e inalcanzable), `runtime/` agregado
+> 95,11 % → **97,98 %**, global 94,75 % → **95,22 %**. 30 tests nuevos.
 >
-> **Queda abierto**: `ADR-0015` designa dos documentos distintos (colisión
-> medida, no ejecutada: renombrar es decisión del mantenedor); 63 informes
-> fechados en `audits/` (deuda de **datos**); y los commits siguen **sin
-> push**, que no está autorizado.
+> **Lectura estricta, escrita como decisión y no como cita**: `AGENTS.md §6.3`
+> nombra `runtime` entre los módulos del core pero no enumera cada fichero. Se
+> eligió que **todo módulo de `runtime/` con código herede el 90 %**, porque es
+> la lectura que hace útil el contrato y la que encuentra el hueco. Consecuencia
+> asumida: el checker **exige suelo declarado para todo módulo de `runtime/`
+> con código**, para que añadir uno nuevo no pase inadvertido. Un guard que sólo
+> vigila la lista que él mismo mantiene no vigila nada.
+>
+> **Dos decisiones de diseño del checker** (`scripts/check_coverage_floors.py`):
+> agrega **recuentos, no porcentajes** (con `branch=true` una rama parcial cuenta
+> como media, y promediar porcentajes da más de lo que hay: un paquete al 95 %
+> de media puede esconder un módulo al 60 %); y un **suelo sobre un módulo
+> fantasma es un fallo**, no un silencio. Los módulos vacíos (los `__init__.py`
+> de reexport, 0 sentencias) quedan excluidos: exigirles suelo es medir un
+> fichero vacío y revienta con división por cero.
+>
+> **CI**: `unit-tests` corre la **receta** en vez de pytest a pelo — **una sola
+> pasada** para tests y cobertura, porque correr pytest dos veces costaría
+> 110 + 203 s — y hay un stage nuevo `coverage-floors` que ejecuta el checker.
+> Seis stages. Mutaciones del checker **3/3** con baseline y control final
+> byte-idéntico.
+>
+> **Aprendizaje reutilizable, con su error medido**: durante el desarrollo leí
+> `rc=0` de un `if pipeline | tail; then …` — el `rc` era el de `tail`, no el del
+> pipeline, y el script estaba reportando cinco incumplimientos. Misma familia
+> que medir `/usr/bin/sg` en vez de `skillgraph` (WI-88) o `wc -c` sobre una
+> línea con `—` (WI-91): **medir la cosa equivocada produce un número que
+> parece confirmar cualquier premisa.** Y una segunda medición dio 408 s de wall
+> clock, pero ese comando incluía pasos extra y corría con carga concurrente;
+> reportar 408 s como coste de la receta habría sido una medición equivocada con
+> formato de dato.
+>
+> **Queda abierto**: las **credenciales de proveedor real** (Anthropic/OpenAI)
+> no están en este entorno, así que el criterio de salida de **H9 sigue
+> declarado incumplido** — con la mitad local del contrato probada (el
+> adaptador *rechaza* bien lo que no debe aceptar) y la mitad remota sin
+> probar. Declarar H9 cerrada sin ejecutarla sería el mismo defecto que este
+> bloque corrige, en dirección contraria. También abiertos: `ADR-0015` designa
+> dos documentos distintos (colisión medida, renombrar es decisión del
+> mantenedor); 63 informes fechados en `audits/` (deuda de **datos**); y los
+> commits siguen **sin push**, que no está autorizado.
 
 > **Bloque 2026-10-02 (cuarta tanda) cerrado — WI-91, release `v0.16.17`.**
 > Versión activa `0.16.17.dev0`; tag `v0.16.17` en `321fa10`. 2493 passed.

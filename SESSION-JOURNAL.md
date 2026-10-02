@@ -10169,3 +10169,131 @@ aplicacion** lo reporto como `MUTACION NO APLICO`, no como «no cazada».
   SHA-256 de `.pipeline.kts` sin drift.
 - **Ciclo SDDK WI-92 CLOSED**. **33 ciclos CLOSED, 0 pendientes.**
 - **SIN PUSH.** 48 commits sin publicar.
+
+---
+
+## 2026-10-02 — WI-93: el contrato de cobertura que el repo declara en dos sitios, y no exigia ninguno
+
+- **Commits**: `66be602` (`test(knowledge)`), `3866454` (`fix(ci)`), mas trazabilidad y release.
+- **Suite**: 2529 passed (2499 antes; +30).
+- **SemVer derivado del historial**: `git log v0.16.17..HEAD` = 0 feat, 0 breaking,
+  1 fix, 2 test, 3 docs, 1 chore → **PATCH → v0.16.18**.
+
+### Lo que habia
+
+Dos contratos sobre cobertura, y la CI canonica no comprobaba ninguno:
+
+| # | Donde | Que declara | Quien lo comprueba |
+|---|---|---|---|
+| 1 | `pyproject.toml [tool.coverage.report]` | `fail_under = 80` (global) | `coverage report`, solo si alguien ejecuta el script a mano |
+| 2 | `AGENTS.md 6.3` | suelos **por modulo** (core >=90 %, CLI >=70 %, `paths.py` >=60 %) | **nadie** |
+
+El segundo **no lo podia expresar ninguna herramienta del repo**: `coverage report`
+solo admite un umbral global. Una cifra declarada y no verificable no es un
+contrato.
+
+### La premisa heredada, medida
+
+`scripts/coverage.sh` excluia la cobertura de CI a proposito, con motivo escrito
+en su cabecera: «la instrumentacion de subproceso **multiplica** el tiempo de
+suite». Decision documentada, no descuido — pero su motivo era una afirmacion sin
+medir.
+
+| | Wall clock |
+|---|---|
+| `pytest` a pelo (lo que hacia la CI) | ~110 s (journal run `84dd0239`: 107,70 s) |
+| `scripts/coverage.sh` completa | 203 s (medido dos veces: 200,77 s y 201,77 s) |
+| **Delta** | **+93 s (~1,85x el stage)** |
+
+**No multiplica: cuesta un minuto y medio mas.** El parrafo queda retirado y
+marcado SUPERSEDIDO, conservado como historia.
+
+### El hueco real que encontre el checker
+
+`runtime/http_adapter.py` media **88,04 %**, por debajo del 90 % que le
+corresponde por ser modulo del core. Sus 19 sentencias sin cubrir eran guardas de
+entrada y de respuesta malformada, **alcanzables**. El modulo ya traia failpoints
+y un `client` inyectable *precisamente* para probarlas sin red; los tests de red
+existentes usan `respx` con cliente inyectado, y por eso la rama de produccion
+que construye su propio `httpx.Timeout` no la tocaba nadie.
+
+| | Antes | Despues |
+|---|---|---|
+| `http_adapter.py` | 88,04 % | **99 %** (solo queda la 424, defensiva e inalcanzable) |
+| `runtime/` agregado | 95,11 % | **97,98 %** |
+| global | 94,75 % | **95,22 %** |
+
+### Decisiones
+
+- **Agregar recuentos, no porcentajes.** Con `branch=true` una rama parcial cuenta
+  como media; promediar porcentajes da mas de lo que hay — un paquete al 95 % de
+  media puede esconder un modulo al 60 %.
+- **Un suelo sobre un modulo fantasma es un fallo**, no un silencio: si la ruta no
+  aparece en el informe, el checker aborta. Los modulos vacios (los `__init__.py`
+  de reexport, 0 sentencias) quedan excluidos: exigirles suelo es medir un
+  fichero vacio y ademas revienta con division por cero.
+- **Exigir suelo para todo modulo de `runtime/` con codigo**, para que anadir uno
+  nuevo no pase inadvertido. Un guard que solo vigila la lista que el mismo
+  mantiene no vigila nada.
+- **Lectura estricta de AGENTS 6.3, escrita como decision y no como cita**: todo
+  modulo de `runtime/` hereda el 90 %. Es la lectura que hace util el contrato y
+  la que encuentra el hueco.
+- **Una sola pasada para tests y cobertura**: `unit-tests` corre la receta, y un
+  stage nuevo `coverage-floors` corre el checker. Correr pytest dos veces costaria
+  110 + 203 s. Seis stages.
+- **Versionado en `scripts/`, no en `.pipelinek/`**: el checker es parte del
+  contrato del repo, ejecutable a mano y versionado.
+
+### Mutaciones del checker
+
+| # | Mutacion | Resultado |
+|---|---|---|
+| M1 | subir un suelo por encima de la cobertura real (`http_adapter` a 99,9) | **cazada** |
+| M2 | apuntar un suelo a un modulo inexistente | **cazada** |
+| M3 | borrar el suelo de un modulo de `runtime/` **que tiene codigo** | **cazada** |
+| M4 | control final: estado real a verde y fichero byte-identico | **OK** |
+
+M1 es la que importa: si el checker no midiera, subir el suelo no lo notaria, y un
+gate que no puede fallar es una decoracion.
+
+### Conocimiento negativo
+
+- **La cobertura agregada puede tapar un modulo debil.** `runtime/` estaba al
+  95,11 % — muy por encima de 90 — y contenia un modulo al 88 %. «El paquete llega
+  al 90 %» y «cada modulo llega al 90 %» son contratos distintos, y solo el segundo
+  encuentra el hueco. Declarar un suelo agregado es elegir que un modulo debil sea
+  aceptable.
+- **La instrumentacion de subproceso no es un lujo: es lo que hace verdadera la
+  medicion.** Sin el hook `.pth`, el CLI que la suite lanza por subproceso mide
+  65,86 % en vez de 94 %. No instrumentar produce un numero que parece un
+  incumplimiento y es ceguera del instrumento.
+- **`if pipeline | tail; then` mide el `tail`, no el pipeline.** Lei `rc=0` de un
+  comando cuyo script reportaba cinco incumplimientos. Misma familia que medir
+  `/usr/bin/sg` en WI-88 o `wc -c` sobre una linea con `—` en WI-91: **medir la
+  cosa equivocada produce un numero que parece confirmar cualquier premisa.**
+  Sexta vez en cuatro bloques.
+- **La cobertura es un techo, no una puerta.** Subir un modulo del 88 al 99 % no
+  demuestra que el adaptador funcione contra Anthropic: demuestra que rechaza
+  bien lo que no deberia aceptar. Son cosas distintas y el bloque no las confunde.
+- **Defecto propio encontrado y corregido**: el script de trazabilidad habia
+  concatenado dos comentarios en `src/skillgraph/__init__.py:27` en vez de
+  reemplazar el anterior. Un comentario que dice dos cosas a la vez no informa de
+  ninguna.
+
+### Sigue abierto (sin workitem)
+
+- **Credenciales de proveedor real (Anthropic/OpenAI)**: ausentes. Es la razon por
+  la que el criterio de salida de **H9 sigue declarado incumplido**. Declarar H9
+  cerrada sin ejecutarla seria el mismo defecto que este bloque corrige, en
+  direccion contraria.
+- **Colision de numeracion de ADR**: `ADR-0015` designa dos documentos distintos.
+  Medida, NO ejecutada: renombrar es decision del mantenedor.
+- **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`.
+- **Push**: sin autorizacion del operador. No ejecutado.
+
+### Evidencia
+
+- `evidence/sddk-wi93-verify-2026-10-02.md`
+- `scripts/check_coverage_floors.py` (checker, versionado)
+- `tests/test_wi93_http_adapter_gaps.py` (30 tests)
+- `.pipelinek/wi93_mutate.sh` (3/3 + baseline + autocontrol de aplicacion)
