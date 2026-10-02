@@ -541,7 +541,7 @@ tests:
   total: 2451   # re-medido 2026-10-02 (bloque WI-88): 2451 passed, suite completa. Desglose medido con un worktree en d47b7af (2430) y `pytest --collect-only` en los dos arboles: 26 tests nuevos, 5 "borrados" que son en realidad los 5 RENOMBRADOS (3 en test_cli_branches.py, 1 en TestCliExitUsage, 1 en test_wi79), luego neto +21. De los 26: 18 en test_wi88_usage_exit_code.py, 4 reapariciones por el renombre, 1 renombre de wi79, y +3 en test_wi47_broad_except_guard.py porque ese guard enumera modulos con rglob y genera un caso por modulo: aparecen por el modulo nuevo exit_codes.py y por el segundo ambito que introduce la clase _UsageParser en parser.py. O sea: la cobertura arquitectural se aplico sola al codigo nuevo.
   passed: 2451
   duration_s: 104.26   # re-medido 2026-10-02: 2451 passed in 104.26s.
-  package_version: "0.16.13.dev0"   # trabajo post-release v0.16.13 (AGENTS 12). El tag v0.16.13 esta en 6e97513; este bloque sigue en local y SIN PUSH.
+  package_version: "0.16.14"   # release v0.16.14. El tag se crea sobre el commit que lleva la version pura, que es lo que exige tests/test_release_governance.py::test_version_matches_git_tag (rama 1: HEAD en etiqueta y __version__ sin sufijo).
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1095,7 +1095,7 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.16.13
+  tag: v0.16.14
   fecha: 2026-10-02
   semver_bump: PATCH
   rationale: "Bloque WI-86 + WI-80 (2 commits de trabajo, cf6539b..eb19942). SemVer derivado del historial: 0 feat, 1 fix (eb19942, rechazo ilegible presentado como PROPOSED sin avisar), 1 refactor (cf6539b, 5 consumidores de mappers dejan de pasar por el facade storage), 1 docs, 1 chore => PATCH. Sin capacidad observable nueva; si cambia la salida de `expansion list`, y para mejor. 2416 passed (2394 en v0.16.12), ruff y format limpios, CI canonica SUCCESS. En el mismo bloque se corrigio un registro FALSO: el bloque anterior anoto 'WI-65-fase-1' como siguiente trabajo sin verificar su premisa, y WI-65 ya lo habia entregado ADR-0022 (storage.py 613 LoC / 15 metodos, 5 mixins vivos). Con esa correccion el proyecto queda con 27 ciclos SDDK CLOSED y 0 abiertos. Decision de criterio que queda RETIRADA: 'no tocar el contrato externo' confundia cambiar un contrato con corregir una afirmacion falsa. El tag se crea sobre el commit que lleva el SemVer puro, que es lo que exige tests/test_release_governance.py::test_version_matches_git_tag."
