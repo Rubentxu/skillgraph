@@ -72,6 +72,27 @@
 > reportar 408 s como coste de la receta habría sido una medición equivocada con
 > formato de dato.
 >
+> **CI certificada**: `Pipeline finished with SUCCESS`, **6/6 stages**
+> (`discover-repo`, `sync-deps`, `unit-tests`, `coverage-floors`, `lint`,
+> `evidence`), `run_id 3fdabce5-b4f1-47b5-ae0a-fddf38769662`, **2529 passed
+> in 206.28s**, 0 `StepFailed`, `RunFinished/success`, SHA-256 de
+> `.pipeline.kts` = `c05e97f5…` sin drift.
+>
+> **La CI salió roja dos veces antes, y las dos veces era verdad** — se dejan
+> escritas porque un cierre que sólo cuenta la run verde falsea el mismo
+> registro que este bloque corrige:
+>
+> 1. **FAILURE** por etiquetar `v0.16.18` sin registrarla en
+>    `release.releases`. Lo cazaron los dos tests de `test_state_release_integrity`,
+>    que existen justo para eso. Defecto de **secuencia** mío: cerré el commit de
+>    trazabilidad antes de emitir el tag.
+> 2. **SUCCESS que no valía**: 9 `StepStarted`, 0 `StepFailed`, 6 etapas — y sin
+>    embargo **no cumplía el criterio 2** de AGENTS.md. Medido: `EchoOutputCaptured`
+>    conserva sólo los últimos **~1,2 KB** de cada step, y con `pytest -q` la línea
+>    `N passed in Xs` cae a media stream y se truncaba. La run era real y **su
+>    prueba había quedado fuera del recorte**, que es peor que no tenerla: invita a
+>    dar por verificado algo que nadie ha leído.
+>
 > **Queda abierto**: las **credenciales de proveedor real** (Anthropic/OpenAI)
 > no están en este entorno, así que el criterio de salida de **H9 sigue
 > declarado incumplido** — con la mitad local del contrato probada (el

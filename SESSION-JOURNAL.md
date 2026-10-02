@@ -10297,3 +10297,56 @@ gate que no puede fallar es una decoracion.
 - `scripts/check_coverage_floors.py` (checker, versionado)
 - `tests/test_wi93_http_adapter_gaps.py` (30 tests)
 - `.pipelinek/wi93_mutate.sh` (3/3 + baseline + autocontrol de aplicacion)
+
+### Cierre del bloque WI-93
+
+- **CI canonica: `Pipeline finished with SUCCESS`, 6/6 stages**
+  (`discover-repo`, `sync-deps`, `unit-tests`, `coverage-floors`, `lint`,
+  `evidence`), `run_id 3fdabce5-b4f1-47b5-ae0a-fddf38769662`,
+  **2529 passed in 206.28s** en `unit-tests`, **0 StepFailed**,
+  `RunFinished/success`, 9 `StepStarted` y 9 `EchoOutputCaptured`, control root
+  completo, SHA-256 de `.pipeline.kts` = `c05e97f5...` sin drift.
+  El stage `coverage-floors` dio `VEREDICTO: todos los suelos declarados se
+  cumplen`, con `http_adapter.py` en 99,34 % y `locks.py` en 90,62 %.
+- **La CI salio ROJA dos veces antes, y las dos veces era verdad.** Ninguna de
+  las dos era ruido de infraestructura; las dos eran defectos mios que las redes
+  del repo cazaron. Se dejan escritas porque un cierre que cuenta solo la run
+  verde falsea el mismo registro que este bloque esta corrigiendo.
+
+  1. **Run `2167b8f3` — FAILURE.** `unit-tests/sh-0` cerro con codigo 1. No era
+     la cobertura: la suite tenia dos tests rojos, los dos de
+     `test_state_release_integrity`. **Etiquete `v0.16.18` sin registrarla** en
+     `release.releases`, y `release.tag` seguia en `v0.16.17`. Es exactamente el
+     fallo que WI-74 escribio esos tests para cazar, y lo cazaron a tres
+     commits de la release. El defecto fue de **secuencia**: cerre el commit de
+     trazabilidad antes de emitir el tag y el registro se quedo a medias.
+     Corregido en `430b2b8`.
+  2. **Run `51b80685` — SUCCESS pero NO valida.** 9 `StepStarted`, 0
+     `StepFailed`, 6 etapas, y aun asi no cumplia el **criterio 2** de AGENTS.md:
+     el journal debe contener un `EchoOutputCaptured` con la linea
+     `N passed in Xs`, que es lo que separa una ejecucion real de un veredicto
+     cacheado. MEDIDO, no supuesto: `EchoOutputCaptured` conserva solo los
+     ultimos **~1,2 KB** de la salida de cada step, y con `pytest -q` la linea de
+     resumen cae a media stream y se truncaba. Lo que quedaba en el journal era
+     la cola de la tabla de cobertura. La run era real y su prueba habia
+     quedado fuera del recorte, que es **peor** que no tenerla: invita a dar por
+     verificado algo que no se ha leido. Corregido en `81d07ed` (`tee` a
+     `.pipelinek/unit-tests.log` + `grep` del resumen al final, para que caiga en
+     la cola que el motor si conserva).
+
+- **Conocimiento negativo anadido**
+  - **Un recorte de salida puede certificar una run que nadie ha mirado.**
+    `SUCCESS` con etapas verdes es necesario y no suficiente: si el marcador que
+    distingue la ejecucion real del veredicto cacheado no llega al journal, lo
+    que se tiene es una afirmacion sin prueba, no una prueba.
+  - **Un commit de trazabilidad cerrado antes de tiempo se paga tarde.** El tag
+    salio sin el registro que lo ata, y el precio lo pagaron dos tests de
+    integridad tres commits mas tarde. El orden correcto es tag y registro en el
+    mismo bloque, o el registro inmediatamente despues.
+  - **`PIPESTATUS[0]`, no `$?`, al meter `tee` en medio.** Sin eso el `tee`
+    habria tapado el fallo de tests. Es la misma leccion de `| tail` aplicada al
+    caso nuevo.
+- **Release**: `v0.16.18` en `1a0c55d`, version actual `0.16.18.dev0`.
+  SemVer derivado del historial, no decidido a mano: `git log v0.16.17..HEAD` =
+  0 feat, 0 breaking, 1 fix, 2 test, 3 docs, 1 chore → **PATCH**.
+- **SIN PUSH.** Sin autorizacion del operador.
