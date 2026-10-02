@@ -31,7 +31,6 @@ hacer fallar al checker. Un test que solo lee el informe real no distingue
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -252,9 +251,25 @@ class TestSuelosDeclaradosSonReales:
 
     @pytest.mark.parametrize("prefijo", sorted(cc.SUELOS_POR_PAQUETE))
     def test_cada_paquete_declarado_tiene_modulos_de_verdad(self, prefijo: str) -> None:
-        files = _informe_real()
-        con_modulos = [f for f in files if f.startswith(prefijo) and _tiene_codigo(files[f])]
-        assert con_modulos, f"{prefijo} tiene suelo declarado pero ningun modulo en el informe"
+        """El prefijo existe en el ARBOL, no en el informe de cobertura.
+
+        Lee el sistema de ficheros y no `coverage json` a proposito, y no por
+        comodidad. La primera version de este test leia el informe, y
+        fallo en la CI con 9 rojos: durante la ejecucion de pytest los datos
+        de cobertura estan todavia en `.coverage.parallel.*` sin combinar, y
+        `coverage json` responde «No data to report». Es decir, el test
+        dependia de un artefacto que pytest produce DESPUES de correr, y se
+        daba por bueno en local unicamente porque aqui ya habia un
+        `scripts/coverage.sh` anterior que habia combinado los datos.
+
+        Que un paquete tenga modulos es una propiedad del codigo fuente, no
+        de la medicion. Preguntarselo al informe era medir en el sitio
+        equivocado, que es como nacen los numeros que confirman cualquier
+        premisa.
+        """
+        ruta = ROOT / prefijo
+        assert ruta.is_dir(), f"{prefijo} tiene suelo declarado pero no es un directorio"
+        assert any(ruta.rglob("*.py")), f"{prefijo} tiene suelo declarado pero ningun modulo .py"
 
     def test_no_ay_manos_dos_listas_que_se_puedan_desincronizar(self) -> None:
         """La lista de modulos desaparecio; el contrato vive en una sola fuente."""
@@ -264,41 +279,21 @@ class TestSuelosDeclaradosSonReales:
         )
 
 
-# --- Contra el informe real -----------------------------------------------
-
-
-def _tiene_codigo(entrada: dict[str, Any]) -> bool:
-    s = entrada["summary"]
-    return int(s["num_statements"]) + int(s["num_branches"]) > 0
-
-
-def _informe_real() -> dict[str, dict[str, Any]]:
-    import json
-
-    salida = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "coverage",
-            "json",
-            "--rcfile",
-            str(ROOT / ".coverage.rc"),
-            "-o",
-            "-",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return dict(json.loads(salida.stdout)["files"])
-
-
-@pytest.mark.skipif(
-    not (ROOT / ".coverage.rc").exists(),
-    reason="sin datos de cobertura: ejecuta antes `bash scripts/coverage.sh`",
-)
-class TestElArbolRealCumpleElContratoSimetrico:
-    def test_el_informe_real_no_tiene_infracciones(self) -> None:
-        _, fallos = cc.evaluar(_informe_real())
-        assert not fallos, f"incumplimientos reales del contrato: {fallos}"
+# --- Lo que este fichero NO comprueba, y por que ---------------------------
+#
+# Una version anterior de este modulo terminaba con
+# `test_el_informe_real_no_tiene_infracciones`, que ejecutaba el contrato
+# contra el informe de cobertura real. Se ha eliminado a proposito, y el
+# borrado es la decision, no una falta:
+#
+#   * Es CIRCULAR. `scripts/coverage.sh` corre pytest y DESPUES hace
+#     `coverage combine`. Un test que necesita el informe combinado para
+#     pasar no puede vivir dentro del pytest que lo produce.
+#   * Es REDUNDANTE. La garantia «el arbol real cumple el contrato» ya la
+#     da `scripts/check_coverage_floors.py`, que corre en el stage
+#     `coverage-floors` de `.pipeline.kts`, en su propia pasada y con el
+#     informe ya combinado. Ese stage es el sitio correcto para comprobar
+#     una propiedad de la medicion: despues de la medicion.
+#
+# Lo que si queda aqui es la PROPIEDAD del contrato, comprobable con informes
+# sinteticos en cualquier orden y sin depender de que nadie haya medido antes.
