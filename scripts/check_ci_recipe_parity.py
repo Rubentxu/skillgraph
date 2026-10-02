@@ -32,7 +32,9 @@ C2  la receta canónica es ejecutable fuera de esta máquina (no lleva rutas
     absolutas a un árbol de trabajo concreto);
 C3  las etapas canónicas se leen **del script**, no de una lista paralela;
 C4  quien ejecuta `pytest` está conectado a la receta canónica: o es un
-    fragmento que ella invoca, o delega en ella (WI-99).
+    fragmento que ella invoca, o delega en ella (WI-99);
+C5  todo `scripts/check_*.py` lo invoca la receta canónica: un contrato
+    exigible no puede desaparecer de ella sin que nada lo note (WI-102).
 
 Por qué C2 está aquí y no en un documento
 -----------------------------------------
@@ -50,8 +52,32 @@ ejecutado por subproceso**. Un documento que dijera «delega en la receta
 canónica» no habría cambiado nada la próxima vez que alguien añadiera una
 línea a un script; un contrato que mira los ficheros, sí.
 
-Diseno: puro por encima, efecto por debajo
-------------------------------------------
+Por qué C5 está aquí y no en un documento
+-----------------------------------------
+C3 lee las etapas del script, y está bien: leer del script es lo que evita
+un guard que vigila una lista paralela. Pero C3 comprobaba que la lista fuera
+**legible**, y una lista de etapas vacía por legibilidad es tan válida como
+una completa.
+
+MEDIDO en WI-102, con el comando canónico de verdad: se borró el bloque
+entero de la etapa `coverage-floors` de `.pipeline.kts` —la que impone los
+suelos que `AGENTS.md §6.3` declara exigibles— y el resultado fue
+
+    scripts/check_ci_recipe_parity.py   exit 0   («OK: ...»)
+    pytest test_wi98_ci_recipe_parity    37 passed
+    la receta, ejecutada de verdad       Pipeline finished with SUCCESS
+
+Cero menciones de `coverage-floors` en su salida, y cero del `VEREDICTO` de
+los suelos. Una receta que ejecuta menos se ejecuta igual de bien, y el
+instrumento que certifica los contratos no comprobaba que los contratos
+estuvieran. C4 exigía que quien ejecuta pytest esté *conectado* a la receta;
+nadie exigía que la receta *contenga* los contratos.
+
+Un documento que dijera «la receta ejecuta los contratos» no habría
+cambiado nada la próxima vez que alguien borrara una etapa. C5 mira los
+ficheros: mira qué hay en `scripts/` y qué invoca `.pipeline.kts`.
+
+
 `evaluar(informe)` y sus descompuestos son **funciones puras**: no leen disco y
 devuelven una tupla de problemas. `medir()` es la única parte que lee ficheros.
 Esa division permite construir contraejemplos con informes sintéticos en vez
@@ -75,6 +101,10 @@ from typing import Final
 CODIGO_RECETA_PROPIA: Final = "sg_ci_receta_propia"
 CODIGO_RUTA_ABSOLUTA: Final = "sg_ci_ruta_absoluta"
 CODIGO_ETAPA_DESCONOCIDA: Final = "sg_ci_etapa_desconocida"
+
+#: Un contrato exigible existe en `scripts/` y la receta canónica no lo
+#: invoca. MEDIDO en WI-102 con la etapa `coverage-floors` borrada.
+CODIGO_CONTRATO_HUERFANO: Final = "sg_ci_contrato_huerfano"
 CODIGO_RUNNER_INEXISTENTE: Final = "sg_ci_runner_inexistente"
 CODIGO_RECETA_SUYA: Final = "sg_ci_receta_suya"
 
@@ -113,6 +143,12 @@ class InformeRunners:
     raiz_repo: str
     runners: dict[str, str]
     etapas_canonicas: tuple[str, ...]
+    #: Contratos exigibles: los `scripts/check_*.py` del repo, como `ruta`.
+    #: Se descubren por convención de nombre, no de una constante: un
+    #: checker nuevo entra en el contrato el día que se escribe.
+    checkers: tuple[str, ...] = ()
+    #: De esos, los que `.pipeline.kts` invoca en una orden real.
+    checkers_invocados: frozenset[str] = frozenset()
     #: Scripts de `scripts/` que una persona ejecutaría esperando un
     #: veredicto, como `ruta -> contenido`.
     scripts: dict[str, str] = field(default_factory=dict)
@@ -350,6 +386,42 @@ def scripts_invocados_por(canonica: str) -> frozenset[str]:
     return rutas_de_script(canonica, "//")
 
 
+#: Ruta a un contrato exigible dentro de una orden. Deliberadamente `*.py` y
+#: deliberadamente `check_`: es la convención que declara C5, y lo que el
+#: guard vigila es lo que la convención dice, no lo que el guard quisiera.
+_RUTA_CHECKER: Final = re.compile(r"[\w./-]*scripts/check_[\w.-]+\.py")
+
+
+def checkers_invocados_por(canonica: str) -> frozenset[str]:
+    """Qué contratos exigibles invoca la receta canónica, en órdenes reales.
+
+    Se lee de las órdenes sin comentarios, como el resto: un checker
+    mencionado en el comentario que explica una etapa **borrada** es
+    exactamente el caso que este guard tiene que ver. MEDIDO en WI-102, y
+    es la misma trampa que M7 de WI-100 y M8 de WI-101: un nombre de
+    fichero en un texto no es una ejecución.
+    """
+    return frozenset(
+        ruta for orden in logicas_de(canonica, "//") for ruta in _RUTA_CHECKER.findall(orden)
+    )
+
+
+def checkers_de(raiz: Path) -> tuple[str, ...]:
+    """Los contratos exigibles del repo: `scripts/check_*.py`, ordenados.
+
+    Se descubre por convención y no de una constante. Un guard que lleva su
+    propia lista de contratos solo vigila los que ya conocía — que es
+    exactamente el fallo que WI-92 encontró en la redacción de su propia
+    documentacion, y el que este bloque lleva dos veces ya.
+    """
+    base = raiz / "scripts"
+    if not base.is_dir():
+        return ()
+    return tuple(
+        f"scripts/{p.relative_to(base).as_posix()}" for p in sorted(base.rglob("check_*.py"))
+    )
+
+
 def evaluar_recetas(informe: InformeRunners) -> tuple[Problema, ...]:
     """C1. Cada runner remoto invoca la receta canónica **en un paso**.
 
@@ -502,8 +574,54 @@ def evaluar_una_receta(informe: InformeRunners) -> tuple[Problema, ...]:
     return tuple(problemas)
 
 
+def evaluar_contratos_de_la_receta(informe: InformeRunners) -> tuple[Problema, ...]:
+    """C5. La receta canónica ejecuta todos los contratos exigibles.
+
+    MEDIDO en WI-102. Se borró el bloque entero de la etapa
+    `coverage-floors` de `.pipeline.kts` y no lo notó ni el guard de paridad
+    (exit 0), ni sus 37 tests, ni la propia receta al ejecutarse
+    (`Pipeline finished with SUCCESS`, con cero menciones de la etapa y
+    cero de su `VEREDICTO`). La receta seguía siendo la fuente de verdad
+    y ya no contenía la mitad de lo que la fuente de verdad declara.
+
+    La forma es **sin lista**, y esa es la decisión que importa. Una lista
+    de contratos obligatorios dentro del guard es la misma trampa que
+    `DIRECTORIOS_NO_RECETA` en WI-99: obliga a mantener enumerado lo que
+    el guard debería comprobar solo, y el mantenimiento es el trabajo que
+    se quiere automatizar. Aquí el conjunto sale del repo
+    (`scripts/check_*.py`), así que un checker nuevo entra en el contrato
+    sin tocar nada, y borrar una etapa se detecta porque el checker que
+    invocaba deja de estar invocado.
+
+    Cubre también el caso inverso, que hasta WI-102 era invisible:
+    **escribir un checker y no enchufarlo en la receta**. Es un guard que
+    no guarda nada, con la misma forma exacta que un guard real.
+
+    Lo que NO cubre, y se declara en vez de disimularse: el descubrimiento
+    es por la convención `check_*.py`. Un contrato escrito en un fichero
+    con otro nombre queda fuera del invariante, igual que un script de
+    shell que no se llama `*.sh` quedaba fuera de C3 antes de WI-100. Es
+    el mismo compromiso: la convención es del repo, y el guard vigila lo
+    que la convención declara, no lo que el guard quisiera que hubiera.
+    """
+    if informe.hubo_error:
+        return ()
+    huerfanos = tuple(c for c in informe.checkers if c not in informe.checkers_invocados)
+    if not huerfanos:
+        return ()
+    return (
+        Problema(
+            CODIGO_CONTRATO_HUERFANO,
+            f"estos contratos exigibles existen en scripts/ pero {informe.receta_canonica} "
+            f"no los invoca en ninguna orden: {', '.join(huerfanos)}. Una receta que "
+            "ejecuta menos se ejecuta igual de bien: borrarle una etapa no la rompe, "
+            "simplemente deja de comprobar lo que su nombre dice comprobar.",
+        ),
+    )
+
+
 def evaluar(informe: InformeRunners) -> tuple[Problema, ...]:
-    """C1..C4. Si la medición falló, no dice nada más."""
+    """C1..C5. Si la medición falló, no dice nada más."""
     if informe.hubo_error:
         return (Problema(CODIGO_RUNNER_INEXISTENTE, f"no se pudo medir: {informe.error}"),)
     return (
@@ -511,6 +629,7 @@ def evaluar(informe: InformeRunners) -> tuple[Problema, ...]:
         *evaluar_portabilidad(informe),
         *evaluar_etapas(informe),
         *evaluar_una_receta(informe),
+        *evaluar_contratos_de_la_receta(informe),
     )
 
 
@@ -638,6 +757,8 @@ def medir(raiz: Path) -> InformeRunners:
             etapas_canonicas=etapas_de(texto),
             scripts=scripts_de(raiz),
             fragmentos=scripts_invocados_por(texto),
+            checkers=checkers_de(raiz),
+            checkers_invocados=checkers_invocados_por(texto),
         )
     except (OSError, UnicodeDecodeError) as exc:
         return _informe_de_error(str(exc))
@@ -662,10 +783,16 @@ def _informe_de_error(mensaje: str) -> InformeRunners:
 
 def formatear(problemas: tuple[Problema, ...]) -> str:
     if not problemas:
+        # El mensaje dice LO MISMO que el guard mide. WI-101 closed el hueco
+        # de que un instrumento anunciara un exit code que no significaba
+        # nada, y la version corta de ese mismo defecto es un "OK" que no
+        # menciona el quinto contrato: el lector se queda creyendo que hay
+        # cuatro, y vuelve a no saber que el quinto se puede borrar.
         return (
             "OK: todo runner remoto invoca la receta canónica, "
             "la receta canónica se puede ejecutar fuera de esta máquina, "
-            "y ninguna otra receta ejecuta pytest por su cuenta."
+            "ninguna otra receta ejecuta pytest por su cuenta, "
+            "y la receta ejecuta todos los contratos exigibles de scripts/."
         )
     lineas = [f"FALLO: {len(problemas)} incumplimiento(s) del contrato de CI"]
     lineas.extend(f"  [{p.codigo}] {p.mensaje}" for p in problemas)

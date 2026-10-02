@@ -641,3 +641,169 @@ class TestC4UnaSolaReceta:
         informe = par.medir(ROOT)
         problemas = par.evaluar(informe)
         assert problemas == (), [p.mensaje for p in problemas]
+
+
+# --- C5: la receta canonica CONTIENE los contratos, no solo los llama ------
+#
+# Invariante anadido en WI-102, al mismo modulo y al mismo fichero.
+#
+# MEDIDO en WI-102, con el comando canonico de verdad: se borro el bloque
+# entero de la etapa `coverage-floors` de `.pipeline.kts` —la que impone los
+# suelos que AGENTS.md 6.3 declara exigibles— y:
+#
+#   scripts/check_ci_recipe_parity.py   exit 0   («OK: ...»)
+#   pytest test_wi98_ci_recipe_parity    37 passed
+#   la receta, ejecutada de verdad       Pipeline finished with SUCCESS
+#   menciones de 'coverage-floors'       0
+#   menciones de 'VEREDICTO'             0
+#
+# C3 leia las etapas del script — bien hecho, es lo que evita un guard que
+# vigila su propia lista— pero solo comprobaba que la lista sea LEGIBLE. Una
+# lista de etapas vacia por legibilidad es tan valida como una completa, y
+# una receta que ejecuta menos se ejecuta igual de bien.
+#
+# La forma es deliberadamente sin lista: el conjunto sale del repo
+# (`scripts/check_*.py`), no de una constante. Ver la nota sobre el
+# descubrimiento en `evaluar_contratos_de_la_receta`.
+
+
+class TestC5LaRecetaContieneLosContratos:
+    def test_un_checker_sin_enchufar_se_detecta(self) -> None:
+        """El fallo medido: la etapa existe como fichero y no se ejecuta.
+
+        C4 exigia que quien ejecuta pytest este conectado a la receta. Nadie
+        exigia que la receta CONTENGA los contratos, y esa diferencia es
+        justo el hueco: una etapa borrada deja de ejecutar su checker, y el
+        checker es lo unico que se nota.
+        """
+        informe = _informe(
+            checkers=("scripts/check_coverage_floors.py",),
+            checkers_invocados=frozenset(),
+        )
+        problemas = par.evaluar(informe)
+        assert par.CODIGO_CONTRATO_HUERFANO in par.codigos_de(problemas)
+        assert "scripts/check_coverage_floors.py" in " ".join(p.mensaje for p in problemas)
+
+    def test_un_checker_enchufar_no_problema(self) -> None:
+        informe = _informe(
+            checkers=("scripts/check_coverage_floors.py",),
+            checkers_invocados=frozenset({"scripts/check_coverage_floors.py"}),
+        )
+        assert par.CODIGO_CONTRATO_HUERFANO not in par.codigos_de(par.evaluar(informe))
+
+    def test_varios_sin_enchufar_se_dicen_todos(self) -> None:
+        """Un guard que dice «falta un contrato» sin decir cual es un guard
+        que obliga a abrir el fichero para enterarse de cual."""
+        informe = _informe(
+            checkers=(
+                "scripts/check_coverage_floors.py",
+                "scripts/check_package_build.py",
+                "scripts/check_ci_recipe_parity.py",
+            ),
+            checkers_invocados=frozenset({"scripts/check_package_build.py"}),
+        )
+        problemas = par.evaluar(informe)
+        assert par.CODIGO_CONTRATO_HUERFANO in par.codigos_de(problemas)
+        mensaje = " ".join(p.mensaje for p in problemas)
+        assert "scripts/check_coverage_floors.py" in mensaje
+        assert "scripts/check_ci_recipe_parity.py" in mensaje
+
+    def test_sin_checkers_no_hay_quejanza(self) -> None:
+        """Un repo sin checkers no incumple nada: el invariante no inventa."""
+        informe = _informe(checkers=(), checkers_invocados=frozenset())
+        assert par.CODIGO_CONTRATO_HUERFANO not in par.codigos_de(par.evaluar(informe))
+
+
+class TestC5ElLectorDeInvocaciones:
+    """El lector tiene que distinguir una orden de una mención.
+
+    Es la misma trampa que M7 de WI-100 (un `echo` de diagnostico conto como
+    invocacion durante dos commits) y que M8 de WI-101 (`--verify` en un
+    comentario). Un guard que busca el nombre del checker en el fichero
+    entero daria verde con la etapa borrada y el nombre en un comentario
+    explicativo, que es exactamente como se documenta una etapa que ya no
+    esta.
+    """
+
+    def test_una_orden_real_se_reconoce(self) -> None:
+        texto = (
+            'val repo = System.getenv("GITHUB_WORKSPACE")\n'
+            "pipeline {\n  stages {\n"
+            '    stage("coverage-floors") {\n'
+            '      sh("cd " + repo + " && uv run python scripts/check_coverage_floors.py")\n'
+            "    }\n  }\n}\n"
+        )
+        assert "scripts/check_coverage_floors.py" in par.checkers_invocados_por(texto)
+
+    def test_una_mencion_en_comentario_no_cuenta(self) -> None:
+        texto = (
+            'val repo = System.getenv("GITHUB_WORKSPACE")\n'
+            "pipeline {\n  stages {\n"
+            '    stage("lint") { sh("cd " + repo + " && uv run ruff check src tests") }\n'
+            "    // La etapa coverage-floors invoca scripts/check_coverage_floors.py.\n"
+            "  }\n}\n"
+        )
+        assert par.checkers_invocados_por(texto) == frozenset()
+
+    def test_una_orden_partida_por_barra_inversa_se_reconoce(self) -> None:
+        """La invocacion real esta partida en varias lineas. Un lector que
+        solo mira linea a linea no la ve — y daria verde con el checker
+        enchufado, que es el falso verde opuesto."""
+        texto = (
+            "pipeline {\n  stages {\n"
+            '    stage("coverage-floors") {\n'
+            '      sh("cd " + repo + \\\n'
+            '         " && uv run python scripts/check_coverage_floors.py")\n'
+            "    }\n  }\n}\n"
+        )
+        assert "scripts/check_coverage_floors.py" in par.checkers_invocados_por(texto)
+
+
+class TestC5ElDescubrimiento:
+    def test_un_checker_nuevo_entra_sin_tocar_el_guard(self, tmp_path: Path) -> None:
+        """La forma es sin lista: un checker nuevo se vigila el dia que se
+        escribe, no el dia que alguien se acuerde de anadirlo a la lista.
+
+        Es el caso inverso al de WI-99, y hoy es invisible: escribir un
+        checker nuevo y no enchufarlo en la receta deja un guard que no
+        guarda nada, con la misma forma exacta que un guard real.
+        """
+        scripts = tmp_path / "scripts"
+        scripts.mkdir()
+        (scripts / "check_coverage_floors.py").write_text("x", encoding="utf-8")
+        nuevo = scripts / "check_un_contrato_nuevo.py"
+        nuevo.write_text("x", encoding="utf-8")
+
+        assert par.checkers_de(tmp_path) == (
+            "scripts/check_coverage_floors.py",
+            "scripts/check_un_contrato_nuevo.py",
+        )
+
+    def test_un_fichero_que_no_es_checker_no_entra(self, tmp_path: Path) -> None:
+        """La convencion es `check_*.py`, y es una convencion declarada.
+
+        Un `helpers.py` en `scripts/` no es un contrato exigible por el
+        nombre que tiene, y meterlo en el invariante obligaria a enchufa-
+        rlo en la receta, que es lo que hace inutil el invariante cuando
+        se ensancha con cosas que no son contratos.
+        """
+        scripts = tmp_path / "scripts"
+        scripts.mkdir()
+        (scripts / "checkers.py").write_text("x", encoding="utf-8")
+        (scripts / "helpers.py").write_text("x", encoding="utf-8")
+        (scripts / "check_uno.sh").write_text("x", encoding="utf-8")
+        assert par.checkers_de(tmp_path) == ()
+
+
+class TestC5ContraElRepoReal:
+    def test_todo_checker_del_repo_lo_invoca_la_receta(self) -> None:
+        """La afirmación del bloque, contra los ficheros de verdad.
+
+        `TestFicherosReales::test_el_contrato_real_no_tiene_problemas` ya
+        pasa por aqui, pero este test dice la propiedad en voz alta y falla
+        con el nombre del checker huerfano, en vez de con un codigo.
+        """
+        informe = par.medir(ROOT)
+        huerfanos = [c for c in informe.checkers if c not in informe.checkers_invocados]
+        assert informe.checkers, "no se ha descubierto ningun checker: el invariante no vigila nada"
+        assert not huerfanos, f"la receta canonica no ejecuta: {huerfanos}"

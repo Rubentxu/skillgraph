@@ -997,6 +997,54 @@ mismo resultado que uno roto, y por eso solo se nota al mutarlo: 9/9 en
 rojo (`.pipelinek/wi101_mutate.sh`).
 
 
+### La receta puede perder un contrato y seguir dando verde (WI-102)
+
+C3 lee las etapas del script, y está bien: leer del script es lo que evita un
+guard que vigila una lista paralela. Pero comprobaba que la lista fuera
+**legible**, y una lista de etapas vacía por legibilidad es tan válida como
+una completa.
+
+Medido en WI-102, con el comando canónico de verdad: se borró el bloque
+entero de la etapa `coverage-floors` —la que impone los suelos que §6.3
+declara exigibles— y el resultado fue
+
+| quién debía enterarse | resultado |
+|---|---|
+| `scripts/check_ci_recipe_parity.py` | exit **0** — «OK: …» |
+| `pytest tests/test_wi98_ci_recipe_parity.py` | **37 passed** |
+| la receta, ejecutada de verdad | **`Pipeline finished with SUCCESS`** |
+
+Cero menciones de `coverage-floors` en su salida, y cero de su `VEREDICTO`. Una
+receta que ejecuta menos se ejecuta igual de bien, y el instrumento que
+certifica los contratos no comprobaba que los contratos estuvieran. C4 exigía
+que quien ejecuta `pytest` esté *conectado* a la receta; nadie exigía que la
+receta *contenga* los contratos.
+
+**C5. Todo `scripts/check_*.py` lo invoca la receta canónica.**
+
+La forma es deliberadamente **sin lista**: el conjunto sale del repo, no de
+una constante. Una lista de contratos obligatorios dentro del guard es la
+misma trampa que `DIRECTORIOS_NO_RECETA` en WI-99 — obliga a mantener
+enumerado lo que el guard debería comprobar solo. Así un checker nuevo entra
+en el contrato el día que se escribe, y borrar una etapa se detecta porque
+el checker que invocaba deja de estar invocado.
+
+Cubre también el caso inverso, que hasta WI-102 era invisible: **escribir un
+checker y no enchufarlo en la receta**. Es un guard que no guarda nada, con la
+misma forma exacta que un guard real.
+
+Lo que no cubre, y se declara en vez de disimularse: el descubrimiento es por
+la convención `check_*.py`. Un contrato escrito con otro nombre queda fuera
+del invariante, igual que un script sin extensión quedaba fuera de C3 antes
+de WI-100.
+
+Medido después del arreglo, con la misma mutación: guard exit **1** con el
+nombre del checker huérfano, 3 tests en rojo, y la receta **ella misma**
+`Pipeline finished with FAILURE`. Mutaciones 5/5 en rojo
+(`.pipelinek/wi102_mutate.sh`), y la quinta vuelve a borrar la etapa de
+verdad: un invariante que solo sabe fallar con informes sintéticos no ha
+medido nada.
+
 ### Compatibilidad con otros runners
 
 `pipelinek` es la fuente de verdad local. GitHub Actions, GitLab CI,
@@ -1006,10 +1054,13 @@ PASS y `pipelinek` local produce FAIL, prevalece `pipelinek` local hasta
 que la divergencia se investigue y documente en este mismo archivo.
 
 **Desde WI-98 esa regla es exigible, y lo es por stage.**
-`scripts/check_ci_recipe_parity.py` (stage `ci-parity`) comprueba que todo
-runner remoto invoque `.pipeline.kts` **en un paso que se ejecuta** —no en
-un comentario que lo mencione— y que la receta canónica se pueda ejecutar
-fuera de esta máquina.
+`scripts/check_ci_recipe_parity.py` (stage `ci-parity`) comprueba, mediante
+**C1–C5**, que todo runner remoto invoque `.pipeline.kts` **en un paso que se
+ejecuta** —no en un comentario que lo mencione—, que la receta canónica se
+pueda ejecutar fuera de esta máquina, que quien ejecuta `pytest` esté
+conectado a la receta (C4), y que la receta **contenga** todos los contratos
+exigibles de `scripts/` (C5). C4 y C5 son las dos mitades de una misma regla:
+conectar sin contener, y contener sin conectar, fallan igual.
 
 Medido cuando se añadió la comprobación:
 
