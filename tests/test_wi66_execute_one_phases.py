@@ -275,11 +275,38 @@ def _rows(storage: Storage, run_id: str) -> int:
 
 
 class TestShortCircuitVerdicts:
-    def test_fail_node_with_always_returns_false(self) -> None:
-        src = inspect.getsource(RunController._fail_node_with)
-        assert src.rstrip().endswith("return False"), (
-            "`_fail_node_with` debe seguir devolviendo False: las fases traducen ese retorno a None"
+    def test_fail_node_with_always_returns_false(self, tmp_path: Path) -> None:
+        """`_fail_node_with` devuelve False: se INVOCA, no se lee el fuente.
+
+        Antes este test hacia `inspect.getsource(...)` y comprobaba que la
+        ultima linea fuese `return False`. WI-76 demostro que un guard de
+        ese tipo no muerde: basta con que el texto se conserve para que el
+        contrato parezca verificado sin haberlo verificado. Aqui el valor
+        de retorno se obtiene de verdad.
+
+        Nota de honestidad: hoy ningun caller consume ese retorno (los dos
+        call-sites de `node_execution_delegations.py` la llaman como
+        sentencia). Se fija igualmente porque es el contrato declarado en
+        el docstring, y para que un `return None` temprano no lo rompa en
+        silencio. El efecto secundario (marcar el nodo FAILED) ya lo
+        verifica `test_runcontroller.py`.
+        """
+        ctl, storage = _controller(tmp_path, _StubAdapter())
+
+        returned = ctl._fail_node_with(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            run_id="r-sentinel",
+            node_execution_id="ne-inexistente",
+            node_name=NODE,
+            exc=ValueError("boom"),
         )
+
+        assert returned is False, (
+            f"`_fail_node_with` devolvio {returned!r}, se esperaba False: "
+            f"las fases traducen ese retorno a None"
+        )
+        storage.close()
 
     def test_attempts_exhausted_returns_false(self, tmp_path: Path) -> None:
         """Con MAX_NODE_ATTEMPTS ejecuciones previas no se abre una mas.

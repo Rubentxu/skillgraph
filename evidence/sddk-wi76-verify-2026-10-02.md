@@ -133,3 +133,57 @@ nuevo esos cuerpos se ejecutan, así que el deficit desaparece. Esto **no**
 significa que el código nuevo esté mejor: significa que la cifra por fin
 mide lo que dice medir. El instrumento de cobertura fiable es el que landed
 WI-75; antes de este trabajo esa cifra era ciega al CLI entero.
+
+---
+
+## 7. Auditoría de extensión: ¿el patrón se repite?
+
+La hipótesis que dejó este trabajo era que un guard sostenido por
+`getsource` o por AST podría aparecer en más sitios. Se auditó en vez de
+suponerla.
+
+**Inventario**: 40 tests en 29 ficheros combinan `inspect.getsource` con un
+`assert`. Triaje:
+
+| categoría | nº | veredicto |
+|---|---|---|
+| Contratos estructurales ("X no debe contener SQL", "bajo 800 LoC", "Y ya no redefine el tipo que movimos") | ~37 | **legítimos**: no se pueden verificar por comportamiento; comprueban que una refactor movió el código |
+| Afirman comportamiento en runtime y solo leen texto | 2 | **falso positivo**: el contrato sí está verificado en otro sitio |
+| Falso éxito confirmado | 1 | corregido en §4 |
+
+Los dos candidatos que afirmaban comportamiento en runtime:
+
+**A. `test_wi66::test_fail_node_with_always_returns_false`** — decía
+"`_fail_node_with` debe seguir **devolviendo** False" y solo comprobaba que
+la última línea del fuente fuese `return False`.
+
+Descartado como falso éxito: insertando un `return None` temprano (dejando
+intacta la última línea, que es el punto ciego del guard de texto), lo
+cazan 2 tests de `test_runcontroller.py` — porque el efecto secundario de
+marcar el nodo FAILED sí está verificado conductualmente. El valor de
+retorno no lo consume ningún caller, así que su valor es irrelevante.
+
+Sí quedaba un residuo real: el docstring de `_fail_node_with` afirma
+"Devuelve siempre `False` para que el caller haga `return
+self._fail_node_with(...)`", y **ninguno de los dos call-sites lo hace**
+(`node_execution_delegations.py:210` y `:268` la invocan como sentencia).
+Corregido: el guard pasa a invocar la función y comprobar el retorno de
+verdad, y el docstring deja de prometer un uso que no existe.
+
+**B. `test_wi44::test_open_known_project_sigue_lanzando`** — decía "debe
+seguir **levantando** FileNotFoundError" y comprobaba que la cadena
+`"FileNotFoundError"` estuviera en el fuente.
+
+Descartado: `test_h9_cli_inproc_knowledge_refresh_compile_trace.py:198`
+verifica el contrato entero y en proceso con
+`pytest.raises(FileNotFoundError, match="proyecto 'missing' no encontrado")`.
+El guard de texto es redundante, no peligroso.
+
+**Conclusión honesta**: el patrón **no es sistémico**. De los dos candidatos,
+ninguno era un falso éxito. La hipótesis del `siguiente` #3 no se sostiene y
+se retira. Queda una corrección menor ya aplicada, que es la de WI-76
+aplicada por prophylaxis a un guard que era redundante pero nominal.
+
+Esto no vuelve verde el hallazgo de §2: aquel sí era real, y lo era porque
+**nada** ejecutaba el shim — ni test conductual, ni el propio contrato. La
+diferencia entre A/B y §2 es exactamente esa.

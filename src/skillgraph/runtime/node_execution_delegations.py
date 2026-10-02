@@ -416,8 +416,18 @@ class NodeExecutionDelegations:
 
         Helper local para `_execute_one`: centraliza el formato
         `"{type(exc).__name__}: {exc}"` y delega en `_mark_node_failed`.
-        Devuelve siempre `False` para que el caller haga
-        `return self._fail_node_with(...)` sin escribir el literal.
+
+        Devuelve siempre `False`. Ojo: los dos call-sites actuales
+        (`_execute_one`, líneas ~210 y ~268) la invocan como sentencia y
+        NO consumen el retorno — la versión anterior de este docstring
+        prometía que hacían `return self._fail_node_with(...)`, y no es
+        así. El valor se fija igualmente porque es el contrato declarado y
+        para que un `return None` accidental no lo rompa en silencio
+        (`tests/test_wi66_execute_one_phases.py` lo comprueba invocándola,
+        no leyendo el fuente).
+
+        Lo que los callers sí dependen es del EFECTO: que el nodo quede
+        FAILED. Eso lo verifica `tests/test_runcontroller.py`.
         """
         self._mark_node_failed(
             tenant_id=tenant_id,

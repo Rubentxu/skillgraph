@@ -8477,3 +8477,51 @@ dice medir. Instrumento fiable: el de WI-75; antes era ciego al CLI.
 Ciclo SDDK `wi-76-shim-false-success`. Sin cambios en `src/`: solo red,
 asi que **sin ADR**. Commit tipo `test(platform)`.
 Evidencia: `evidence/sddk-wi76-verify-2026-10-02.md`.
+
+---
+
+## 2026-10-02 — WI-76 (bis): el patron NO era sistémico
+
+El `siguiente` #3 del recibo de WI-76 era "auditar si el patron
+'garantia sostenida por un test que no ejecuta nada' se repite". Se
+audito en vez de suponerlo. **No se repite.**
+
+**Inventario**: 40 tests en 29 ficheros combinan `inspect.getsource` con
+un `assert`. Triaje:
+
+- ~37 son contratos ESTRUCTURALES ("X no debe contener SQL", "bajo 800
+  LoC", "Y ya no redefine el tipo que movimos"). Son legitimos: no se
+  pueden verificar por comportamiento, comprueban que una refactor movio
+  el codigo.
+- 2 afirmaban comportamiento en runtime y solo leian texto.
+- 1 era el falso exito de WI-76, ya corregido.
+
+**Candidato A — `_fail_node_with` "debe seguir devolviendo False"**
+(test_wi66). Descartado: metiendo un `return None` temprano, dejando
+intacta la ultima linea (que es el punto ciego del guard de texto), lo
+cazan 2 tests de `test_runcontroller.py`, porque el efecto secundario de
+marcar el nodo FAILED si esta verificado conductualmente. El valor de
+retorno no lo consume NINGUN caller.
+
+**Candidato B — `_open_known_project` "debe seguir levantando
+FileNotFoundError"** (test_wi44). Descartado:
+`test_h9_cli_inproc_...:198` lo verifica entero y en proceso con
+`pytest.raises(FileNotFoundError, match="proyecto 'missing' no
+encontrado")`.
+
+**Lo que si quedaba era un residuo real**: el docstring de
+`_fail_node_with` promete "Devuelve siempre `False` para que el caller
+haga `return self._fail_node_with(...)`", y ninguno de los dos
+call-sites (`node_execution_delegations.py:210` y `:268`) lo hace: la
+invocan como sentencia. Corregido. El guard pasa a INVOCAR la funcion y
+comprobar el retorno, con la misma mutacion que antes escapaba (return
+temprano) ahora detectada. Docstring actualizado para no prometer un uso
+inexistente.
+
+**Por que A/B no son falsos exitosos y §2 si**: alli no habia NINGUN test
+que ejecutara el shim, ni el propio contrato lo consumia. Aqui el
+comportamiento esta verificado en otro sitio; el guard de texto es
+redundante, no peligroso. La hipotesis del recibo se retira: no es
+sistematico.
+
+Evidencia ampliada: `evidence/sddk-wi76-verify-2026-10-02.md` §7.
