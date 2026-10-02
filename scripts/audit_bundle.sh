@@ -82,7 +82,13 @@ fi
 echo "[audit_bundle] ejecutando bash scripts/ci.sh..."
 bash scripts/ci.sh 2>&1 | tee ci-output-cleanroom.txt
 
-echo "[audit_bundle] ejecutando uat_audit..."
+echo "[audit_bundle] ejecutando uat_audit --verify..."
+# `--verify`, no el modo lectura. MEDIDO en WI-101: sin flag, `uat_audit`
+# relee los JSON de `tests/uat-evidence/` y no ejecuta un solo UAT, asi
+# que el `PASS=16` de este bundle describia 26 ficheros escritos hace 111
+# commits, no el codigo que se esta certificando. `--verify` ejecuta, no
+# persiste, y confronta cada veredicto con la evidencia persistida.
+#
 # `-m tests.uat_audit`, no `python tests/uat_audit.py`: en la forma de
 # fichero, sys.path[0] es `tests/` y el `from tests._evidence_lock import`
 # de nivel de modulo falla con ModuleNotFoundError (exit 1). Con `-m` el
@@ -94,11 +100,11 @@ echo "[audit_bundle] ejecutando uat_audit..."
 # Mismo workaround que el pre-push hook y que .pipeline.kts.
 UAT_LOG="${SCRATCH}/skillgraph-${SHORT_SHA}/uat-audit-cleanroom.txt"
 set +e
-uv run python -m tests.uat_audit 2>&1 | tee "$UAT_LOG"
+uv run python -m tests.uat_audit --verify 2>&1 | tee "$UAT_LOG"
 UAT_RC="${PIPESTATUS[0]}"
 set -e
 if [ "$UAT_RC" -ne 0 ]; then
-    echo "[audit_bundle] ERROR: uat_audit fallo (exit ${UAT_RC}); bundle NO certificable" >&2
+    echo "[audit_bundle] ERROR: uat_audit --verify fallo (exit ${UAT_RC}); bundle NO certificable" >&2
     exit "$UAT_RC"
 fi
 

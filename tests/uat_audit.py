@@ -24,9 +24,11 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EVIDENCE_DIR = REPO_ROOT / "tests" / "uat-evidence"
@@ -1829,6 +1831,28 @@ _UAT_FUNCTIONS: list[tuple[str, str]] = [
 # seguridad, --write sobre stubs exige --yes explicito.
 _STUB_UATS: frozenset[str] = frozenset({"UAT-08", "UAT-09", "UAT-12", "UAT-13"})
 
+#: Veredictos con los que una corrida PUEDE certificarse. Lista blanca, no
+#: negra.
+#:
+#: `PASS` y `BLOCKED` son el dominio cerrado de `Evidence.status`; `BLOCKED`
+#: certifica porque es un veredicto honesto ("esto no se puede comprobar
+#: todavia"), no una ausencia. Todo lo demas —FAIL, MISSING, READ_ERROR, y
+#: cualquier cadena que no sea del dominio— es «no se si».
+#:
+#: La lista blanca es la forma correcta por una razon medible: una lista
+#: negra tiene que enumerar cada cosa mala, y el conjunto de cosas malas no
+#: tiene fin. Con lista negra, un `status: "passed"` (typo, esquema viejo)
+#: pasaba el guard en silencio — y el resumen ni lo contaba, asi que la
+#: corrida imprimia `PASS=15 FAIL=0` con 16 veredictos leidos. Ese fue el
+#: segundo defecto que destapo WI-101 al escribir su propio test.
+#:
+#: MEDIDO en WI-101, con el comando exacto del bundle: con `UAT-01.json`
+#: inyectado en FAIL el modo lectura imprimia `PASS=15 FAIL=1` y salia con
+#: 0. Con `tests/uat-evidence/` ausente imprimia `PASS=0 FAIL=0` y salia
+#: con 0. La guarda del bundle (`if [ "$UAT_RC" -ne 0 ]`) no podia
+#: dispararse en ninguno de los dos casos.
+_ESTADOS_CERTIFICABLES: Final[frozenset[str]] = frozenset({"PASS", "BLOCKED"})
+
 
 def _run_one(uat_id: str, fn_name: str, write: bool) -> tuple[Evidence, Path | None]:
     """Ejecuta un UAT individual; graba evidencia solo si write=True."""
@@ -1865,31 +1889,118 @@ def _summary(results: list[tuple[str, str, Path | None]]) -> None:
     n_pass = sum(1 for _, s, _ in results if s == "PASS")
     n_fail = sum(1 for _, s, _ in results if s == "FAIL")
     n_block = sum(1 for _, s, _ in results if s == "BLOCKED")
+    # Los veredictos fuera del dominio NO se tragan. MEDIDO en WI-101: con
+    # un `status: "passed"` el resumen imprimia `PASS=15 FAIL=0 BLOCKED=0`
+    # sobre 16 veredictos leidos, porque el recuento soloenian las tres
+    # etiquetas conocidas. Un total que no suma el numero de filas leidas
+    # no es un total.
+    otros = [(uid, s) for uid, s, _ in results if s not in _ESTADOS_CERTIFICABLES and s != "FAIL"]
     print(f"\nPASS={n_pass}  FAIL={n_fail}  BLOCKED={n_block}")
+    if otros:
+        print(f"FUERA DE DOMINIO={len(otros)}: {otros}")
 
 
-def _read_existing() -> list[tuple[str, str, Path | None]]:
-    """Lee la evidencia persistida sin ejecutar nada (modo read-only)."""
+def _read_existing(*, silencioso: bool = False) -> list[tuple[str, str, Path | None]]:
+    """Lee la evidencia persistida sin ejecutar nada (modo read-only).
+
+    `silencioso=True` suprime el volcado por UAT: lo usa `--verify`, que ya
+    imprime la tabla que importa (la comparacion con la ejecucion) y no
+    quiere dos informes del mismo dato en la misma salida.
+    """
     results: list[tuple[str, str, Path | None]] = []
     if not EVIDENCE_DIR.exists():
-        print(f"(no hay evidencia en {EVIDENCE_DIR})")
+        if not silencioso:
+            print(f"(no hay evidencia en {EVIDENCE_DIR})")
+        for uat_id, _fn in _UAT_FUNCTIONS:
+            results.append((uat_id, "MISSING", None))
         return results
     for uat_id, _fn in _UAT_FUNCTIONS:
         path = EVIDENCE_DIR / f"{uat_id}.json"
         if not path.exists():
-            print(f"  {uat_id}: MISSING (no hay evidencia persistida)")
+            if not silencioso:
+                print(f"  {uat_id}: MISSING (no hay evidencia persistida)")
             results.append((uat_id, "MISSING", None))
             continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            print(f"  {uat_id}: READ_ERROR {type(exc).__name__}: {exc}")
+            if not silencioso:
+                print(f"  {uat_id}: READ_ERROR {type(exc).__name__}: {exc}")
             results.append((uat_id, "READ_ERROR", None))
             continue
         status = str(data.get("status", "UNKNOWN"))
         rev = str(data.get("revision", "?"))[:12]
-        print(f"  {uat_id}: {status} (rev={rev}, persisted)")
+        if not silencioso:
+            print(f"  {uat_id}: {status} (rev={rev}, persisted)")
         results.append((uat_id, status, path))
+    return results
+
+
+def _estados_persistidos() -> dict[str, str]:
+    """Mapa uat_id -> status segun la evidencia en disco.
+
+    Delega en `_read_existing` a proposito: un segundo lector de la
+    evidencia podria discrepar del primero, y entonces `--verify`
+    contrastaria la ejecucion contra una lectura que no es la que el modo
+    lectura usa.
+    """
+    return {uid: status for uid, status, _ in _read_existing(silencioso=True)}
+
+
+def _verdict(results: Sequence[tuple[str, str, Path | None]]) -> int:
+    """Exit code de una corrida: 0 solo si TODOS los veredictos certifican.
+
+    Este es el UNICO sitio donde se decide si una corrida pasa. Los tres
+    modos lo comparten para que no puedan divergir entre si: mientras el
+    modo lectura hiciese su propio `return 0`, cambiar el codigo de
+    ejecucion no habria fixing nada.
+
+    MEDIDO en WI-101: el modo lectura hacia `return 0` incondicional, y el
+    guard del bundle compara contra ese codigo. Un exit code fijo no es un
+    guard: es un mensaje con codigo de salida.
+    """
+    return 1 if any(s not in _ESTADOS_CERTIFICABLES for _, s, _ in results) else 0
+
+
+def _divergencias(
+    ejecutado: Mapping[str, str], persistido: Mapping[str, str]
+) -> tuple[tuple[str, str, str], ...]:
+    """UATs cuya ejecucion no coincide con la evidencia persistida.
+
+    Devuelve tuplas ``(uat_id, persistido, ejecutado)`` ordenadas por UAT.
+
+    La evidencia persistida es un JSON del pasado; el codigo que la produjo
+    es el presente. Sin este contraste, un UAT que hoy falla puede seguir
+    declarando PASS indefinidamente sin que nada se entere: la evidencia es
+    la unica fuente del veredicto y la unica fuente no se contrasta con
+    ella misma.
+    """
+    return tuple(
+        (uid, str(persistido.get(uid, "AUSENTE")), ejecutado[uid])
+        for uid in sorted(ejecutado)
+        if persistido.get(uid) != ejecutado[uid]
+    )
+
+
+def _reportar_divergencias(divergencias: Sequence[tuple[str, str, str]]) -> None:
+    if not divergencias:
+        print("\nConvergencia: la ejecucion coincide con la evidencia persistida.")
+        return
+    print(f"\n=== Divergencias ({len(divergencias)}) ===")
+    for uat_id, persistido, ejecutado in divergencias:
+        print(f"  {uat_id}: persistido={persistido} ejecutado={ejecutado}")
+
+
+def _ejecutar(
+    selected: Sequence[tuple[str, str]], *, write: bool
+) -> list[tuple[str, str, Path | None]]:
+    """Ejecuta las UATs seleccionadas y recoge sus veredictos."""
+    results: list[tuple[str, str, Path | None]] = []
+    for uat_id, fn_name in selected:
+        print(f"--- Ejecutando {fn_name} ---")
+        ev, path = _run_one(uat_id, fn_name, write=write)
+        results.append((uat_id, ev.status, path))
+        _report(ev, path)
     return results
 
 
@@ -1913,6 +2024,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Ejecuta los UATs SIN persistir evidencia (util para debug).",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Ejecuta los UATs SIN persistir y CONFRONTA el resultado con la "
+        "evidencia persistida: falla si algun UAT falla hoy, o si lo que dice "
+        "la evidencia no es lo que devuelve la ejecucion. Es el modo que "
+        "usa scripts/audit_bundle.sh.",
     )
     parser.add_argument(
         "--yes",
@@ -1941,12 +2060,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Disponibles: {[uid for uid, _ in _UAT_FUNCTIONS]}", file=sys.stderr)
             return 2
 
-    # Por defecto (sin --write ni --dry-run): modo read-only.
-    if not args.write and not args.dry_run:
+    # Por defecto (sin --write, --dry-run ni --verify): modo read-only.
+    #
+    # El exit code sale de `_verdict`, no de un `return 0` aqui. MEDIDO en
+    # WI-101: con `return 0` incondicional, evidencia en FAIL salia con 0 y
+    # el bundle se certificaba a si mismo con el FAIL a la vista.
+    if not args.write and not args.dry_run and not args.verify:
         print("=== Modo lectura (no se ejecuta nada; evidencia persistida) ===")
         results = _read_existing()
         _summary(results)
-        return 0
+        return _verdict(results)
 
     # Proteccion: --write sobre UATs stub requiere --yes explicito.
     write = bool(args.write)
@@ -1962,18 +2085,22 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 3
 
+    if args.verify:
+        print(f"=== Modo VERIFY ({len(selected)} UATs; no persiste) ===")
+        results = _ejecutar(selected, write=False)
+        _summary(results)
+        divergen = _divergencias({uid: s for uid, s, _ in results}, _estados_persistidos())
+        _reportar_divergencias(divergen)
+        # Falla si un UAT no certifica, o si la evidencia no describe lo que
+        # el codigo hace hoy. Las dos cosas por separado: una convergencia
+        # de FAIL no es un veredicto bueno.
+        return _verdict(results) or (1 if divergen else 0)
+
     mode = "WRITE" if write else "DRY-RUN"
     print(f"=== Modo {mode} ({len(selected)} UATs) ===")
-    results: list[tuple[str, str, Path | None]] = []
-    for uat_id, fn_name in selected:
-        print(f"--- Ejecutando {fn_name} ---")
-        ev, path = _run_one(uat_id, fn_name, write=write)
-        results.append((uat_id, ev.status, path))
-        _report(ev, path)
-
+    results = _ejecutar(selected, write=write)
     _summary(results)
-    n_fail = sum(1 for _, s, _ in results if s == "FAIL")
-    return 0 if n_fail == 0 else 1
+    return _verdict(results)
 
 
 if __name__ == "__main__":
