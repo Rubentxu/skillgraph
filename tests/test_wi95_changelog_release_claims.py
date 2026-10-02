@@ -80,6 +80,18 @@ def _en_changelog() -> set[str]:
     return {v for v, _ in _secciones()}
 
 
+def _version_en_preparacion() -> str | None:
+    """La version pura que `__version__` declara, si lo hace.
+
+    Es la unica version sin tag que el CHANGELOG puede anunciar legitimamente:
+    la que se esta emitiendo ahora mismo. Devuelve `None` en cuanto el bump a
+    `.devN` se aplica, que es cuando la excepcion deja de tener sentido.
+    """
+    texto = (ROOT / "src" / "skillgraph" / "__init__.py").read_text(encoding="utf-8")
+    m = re.search(r'^__version__ = "(\d+\.\d+\.\d+)"', texto, re.M)
+    return m.group(1) if m else None
+
+
 # --- 1. Biyeccion con git -------------------------------------------------
 
 
@@ -98,8 +110,24 @@ class TestBiyeccionConGit:
         )
 
     def test_toda_seccion_con_version_tiene_tag(self) -> None:
-        """La inversa: una seccion que anuncia una version que no existe."""
-        inventadas = [v for v in sorted(_en_changelog()) if v not in set(_tags())]
+        """La inversa: una seccion que anuncia una version que no existe.
+
+        Con UNA excepcion, y es la misma que obliga a `HOOK_SKIP_TESTS` en el
+        commit de release: entre «commiteo la release» y «etiqueto» hay una
+        ventana en la que el CHANGELOG anuncia una version que git todavia no
+        tiene. `AGENTS.md §12` obliga a ese orden, y `test_release_governance`
+        tiene la misma imposibilidad estructural.
+
+        La excepcion es **estrecha y se autolimpia**: solo vale para la version
+        que `__version__` declara en PURO, y en cuanto llega el bump a `.dev0`
+        deja de aplicar. Si el tag se perdiera, el bump dejaria de estar
+        justificado y el guard volveria a fallar — que es justo lo que tiene
+        que pasar.
+        """
+        tags = set(_tags())
+        en_changelog = _en_changelog()
+        en_curso = _version_en_preparacion()
+        inventadas = [v for v in sorted(en_changelog) if v not in tags and v != en_curso]
         assert not inventadas, (
             f"CHANGELOG.md tiene seccion de versiones que git no tiene: {inventadas}"
         )
