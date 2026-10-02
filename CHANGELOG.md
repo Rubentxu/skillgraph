@@ -14,9 +14,10 @@ Tipos:
 
 ## [Unreleased] — WI-92: lo que WI-90 registró como deuda, medido: era falso
 
-**Sin bump todavía**: el `test(governance)` de este bloque no bumpea por sí solo; el
-`docs` tampoco. Si no hay ningún `fix`/`feat` al cerrar, la release no procede. 2499
-passed (2493 antes).
+**Sin bump, y es la decisión correcta**: el bloque entrega 1 `test` + 1 `docs`, y por
+la regla de este fichero (`refactor`/`test`/`docs`/`chore` no bumpean SemVer) no hay
+release que emitir. Forzar una por un `test` inflaría el historial. 2499 passed
+(2493 antes).
 
 ### Measured
 

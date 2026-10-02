@@ -1,7 +1,12 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-02 (quinta tanda) cerrado — WI-92, release `v0.16.18`.**
-> Versión activa `0.16.18.dev0`; tag `v0.16.18`. 2499 passed.
+> **Bloque 2026-10-02 (quinta tanda) cerrado — WI-92, SIN release.**
+> Versión activa `0.16.17.dev0`; último tag `v0.16.17` en `321fa10`. 2499 passed.
+> **Sin release y a propósito**: el bloque entrega 1 `test` + 1 `docs`, y por la
+> regla de SemVer del CHANGELOG (`refactor`/`test`/`docs`/`chore` no bumpean) no
+> hay nada que liberar. Forzar una release por un `test` sería inflar el
+> historial; no liberar trabajo verificado sí sería dejándolo a medias, y no es
+> el caso.
 >
 > **WI-92 — lo que WI-90 registró como deuda, medido: era falso** (`5b591c2`).
 > WI-90 cerró el round-trip de `FileSignature` y dejó anotados **sin medir**
