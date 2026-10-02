@@ -126,8 +126,8 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-73   # P3 legibilidad: aggregate_file_signatures 86 -> 72 LoC, cc 8 -> 3 (P3 5 -> 4). El corte dio NOMBRE a un invariante que solo vivia en el docstring de la clase y en el nombre de un test: UAT-EVO-08 (un proyecto no ve las firmas de otro) ahora es _sources_in_scope, con sus tres casos documentados (incluido el tercero: un source inexistente se omite en silencio, distincion deliberada respecto al rechazo, porque filtrar en silencio el cruce de otro proyecto seria una fuga de contenido). El for-solo-acumula paso a comprehension (AGENTS 11.8). Ciclo SDDK wi-73-p3-aggregate-file-signatures
-  next_workitem: WI-74   # Quedan 4 funciones P3 y NINGUNA tiene cc alto: build_parser (409, cc 1, tabla declarativa), compile_handoff (90, cc 2, lineal), compile_handoff_from_scopes (85, cc 1, lineal) y promote_candidate (84, cc 4, marginal). Ademas hay un PUNTO CIEGO MEDIDO que el audit no captura: list_file_signatures_for_source (knowledge_controller.py) tiene cc 10, la mayor de su modulo, con 58 LoC, y cae entre los dos umbrales del audit (80 LoC y cc 20). Decidir con el operador si se abre frente para ella o se acepta. NO tocar build_parser ni las dos lineales: partirlas seria ceremonia
+  current_workitem: WI-74   # Integridad del estado: STATE.yaml declaraba 4 SHA que NO EXISTEN en el repo (v0.14.1..v0.14.4), 2 SHA que apuntan al commit equivocado, 3 entradas con prosa en el campo sha, release.tag dos versiones atras y 2 releases sin registrar. Reconciliado contra git (git rev-list -n 1) de forma quirurgica, preservando los 156 comentarios del documento. Red nueva tests/test_state_release_integrity.py: ata el estado a git tag con igualdad exacta, y un test impide borrar la constancia de los SHA que no resolvian
+  next_workitem: decision_del_operador   # El frente P3 esta AGOTADO: quedan 4 funciones y ninguna tiene cc alto (build_parser cc 1 declarativo, compile_handoff cc 2 y compile_handoff_from_scopes cc 1 lineales, promote_candidate cc 4 marginal). Partirlas seria ceremonia. Queda pendiente de decision: (a) abrir frente para el punto ciego del audit (list_file_signatures_for_source, cc 10 con 58 LoC, que ningun umbral captura) o aceptarlo; (b) aprobar el cierre de los ciclos SDDK wi-72, wi-73 y wi-74, que esperan approval-system-cycle_supersede
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
       fecha: 2026-09-26
@@ -1095,10 +1095,14 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.16.8
+  tag: v0.16.10
   fecha: 2026-09-29
   semver_bump: PATCH
   rationale: "Ciclo SDDK WI-56 (path A-lite), commit 8eda4ea. Descomposicion del god-module platform/storage.py (2837 -> 1807 LoC, -36%) en 5 repositorios SQLite reales mediante patron strangler (ADR-0016): SqliteRunRepository, SqlitePolicyStore, SqliteKnowledgeRepository, SqliteEventStore y SqlitePromotionRepository. Cada corte tiene su red de contrato escrita ANTES (RED honesto: solo fallaba la identidad del facade) y cero ediciones en callers (REQ-WI56-1/I1). Incluye 8eda4ea chore(repo): .jcode-scratch/ ignorado, auditoria de deuda del dia y evidencia UAT de UAT-08/09 alineada con HEAD. SemVer derivado del historial v0.16.7..8eda4ea: 5 refactor, 2 test, 5 chore, 1 docs, 0 feat, 0 fix, 0 breaking => PATCH (unica forma valida). 1754/1754 tests no-UAT PASS, ruff check+format limpios, release governance gate 2 passed. Detalle del sprint R1+R2 que abrio la linea 0.16.x en v0.16.0 (WI-32/33, DTOs inmutables + SqliteUnitOfWork) conservado en la entrada v0.16.0 del historial de releases."
+  # Reconciliado con git el 2026-10-02 (WI-74): cada `sha` es el de su
+  # etiqueta y resuelve a un commit real. Donde el valor anterior no
+  # resolvia, queda en `superseded_sha` con la razon. La red que lo
+  # mantiene: tests/test_state_release_integrity.py
   releases:
     - tag: v0.3.0
       fecha: 2026-09-23
@@ -1170,76 +1174,95 @@ release:
       nota: "MINOR locks concurrentes por run (RunLock + fcntl + RunController lock_mode/lock_timeout_seconds). Commit: 241ccc9. Cierra vector de interleaving que podia saltarse la redaccion (v0.13.0). Cierre de Etapa 7 (S6)."
     - tag: v0.14.1
       fecha: 2026-09-26
-      sha: "1947df6"
+      sha: "e2cdc533ad5c8c7db12eaf8a5c5cab21bf5030d6"
+      superseded_sha: "1947df6"
+      superseded_sha_nota: "el valor anterior no resuelve en git (el historial se movio bajo esta release); el sha vigente es el de la etiqueta. Constancia conservada a proposito."
       nota: "WI-01: release & integration readiness (rollback del drift de provenance v0.14.0). Erratum de v0.14.0 preservado como evidencia historica."
     - tag: v0.14.2
       fecha: 2026-09-26
-      sha: "7413f0c"
+      sha: "da95923acf153e198e3d6317d7e1e83aef42b58b"
+      superseded_sha: "7413f0c"
+      superseded_sha_nota: "el valor anterior no resuelve en git (el historial se movio bajo esta release); el sha vigente es el de la etiqueta. Constancia conservada a proposito."
       nota: "WI-02a: refactor B+C puertos (RunRepository/EventStore/PolicyStore como Protocols inyectables)."
     - tag: v0.14.3
       fecha: 2026-09-26
-      sha: "d8ec98a"
+      sha: "7dec857cd1153d53bbe7c2ede38ac60b6ff28af7"
+      superseded_sha: "d8ec98a"
+      superseded_sha_nota: "el valor anterior no resuelve en git (el historial se movio bajo esta release); el sha vigente es el de la etiqueta. Constancia conservada a proposito."
       nota: "WI-02b: refactor EventLog + KnowledgeController por Protocols + escape hatch removal."
     - tag: v0.14.4
       fecha: 2026-09-26
-      sha: "9e1cd12"
+      sha: "dd7a3efcb31bf81a5d70b1a91a0e49b579d30221"
+      superseded_sha: "9e1cd12"
+      superseded_sha_nota: "el valor anterior no resuelve en git (el historial se movio bajo esta release); el sha vigente es el de la etiqueta. Constancia conservada a proposito."
       nota: "WI-03: governance/receipts migra a KnowledgeRepository; cierra ultimo escape hatch _conn."
     - tag: v0.14.5
       fecha: 2026-09-26
       nota: "WI-06..WI-10 housekeeping (coverage hardening H-14 + docs sync). PATCH sin release (doc-only sin bump)."
-      sha: "0.14.5 housekeeping rollup"
+      sha: "516bb20ff9e541e1c196de24191b04161e0ffaf6"
+      nota: "0.14.5 housekeeping rollup"
     - tag: v0.14.6
       fecha: 2026-09-26
-      sha: "WI-11 release bundle"
+      sha: "42a26cf8b86f2ce510817672a896b43836384108"
+      nota: "WI-11 release bundle"
       nota: "WI-06..WI-10 agrupados en un solo bump MINOR (housekeeping)"
     - tag: v0.14.7
       fecha: 2026-09-26
-      sha: "WI-12..WI-17 release bundle"
+      sha: "5b7e2968c1ac013de9cee67f73aa6ea1ec3fa736"
+      nota: "WI-12..WI-17 release bundle"
       nota: "WI-12 (E1 Adapter real HttpAgentAdapter) + WI-13 (CLI wiring) + WI-14 (Threat model S8) + WI-15 (Backups CLI) + WI-16 (Observabilidad) + WI-17 (import redundante). MINOR."
     - tag: v0.14.8
       fecha: 2026-09-26
-      sha: "4a297ad1"
+      sha: "c5c405e32dd14a5695c0abc1288541515b8e3f96"
       nota: "WI-21..WI-30 (debt-reduction H-03: 8 hotspots cc refactored + auditor reproducible WI-28). MINOR."
     - tag: v0.15.0
       fecha: 2026-09-27
-      sha: "4d6d1b430ca3f726a080e12c37dd58180d72483b (tag SHA 0d73f731dd9142cd44b5be27965f642ab03254b1)"
+      sha: "4d6d1b430ca3f726a080e12c37dd58180d72483b"
       nota: "R0 housekeeping (QW-A..I, 10 commits) + WI-31 cast Storage Protocol (1 commit atomico) + WI-35 docs (1 commit). MINOR por 1 BREAKING (QW-B redaction default flip) + 3 feat (QW-C Storage CM, WI-31 Storage.knowledge_repository(), QW-I docs/blueprint snapshot) + 1 fix (QW-A Anthropic retired model). 1078/1078 PASS, ruff limpio, cobertura 95.25%. Erratum v0.14.0 preservado."
     - tag: v0.16.0
       fecha: 2026-09-27
-      sha: "e99df3a0e83972fd9f2a99fbdbe172346d3aeffa (tag SHA e99df3a0e83972fd9f2a99fbdbe172346d3aeffa sobre commit e99df3a0e83972fd9f2a99fbdbe172346d3aeffa; sprint R1+R2 HEAD base b42a2a8)"
+      sha: "e99df3a0e83972fd9f2a99fbdbe172346d3aeffa"
       nota: "Sprint audit externo 974055c: WI-32.1 cast residual + WI-32.2 StoredEvent (WI-32.2 ya en v0.15.0 base 2e85a8d), WI-32.4 StoredRun/NodeExecution, WI-32.5 StoredResource/Relation, WI-33 SqliteUnitOfWork + 5 bounded-context adapters. 1109/1109 PASS, ruff limpio. 0 BREAKING. Sin WI-34 (adelgazar RunController) ni WI-35 (CLI split) por scope/riesgo."
     - tag: v0.16.1
       fecha: 2026-09-27
-      sha: "4cb641c7e1476b04110d26243fee20482be5c5db (tag SHA c2d6daf2ed864fd626f5a86cb83982aa5c96f85f)"
+      sha: "4cb641c7e1476b04110d26243fee20482be5c5db"
       nota: "PATCH. fix(cli): cierre de conexiones SQLite propiedad en los handlers + fix(cli) agents_root NameError en sg run detectado por E2E (WI-37) + refactor(storage) R1 strict DTO boundary en list_promotions/get_promotion/get_budget (WI-38)."
     - tag: v0.16.2
       fecha: 2026-09-27
-      sha: "92e06f3e3c78e727de057d965f09305636e58762 (tag SHA 92432933241535d2e4531dab518217d973694a00)"
+      sha: "92e06f3e3c78e727de057d965f09305636e58762"
       nota: "PATCH. 4 fix: errores de knowledge clasificados por tipo y no por texto del mensaje, rechazo de bool donde se declara integer/number, narrowing de bare except, y 7 delegaciones de Storage rotas en SqliteUnitOfWork. Ademas fix(ci): .pipeline.kts versionado y rutas absolutas en sh(). B1 (Cargo.toml) documentado como bloqueante real del release planner."
     - tag: v0.16.3
       fecha: 2026-09-28
-      sha: "95d4c8a3ffb370877e384011e040a3a79ba4af6d (tag SHA 23336da097465862a9e14c77a1b4bd9236fcee87)"
+      sha: "95d4c8a3ffb370877e384011e040a3a79ba4af6d"
       nota: "PATCH. fix(backups): snapshot consistente de SQLite en WAL en vez de copia cruda. docs(ci): un pipeline en verde no prueba que los tests hayan pasado (el cache hit de pipelinek no ejecutaba tests). B2 corregido: permissions.yaml es un archivo del proyecto, no una carencia del framework."
     - tag: v0.16.4
       fecha: 2026-09-28
-      sha: "7d5aa91cf9f12c88d7a83be5518098ae1cf6cbc6 (tag SHA 1fd1b740668118afa343453dab1cf7cd7fc248b0)"
+      sha: "7d5aa91cf9f12c88d7a83be5518098ae1cf6cbc6"
       nota: "PATCH correctivo de v0.16.3 (package metadata defectuosa). refactor(backups): politica de recoleccion aislada, cc 14 -> 3. fix(audit): las recomendaciones se derivan de la medicion, no de prosa congelada. Primera release hecha por el camino manual documentado tras confirmarse B1."
     - tag: v0.16.5
       fecha: 2026-09-28
-      sha: "15258c0b0edf32d0b5b2ade9fb8f1755d7f9de6b (tag SHA 50aaa1f4bade05668327bd89e2bb74660b46e5e3)"
+      sha: "15258c0b0edf32d0b5b2ade9fb8f1755d7f9de6b"
       nota: "PATCH. refactor(cli) cmd_promotion_reconcile cc 14 -> 7 con el failpoint after_apply_first implementado (estaba documentado pero no existia). refactor(domain) _make_schema_validator cc 13 -> 3, nesting 5 -> 0. test(ci): se fija la regla de que un verde no es evidencia hasta que el journal muestra StepStarted. 1455 passed. Cierra los 2 hotspots reales que exponia la auditoria corregida."
     - tag: v0.16.6
       fecha: 2026-09-28
-      sha: "ba9f70660a2ddf995c399a81a331d0b8584cfb20 (tag SHA 146c4e9e602285b47a51e32e43d190619b3e0028)"
+      sha: "ba9f70660a2ddf995c399a81a331d0b8584cfb20"
       nota: "PATCH. fix de max_visits + refactors de complejidad ciclomatica sobre las cadenas de guardas de plan y recibo, cada uno con su test de contrato escrito antes del refactor. Receipts de CI publicados por refactor."
     - tag: v0.16.7
       fecha: 2026-09-28
-      sha: "0fc701805685c22a8186bfc2a309aa783cd83281 (tag SHA 0de54ceb4ffe112e6661e81a31ebb6d7839cfcb6)"
+      sha: "0fc701805685c22a8186bfc2a309aa783cd83281"
       nota: "PATCH. fix(core): rechazo de bool en Recipe.token_budget y Recipe.revision. refactor: GitSource.detect_changes cc 11 -> 5 y _reconcile_run_locked cc 11 -> 5, ambos con red de contrato previa. Auditoria de deuda regenerada."
     - tag: v0.16.8
       fecha: 2026-09-29
-      sha: "8eda4ea4b411f64aa19f999abab44d6be0bc252f (tag SHA 8eda4ea4b411f64aa19f999abab44d6be0bc252f; commit base del ciclo WI-56 4d64ad6)"
+      sha: "df72bcc00bd5f3666f107a29cbe2c3300269a74f"
       nota: "PATCH. Ciclo WI-56 (ADR-0016): descomposicion del god-module platform/storage.py (2837 -> 1807 LoC) en 5 repositorios reales mediante patron strangler, cada uno con su red de contrato escrita antes (RED honesto) y cero ediciones en callers. Incluye chore(repo): .jcode-scratch/ ignorado, sin lo cual el propio acto de verificar dejaba el arbol sucio y bloqueaba el paso 1 del checklist de release de SDDK."
+    - tag: v0.16.9
+      fecha: 2026-10-01
+      sha: "600279a1e1acfcfa94c7538b5e679f973b0e2997"
+      nota: "WI-49: rechazo de bool en enteros declarados. 3 fix (plan, backups, receipts), 0 feat, 0 breaking -> PATCH. Cierra la clase de defecto que wi-46 dejo abierta: isinstance(True, int) es True, asi que un booleano declarado donde se espera un entero pasaba en silencio."
+    - tag: v0.16.10
+      fecha: 2026-10-02
+      sha: "2ee6d7765e8c9d958abef649c39774cf923d27e7"
+      nota: "Bloque WI-65..WI-71: cierre de H-01 (Storage 1807 -> 623 LoC, ADR-0022), RunController por dominios (1421 -> 665, ADR-0023/0024), ports en dto + repositories. God modules 3 -> 0. 0 feat, 6 fix, 13 refactor, 3 test, 23 docs, 12 chore -> PATCH por la regla del CHANGELOG. 2154 -> 2181 tests. Tres correcciones reales de gobernanza de CI: el SUCCESS cacheado que declaraba verde un run sin ejecutar un step, la ambiguedad de PATH entre asdf y mise, y el hook pre-commit que se comia el exit de pytest."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes

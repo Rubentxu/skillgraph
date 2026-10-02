@@ -8240,3 +8240,67 @@ gates, en orden):
 
 Verificacion: 2215 passed (2197 + 18), ruff y format limpios, los tests
 de knowledge (H12/H13/H9) pasan sin modificarlos.
+
+### WI-74 — `STATE.yaml` mentia sobre las releases, y nada lo detectaba
+
+Con el frente P3 agotado, mire que **auditorias abiertas** quedaban en
+el repo, que es parte del objetivo original. `state-sync-gap-2026-09-25`
+seguia con hallazgos abiertos. Comprobado hoy contra git: abierto, y
+peor de lo que estaba.
+
+**Lo que tenia (medido, no supuesto):**
+
+- 4 SHA **no existen en el repo**: v0.14.1 (`1947df6`), v0.14.2
+  (`7413f0c`), v0.14.3 (`d8ec98a`), v0.14.4 (`9e1cd12`).
+  `git cat-file -e <sha>^{commit}` falla en los cuatro.
+- 2 SHA existen pero apuntan al commit equivocado (el de la
+  *documentacion* del release, no el del tag).
+- 3 entradas usan el campo `sha` para prosa libre ("WI-11 release bundle").
+- `release.tag` decia `v0.16.8` cuando la ultima etiqueta era `v0.16.10`.
+- Faltaban `v0.16.9` y `v0.16.10`.
+
+`STATE.yaml` es el punto de recuperacion durable. Restaurar desde el
+llevaba a commits que no existen.
+
+**Por que nadie lo noto.** El audit de deuda arquitectonica SI tiene red
+que ata su prosa a la medicion (`test_audit_debt_accuracy.py`, WI-69).
+El estado no tenia nada equivalente. Es el mismo patron de la sesion,
+tercera vez: un documento de deuda que miente es peor que no tenerlo.
+
+**Reconciliacion quirurgica, no un round-trip.** El primer intento uso
+`yaml.safe_dump` y lo abandone antes de ejecutarlo: STATE.yaml son 1288
+lineas con 156 comentarios que explican el por de cada decision, y un
+round-trip los habria destruido todos. Se edito a nivel de texto, con
+`git rev-list -n 1 <tag>` como unica fuente. Resultado: 1288 -> 1311
+lineas, los 156 comentarios intactos, y el diff solo toca `tag`, `sha` y
+las dos releases que faltaban.
+
+**El pasado no se borra ni se disimula.** Donde el valor antiguo no
+resolvia, queda en `superseded_sha` con su razon, y hay un test que
+falla si alguien lo quita. Sustituir los SHA rotos por los correctos y
+borrar el rastro dejaria el documento mas limpio y mas falso: perderia
+la informacion de que el historial se movio bajo esas releases. Ese test
+(`test_unresolvable_old_shas_are_recorded_as_such`) es la parte que
+impide el "arreglo" silencioso.
+
+**Dos bugs mios en el proceso:**
+
+1. La primera reconciliacion inserto las releases nuevas buscando "el
+   final de la lista" retrocediendo desde la ultima linea `- tag:`, y
+   cayo EN MEDIO de las entradas de v0.16.7 dejando campos huerfanos. Se
+   detecto porque un test fallo con un SHA que no era de la etiqueta. El
+   ancla correcta es `capacidades_entregadas:`, una clave de nivel
+   superior, no un patron de lineas de la lista.
+2. Mi primer probe de drift usaba un `dict` indexado por tag, asi que
+   una entrada duplicada se sobrescribia en silencio (last-writer-wins):
+  reportaba "0 inventadas" y no veia el problema. El test de
+   duplicados cuenta sobre la lista, no sobre el dict.
+
+**La red (8 tests) ata el estado a git con igualdad exacta**, sin
+margenes: si manana se publica una release y no se registra aqui, falla
+solo. Cinco mutaciones verificadas, cada una por su test: rebajar
+`release.tag`, borrar una release, un SHA inventado, prosa en `sha`, y
+borrar la constancia del pasado.
+
+Ciclo SDDK wi-74-state-release-drift. Sin codigo de producto: solo
+estado y tests, asi que **sin ADR** y commit tipo `fix(state)` + `test`.
