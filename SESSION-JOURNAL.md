@@ -8005,3 +8005,44 @@ probable son mis propias aserciones):
   falsa; se corrigio a "exactamente uno de structured/ambiguous, y
   `script` acompana al caso python_script".
 - `# Titulo` como capacidad: las capacidades solo extraen h2/h3, no h1.
+
+### Release v0.16.10 — bloque WI-65..WI-71 publicado (autorizado por el operador)
+
+Push y release autorizados expresamente por el operador ("sube" + bump
+con tag anotado). Resultado: 61 commits a `origin/main` (desde
+`e680b72`), etiqueta `v0.16.10` en `2ee6d77`, `origin/main` = HEAD
+local, 0 pendientes.
+
+**Corrijo mi propia recomendacion de version.** Propuse v0.17.0
+(MINOR) y lo descarte al aplicar la regla del propio CHANGELOG al
+historial: el bloque tiene **0 `feat`, 6 `fix`, 13 `refactor`,
+3 `test`, 23 `docs`, 12 `chore`**, y la regla dice `fix` -> PATCH y
+`refactor`/`test`/`docs`/`chore` -> sin bump. El bloque no anade
+ninguna capacidad observable y la API publica se conserva identica.
+Un MINOR habria sido un numero inventado por mi, no derivado del
+historial, que es justo lo que AGENTS.md §12 prohibe.
+
+**Nudo estructural del release governance, documentado.** El
+admission gate exige `__version__` puro SI Y SOLO si HEAD esta sobre
+la etiqueta, y `.devN` en cualquier otro caso. Ningun commit previo a
+la etiqueta puede satisfacerlo, porque todavia no existe: es un
+chicken-and-egg real, no una comodidad. Se resolvio commiteando el
+release con `HOOK_SKIP_TESTS=1` (ruff check y format siguen
+corriendo, que es lo que el bypass perdona) y ejecutando la suite
+completa DESPUES de crear el tag, que es la condicion en la que el
+gate debe pasar de verdad. El gate no se relaja ni se salta: se
+verifica en su condicion real. Resultado: 2/2 PASS, 2181 passed.
+
+**El gate tambien cazo un fallo documental mio.** Con
+`__version__ = 0.16.10.dev0`, `test_current_version_is_documented_in_state`
+exige que CURRENT.md contenga esa cadena EXACTA; "0.16.10" a secas no
+la contiene porque la comprobacion va en el sentido contrario
+("version in current_md"). No es un gate que estorba: es exactamente
+la red que hacia falta, porque un `.dev0` sin documentar es drift.
+
+**Divergencia preexistente detectada, NO tocada.** `git fetch
+--tags` rechaza `v0.7.1`: el tag local apunta a `8b63db6` ("merge
+h9-plan-b-atomicity -> main") y el remoto a otro objeto. Es
+historico, anterior a este bloque, y AGENTS.md prohibe `tag --force`
+sobre etiqueta publicada, asi que se reporta y no se reescribe. El
+push de v0.16.10 no lo?to y el `fetch` no lo bloqueo.
