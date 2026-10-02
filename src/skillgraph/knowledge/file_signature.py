@@ -139,6 +139,97 @@ _RE_IMPORT = re.compile(r"^\s*(?:from\s+(\S+)\s+)?import\s+(\S+)")
 _RE_DEF = re.compile(r"^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 
+def _procedencia(method: str) -> SignatureProcedencia:
+    """Procedencia con la version del extractor ya puesta.
+
+    La version es un dato del extractor, no de cada signature: escribirla
+    en cada construccion son cinco oportunidades de divergir.
+    """
+    return SignatureProcedencia(
+        extraction_method=method,
+        extractor_version=_EXTRACTOR_VERSION,
+    )
+
+
+def _vigencia(state: ExtractionState) -> SignatureVigencia:
+    """Deriva ``fresh``/``stale`` del estado. Fuente unica de la regla.
+
+    ``SignatureVigencia.__post_init__`` **rechaza** la incoherencia entre
+    el estado y el par, asi que escribir el par a mano en cada
+    construccion no es estilo: es dejar cuatro bombas armed con un
+    fichero valido. Aqui la inferencia es unica y no se puede errar.
+    """
+    return SignatureVigencia(
+        state=state,
+        fresh=(state == "complete"),
+        stale=(state != "complete"),
+    )
+
+
+def _summary(
+    foco: str,
+    *,
+    cobertura: int,
+    method: str,
+    state: ExtractionState,
+) -> FileSignature:
+    """Signature ``file_summary``: siempre la primera de la tupla."""
+    return FileSignature(
+        foco=foco,
+        contrato="file_summary",
+        cobertura=cobertura,
+        procedencia=_procedencia(method),
+        vigencia=_vigencia(state),
+    )
+
+
+def _module_signature(file_path: str, module: str) -> FileSignature:
+    return FileSignature(
+        foco=f"{file_path}::{module}",
+        contrato="module",
+        cobertura=1,
+        procedencia=_procedencia("regex_import"),
+        vigencia=_vigencia("complete"),
+    )
+
+
+def _def_signature(file_path: str, name: str) -> FileSignature:
+    return FileSignature(
+        foco=f"{file_path}::def::{name}",
+        contrato="def",
+        cobertura=1,
+        procedencia=_procedencia("regex_def"),
+        vigencia=_vigencia("complete"),
+    )
+
+
+def _scan_lines(file_path: str, lines: list[str]) -> tuple[tuple[FileSignature, ...], bool, bool]:
+    """Aplica las heuristicas linea a linea.
+
+    Devuelve ``(signatures, hay_imports, hay_defs)``. El ``continue``
+    tras un import no es cosmetico: sin el, una linea ``import`` caeria
+    tambien en la rama de ``def`` y generaria signatures duplicadas.
+    """
+    sigs: list[FileSignature] = []
+    has_imports = False
+    has_defs = False
+    for line in lines:
+        m_imp = _RE_IMPORT.match(line)
+        if m_imp:
+            has_imports = True
+            # Grupo 2 primero: para `import os` es el modulo, y para
+            # `from x import y` es el simbolo importado. Es el
+            # comportamiento vigente y lo fija un test explicito.
+            module = m_imp.group(2) or m_imp.group(1) or "?"
+            sigs.append(_module_signature(file_path, module))
+            continue
+        m_def = _RE_DEF.match(line)
+        if m_def:
+            has_defs = True
+            sigs.append(_def_signature(file_path, m_def.group(1)))
+    return tuple(sigs), has_imports, has_defs
+
+
 def extract_file_signatures(*, file_path: str, content: str) -> tuple[FileSignature, ...]:
     """Extrae FileSignatures deterministas de un fichero.
 
@@ -152,23 +243,17 @@ def extract_file_signatures(*, file_path: str, content: str) -> tuple[FileSignat
         signature "summary" con foco=file_path para que el caller
         pueda detectar estados terminales (empty/absent) y saber
         que se intento extraer.
+
+    Puro: sin Storage, sin Adapter, sin reloj (AGENTS 1.1/1.3).
     """
     # Caso 1: archivo ausente (sentinel).
     if file_path == "<absent>":
         return (
-            FileSignature(
-                foco=file_path,
-                contrato="file_summary",
+            _summary(
+                file_path,
                 cobertura=0,
-                procedencia=SignatureProcedencia(
-                    extraction_method="absent_sentinel",
-                    extractor_version=_EXTRACTOR_VERSION,
-                ),
-                vigencia=SignatureVigencia(
-                    state="absent",
-                    fresh=False,
-                    stale=True,
-                ),
+                method="absent_sentinel",
+                state="absent",
             ),
         )
 
@@ -178,80 +263,25 @@ def extract_file_signatures(*, file_path: str, content: str) -> tuple[FileSignat
     # Caso 2: archivo vacio.
     if n_lines == 0:
         return (
-            FileSignature(
-                foco=file_path,
-                contrato="file_summary",
+            _summary(
+                file_path,
                 cobertura=0,
-                procedencia=SignatureProcedencia(
-                    extraction_method="line_count",
-                    extractor_version=_EXTRACTOR_VERSION,
-                ),
-                vigencia=SignatureVigencia(
-                    state="empty",
-                    fresh=False,
-                    stale=True,
-                ),
+                method="line_count",
+                state="empty",
             ),
         )
 
     # Caso 3: extraer imports + defs.
-    sigs: list[FileSignature] = []
-    has_imports = False
-    has_defs = False
-    for line in lines:
-        m_imp = _RE_IMPORT.match(line)
-        if m_imp:
-            has_imports = True
-            module = m_imp.group(2) or m_imp.group(1) or "?"
-            sigs.append(
-                FileSignature(
-                    foco=f"{file_path}::{module}",
-                    contrato="module",
-                    cobertura=1,
-                    procedencia=SignatureProcedencia(
-                        extraction_method="regex_import",
-                        extractor_version=_EXTRACTOR_VERSION,
-                    ),
-                    vigencia=SignatureVigencia(state="complete", fresh=True, stale=False),
-                )
-            )
-            continue
-        m_def = _RE_DEF.match(line)
-        if m_def:
-            has_defs = True
-            name = m_def.group(1)
-            sigs.append(
-                FileSignature(
-                    foco=f"{file_path}::def::{name}",
-                    contrato="def",
-                    cobertura=1,
-                    procedencia=SignatureProcedencia(
-                        extraction_method="regex_def",
-                        extractor_version=_EXTRACTOR_VERSION,
-                    ),
-                    vigencia=SignatureVigencia(state="complete", fresh=True, stale=False),
-                )
-            )
+    sigs, has_imports, has_defs = _scan_lines(file_path, lines)
 
-    # Summary final: estado depende de si hubo heuristicas aplicables.
-    if has_imports or has_defs:
-        summary_state: ExtractionState = "complete"
-    else:
-        summary_state = "partial"
-
-    summary = FileSignature(
-        foco=file_path,
-        contrato="file_summary",
+    # Summary final: `complete` si alguna heuristica fue aplicable,
+    # `partial` si el fichero tiene lineas pero ninguna coincidio.
+    summary_state: ExtractionState = "complete" if (has_imports or has_defs) else "partial"
+    summary = _summary(
+        file_path,
         cobertura=n_lines,
-        procedencia=SignatureProcedencia(
-            extraction_method="line_count",
-            extractor_version=_EXTRACTOR_VERSION,
-        ),
-        vigencia=SignatureVigencia(
-            state=summary_state,
-            fresh=(summary_state == "complete"),
-            stale=(summary_state != "complete"),
-        ),
+        method="line_count",
+        state=summary_state,
     )
     # Summary primero; signatures especificas despues.
     return (summary, *sigs)
