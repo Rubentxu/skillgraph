@@ -945,13 +945,57 @@ Medido: seis mutaciones, seis en rojo. Una de ellas restaura el
 contrajemplo inventado prueba que el test está bien, no que el guard
 muerda.
 
-*Deuda medida y no resuelta:* `scripts/hooks/pre-push` ejecuta la suite
-completa a pelo y emite veredicto con el instrumento ciego. Está excluido
-del invariante —un hook de git tiene un presupuesto de tiempo fijo y corto,
-y su salida es un filtro de evento, no el veredicto que este capítulo
-declara fuente de verdad— y esa exclusión está escrita en el guard y fijada
-por un test, para que ampliarla sea una decisión visible y no una puerta
-trasera. Convergerlo con la receta canónica es un workitem propio.
+*Resuelto en WI-100:* `scripts/hooks/pre-push` ejecutaba la suite completa a
+pelo y emitía veredicto con el instrumento ciego — el mismo defecto que este
+capítulo describe para `scripts/ci.sh`. Ahora **delega** en `scripts/ci.sh`, y
+sus tests ejecutan el hook de verdad contra un repo de prueba en vez de
+comprobar que el fichero contiene una cadena.
+
+### El bundle de auditoría tiene que ejecutar (WI-101)
+
+Delego en la receta no basta si el paso que viene después no mide nada.
+
+`scripts/audit_bundle.sh` —el instrumento que existe *para* dar evidencia
+reproducible a una auditoría independiente— invocaba
+`python -m tests.uat_audit` sin flags. Ese es el modo lectura: **no ejecuta
+ningún UAT**, relee los 26 JSON de `tests/uat-evidence/` y los repite. El
+`PASS=16` del bundle de WI-99 se escribió mirando ficheros del commit
+`0ebbd58`, 111 commits por detrás.
+
+Y lo que hace peor: el modo lectura hacía `return 0` **incondicional**. El
+exit code estaba estructuralmente desacoplado del veredicto, así que la
+guarda del bundle (`if [ "$UAT_RC" -ne 0 ]`) no podía dispararse nunca.
+Medido con el comando exacto del bundle, antes del arreglo:
+
+| evidencia en disco | salida | exit code |
+|---|---|---|
+| `UAT-01.json` inyectada en `FAIL` | `PASS=15 FAIL=1` | **0** |
+| `tests/uat-evidence/` ausente | `PASS=0 FAIL=0` | **0** |
+
+Un bundle con un FAIL a la vista y un bundle sin una sola evidencia eran
+indistinguibles de uno sano. Un exit code fijo no es un guard: es un mensaje
+con código de salida.
+
+**Las tres reglas que lo cierran.**
+
+1. **El exit code sale de `_verdict`**, compartido por los tres modos, para
+   que no puedan divergir entre sí. Lista **blanca** (`PASS`, `BLOCKED`), no
+   negra: el conjunto de cosas malas no tiene fin, y con lista negra un
+   `status: "passed"` pasaba en silencio.
+2. **`--verify` ejecuta, no persiste, y confronta.** Cada veredicto se
+   compara con la evidencia persistida. Sin ese contraste la evidencia era la
+   única fuente del veredicto, y no se contrastaba con nada: podía afirmar
+   `PASS` para un UAT que hoy falla sin que nadie se entere.
+3. **El resumen no se traga lo que no conoce.** Antes `PASS=15 FAIL=0` sobre
+   16 filas leídas, porque el recuento solo miraba las tres etiquetas
+   conocidas. Un total que no suma las filas no es un total.
+
+Verificado después del arreglo, no antes: los 16 UAT se ejecutan y
+**convergen** con la evidencia versionada. La evidencia era cierta; lo que
+faltaba era comprobarlo. Un guard que declara algo que no mide produce el
+mismo resultado que uno roto, y por eso solo se nota al mutarlo: 9/9 en
+rojo (`.pipelinek/wi101_mutate.sh`).
+
 
 ### Compatibilidad con otros runners
 
