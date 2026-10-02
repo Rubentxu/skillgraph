@@ -20,11 +20,32 @@ dist/
 .skillgraph/
 
 # Documentación input del blueprint (se conserva en external/, fuera del repo)
-# Excepción: docs/blueprint/ SI se versiona (snapshot del blueprint que el
-# codigo puede referenciar de forma estable; ver tests/test_cli_uat.py).
+#
+# `docs/` mezcla dos categorias que NO se gobiernan igual, y el patron
+# `docs/*` las trataba como una sola (WI-99):
+#
+#   1. Snapshot del blueprint y documentos propios del proyecto. Se
+#      versionan: son fuente de verdad estable que el codigo y los tests
+#      referencian. `docs/blueprint/` lo leen los UAT
+#      (tests/test_cli_uat.py); `docs/architecture/` y
+#      `docs/observability-runbook.md` son la evidencia que
+#      `STATE.yaml` declara para los entregables E2 y E4 de H9.
+#   2. Resto de `docs/`: material de trabajo.
+#
+# MEDIDO en WI-99: con el patron anterior, `STATE.yaml` declaraba dos
+# entregables como CUMPLIDOS cuya evidencia NO versionaba. El guard
+# tests/test_wi91_h9_conformance_record.py lo detecta —su mensaje es
+# literal, «afirmacion sin respaldo»— pero solo fallaba FUERA del arbol de
+# trabajo, porque aqui los ficheros estaban en disco. La receta canonica
+# ejecutada en un clon del mismo commit daba 2 failed, 2623 passed.
+# Un entregable cuya evidencia no esta en el repo no esta cumplido: el
+# que lo construye no lo recibe, y el que lo audita no lo puede leer.
 docs/*
 !docs/blueprint/
 !docs/blueprint/**
+!docs/architecture/
+!docs/architecture/**
+!docs/observability-runbook.md
 
 # Entradas externas no versionadas (blueprint original, generador, etc.)
 external/
