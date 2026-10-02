@@ -77,17 +77,11 @@ DIRECTORIOS_RUNNER: Final[tuple[str, ...]] = (".github/workflows", ".gitlab")
 #: Ficheros que declaran un runner remoto dentro de esos directorios.
 PATRONES_RUNNER: Final[tuple[str, ...]] = ("*.yml", "*.yaml")
 
-#: Rutas absolutas que apuntan a un arbol de trabajo concreto y hacen la receta
-#: inejecutable en cualquier otra maquina.
-#:
-#: Se busca un arbol de trabajo, no `/` en general: `/usr/bin/uv` o
-#: `/tmp/pipeline` son legitimos y no atan el script a ningun sitio. Un arbol
-#: tiene la forma `/algo/otro/mas` y aparece dentro de un `sh(...)`.
-#: Medido en WI-98 sobre `.pipeline.kts`: 10 apariciones de
-#: `/var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph`.
-_RAIZ_ABSOLUTA: Final = re.compile(
-    r'sh\(\s*"(?:[^"]*?\s)?(/[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)*)'
-)
+#: Cómo tiene que resolver la raíz un script portable: por entorno (el runner
+#: la define) o por el cwd del proceso (el repo, cuando se invoca desde su
+#: raíz). MEDIDO en WI-98: el motor v0.39.0 sí propaga el entorno a los
+#: `sh()`, así que esto no es un truco sino una línea.
+_RESUELVE_RAIZ: Final = re.compile(r'System\.getenv\(|System\.getProperty\(\s*"user\.dir"\s*\)')
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +98,7 @@ class InformeRunners:
 
     receta_canonica: str
     canonica: str
+    raiz_repo: str
     runners: dict[str, str]
     etapas_canonicas: tuple[str, ...]
     hubo_error: bool = False
@@ -116,48 +111,82 @@ class InformeRunners:
 
 
 def evaluar_recetas(informe: InformeRunners) -> tuple[Problema, ...]:
-    """C1. Cada runner remoto invoca la receta canónica.
+    """C1. Cada runner remoto invoca la receta canónica **en un paso**.
 
-    Se busca el nombre del script, no una lista de comandos: exigir que el
-    remoto mentione «lint» y «pytest» es aceptar una reimplementación parcial
-    que se queda sin los contratos que la local sí ejecuta. Esa es
+    Dos decisiones, y las dos se ganaron midiendo:
+
+    *Se busca el nombre del script, no una lista de comandos.* Exigir que el
+    remoto mencione «lint» y «pytest» es aceptar una reimplementación
+    parcial que se queda sin los contratos que la local sí ejecuta. Esa es
     exactamente la divergencia que este bloque cierra.
+
+    *Se buscan los PASOS, no el fichero.* Un guard que busca `.pipeline.kts`
+    en el contenido entero encuentra la cadena en el comentario que explica
+    que se usa, y aprueba un workflow que ejecuta otra cosa. MEDIDO: las
+    cinco mutaciones de este contrato dieron `rc=0` por eso — el defecto
+    estaba en el diseño del invariante, no en los tests.
+
+    Y se exigía lo segundo por el primero: si el remoto reimplementa la
+    receta, la cadena aparece en el fichero pero no en ningún paso.
     """
     problemas: list[Problema] = []
     for ruta in sorted(informe.runners):
-        cuerpo = informe.runners[ruta]
-        if RECETA_CANONICA in cuerpo:
+        pasos = pasos_ejecutables(informe.runners[ruta])
+        if any(RECETA_CANONICA in paso for paso in pasos):
             continue
         problemas.append(
             Problema(
                 CODIGO_RECETA_PROPIA,
-                f"{ruta} no invoca {RECETA_CANONICA}: ejecuta su propia receta. "
+                f"{ruta} no ejecuta {RECETA_CANONICA}: sus pasos no la invocan. "
                 f"Si un runner remoto produce PASS y la receta local produce FAIL, "
-                f"nadie sabe cual de las dos estaba mintiendo",
+                f"nadie sabe cuál de las dos estaba mintiendo",
             )
         )
     return tuple(problemas)
 
 
 def evaluar_portabilidad(informe: InformeRunners) -> tuple[Problema, ...]:
-    """C2. La receta canónica no lleva rutas atadas a esta máquina.
+    """C2. La receta canónica sabe dónde está, y no está atada a esta máquina.
 
-    Sin esto, C1 produce una promesa inejecutable: el remoto invoca la receta
-    y falla en el primer paso porque la ruta no existe en su disco. Las dos
-    invariantes son la misma regla por los dos lados.
+    Son dos condiciones, y las dos verificables sin heurística sobre `/`:
+
+    **Resuelve la raíz.** Un script que no lee ni el entorno ni el `user.dir`
+    no tiene manera de saber dónde está el checkout, así que sus rutas sólo
+    pueden ser elcwd del motor — que no es el repo — o absolutas a una
+    máquina concreta.
+
+    **No contiene esta raíz.** Es la forma exacta del problema: antes
+    llevaba diez apariciones de `/var/mnt/DiscoChino2-fast/...`. Se compara
+    contra la raíz real del repo, no contra un patrón de «parece
+    absoluta»: `/usr/bin/uv` es legítimo y no ata el script a nada.
+
+    La versión primera de este invariante buscaba rutas absolutas dentro de
+    `sh(...)` y no veía nada cuando la ruta estaba en una `val` de Kotlin,
+    que es justo donde la muevo para arreglar el problema. Un invariante que
+    solo mira una sintaxis concreta se puede esquivar cambiando de sintaxis.
     """
-    encontrados = sorted(set(_RAIZ_ABSOLUTA.findall(informe.canonica)))
-    if not encontrados:
-        return ()
-    return (
-        Problema(
-            CODIGO_RUTA_ABSOLUTA,
-            f"{informe.receta_canonica} lleva rutas absolutas a un arbol concreto "
-            f"({', '.join(encontrados[:3])}): no se puede ejecutar fuera de esta "
-            f"maquina, asi que la regla «el remoto invoca la misma receta» es "
-            f"inejecutable",
-        ),
-    )
+    problemas: list[Problema] = []
+    if not _RESUELVE_RAIZ.search(informe.canonica):
+        problemas.append(
+            Problema(
+                CODIGO_RUTA_ABSOLUTA,
+                f"{informe.receta_canonica} no resuelve la raiz del checkout: "
+                f"no lee ni `System.getenv` ni `user.dir`. Sin eso sus rutas solo "
+                f"pueden ser el cwd del motor — que no es el repo — o absolutas "
+                f"a una maquina concreta",
+            )
+        )
+    raiz = informe.raiz_repo.rstrip("/")
+    if raiz and raiz != "/" and raiz in informe.canonica:
+        problemas.append(
+            Problema(
+                CODIGO_RUTA_ABSOLUTA,
+                f"{informe.receta_canonica} contiene la ruta de este arbol de "
+                f"trabajo ({raiz}): no se puede ejecutar en otra maquina, asi que "
+                f"la regla «el remoto invoca la misma receta» es inejecutable",
+            )
+        )
+    return tuple(problemas)
 
 
 def evaluar_etapas(informe: InformeRunners) -> tuple[Problema, ...]:
@@ -209,6 +238,52 @@ def etapas_de(script: str) -> tuple[str, ...]:
     return tuple(re.findall(r'\bstage\(\s*"([^"]+)"', script))
 
 
+def pasos_ejecutables(contenido: str) -> list[str]:
+    """Los `run:` de un workflow, incluidos los multilínea, sin comentarios.
+
+    Vive aqui y no en el fichero de tests porque el invariante C1 depende de
+    el, y duplicar un parser entre el guard y su test es la forma de que
+    dejen de contar lo mismo sin que nada lo note.
+
+    Un bloque escalar (`run: |`, `run: >`) termina cuando una línea deja de
+    estar más indentada que la clave `run:`. Sin esa condición el parser se
+    comería el resto del fichero y devolvería como «pasos» las claves
+    siguientes.
+    """
+    pasos: list[str] = []
+    sangria_bloque: int | None = None
+    for linea in contenido.splitlines():
+        # Un comentario YAML empieza por `#` al inicio de la línea o tras un
+        # espacio. Partir por cualquier `#` rompía `## CI Summary` y las URLs
+        # con fragmento.
+        sin_comentario = linea
+        pos = sin_comentario.find("#")
+        if pos == 0 or (pos > 0 and sin_comentario[pos - 1].isspace()):
+            sin_comentario = sin_comentario[:pos]
+        if not sin_comentario.strip():
+            continue
+        sangria = len(sin_comentario) - len(sin_comentario.lstrip())
+        if sangria_bloque is not None:
+            if sangria > sangria_bloque:
+                pasos.append(sin_comentario.strip())
+                continue
+            sangria_bloque = None
+        # En YAML un paso de un `steps:` empieza por `- run:`, no por `run:`.
+        # Sin quitar el guion, la mitad de los pasos no se veían.
+        clave = sin_comentario.strip()
+        if clave.startswith("- "):
+            clave = clave[2:].strip()
+            sangria = len(sin_comentario) - len(sin_comentario[2:].lstrip())
+        if not clave.startswith("run:"):
+            continue
+        valor = clave.split("run:", 1)[1].strip()
+        if valor in ("|", ">", "|-", ">-"):
+            sangria_bloque = sangria
+        elif valor:
+            pasos.append(valor)
+    return pasos
+
+
 def runners_de(raiz: Path) -> dict[str, str]:
     """Todo fichero que declara un runner remoto, como `ruta -> contenido`.
 
@@ -236,6 +311,7 @@ def medir(raiz: Path) -> InformeRunners:
         return InformeRunners(
             receta_canonica=RECETA_CANONICA,
             canonica=texto,
+            raiz_repo=str(raiz),
             runners=runners_de(raiz),
             etapas_canonicas=etapas_de(texto),
         )
@@ -252,6 +328,7 @@ def _informe_de_error(mensaje: str) -> InformeRunners:
     return InformeRunners(
         receta_canonica=RECETA_CANONICA,
         canonica="",
+        raiz_repo="",
         runners={},
         etapas_canonicas=(),
         hubo_error=True,

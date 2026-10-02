@@ -12,6 +12,7 @@ del usuario). Solo verifican la presencia y la forma.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,47 +20,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOK_PATH = REPO_ROOT / "scripts" / "hooks" / "pre-commit"
 
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+from check_ci_recipe_parity import pasos_ejecutables as _pasos_ejecutables  # noqa: E402
 
-def _pasos_ejecutables(contenido: str) -> list[str]:
-    """Los `run:` de un workflow, incluidos los multilínea, sin comentarios.
-
-    Un guard que busca una cadena en el fichero entero encuentra la cadena
-    en un comentario que habla de ella. Solo los pasos se ejecutan, y solo
-    ellos pueden romper algo.
-
-    Un bloque escalar (`run: |`, `run: >`) termina cuando una línea deja de
-    estar más indentada que la clave `run:`. Sin esa condición el parser se
-    comería el resto del fichero y devolvería como «pasos» las claves
-    siguientes.
-    """
-    pasos: list[str] = []
-    sangria_bloque: int | None = None
-    for linea in contenido.splitlines():
-        # Un comentario YAML empieza por `#` al inicio de la linea o
-        # tras un espacio. Partir por cualquier `#` rompia `## CI Summary`
-        # y las URLs con fragmento.
-        sin_comentario = linea
-        for marca in ("#",):
-            pos = sin_comentario.find(marca)
-            if pos == 0 or (pos > 0 and sin_comentario[pos - 1].isspace()):
-                sin_comentario = sin_comentario[:pos]
-                break
-        if not sin_comentario.strip():
-            continue
-        sangria = len(sin_comentario) - len(sin_comentario.lstrip())
-        if sangria_bloque is not None:
-            if sangria > sangria_bloque:
-                pasos.append(sin_comentario.strip())
-                continue
-            sangria_bloque = None
-        if not sin_comentario.strip().startswith("run:"):
-            continue
-        valor = sin_comentario.split("run:", 1)[1].strip()
-        if valor in ("|", ">", "|-", ">-"):
-            sangria_bloque = sangria
-        elif valor:
-            pasos.append(valor)
-    return pasos
+# El parser de `run:` vive en `scripts/check_ci_recipe_parity.py` y no aqui.
+# El invariante C1 depende de el, y duplicarlo entre el guard y su test es
+# la forma de que dejen de contar lo mismo sin que nada lo note (WI-98).
 
 
 PRE_PUSH_HOOK_PATH = REPO_ROOT / "scripts" / "hooks" / "pre-push"

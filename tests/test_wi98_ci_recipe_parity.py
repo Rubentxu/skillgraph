@@ -71,7 +71,7 @@ jobs:
         run: mise exec -- pipelinek run --rerun .pipeline.kts
 """
 
-#: El workflow que el repo tenia antes de WI-98: su propia receta.
+#: El workflow que el repo tenía antes de WI-98: su propia receta.
 WORKFLOW_A_PELO = """
 name: ci
 on:
@@ -83,6 +83,28 @@ jobs:
       - uses: actions/checkout@v4
       - run: mise run lint
       - run: mise run format --check
+      - run: mise exec -- uv run pytest --cov=skillgraph -q
+"""
+
+#: El caso que el guard de cadenas no distingue: la receta canonica
+#: aparece, pero solo en un COMENTARIO que explica que se usa.
+#:
+#: Es el `.github/workflows/ci.yml` real de este repo tras WI-98, y es la
+#: trampa en la que cae un guard que busca la cadena en el fichero entero:
+#: encuentra `.pipeline.kts` en el comentario y da el visto bueno a un
+#: workflow que no ejecuta la receta. MEDIDO en WI-98: las cinco
+#: mutaciones dieron rc=0 por esto.
+WORKFLOW_RECETA_EN_COMENTARIO = """
+name: ci
+# Este workflow SI invoca .pipeline.kts, lo veriais en el paso de abajo.
+on:
+  push:
+    branches: [main]
+jobs:
+  lint-and-test:
+    steps:
+      - uses: actions/checkout@v4
+      - run: mise run lint
       - run: mise exec -- uv run pytest --cov=skillgraph -q
 """
 
@@ -101,6 +123,7 @@ def _informe(**cambios: object) -> par.InformeRunners:
     base: dict[str, object] = {
         "receta_canonica": ".pipeline.kts",
         "canonica": CANONICA_PORTABLE,
+        "raiz_repo": "/home/alguien/work/skillgraph",
         "runners": {
             ".github/workflows/ci.yml": WORKFLOW_SANO,
         },
@@ -121,6 +144,52 @@ class TestC1InvocaLaRecetaCanonica:
         """El fallo real: el remoto decide que tests y lint le bastan."""
         informe = _informe(runners={".github/workflows/ci.yml": WORKFLOW_A_PELO})
         assert par.CODIGO_RECETA_PROPIA in par.codigos_de(par.evaluar(informe))
+
+    def test_receta_mencionada_solo_en_un_comentario_no_cumple(self) -> None:
+        """La cadena tiene que estar en un paso que se EJECUTA.
+
+        Es la diferencia entre este guard y los nueve que sustituye. Un
+        guard que busca `.pipeline.kts` en el fichero entero encuentra la
+        cadena en el comentario que explica que se usa, y da el visto
+        bueno a un workflow que ejecuta otra cosa.
+
+        MEDIDO en WI-98: las cinco mutaciones de este contrato dieron
+        `rc=0` por esto. El defecto no era de los tests, era del diseño del
+        invariante: «contiene la cadena» no es «ejecuta la receta».
+        """
+        informe = _informe(runners={".github/workflows/ci.yml": WORKFLOW_RECETA_EN_COMENTARIO})
+        assert par.CODIGO_RECETA_PROPIA in par.codigos_de(par.evaluar(informe))
+
+    def test_el_parser_ignora_comentarios_y_bloques_escalares(self) -> None:
+        """El parser es la base del invariante: se prueba aparte.
+
+        La ultima aserción es la que mas importa: `echo "## ..."` **sí** se
+        incluye. Un `##` dentro de una cadena no es un comentario, y un
+        parser que lo tratara como tal truncaría el paso por la mitad.
+        """
+        pasos = par.pasos_ejecutables(
+            """
+jobs:
+  a:
+    steps:
+      # run: esto es un comentario
+      - run: |
+          echo "## esto va dentro de una cadena"
+          echo uno
+      - run: >
+          echo dos
+          echo tres
+      - run: echo cuatro
+      - name: otro paso
+        run: echo cinco
+"""
+        )
+        assert "echo uno" in pasos
+        assert "echo dos" in pasos and "echo tres" in pasos
+        assert "echo cuatro" in pasos and "echo cinco" in pasos
+        assert not any("esto es un comentario" in p for p in pasos)
+        assert 'echo "## esto va dentro de una cadena"' in pasos
+        assert "otro paso" not in pasos
 
     def test_el_nombre_del_runner_se_reporta(self) -> None:
         """Un diagnostico sin decir QUE archivo falló obliga a buscarlo a mano."""
@@ -152,16 +221,19 @@ class TestC1InvocaLaRecetaCanonica:
 
 
 class TestC2CanonicalPortable:
-    def test_ruta_absoluta_a_maquina_se_detecta(self) -> None:
+    def test_ruta_de_este_arbol_se_detecta(self) -> None:
         """10 rutas a /var/mnt/... hacen la regla INEJECUTABLE en un runner.
 
         No es que el remoto incumpla la regla: es que la regla no podria
         cumplirse ni con el mejor workflow. Una promesa que no se puede
         cumplir no es un contrato.
         """
-        inexistente = "/home/runner/work/skillgraph/skillgraph/pyproject.toml"
-        script = f'pipeline {{ stages {{ stage("x") {{ sh("ls {inexistente}") }} }} }}\n'
-        informe = _informe(canonica=script)
+        raiz = "/var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph"
+        script = (
+            f'val repo = "{raiz}"\n'
+            'pipeline { stages { stage("x") { sh("ls " + repo + "/pyproject.toml") } } }\n'
+        )
+        informe = _informe(canonica=script, raiz_repo=raiz)
         assert par.CODIGO_RUTA_ABSOLUTA in par.codigos_de(par.evaluar(informe))
 
     def test_resolucion_por_entorno_o_cwd_no_se_detecta(self) -> None:
@@ -169,6 +241,44 @@ class TestC2CanonicalPortable:
         script = (
             'val repo = System.getenv("GITHUB_WORKSPACE") ?: System.getProperty("user.dir")\n'
             'pipeline { stages { stage("x") { sh("ls " + repo + "/pyproject.toml") } } }\n'
+        )
+        informe = _informe(canonica=script)
+        assert par.CODIGO_RUTA_ABSOLUTA not in par.codigos_de(par.evaluar(informe))
+
+    def test_un_script_que_no_resuelve_la_raiz_se_detecta(self) -> None:
+        """Sin resolucion, sus rutas solo pueden ser el cwd del motor.
+
+        El cwd del motor es un workspace suyo, no el repo. Un script que no
+        lee ni el entorno ni `user.dir` no tiene manera de saber donde esta
+        el checkout, aunque no lleve ninguna ruta absoluta.
+        """
+        script = 'pipeline { stages { stage("x") { sh("ls pyproject.toml") } } }\n'
+        informe = _informe(canonica=script)
+        assert par.CODIGO_RUTA_ABSOLUTA in par.codigos_de(par.evaluar(informe))
+
+    def test_la_raiz_todotavia_siendo_una_val_se_detecta(self) -> None:
+        """El invariante no se puede esquivar cambiando de sintaxis.
+
+        La primera version buscaba rutas absolutas DENTRO de `sh(...)`, y no
+        veía nada cuando la ruta estaba en una `val` de Kotlin — que es
+        justo donde se mueve uno para arreglar el problema. Un invariante
+        que solo mira una sintaxis concreta se esquiva cambiando de
+        sintaxis.
+        """
+        raiz = "/home/alguien/work/skillgraph"
+        script = (
+            f'val repo = System.getProperty("user.dir")\n'
+            f'val cache = "{raiz}/.cache"\n'
+            'pipeline { stages { stage("x") { sh("ls " + repo) } } }\n'
+        )
+        informe = _informe(canonica=script, raiz_repo=raiz)
+        assert par.CODIGO_RUTA_ABSOLUTA in par.codigos_de(par.evaluar(informe))
+
+    def test_una_raiz_ajena_no_es_deriva(self) -> None:
+        """`/usr/bin/uv` no ata el script a ninguna maquina."""
+        script = (
+            'val repo = System.getProperty("user.dir")\n'
+            'pipeline { stages { stage("x") { sh("/usr/bin/env true " + repo) } } }\n'
         )
         informe = _informe(canonica=script)
         assert par.CODIGO_RUTA_ABSOLUTA not in par.codigos_de(par.evaluar(informe))
