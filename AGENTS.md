@@ -903,19 +903,31 @@ público. Mientras la versión mayor siga siendo `0`, un `BREAKING CHANGE`
 **no** obliga a saltar a `1.0.0`: la etiqueta sigue avanzando por MINOR o
 PATCH según el resto de commits del tramo.
 
-Se aplicó **tres veces**, cada una con la decisión escrita en el commit de
-release y en ningún otro sitio:
+Se aplicó **tres veces**, y conviene ser exacto sobre cómo: **ninguna de las
+tres usó el marcador de la convención**. No hay `!` en el asunto ni un footer
+`BREAKING CHANGE:` — lo que hay es un **anuncio en prosa** dentro del cuerpo
+del commit, y una decisión tomada a mano en el commit de release.
 
-| Etiqueta | Qué cambió | Dónde está escrito |
+| Etiqueta | Qué cambió | Cómo se anunció |
 |---|---|---|
-| `v0.7.0` | eliminación de 20 shims de retro-compatibilidad y de rutas de import antiguas | «Esto es BREAKING CHANGE para importadores externos que usaban…» |
-| `v0.15.0` | R1+R2 de la frontera de persistencia | «MINOR por 1 BREAKING + 3 feat + 1 fix» |
+| `v0.7.0` | eliminación de 20 shims de retro-compatibilidad y de rutas de import antiguas | viñeta «Esto es BREAKING CHANGE para importadores externos que usaban…» |
+| `v0.15.0` | R1+R2 de la frontera de persistencia | «MINOR por 1 BREAKING + 3 feat + 1 fix», en el commit de release |
 | `v0.16.2` | — | «BREAKING CHANGE, luego MINOR y MAJOR quedan fuera y corresponde PATCH» |
+
+Que ninguna llevara el marcador es **justo el problema**, no un detalle: sin
+`!` ni footer, ninguna herramienta podía verlas. `scripts/derive_semver.py`
+las cuenta hoy como breaking en **cero**, y aun así fueron cambios
+rompedores. La decisión fue correcta y está documentada; lo que faltó fue el
+marcador que la habría hecho citable por una máquina.
 
 Se nombran para que el precedente sea **citable**. Sin nombre, cada
 breaking change obliga a volver a medirlo desde cero, y el salto a `1.0.0` es
 una decisión de una sola oportunidad: tomarla por sorpresa es peor que
 tomarla por criterio.
+
+**Marcar es lo barato**: mientras se este en 0.x, un `BREAKING CHANGE`
+marcado no obliga a nada, porque la cláusula de arriba lo exonera. Marcar
+cuesta un carácter y compra que la decisión quede visible.
 
 **Salir de 0.x es una decisión explícita**, no un efecto secundario de tener
 ya muchas versiones. Cuando se decida, se escribe aquí antes que en el
