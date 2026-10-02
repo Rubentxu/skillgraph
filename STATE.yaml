@@ -561,7 +561,7 @@ tests:
   total: 2625   # re-medido 2026-10-02 (bloque WI-98): 2625 passed. +20 sobre 2605 = tests/test_wi98_ci_recipe_parity.py (16) y test_hooks_system.py::TestCIWorkflow (9 -> 8, +1 neto por los 3 nuevos menos los 4 sustituidos).
   passed: 2625
   duration_s: 245.73   # MEDIDO en la CI canonica del bloque WI-97 con la receta de cobertura (stage unit-tests). pytest a pelo son ~111 s: el delta de ~94 s es el coste de instrumentar, coherente con los +93 s de WI-93 y +95 s de WI-94. Los +17 s sobre WI-96 son los 5 tests que construyen el paquete de verdad.
-  package_version: "0.18.0.dev0"   # trabajo post-release v0.18.0 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
+  package_version: "0.19.0.dev0"   # trabajo post-release v0.19.0 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1138,7 +1138,7 @@ release:
   releases:
     - tag: v0.19.0
       fecha: 2026-10-02
-      sha: "PENDIENTE"
+      sha: "0fa0574b7a6e580570a128630995b9dd3a428572"
       nota: "WI-98: la regla de runners de AGENTS.md pasa de ser declaracion a ser exigible (stage ci-parity), y .pipeline.kts se hace portable para que se pueda cumplir"
     - tag: v0.18.0
       fecha: 2026-10-02
