@@ -7606,3 +7606,31 @@ Acumulado H-02 desde v0.16.9: **2357 → 610 LoC (−74%)**.
   investigacion). Siguiente: push del acumulado (operador) y WI-58
   (red subprocess de policy/runs o ADR de runcontroller).
 
+## 2026-10-02 (IV) — WI-58: red subprocess para policy/runs
+
+### Resumen
+
+Implementa el "siguiente" de la investigacion WI-57: los handlers
+policy/runs eran los unicos consumidores runtime de
+`_open_project_storage` sin red e2e. Nuevo
+`tests/test_wi58_policy_runs_subprocess.py` (6 tests via
+`python -m skillgraph` real): policy get default, set+get persistente,
+choice invalido (SystemExit 2), runs list vacio, budget y cancel de
+run inexistente (EXIT_DOMAIN).
+
+### Descubrimientos (contratos as-built fijados)
+
+- `runs budget` captura NotFoundError LOCALMENTE y emite prefijo plano
+  `ERROR: run no encontrado`; `runs cancel` delega en main y emite
+  `ERROR (sg_not_found): ...`. Dos formatos, mismo exit 10: asimetria
+  real documentada por test, no unificada (cambio de forma, no de
+  valor).
+- El sub desconocido de un comando TABLE-NESTED lo aborta argparse con
+  SystemExit(2) antes de `_resolve_handler`: el fallback
+  ayuda+EXIT_USAGE de main aplica a flat sin handler.
+
+### Evidencia
+
+- 6/6 nuevos; suite completa PASS por hook (ya no enmascarado).
+- HEAD `b3ec...` (ver git log); SIN push (pendiente operador).
+
