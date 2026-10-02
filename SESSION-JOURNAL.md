@@ -7755,3 +7755,38 @@ deriva `_conn`). Costura sin friccion.
   operador). Siguiente: fases 2b/2c opcionales de ADR-0020, fase 2 de
   ADR-0019 (snapshot/recovery, requiere diseno), o push.
 
+## 2026-10-02 (VIII) — WI-62: ADR-0021, subsistema policy fuera de graph_expansion
+
+### Resumen
+
+Novena pasada autonomo. Cuarto god module: graph_expansion.py (862
+LoC). El subsistema policy (196 LoC: ProposalStageName, ProposalStage,
+PolicySettings, PolicyContext, PolicyDecision, PolicyEngine,
+_check_p1..p5, DefaultPolicyEngine, EvaluationResult, evaluate_proposal)
+sale a `governance/expansion_policy.py`. **graph_expansion 862 -> 664
+LoC: fuera de god files** (quedan storage/runcontroller/ports).
+
+### Claves de la extraccion
+
+- Cero dependencia runtime de graph_expansion: anotaciones bajo
+  TYPE_CHECKING; P5 cambia isinstance por nombre de tipo (alineado con
+  P4, documentado en ADR-0021; sin subclases de PatchOps en el repo).
+- now_iso se importa de runtime.engine directamente (externo).
+- Re-export runtime en graph_expansion: __all__ intacto; el test
+  H4-slice3 no se edita.
+
+### Evidencia
+
+- RED honesto (collection error). Red de identidad 9 aserciones +
+  humo P1 con SimpleNamespace (sin acoplamiento al ADT). Afectados
+  45/45 (wi62 + H4 slice3 + H4 + H4 cli). Suite completa PASS por
+  hook real. Auditoria regenerada: 3 god files restantes (storage
+  1807, runcontroller 1289, ports 927).
+
+### Descubrimientos
+
+- ProposalStageName es Assign simple (no AnnAssign): la deteccion AST
+  debe cubrir ambos (aprendizaje aplicado del corte 1 de ADR-0020).
+- PolicyContext es frozen: los tests de humo deben construir el
+  contexto con settings ya restrictivos (no mutar post-hoc).
+

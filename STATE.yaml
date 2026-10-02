@@ -126,7 +126,7 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-61   # fase 2a de knowledge_repository (ADR-0020): cluster CLAIMS -> SqliteClaimRepository (platform/knowledge_claims.py); 874 -> 702 LoC, FUERA de god files (<800); fachada delegante con firmas keyword-only identicas; 0 self-calls verificado por AST
+  current_workitem: WI-62   # ADR-0021: subsistema policy -> governance/expansion_policy.py (P5 por nombre de tipo, anotaciones TYPE_CHECKING); graph_expansion 862 -> 664 LoC, FUERA de god files (quedan storage/runcontroller/ports). Red identidad + humo P1 10/10
   next_workitem: WI-56   # siguiente estrangulamiento P1 segun audit vigente: runcontroller.py (1445 LoC) o knowledge_repository.py (986); requiere ADR propia (patron ADR-0018 replicable)
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
