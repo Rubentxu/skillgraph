@@ -18,6 +18,7 @@ Output: stdout (reporte) + writes audits/architecture-debt-2026-09-26.md
 
 from __future__ import annotations
 
+import argparse
 import ast
 import pathlib
 import sys
@@ -25,7 +26,6 @@ from datetime import UTC, datetime
 
 SRC_ROOT = pathlib.Path("src")
 AUDITS_DIR = pathlib.Path("audits")
-AUDITS_DIR.mkdir(exist_ok=True)
 
 # Marca que delimita la cronologia escrita a mano. Todo lo que quede por
 # debajo se conserva al regenerar el informe: el generador solo reescribe
@@ -126,13 +126,48 @@ def max_public_cc(files: list[dict]) -> int:
     )
 
 
-def main() -> int:
-    if not SRC_ROOT.exists():
-        print(f"FATAL: {SRC_ROOT} no existe; ejecuta desde la raiz del repo.", file=sys.stderr)
+def main(argv: list[str] | None = None) -> int:
+    """Audita el arbol y escribe el informe.
+
+    WI-89: tanto el arbol que se analiza como el destino de la escritura son
+    parametros. Antes ambos eran relativos al cwd, y como el destino caia
+    dentro de `audits/` —que esta TRACKEADO— cada corrida de la suite
+    reescribia un fichero versionado del repositorio que el propio script
+    audita. Ademas el mkdir vivia a nivel de modulo, luego importar el script
+    ya creaba un directorio.
+
+    Los defaults siguen siendo cwd-relativos: un humano que lance el script a
+    mano desde la raiz obtiene exactamente el mismo comportamiento.
+    """
+    parser = argparse.ArgumentParser(
+        prog="audit_debt", description="Auditoria automatica de deuda arquitectonica."
+    )
+    parser.add_argument(
+        "--src-root",
+        type=pathlib.Path,
+        default=SRC_ROOT,
+        help=f"Arbol a auditar (default: {SRC_ROOT}, relativo al cwd).",
+    )
+    parser.add_argument(
+        "--out-dir",
+        type=pathlib.Path,
+        default=AUDITS_DIR,
+        help=(
+            f"Directorio donde escribir el informe (default: {AUDITS_DIR}, relativo "
+            "al cwd). Los tests pasan uno temporal para no mutar el repositorio."
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    src_root: pathlib.Path = args.src_root
+    out_dir: pathlib.Path = args.out_dir
+
+    if not src_root.exists():
+        print(f"FATAL: {src_root} no existe; ejecuta desde la raiz del repo.", file=sys.stderr)
         return 1
 
     files = []
-    for p in SRC_ROOT.rglob("*.py"):
+    for p in src_root.rglob("*.py"):
         if "__pycache__" in str(p):
             continue
         files.append(audit_file(p))
@@ -323,7 +358,8 @@ def main() -> int:
     lines.append("  documenta la excepcion de forma explicita.")
     lines.append("")
 
-    out_path = AUDITS_DIR / f"architecture-debt-{today}.md"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"architecture-debt-{today}.md"
     annals = read_annals(out_path)
     out_path.write_text("\n".join([*lines, "", ANNALS_MARKER, "", *annals]))
     print(out_path)

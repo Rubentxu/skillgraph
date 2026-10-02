@@ -106,9 +106,14 @@ def test_main_preserves_annals_end_to_end(tmp_path: pathlib.Path) -> None:
     previous = Path.cwd()
     os.chdir(sandbox)
     try:
-        assert auditor_mod.main() == 0
+        # WI-89: `main()` ahora acepta `argv`, y con `None` argparse lee
+        # `sys.argv` — que bajo pytest es la linea de ordenes de pytest, no
+        # del auditor. Un llamador programatico pasa la lista explicita; el
+        # comportamiento por defecto (cwd-relativo) no cambia, y por eso
+        # basta con `[]`.
+        assert auditor_mod.main([]) == 0
         first = report.read_text(encoding="utf-8")
-        assert auditor_mod.main() == 0
+        assert auditor_mod.main([]) == 0
         second = report.read_text(encoding="utf-8")
     finally:
         os.chdir(previous)

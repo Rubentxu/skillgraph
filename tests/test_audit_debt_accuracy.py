@@ -22,10 +22,17 @@ import importlib.util
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _SRC = _PROJECT_ROOT / "src"
+
+#: Sandbox del informe (WI-89). El contenido se cachea: los cinco tests de
+#: este fichero comparan las cifras del mismo informe, y regenerarlo en cada
+#: uno multiplica por cinco el coste del subproceso sin anadir cobertura.
+_OUT_DIR = Path(tempfile.mkdtemp(prefix="sg-audit-accuracy-"))
+_CACHE: dict[str, str] = {}
 
 
 def _load_audit_module():
@@ -40,7 +47,15 @@ def _load_audit_module():
 
 
 def _run_audit() -> subprocess.CompletedProcess[str]:
-    cmd = [sys.executable, "audits/audit_debt.py"]
+    """Audita el `src/` REAL y escribe el informe en un sandbox.
+
+    WI-89: aqui no basta un sandbox completo. `_measure` recorre
+    `_PROJECT_ROOT/src` y compara la cc medida con las cifras citadas en el
+    informe, asi que el origen tiene que seguir siendo el arbol real; lo que
+    se mueve es el destino. Antes escribia en `audits/`, un directorio
+    TRACKEADO, y mutaba el repositorio en cada corrida de la suite.
+    """
+    cmd = [sys.executable, "audits/audit_debt.py", "--out-dir", str(_OUT_DIR)]
     return subprocess.run(
         cmd,
         cwd=str(_PROJECT_ROOT),
@@ -69,9 +84,12 @@ def _measure(cc_of) -> dict[str, frozenset[int]]:
 
 
 def _report_text() -> str:
-    proc = _run_audit()
-    assert proc.returncode == 0, f"audit_debt.py fallo: rc={proc.returncode}\n{proc.stderr}"
-    return Path(proc.stdout.strip()).read_text()
+    """Texto del informe, generado una vez y cacheado (WI-89)."""
+    if "text" not in _CACHE:
+        proc = _run_audit()
+        assert proc.returncode == 0, f"audit_debt.py fallo: rc={proc.returncode}\n{proc.stderr}"
+        _CACHE["text"] = Path(proc.stdout.strip()).read_text()
+    return _CACHE["text"]
 
 
 def test_recommendations_match_measured_complexity() -> None:

@@ -15,14 +15,32 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+#: Sandbox del informe. Se crea una vez por sesion: el auditor es idempotente
+#: sobre el mismo destino, y los tres tests de este fichero comparten el
+#: resultado, igual que antes compartian el fichero del repo.
+_OUT = Path(tempfile.mkdtemp(prefix="sg-audit-"))
+
+
+def _out_dir() -> Path:
+    return _OUT
+
 
 def _run_audit() -> subprocess.CompletedProcess[str]:
-    """Helper: invoca ``python audits/audit_debt.py`` desde la raiz."""
-    cmd = [sys.executable, "audits/audit_debt.py"]
+    """Helper: invoca ``python audits/audit_debt.py`` desde la raiz.
+
+    WI-89: el destino de la escritura es un sandbox. Antes escribia en
+    ``audits/`` relativo al cwd, que es un directorio TRACKEADO, asi que cada
+    corrida de la suite rescribia un fichero versionado del repositorio que el
+    propio script audita — y en un dia sin informe previo creaba un fichero
+    NUEVO sin trackear. Se sigue leyendo el `src/` real desde la raiz: lo que
+    se parametriza es solo donde acaba el informe.
+    """
+    cmd = [sys.executable, "audits/audit_debt.py", "--out-dir", str(_out_dir())]
     return subprocess.run(
         cmd,
         cwd=str(_PROJECT_ROOT),
