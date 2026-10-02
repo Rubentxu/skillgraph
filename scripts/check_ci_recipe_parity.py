@@ -183,8 +183,62 @@ _INVOCA_PYTEST: Final = re.compile(r"(?:^|[\s/])pytest(?:\s|$)")
 #: Python invocado directamente por la receta no es un script de shell.
 _RUTA_SCRIPT: Final = re.compile(r"[\w./-]*scripts/[\w.-]+\.sh")
 
-#: Un path literal de pytest: algo que termina en `.py`.
-_PATH_LITERAL: Final = re.compile(r"[\w./*-]+\.py$")
+#: Un path literal de pytest: un módulo `.py` o un directorio. Los dos
+#: seleccionan. `pytest src/` es tan filtrado como `pytest tests/test_x.py`,
+#: y reconocer solo el primero haría que el segundo se contara como suite
+#: entera.
+_PATH_LITERAL: Final = re.compile(r"[\w./*-]+\.py$|[\w./*-]+/$")
+
+
+#: Verbos de shell que pueden MENCIONAR pytest sin invocarlo.
+#:
+#: No es la lista de excepciones queWI-99 quito: es una lista de PALABRAS
+#: del lenguaje, no de ficheros del repo. Añadir un `verify.sh` nuevo, o un
+#: hook nuevo, no la desactualiza. La lista de WI-99 growaba cada vez que
+#: aparecía un caso; esta no crece nunca.
+#:
+#: MEDIDO en WI-100, y lo encontró una mutación, no un test. C4 llevaba dos
+#: commits dando VERDE porque el `pre-commit` llevaba una línea de
+#: diagnóstico
+#:
+#:     echo "[pre-commit] smoke: pytest sobre $N_STAGED fichero(s) .py staged"
+#:
+#: y esa línea tenía las tres cosas que el invariante miraba: la palabra
+#: `pytest`, una variable, y estaba en una orden ejecutable. Un guard que
+#: confunde un MENSAJE con una EJECUCIÓN no mide qué corre: mide qué se
+#: dice.
+_VERBOS_DE_MENCION: Final = frozenset(
+    {"echo", "printf", "tail", "head", "grep", "cat", "sed", "awk", "test", "read"}
+)
+
+
+#: Palabras que abren una orden de shell sin ser el comando que la ejecuta.
+#: `if run_in_toolchain run pytest` empieza por `if` y ejecuta `run_in_toolchain`.
+_ABIERTURA_DE_ORDEN: Final = frozenset(
+    {"if", "then", "else", "elif", "do", "done", "while", "until", "!", "(", "{", "time"}
+)
+
+
+def _patron_de_invocacion(orden: str) -> re.Match[str] | None:
+    """Dónde empieza pytest en una orden que REALMENTE lo ejecuta.
+
+    La regla es «qué comando lanza esta línea», no «qué palabra hay antes
+    de pytest». Se probó lo segundo y no sirve: en
+
+        echo "[pre-commit] smoke: pytest sobre $N_STAGED fichero(s) .py staged"
+
+    la palabra anterior a `pytest` es `smoke:`, no `echo`, así que la regla
+    de proximidad daba verde a un mensaje. Un verbo de shell que no
+    ejecuta programas no puede estar invocando pytest, y eso decide sin
+    depender de lo que haya escrito alrededor.
+    """
+    m = _INVOCA_PYTEST.search(orden)
+    if m is None:
+        return None
+    comando = next((t for t in orden.split() if t not in _ABIERTURA_DE_ORDEN), None)
+    if comando is not None and comando in _VERBOS_DE_MENCION:
+        return None
+    return m
 
 
 def es_path_de_pytest(token: str) -> bool:
@@ -261,11 +315,15 @@ def filtra_por_ficheros(contenido: str) -> bool:
     staged y **no se los pasaba** — corría la suite entera (2636 tests,
     124 s) anunciando «smoke, ~10 s». El selector existía; la instrucción
     no. Los dos hechos son incompatibles y solo uno estaba escrito.
+
+    Solo se miran órdenes que INVOCAN pytest, no las que lo mencionan; ver
+    `_patron_de_invocacion` y el motivo, que es un falso positivo que hizo
+    que este invariante diera verde dos commits seguidos.
     """
     return any(
         es_path_de_pytest(token)
         for orden in logicas_de(contenido, "#")
-        if _INVOCA_PYTEST.search(orden)
+        if _patron_de_invocacion(orden) is not None
         for token in orden.split()
     )
 

@@ -587,6 +587,41 @@ class TestC4UnaSolaReceta:
         assert not par.filtra_por_ficheros('python -m pytest -q -k "nombre"')
         assert not par.filtra_por_ficheros("run pytest -q -p no:cacheprovider")
 
+    def test_un_mensaje_no_es_una_invocacion(self) -> None:
+        """El falso positivo que encontro una MUTACION, no un test.
+
+        C4 llevaba dos commits dando verde porque el pre-commit tenia una
+        linea de diagnostico:
+
+            echo "[pre-commit] smoke: pytest sobre $N_STAGED fichero(s) .py"
+
+        y esa linea tenia las tres cosas que el invariante miraba: la
+        palabra `pytest`, una variable que parece un path, y estaba en una
+        orden ejecutable. Por eso el pre-commit que corria la suite entera
+        se creia conforme.
+
+        Lo encontro la mutacion M7, que degrada el hook a su forma
+        anterior: el contrato seguia verde. Un guard que confunde un
+        MENSAJE con una EJECUCION no mide que corre: mide que se dice.
+        """
+        mensaje = 'echo "[pre-commit] smoke: pytest sobre $N_STAGED fichero(s) .py staged"'
+        assert par.filtra_por_ficheros(mensaje) is False
+        assert par.filtra_por_ficheros('tail -30 "$_log" | grep pytest') is False
+        assert par.filtra_por_ficheros("printf '%s' pytest") is False
+        # Y lo que de verdad se ejecuta sigue funcionando:
+        assert par.filtra_por_ficheros("if run_in_toolchain run pytest -q $STAGED_PY; then")
+
+    def test_un_directorio_tambien_selecciona(self) -> None:
+        """`pytest src/` es tan filtrado como `pytest tests/test_x.py`.
+
+        Reconocer solo los ficheros `.py` haria que un directorio se
+        contara como suite entera — y el falso verde seria el opuesto del
+        que se quiere vigilar.
+        """
+        assert par.filtra_por_ficheros("python3 -m pytest -q src/")
+        assert par.filtra_por_ficheros("uv run pytest -q scripts/check_ci_recipe_parity.py")
+        assert not par.filtra_por_ficheros("uv run pytest -q --cov=skillgraph")
+
     def test_un_script_se_reconoce_por_extension_o_por_shebang(self) -> None:
         """Las dos vias del descubrimiento, porque hay ficheros sin extension.
 
