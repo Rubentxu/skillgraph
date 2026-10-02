@@ -7830,3 +7830,33 @@ LoC: fuera de god files** (quedan storage/runcontroller/ports).
 - PolicyContext es frozen: los tests de humo deben construir el
   contexto con settings ya restrictivos (no mutar post-hoc).
 
+## 2026-10-02 (X) — Verificación de instrumentación de cobertura subprocess
+
+### Hallazgo (corrige la nota de WI-57)
+
+La suite completa con `--cov=skillgraph` MIDE los subprocesos, pero de
+forma NO determinista: en el mismo run, `commands/knowledge.py` marca
+95% y `promotion.py` 85% (ejercitados via subprocess), mientras
+`commands/runs.py` marca 9% y `expansion.py` 24% pese a tener tests
+subprocess propios. Patron compatible con subprocesos pisandose el
+fichero de datos de coverage (last-writer-wins sin parallel mode).
+La nota anterior de WI-57 ("subprocess invisible") era un artefacto
+del run acotado: la verdad es "semi-medido e inconsistentemente".
+
+### Evidencia
+
+- Suite completa: 1874 passed (1822 + 52 de redes nuevas), 95s,
+  cobertura global 89.45% (gate >=80 OK).
+- Por modulo CLI: knowledge 95%, promotion 85%, run 81%, support 69%,
+  parser/__init__ 100%, pack 46%, expansion 24%, runs 9%.
+
+### Deuda confirmada y precisada (no corregida hoy: cambio de config
+de coverage + verificacion, queda para siguiente pasada con
+autorizacion de config)
+
+1. Activar `parallel = True` + combine de coverage para subprocesos
+   (o cubrir los handlers en-proceso). Sin eso, el % de runs/expansion/
+   pack es ruido.
+2. Los handlers de runs/expansion/pack carecen de tests in-proceso:
+   unica red real via subprocess (que la instrumentacion pisotea).
+
