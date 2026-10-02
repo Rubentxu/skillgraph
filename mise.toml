@@ -12,6 +12,16 @@ MISE_PYTHON_COMPILE = "0"     # usar solo binarios precompilados, evita compilar
 [tools]
 python = "3.13.15"
 uv = "0.12.17"
+# Canon de AGENTS.md ("CI Local Obligatorio -- pipelinek"). Sin este pin,
+# el `pipelinek` del PATH resuelve al shim de asdf 0.43.0 (otro gestor de
+# tools), que produjo veredictos NO confiables en el bake-off. Verificado
+# 0.39.0 con run real el 2026-10-02: 1880 passed in 86.12s, lint OK,
+# 5/5 stages, "Pipeline finished with SUCCESS", cero StepFailed.
+# El id debe ser el backend completo: `mise ls --installed` lo registra como
+# `github:Rubentxu/pipeline-kotlin`; un `pipelinek = "0.39.0"` suelto crea
+# una entrada distinta que queda (missing) y rompe `mise exec -- pipelinek`.
+# Evidencia: evidence/pipelinek-bakeoff-2026-10-02.md
+"github:Rubentxu/pipeline-kotlin" = "0.39.0"
 
 [settings]
 experimental = true
