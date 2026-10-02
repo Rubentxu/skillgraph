@@ -7873,3 +7873,17 @@ autorizacion de config)
 - Estado de la config: revertida; comentario NOTA deja constancia del
   experimento y del enlace al journal.
 
+### WI-63 — red in-proceso para handlers runs/expansion/pack
+
+Implementacion pragmatica de la deuda de instrumentacion: 6 tests
+in-proceso (`tests/test_wi63_cli_handlers_inproc.py`) que llaman los
+handlers directamente con Namespace (setup de proyecto por subprocess,
+deliberadamente no medido). Cobertura deterministica verificada:
+runs.py 37%, pack.py 40%, expansion.py 20% en scoped inproc (vs
+9/24/46% via subprocess pisoteado).
+
+Contratos as-built fijados: `runs list` exige limit numerico (parser
+default 20); `runs cancel` PROPAGA NotFoundError (main la traduce a
+EXIT_DOMAIN — la red wi58 subprocess ya fija ese lado); `propose`
+exige >=1 operacion y manual_signed con granted_by/granted_at.
+
