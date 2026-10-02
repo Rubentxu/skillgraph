@@ -5,16 +5,30 @@ sin conexion, sin reloj, sin SQL. Mismo criterio y mismo motivo de
 cambio que `knowledge_mappers.py` (ADR-0020, WI-60) aplico a
 `knowledge_repository`: un modulo para el contrato fila->DTO.
 
-`storage.py` los re-exporta porque los componentes de WI-56 (ADR-0016
-corte 5) los importan desde ahi. NO renombrar ni mover sin migrar
-`event_store`, `policy_store` y `knowledge_repository`.
+WI-81: este modulo tenia DOCE entradas en `MAPPER_NAMES` y siete eran
+alias de compatibilidad de WI-56 (corte 3) que reenviaban a
+`SqliteKnowledgeRepository.row_to_*`. Sus propios docstrings decian "el
+corte 5 reubicara los callers": el corte 5 ocurrio (ADR-0020), los
+callers se fueron al mapper real de `knowledge_mappers.py` y los alias
+se quedaron sin nadie. Se borran aqui, con el criterio que ADR-0014 ya
+establecio para los shims de modulo: una capa de retro-compatibilidad
+que ya no protege a nadie es codigo muerto con forma de API publica.
+
+Verificacion de que no habia callers (`tests/test_wi81_dead_aliases.py`):
+en runtime, `knowledge_repository._row_to_source is row_mappers._row_to_source`
+es `False` — el simbolo que usan las funciones de `knowledge_repository` es
+un alias LOCAL suyo (`knowledge_repository.py:696-702`) que apunta a
+`knowledge_mappers.row_to_source`. Ningun modulo de `src/` los importaba.
+
+`storage.py` sigue reexportando los CINCO mappers que quedan, porque
+`event_store` y `policy_store` los importan desde ahi. NO renombrar ni
+mover esos sin migrarlos.
 """
 
 from __future__ import annotations
 
-import json
 import sqlite3
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from skillgraph.resources.bricks import Brick
@@ -35,31 +49,21 @@ MAPPER_NAMES: Final[tuple[str, ...]] = (
     "_row_to_stored_event",
     "_row_to_stored_promotion",
     "_row_to_stored_budget",
-    "_row_to_source",
-    "_row_to_evidence",
-    "_row_to_stored_evidence",
-    "_row_to_claim",
-    "_row_to_stored_claim",
     "_row_to_run",
     "_row_to_node_execution",
-    "_row_to_resource",
-    "_row_to_relation",
 )
-"""Los 12 mappers extraidos de `storage.py` (guarda de recuento)."""
+"""Los 5 mappers extraidos de `storage.py` (guarda de recuento).
+
+WI-81: antes eran 12. Los 7 restantes eran alias de WI-56 sin callers,
+no mappers. El recuento ahora dice la verdad sobre lo que hay.
+"""
 
 __all__ = [
     "MAPPER_NAMES",
-    "_row_to_claim",
-    "_row_to_evidence",
     "_row_to_node_execution",
-    "_row_to_relation",
-    "_row_to_resource",
     "_row_to_run",
-    "_row_to_source",
     "_row_to_stored_budget",
-    "_row_to_stored_claim",
     "_row_to_stored_event",
-    "_row_to_stored_evidence",
     "_row_to_stored_promotion",
     "_uid",
 ]
@@ -145,51 +149,6 @@ def _row_to_stored_budget(row: sqlite3.Row) -> StoredBudget:
     )
 
 
-def _row_to_source(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_source``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_source
-
-    return row_to_source(row, json)
-
-
-def _row_to_evidence(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_evidence``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_evidence
-
-    return row_to_evidence(row, json)
-
-
-def _row_to_stored_evidence(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_stored_evidence``. El corte 5
-    reubicara los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_stored_evidence
-
-    return row_to_stored_evidence(row, json)
-
-
-def _row_to_claim(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_claim``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_claim
-
-    return row_to_claim(row, [], json)
-
-
-def _row_to_stored_claim(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_stored_claim``. El corte 5
-    reubicara los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_stored_claim
-
-    return row_to_stored_claim(row, json)
-
-
 def _row_to_run(row: sqlite3.Row) -> StoredRun:
     """Convierte una fila de ``workflow_runs`` al DTO ``StoredRun``.
 
@@ -232,21 +191,3 @@ def _row_to_node_execution(row: sqlite3.Row) -> StoredNodeExecution:
         started_at=row["started_at"],
         finished_at=row["finished_at"],
     )
-
-
-def _row_to_resource(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_resource``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_resource
-
-    return row_to_resource(row)
-
-
-def _row_to_relation(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_relation``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_relation
-
-    return row_to_relation(row)

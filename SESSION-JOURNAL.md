@@ -8919,3 +8919,136 @@ salida de un comando publicado: es decision de producto.
 
 2362 -> **2368 passed**. Sin cambios en `src/`. Sin ADR.
 Evidencia: `evidence/sddk-wi80-verify-2026-10-02.md`.
+
+---
+
+## WI-81 — segunda tanda de ADR-0014: 7 alias de funcion sin callers (2026-10-02)
+
+Ciclo SDDK `p-b7740b96d79ec013/wi-81-drop-dead-row-mapper-shims`.
+Workitem derivado por SDDK en modo ejecucion autonoma, con la consigna
+"alerta de deuda sin verificar si sus criterios siguen vigentes no es
+deuda real". Se aplico la consigna antes de tocar nada.
+
+### Primero: verificar la deuda, no ejecutarla
+
+| Alerta | Verificacion | Veredicto |
+|---|---|---|
+| `sddk debt incs` -> 50 INCs | vault del proyecto = 0 entradas; los 50 en `sddk-framework/incs` y `p-733fb505b5a6bd2d`. Leido uno: `domain: kernel`, `status: closed`, `Cargo.toml`. | deuda de OTRO proyecto |
+| backlog #1 shim pipelinek | el item dice 0.43.0; hoy el shim es 0.46.0; `mise.toml` ya fija 0.39.0 con bake-off | premisa CADUCA |
+| backlog #2 cycle supersede | bug del framework (event ID sin cycle_id) | no accionable aqui |
+| `sddk lint` 4 errores | `schemas/`, `docs/generated/`, `manifest.toml` nunca existieron en git | opt-ins no adoptados |
+| `architecture-debt` | 0 god modules, 0 hotspots cc>=20, 0 anidamiento >=5 | limpio |
+| shims WI-76 | ADR-0014 aceptada, su paso 8 ya aplicado a los shims de MODULO | **deuda real** |
+
+La unica deuda real era la misma que ADR-0014 ya habia decidido, en una
+forma que su inventario no recogia: alias de FUNCION, no de modulo.
+
+### La ineria, medida en runtime
+
+WI-56 (corte 3) dejo 7 alias en `row_mappers.py` que reenvian a
+`knowledge_mappers.row_to_*`. Sus docstrings decian "el corte 5
+reubicara los callers". El corte 5 ocurrio (ADR-0020 / WI-60).
+
+Un barrido textual habria concluido "los llama `knowledge_repository`",
+y eso es un **falso positivo**: ahi el simbolo es un alias LOCAL
+(`knowledge_repository.py:696-702`) que apunta a
+`knowledge_mappers.row_to_source`. La pregunta correcta es si el
+simbolo que se resuelve ES el alias, y eso solo se responde con
+identidad de objetos:
+
+    knowledge_repository._row_to_source is row_mappers._row_to_source
+    -> False   (los 7)
+
+Y ningun modulo de `src/` los importaba: `event_store.py:24` importa
+`_SCHEMA_SQL, Storage, _row_to_stored_event`, y ese ultimo es uno de
+los CINCO reales.
+
+El docstring del modulo decia "NO renombrar ni mover sin migrar
+event_store, policy_store y knowledge_repository". Vigente para los 5,
+OBSOLETA para estos 7. Esa era exactamente la premisa que sostenia el
+codigo muerto.
+
+### TDD
+
+`tests/test_wi81_dead_aliases.py`, 23 tests. **Rojo: 13 failed, 10
+passed.** Los 10 verdes son caracterizacion y prueban por que el borrado
+es seguro.
+
+Un error propio, corregido ANTES de tocar `src/`: la v1 de la
+caracterizacion buscaba "quien llama a `_row_to_source`" por AST y daba
+7 falsos positivos. La comprobacion correcta es identidad en runtime.
+Queda anotado porque es el mismo patron que documento WI-76: un barrido
+por nombre no dice a que objeto resuelve el nombre.
+
+Fix minimo: 7 funciones fuera, `MAPPER_NAMES` 12 -> 5, `__all__` de
+`row_mappers` y `storage`, docstrings actualizados, `test_wi65` al
+recuento real, `test_wi60` sin su test de shim, y
+`test_wi76_shim_execution.py` BORRADO (14 tests: premisa resuelta,
+objeto desaparecido; AGENTS 6.2 "o arreglas el test o lo borras").
+
+**Verde**: 23 passed. **Quiirurgico** sobre 81 ficheros que importan
+`platform.storage`, `event_store`, `policy_store`,
+`knowledge_repository` o `knowledge_mappers`: **1034 passed**.
+
+### Mutaciones
+
+| # | Mutacion | Resultado |
+|---|---|---|
+| M1 | reintroducir un alias muerto + su entrada en `MAPPER_NAMES` | CAZADA, 3 failed |
+| M2 | `knowledge_repository` pasa a resolver al alias (caller real) | CAZADA, 3 failed |
+
+M2 es la que justifica el trabajo: es el escenario que habria
+desaconsejado borrar. La red lo detecta.
+
+### La leccion del script
+
+La v1 de `.pipelinek/wi81_mutate.sh` revertia cada mutacion con
+`git checkout -- <file>`. Eso restaura la version de **HEAD** y por
+tanto **destruye el fix sin commitear**. Tras las dos mutaciones, el
+control del final (que exige verde con el arbol de trabajo) fallo con 4
+failed y `row_mappers.py` volvio a tener 12 funciones.
+
+Restaurado desde el backup; el script ahora revierte con `cp` del
+backup y comprueba que la mutacion aplico con `diff -q` contra el
+backup, no con `git diff --quiet` contra HEAD.
+
+Sin ese control final se habria commiteado un arbol inconsistente
+creyendo que las mutaciones estaban validadas. Es el mismo motivo por
+el que WI-79 metio el `git diff --quiet`, y aqui habria fallen los dos:
+`git checkout --` es elemetico en la raiz.
+
+### Trazabilidad
+
+Addendum en `external/blueprint-v1/adr/ADR-0014-...` (no se reabre el
+ADR, se completa). `STATE.yaml` `current_workitem: WI-81`;
+`next_workitem` con (c) resuelta y (i) nueva: la triple alerta de deuda
+falsa, verificada y NO ejecutada.
+
+CI canonica: run `6d5e68a5-4c80-4f03-b026-3ed1317d5405`,
+`RunFinished: success`, 8 `StepStarted`, 5/5 stages, 0 `StepFailed`,
+**2376 passed in 104.41s**. Recuento: 2368 + 23 nuevos - 14 (WI-76) - 1
+(WI-60) = 2376.
+
+Evidencia: `evidence/sddk-wi81-verify-2026-10-02.md`.
+
+### Nota de trazabilidad: los ADR no estan versionados
+
+El addendum a ADR-0014 NO entra en el commit. `external/` esta en
+`.gitignore` desde la linea 22, con el motivo escrito:
+
+    # Documentacion input del blueprint (se conserva en external/,
+    # fuera del repo)
+    external/
+
+`git ls-files external/blueprint-v1/adr/` no devuelve nada. Los ADR
+viven en disco pero no en git, y AGENTS.md §10 exige abrir la ADR ahi
+cuando una desviacion es material. Es la convencion del proyecto y se
+respeta, pero conviene que quede dicha: **un ADR de este repo no es
+un artefacto que sobreviva a un clone**.
+
+La trazabilidad que SI se versiona, y por tanto la que sobrevive, va en
+`STATE.yaml`, `SESSION-JOURNAL.md` y `evidence/`, que es donde queda
+el criterio, la ineria medida y las mutaciones.
+
+Comprobado de paso: `AGENTS.md` SI esta trackeado. La norma que exige
+los ADR vive en git; los ADR que produce, no.

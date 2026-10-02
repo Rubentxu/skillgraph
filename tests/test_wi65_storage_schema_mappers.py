@@ -6,9 +6,11 @@ queda tras la fase 1. Umbral del audit: <800 LoC por fichero.
 
 Contrato fijado aqui:
 
-1. Los **12 mappers fila->DTO** y `_uid` viven en
+1. Los **5 mappers fila->DTO** y `_uid` viven en
    `skillgraph.platform.row_mappers`. Son funciones puras: reciben una
    fila y devuelven un DTO, sin `self`, sin conexion, sin reloj.
+   (WI-81: eran 12. Los 7 restantes eran alias de retro-compatibilidad
+   de WI-56 sin callers; ver `tests/test_wi81_dead_aliases.py`.)
 2. El **DDL** (`_SCHEMA_SQL`, 248 LoC) y `SCHEMA_VERSION` viven en
    `skillgraph.platform.schema`. Es una constante: no tiene razon de
    cambio junto a los metodos del facade.
@@ -34,7 +36,7 @@ from pathlib import Path
 import pytest
 
 from skillgraph.platform import storage
-from skillgraph.platform.row_mappers import MAPPER_NAMES, _row_to_source
+from skillgraph.platform.row_mappers import MAPPER_NAMES, _row_to_run
 from skillgraph.platform.schema import SCHEMA_SQL
 
 MAPPERS_ON_STORAGE: tuple[str, ...] = MAPPER_NAMES
@@ -168,12 +170,17 @@ class TestShimPreserved:
 
         assert event_store._row_to_stored_event is storage._row_to_stored_event
 
-    def test_twelve_mappers_moved(self) -> None:
-        """Guarda el recuento: un mapper olvidado no se nota solo."""
-        assert len(MAPPERS_ON_STORAGE) == 12, f"esperados 12 mappers, hay {len(MAPPERS_ON_STORAGE)}"
+    def test_five_mappers_moved(self) -> None:
+        """Guarda el recuento: un mapper olvidado no se nota solo.
+
+        WI-81 bajo el recuento de 12 a 5. Los 7 que se fueron eran alias
+        de WI-56, no mappers, y `test_wi81_dead_aliases.py` es quien
+        vigila ahora que no vuelvan a colarse en la cuenta.
+        """
+        assert len(MAPPERS_ON_STORAGE) == 5, f"esperados 5 mappers, hay {len(MAPPERS_ON_STORAGE)}"
 
     def test_representative_mapper_is_callable(self) -> None:
-        assert callable(_row_to_source)
+        assert callable(_row_to_run)
 
     def test_runtime_constructed_dtos_are_importable(self) -> None:
         """Guarda contra la regresion real de esta fase.

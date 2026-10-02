@@ -50,22 +50,19 @@ from skillgraph.platform.ports import (
 )
 
 # Re-exports de la fase 2 (WI-65). Los usa internamente y los exporta
-# porque los componentes de WI-56 (ADR-0016 cortes 4 y 5) los importan
-# desde aqui. Declarados en __all__ para que ruff no los borre por F401
-# en cuanto el facade deje de referenciarlos.
+# porque `event_store` y `policy_store` los importan desde ahi. Declarados
+# en __all__ para que ruff no los borre por F401 en cuanto el facade deje
+# de referenciarlos.
+#
+# WI-81: antes re-exportaba tambien los 7 alias de WI-56 (corte 3). El
+# corte 5 reubico sus callers y se comprobo en runtime que nadie los
+# invocaba, asi que se retiraron. Ver `tests/test_wi81_dead_aliases.py`.
 from skillgraph.platform.row_mappers import (
     MAPPER_NAMES,
-    _row_to_claim,
-    _row_to_evidence,
     _row_to_node_execution,
-    _row_to_relation,
-    _row_to_resource,
     _row_to_run,
-    _row_to_source,
     _row_to_stored_budget,
-    _row_to_stored_claim,
     _row_to_stored_event,
-    _row_to_stored_evidence,
     _row_to_stored_promotion,
     _uid,
 )
@@ -111,17 +108,10 @@ __all__ = [
     "StoredRelation",
     "StoredResource",
     "StoredRun",
-    "_row_to_claim",
-    "_row_to_evidence",
     "_row_to_node_execution",
-    "_row_to_relation",
-    "_row_to_resource",
     "_row_to_run",
-    "_row_to_source",
     "_row_to_stored_budget",
-    "_row_to_stored_claim",
     "_row_to_stored_event",
-    "_row_to_stored_evidence",
     "_row_to_stored_promotion",
     "_uid",
 ]

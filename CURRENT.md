@@ -3,6 +3,36 @@
 > **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
 > `v0.16.10` en `2ee6d77`. Los workitems posteriores a la release se
 > acumulan sobre ese HEAD; la siguiente release se decide con el operador.
+> **WI-81 cerrado — segunda tanda de ADR-0014: 7 alias de función sin
+> callers** (2026-10-02, ciclo SDDK
+> `wi-81-drop-dead-row-mapper-shims`): antes de aceptar deuda técnica
+> como deuda, se verificó cada alerta, y **ninguna de las registradas lo
+> era**. `sddk debt incs` devuelve 50 INCs que no son de este proyecto
+> (el vault `p-b7740b96d79ec013` tiene **0 entradas**; están en
+> `sddk-framework/` y en `p-733fb505b5a6bd2d`, y uno leído es
+> `domain: kernel, status: closed`, sobre `Cargo.toml`). El backlog #1
+> del shim de `pipelinek` tiene premisa caduca: dice 0.43.0, hoy es
+> 0.46.0 y `mise.toml` **ya fija** 0.39.0 con bake-off documentado. Y
+> `sddk lint` falla con 4 errores que son **opt-ins no adoptados**:
+> `schemas/`, `docs/generated/` y `manifest.toml` nunca existieron en el
+> historial de git. Lo único que sí era deuda real: los 7 alias de
+> WI-56 (corte 3) en `platform/row_mappers.py`, cuyos docstrings decían
+> «el corte 5 reubicará los callers» — el corte 5 ocurrió, los callers
+> se fueron a `knowledge_mappers` y los alias se quedaron, dejando
+> `MAPPER_NAMES` anunciando 12 mappers donde había 5. **Inercia medida
+> en runtime, no por lectura**: `knowledge_repository._row_to_X is
+> row_mappers._row_to_X` → `False` en los 7, porque ese símbolo es un
+> alias *local* suyo (`knowledge_repository.py:696-702`). Un barrido
+> textual habría dicho «los llama `knowledge_repository`» y es un falso
+> positivo. Test rojo primero (23 tests, 13 failed / 10 passed de
+> caracterización), fix mínimo, 2 mutaciones cazadas incluida la
+> reintroducción de un caller real. `test_wi76_shim_execution.py`
+> borrado: premisa resuelta, objeto desaparecido (AGENTS §6.2). Addendum
+> en ADR-0014. **Una lección**: la primera versión del script de
+> mutaciones revertía con `git checkout --`, que restaura HEAD y
+> destruyó el fix sin commitear; el control del final lo detectó. Sin
+> ese control se habría commiteado un árbol inconsistente. Evidencia:
+> `evidence/sddk-wi81-verify-2026-10-02.md`.
 > **WI-80 cerrado — un rechazo ilegible se presenta como `PROPOSED`,
 > sin avisar** (2026-10-02, ciclo SDDK
 > `wi-80-silent-handler-audit`): la señal que WI-76..WI-79 no habían

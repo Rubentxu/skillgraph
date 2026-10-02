@@ -55,13 +55,10 @@ class TestRepositoryUntouched:
         assert "def row_to_source" not in source
         assert "def row_to_relation" not in source
 
-    def test_storage_shim_import_keeps_working(self) -> None:
-        """El import diferido del shim de storage.py resuelve contra el
-        re-export de knowledge_repository (regresion del corte 5 de
-        ADR-0016): el shim es un wrapper, no el mapper mismo."""
-        import inspect
-
-        from skillgraph.platform import storage
-
-        source = inspect.getsource(storage._row_to_source)
-        assert "from skillgraph.platform.knowledge_repository import row_to_source" in source
+    # WI-81: este fichero tenia tambien
+    # `test_storage_shim_import_keeps_working`, que afirmaba que el shim
+    # `storage._row_to_source` resolvia contra `knowledge_repository`.
+    # Ese shim era uno de los 7 alias de WI-56 sin callers, asi que se
+    # elimino con el resto. El invariante que queda vivo no es "el shim
+    # funciona" sino "nadie lo usa": lo vigila
+    # `tests/test_wi81_dead_aliases.py`.
