@@ -1,5 +1,23 @@
 # CURRENT — puntero operativo
 
+> **RELEASE v0.16.10** (2026-10-02): publica el bloque **WI-65..WI-71**
+> (57 commits) que estaba sin subir desde `e680b72`. Numero derivado del
+> historial segun la regla del CHANGELOG, no por criterio propio: el
+> bloque tiene **0 `feat` y 6 `fix`**, y la regla dice `fix` -> PATCH y
+> `refactor`/`test`/`docs`/`chore` -> sin bump. Un MINOR se descarto
+> pese a haberlo propuesto, porque el bloque no anade ninguna
+> capacidad observable y la API publica se conserva identica
+> (verificada por identidad de objeto, no por inspeccion). Contenido:
+> cierre de H-01 (god modules 3 -> 0), siete redes de contrato nuevas
+> (2154 -> 2181 tests) y seis correcciones reales, tres de ellas de
+> gobernanza de CI (el SUCCESS cacheado que enmascaraba runs, la
+> ambiguedad de PATH entre asdf y mise, y el hook pre-commit que se
+> comia el exit de pytest). Nudo documentado: el admission gate exige
+> que `__version__` puro coincida con una etiqueta en HEAD, asi que el
+> commit de release no puede pasar el gate **antes** de que exista la
+> etiqueta. Se commitea con `HOOK_SKIP_TESTS=1` (ruff sigue
+> corriendo) y la suite completa se ejecuta despues de crear el tag,
+> que es la condicion en la que el gate realmente debe pasar.
 > **WI-71 cerrado — P3 7 → 6** (2026-10-02): `analyze_skill`
 > (importacion de skills, UAT-11) 101 → **30 LoC** y cc 11 → **1**.
 > Elegida por medicion, no por LoC: de las candidatas P3 era la de mayor

@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.9.dev0"  # trabajo post-release v0.16.9 (regla AGENTS §12)
+__version__ = "0.16.10"  # release v0.16.10 (regla AGENTS §12): 0 feat, 6 fix -> PATCH
 
 from skillgraph.core.errors import (
     IdentityConflictError,

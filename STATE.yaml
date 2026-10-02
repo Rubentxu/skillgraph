@@ -541,7 +541,7 @@ tests:
   total: 1431   # post-fix(audit) + refactor(backups): 1422 -> 1431 (+9 tests: 4 de exactitud de auditoria, 5 de politica de recoleccion; +2 preexistentes contados aparte)
   passed: 1431
   duration_s: 644   # re-medido el 2026-09-28 con `uv run pytest -q` con cobertura (1431 passed in 644.38s; la anterior de 1215s era de un run con fallos de gobernanza)
-  package_version: "0.16.9.dev0"   # trabajo post-release v0.16.9 (regla AGENTS §12): bump .dev0 inmediato tras el tag para no reproducir el drift del commit 7e6df87
+  package_version: "0.16.10"   # release v0.16.10 (regla AGENTS §12). PATCH derivado del historial: 0 feat, 6 fix, 13 refactor, 3 test, 23 docs, 12 chore. El bump MINOR que se propuso queda descartado por la regla del CHANGELOG (feat -> MINOR)
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1284,5 +1284,5 @@ release:
     footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"
     e2e_real_h6: "pack_loader declara Character/StoryArc desde narrative-core.md; valida instancias; shadowing de tipos core y namespaces reservados rechazados"
     e2e_real_h7: "reconcile_after_interruption_completes_pending: IN_PROGRESS dejado por crash -> reconcile_pending aplica apply_fn exactamente 1 vez por propuesta, sin duplicar"
-  push: false   # origin/main = e680b72; el bloque WI-65..WI-71 sigue LOCAL y sin publicar. Requiere autorizacion explicita del operador ("sube"). No publicar trabajo parcial: decidir antes si el bloque se publica con bump de __version__ y tag anotado coherente (la release vigente es v0.16.9 y __version__ esta en 0.16.9.dev0)
+  push: pendiente   # release v0.16.10 preparada en este commit: el bloque WI-65..WI-71 (57 commits) mas el commit de release salen a origin/main en el push autorizado por el operador. Se confirma con un commit docs(state) posterior al push, para no afirmar como hecho lo que aun no ha ocurrido
 

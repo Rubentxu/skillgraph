@@ -12,6 +12,88 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.10] - 2026-10-02 — WI-65..WI-71: cierre de H-01 y god modules 3 → 0
+
+**Resumen**: publica el bloque de 57 commits acumulado desde `e680b72`. El
+número sale de la regla del propio CHANGELOG aplicada al historial: **0
+`feat`, 6 `fix`, 13 `refactor`, 3 `test`, 23 `docs`, 12 `chore`** → **PATCH**.
+Se propuso un MINOR y se descartó: el bloque no añade ninguna capacidad
+observable y la API pública se conserva idéntica. Contiene tres defectos
+reales de gobernanza de CI, el cierre de la god class `Storage` (H-01), tres
+cortes estranguladores que llevan god modules 3 → 0, y siete redes de
+contrato nuevas. **2181 passed** (2154 antes del bloque), ruff y format
+limpios, CI canónica con `Pipeline finished with SUCCESS`.
+
+### Fixed
+
+- `fix(ci)` `3665262`: **SUCCESS cacheado**. El comando canónico sin
+  `--rerun` reutilizaba el veredicto por `cacheKey` de compilación del
+  script: 72 ms, cinco stages "success", cero `StepStarted`. Un run que no
+  ejecutaba nada se declaraba verde. `--rerun` pasa a ser obligatorio y
+  AGENTS.md gana un criterio nuevo (el journal debe contener `StepStarted`
+  y un `EchoOutputCaptured` con la línea de resumen de pytest). El criterio
+  de "cero `StepFailed`" pasa a filtrar por `occurred_at` porque el
+  `run_id` se reutiliza entre replays.
+- `fix(ci)` `1bb545d` + `9dff66c`: la causa del "bake-off" entre versiones
+  de `pipelinek` era la **ambigüedad de PATH entre asdf y mise**, no una
+  versión defectuosa. Tres runs controlados (0.39.0 mise / 0.43.0 asdf /
+  0.46.0 asdf) dieron los tres `1880 passed` + SUCCESS. Se fija 0.39.0 en
+  `mise.toml` y se corrige la evidencia durable.
+- `fix(ci)` `2cbc6c9`: el hook pre-commit decidía sobre el exit de `tail`, no
+  el de `pytest`, y enmascaraba cualquier fallo de la suite (misma clase de
+  trampa que `PIPESTATUS`).
+- `fix(cli)` `c3444a7`: se restaura `@contextmanager` en
+  `support._open_project_storage`.
+- `fix(tests)` `ff5d246`, `229c542`: repara imports de símbolos movidos por
+  los cortes estranguladores y actualiza cuatro contratos a la realidad
+  post-estrangulamiento.
+
+### Changed (sin cambio de comportamiento observable)
+
+- `refactor(platform)` `9c104ac`, `2f5f7e4`, `405f49e` — **ADR-0022, cierra
+  H-01**: la god class `Storage` (1807 LoC, 80 métodos) deja de figurar como
+  god module. `storage.py` queda en **623 LoC**: 65 métodos de delegación a
+  cinco mixin por componente, 12 mappers fila→DTO y el DDL a `row_mappers.py`
+  y `schema.py`. Los atómicos H9/H10 (`_tx`, `_atomic`, `_migrate`) **no se
+  mueven**: ADR-0016 exige que compartan `self._conn` sin duplicarlo.
+- `refactor(runtime)` `e07413b` — **ADR-0023**: `_execute_one` 143 → 74 LoC
+  en cuatro fases nombradas (`_node_guard`, `_compile_node_handoff`,
+  `_invoke_node_adapter`, `_settle_node_outcome`).
+- `refactor(runtime)` `57121ed` — **ADR-0024**, completa ADR-0019 fase 2:
+  `RunController` 1421 → 665 LoC en tres mixin de dominio, en **módulos
+  separados** (uno único habría salido en 845 LoC: reubicar el problema).
+- `refactor(platform)` `c29a848`: `ports/__init__.py` 927 → `dto.py` (448) +
+  `repositories.py` (442) + índice de 55. **God modules 3 → 0.**
+- `refactor(knowledge)` `a16cd10` y `b6741bf`: `extract_file_signatures` 116
+  → 55 LoC y `analyze_skill` 101 → 30 LoC (cc 11 → 1). Ambas candidatas
+  elegidas por **medición AST, no por tamaño**: son las de mayor cc real
+  entre las que quedaban; las lineales (`compile_handoff` cc 3,
+  `compile_handoff_from_scopes` cc 1) se dejan intactas a proposito.
+
+### Regresiones evitadas por la red (contexto)
+
+Cuatro apariciones del mismo bug: `ruff --fix` borra por F401 los DTO
+re-exportados en cuanto el facade deja de referenciarlos (61, 133 y 1 test
+caídos en WI-65, WI-66 y WI-67). Guardas permanentes añadidas: lista
+explícita de re-exports consumidos desde fuera y superficie pública
+afirmada con `inspect.getmembers` (un `vars(cls)` no ve la herencia).
+`ClassDef.lineno` no apunta al decorador, así que un corte de dataclasses
+puede dejar los `@dataclass` atrás (41 tests, dos veces).
+
+### Contexto
+
+- Dos rarezas preexistentes de la importación de skills quedan **fijadas con
+  test, no corregidas**: importar un fichero suelto lo nombra `"."` (porque
+  `Path(f).relative_to(f)` es `"."`) y el mensaje de ruta inexistente usa la
+  raíz ya resuelta. La primera cambia el payload que consumen UAT e informe:
+  es decisión de producto.
+- Nudo estructural del release governance: el admission gate exige que
+  `__version__` puro coincida con una etiqueta en HEAD, así que el commit de
+  release no puede pasar el gate antes de que exista la etiqueta. Se
+  commitea con `HOOK_SKIP_TESTS=1` (ruff sigue corriendo) y la suite
+  completa se ejecuta **después** de crear el tag, que es la condición en la
+  que el gate debe pasar de verdad.
+
 ## [0.16.9] - 2026-10-01 — WI-49: rechazo de bool en enteros declarados
 
 **Resumen**: ciclo SDDK `wi-49-bool-int-declared-coercions` (identidad `p-b7740b96d79ec013`). Cierra la clase de defecto que wi-46 dejó abierta (`isinstance(True, int)` es `True`, así que `int(True)` = 1 y un booleano declarado donde se espera un entero pasaba en silencio): tres superficies más donde la coerción ciega aceptaba `bool` — **plan** (`resourceRevision: true` → revisión 1 que nadie declaró), **backups** (manifest con `size_bytes: true` → tamaño 1 en restore) y **receipts** (`tests_run=True`/`tests_passed=True` aceptados por la dataclass pese al docstring que los "preservaba"; solo el cross-check `tests_passed > tests_run` mordía en una dirección, y el lector defensivo `_payload_to_receipt` coercaba antes de validar). 3 `fix`, 0 `feat`, 0 breaking → **PATCH**.
