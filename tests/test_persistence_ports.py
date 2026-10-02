@@ -28,11 +28,23 @@ from skillgraph.platform.storage import Storage
 
 
 def _public_methods(cls: type) -> set[str]:
-    """Métodos públicos (no empiezan por ``_``) declarados en ``cls``."""
+    """Métodos públicos (no empiezan por ``_``) expuestos por ``cls``.
+
+    Se cuentan también los **heredados**: desde WI-65 el facade `Storage`
+    hereda sus 65 delegación de los mixin por componente
+    (`RunDelegations`, `KnowledgeDelegations`, ...), así que su
+    `__qualname__` es `Mixin.metodo` y no `Storage.metodo`. El filtro
+    por `__qualname__` que se usaba antes solo miraba el cuerpo de la
+    clase y daba por roto un `Storage` que cumple el Protocol.
+
+    Lo que este test afirma es "¿`cls` **expone** estos nombres?", así
+    que la pregunta correcta es sobre el conjunto accesible, no sobre
+    dónde se definen las funciones.
+    """
     return {
         name
-        for name, member in inspect.getmembers(cls, predicate=inspect.isfunction)
-        if not name.startswith("_") and member.__qualname__.startswith(cls.__name__)
+        for name, _member in inspect.getmembers(cls, predicate=inspect.isfunction)
+        if not name.startswith("_")
     }
 
 
