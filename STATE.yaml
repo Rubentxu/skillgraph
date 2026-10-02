@@ -541,7 +541,7 @@ tests:
   total: 2463   # re-medido 2026-10-02 (bloque WI-89): 2463 passed. +12 sobre 2451 = los 12 tests de tests/test_wi89_audit_writes_outside_repo.py. Dato relevante: el hook de pre-commit, que antes dejaba `M audits/architecture-debt-<hoy>.md`, deja ahora el arbol LIMPIO. Ese era el sintoma visible del defecto.
   passed: 2463
   duration_s: 105.06   # re-medido 2026-10-02: 2463 passed in 105.06s (lo reporto el pre-commit al commitear 64a28a8).
-  package_version: "0.16.14.dev0"   # trabajo post-release v0.16.14 (AGENTS 12). El tag v0.16.14 esta en 3cfce09; este bloque sigue en local y SIN PUSH.
+  package_version: "0.16.15"   # release v0.16.15. El tag se crea sobre el commit que lleva la version pura, que es lo que exige tests/test_release_governance.py::test_version_matches_git_tag (rama 1).
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1096,7 +1096,7 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.16.14
+  tag: v0.16.15
   fecha: 2026-10-02
   semver_bump: PATCH
   rationale: "Bloque WI-87 + WI-88 (3 commits de trabajo, d47b7af..1a0c38b, mas 0a3fd1a de lint). SemVer derivado del historial: 0 feat, 1 fix (1a0c38b), 1 refactor (d47b7af), 1 docs, 1 style, 1 chore => PATCH. Sin capacidad observable nueva, pero el contrato externo de la CLI cambia en algo que un script necesita: antes rc==2 no distinguia un nombre de proyecto invalido de un comando mal escrito, y EXIT_USAGE (1) no se producia nunca; ahora 1 significa uso y 2 significa una sola cosa. 2451 passed (2430 en v0.16.13), ruff y format limpios. WI-87 no cambia comportamiento observable hoy (el CHECK y la constante ya coincidian): lo que cambia es que ya no PUEDEN dejar de coincidir, porque salen de la misma expresion. Con un solo fix en el historial, el bump lo triggera ese. CIERRE DE DOS DECISIONES DEL OPERADOR: (d) propiedad de dominio del vocabulario, resuelta con ADR-0015; (f) exit code de argparse, resuelta con ADR-0016. La medicion de (f) casi la cerro por el motivo equivocado: la primera ejecucion dio exit 1 en los tres casos y habria permitido declararla caducada, pero se habia medido /usr/bin/sg (la herramienta Unix de grupos) en vez del console script `skillgraph`. Leccion de bloque, no de codigo: medir el programa equivocado es la forma mas barata de cerrar un defecto por error."

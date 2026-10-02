@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.14.dev0"  # trabajo post-release v0.16.14 (regla AGENTS §12): bump .dev0 inmediato tras el tag para no reproducir el drift
+__version__ = "0.16.15"  # release v0.16.15: PATCH derivado del historial (v0.16.14..HEAD = 0 feat, 1 fix(audit), 2 docs, 1 chore)
 
 from skillgraph.core.errors import (
     IdentityConflictError,
