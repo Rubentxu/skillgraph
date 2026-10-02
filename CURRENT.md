@@ -3,6 +3,39 @@
 > **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
 > `v0.16.10` en `2ee6d77`. Los workitems posteriores a la release se
 > acumulan sobre ese HEAD; la siguiente release se decide con el operador.
+> **WI-80 cerrado — un rechazo ilegible se presenta como `PROPOSED`,
+> sin avisar** (2026-10-02, ciclo SDDK
+> `wi-80-silent-handler-audit`): la señal que WI-76..WI-79 no habían
+> barrido — *fallbacks silenciosos*. Barrido mecánico de los 66 handlers
+> de excepción de `src/`: **59 con cuerpo efectivo, cero `pass`, cero
+> handlers vacíos** (el antipatrón AGENTS §11.14.4 no está presente en
+> esa forma) y 7 con cuerpo únicamente `continue`, todos de tolerancia a
+> dato corrupto y documentados. Los 4 `except Exception` anchos están
+> justificados en el código; los 3 `except BaseException` relanzan con
+> `raise`, que es lo correcto (estrechar a `Exception` dejaría el
+> `BEGIN` abierto ante un `ValidationError` o un `Ctrl-C`).
+> **Hipótesis refutada sin tocar código**: `_load_registry` se salta un
+> resource con `spec_json` ilegible, pero el registry es un *allowlist
+> de existencia* (I3/I4 preguntan «la capability EXISTE»), no un detector
+> de colisiones, así que un registro incompleto hace **fallar** la
+> comprobación con I3 en vez de pasarla: *fail-closed* correcto.
+> **Hallazgo real**: `_collect_rejection_ids` (`expansion.py:86`) se
+> salta un `expansion_rejections/*.json` ilegible; el `proposal_id` no se
+> registra y `_infer_proposal_stage` cae a `PROPOSED`, sin aviso. Es el
+> patrón que `git_source.py:365` ya decidió corregir («un dato plausible
+> y falso es peor que un error»). Consecuencia **medida**: `expansion
+> list` imprime `stage=PROPOSED` con exit 0 para una propuesta
+> rechazada, y `--stage REJECTED` la hace desaparecer. **No** es un
+> falso éxito de escritura: `cmd_expansion_apply` no consulta el
+> registro de rechazos — `apply` es idempotente por re-validación.
+> Añadido `tests/test_wi80_expansion_rejection_visibility.py` (6 tests,
+> **sin tocar `src/`**) con 2 mutaciones cazadas, incluida la
+> *corrección candidata* (fallback por nombre de fichero), que pone la
+> red en rojo: arreglarlo exige tocar el test a propósito. **No se
+> corrige** — cambiar la salida de `expansion list` es contrato externo
+> (AGENTS §6.4) con un consumidor (`--stage REJECTED`), y hay dos salidas
+> no equivalentes. 2362 → **2368 passed**. Evidencia:
+> `evidence/sddk-wi80-verify-2026-10-02.md`.
 > **WI-79 cerrado — el contrato de exit code de la CLI no lo fijaba
 > ningún test** (2026-10-02, ciclo SDDK `wi-79-cli-exit-contract`):
 > `main()` termina en `sys.exit(main())`, así que un handler de

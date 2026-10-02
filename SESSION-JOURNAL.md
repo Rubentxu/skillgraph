@@ -8795,3 +8795,127 @@ pierda.
 `src/`**: cero cambios de comportamiento, el codigo ya cumplia. Sin
 ADR. 2260 -> **2362 passed**. ruff y format limpios.
 Evidencia: `evidence/sddk-wi79-verify-2026-10-02.md`.
+
+---
+
+## WI-80 — fallbacks silenciosos: un rechazo ilegible se presenta como PROPOSED (2026-10-02)
+
+Ciclo SDDK `p-b7740b96d79ec013/wi-80-silent-handler-audit`. Cierra la
+senal que WI-76 (cobertura), WI-77 (limite sin test), WI-78 (DTO) y
+WI-79 (exit codes) no habian tocado: **fallbacks silenciosos**, que el
+goal lista de forma explicita.
+
+### El barrido
+
+`.pipelinek/wi80_scan_silent_handlers.py` recorre los 66 handlers de
+excepcion de `src/`:
+
+    ok: 59    vacio: 0    pass: 0    continue: 7
+
+**Cero `pass` y cero handlers vacios.** El antipatron 11.14.4 de
+AGENTS.md no esta presente en esa forma. Los 7 `continue` son
+"tolerancia a dato corrupto" y todos llevan comentario que lo declara.
+
+`return None` no se marca a proposito: en este repo es valor de negocio
+legitimo. `git_source.py:375` existe precisamente para distinguir "no
+se pudo determinar" de "working tree limpio" devolviendo `None`.
+
+Los 4 `except Exception` anchos: los 4 justificados en el codigo. Los 3
+`except BaseException` relanzan con `raise`, que es lo correcto —
+estrechar a `Exception` dejaria el `BEGIN` abierto ante un
+`ValidationError` o un Ctrl-C.
+
+### Una deuda que NO es hallazgo
+
+`governance/promotion.py:116` atrapa `Exception` de `apply_fn` y marca
+FAILED. El propio codigo declara:
+
+    DEUDA CONOCIDA: `mark_promotion_failed` solo escribe el status, no
+    el motivo. La causa se pierde...
+
+Se midio: la tabla `promotion_outbox` (`schema.py:253`) no tiene
+columna para el motivo, no hay evento ni log, y
+`test_h7_promocion.py:198` ya afirma que FAILED no reintenta. Es deuda
+**consciente y fijada**. No es un hallazgo y no se reabre.
+
+### Hipotesis refutada sin tocar codigo
+
+`_load_registry` (`expansion.py:109`) hace `continue` si un resource
+tiene `spec_json` ilegible, y ese registry alimenta `apply_expansion` y
+`validate`. La hipotesis era que un registro incompleto haria pasar una
+colision de capabilities.
+
+Se leyo el consumidor antes de tocar nada (`graph_expansion.py:341`):
+
+    def _check_capabilities(proposal, registry):
+        """I3+I4: caps/deps NO en registry."""
+        if any(not _ref_exists(cap, registry) for cap in proposal.capabilities_needed):
+            violated.append("I3")
+
+El registry es un **allowlist de existencia**, no un detector de
+colisiones. Un registro incompleto hace que la comprobacion **falle**
+con I3. Fail-closed. Ninguna invariante I0..I6 depende de que este
+completo. **Hipotesis retirada.**
+
+### El hallazgo
+
+`_collect_rejection_ids` (`expansion.py:86`): un
+`expansion_rejections/*.json` ilegible se salta con `continue`, el
+`proposal_id` no se registra, y `_infer_proposal_stage` (precedencia
+ARCHIVED > APPLIED > REJECTED > PROPOSED) cae al ultimo caso.
+
+Lo que hace esto peor que las otras dos tolerancias del repo es que
+aquí la degradacion es la **afirmacion contraria**: "esta propuesta NO
+esta rechazada". `git_source.py:365` ya decidio que un dato plausible y
+falso "es peor que un error"; `backups.py:358` degrada a "no aparece en
+la lista" y lo dice. Aqui se imprime `stage=PROPOSED` sin una linea de
+aviso.
+
+Consecuencia medida:
+
+| Escenario | `expansion list` | `--stage REJECTED` |
+|---|---|---|
+| legible | `stage=REJECTED` | la lista |
+| corrupto | `stage=PROPOSED`, exit 0, sin aviso | `(sin propuestas...)` |
+
+**Alcance acotado, importante**: NO es un falso exito de escritura.
+`cmd_expansion_apply` no consulta `_collect_rejection_ids`; re-aplicar
+una propuesta rechazada la re-valida contra el plan. `apply` es
+idempotente por **re-validacion**, no por consulta de rechazos. El
+defecto es de **visualizacion** (`cmd_expansion_list` y
+`cmd_expansion_show`). Digo esto porque la hipotesis inicial, sin
+medir, habria reportado un bypass de gobernanza que no existe.
+
+### La red y sus mutaciones
+
+`tests/test_wi80_expansion_rejection_visibility.py`, 6 tests, sin tocar
+`src/`. Caso base y caso degradado lado a lado.
+
+- M1: `continue` -> `raise` (la tolerancia se pierde). **CAZADA**, 4 failed.
+- M2: **la correccion candidata** — fallback por nombre de fichero, el
+  marcador se llama `<proposal_id>.json` asi que el id sigue siendo
+  recuperable aunque el JSON este truncado. **CAZADA**, 4 failed.
+
+M2 en la red es lo importante: si el operador decide arreglar el
+defecto, el test se pone rojo y obliga a hacerlo de forma deliberada.
+
+### Por que no se corrige
+
+Cambiar la salida de `expansion list` es contrato externo (AGENTS 6.4)
+y tiene un consumidor. Y las dos salidas posibles no son equivalentes:
+
+1. **Fallback por nombre** (M2). Barata, funciona para el truncamiento.
+   Pero un rejection renombrado a mano daria un `proposal_id`
+   equivocado: cambiaria "no se" por "si, rechazada", un falso dato en
+   la direccion contraria.
+2. **Aviso explicito.** `list` dice que ficheros no pudo leer y con que
+   error, sin cambiar la clasificacion. Es el patron de `backups.py`,
+   con el aviso que aqui falta.
+
+La segunda encaja con el criterio del repo, pero elegirla cambia la
+salida de un comando publicado: es decision de producto.
+
+### Resultado
+
+2362 -> **2368 passed**. Sin cambios en `src/`. Sin ADR.
+Evidencia: `evidence/sddk-wi80-verify-2026-10-02.md`.
