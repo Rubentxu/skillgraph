@@ -14,6 +14,59 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.20.3] - 2026-10-03 — la receta canónica puede perder un contrato y seguir verde
+
+**PATCH**: `git log v0.20.2..HEAD` = 0 `feat`, 2 `fix`, 0 `test`/`docs`, 0 breaking.
+**2673 passed** (2661 antes; +12).
+
+C3 leía las etapas del script, y lo hacía bien: leer del script es lo que evita
+un guard que vigila una lista paralela. Pero comprobaba que la lista fuera
+**legible**, y una lista de etapas vacía por legibilidad es tan válida como
+una completa.
+
+### Medido con el comando canónico de verdad
+
+Se borró el bloque entero de la etapa `coverage-floors` de `.pipeline.kts` —la
+que impone los suelos que `AGENTS.md §6.3` declara exigibles— y:
+
+| quién debía enterarse | resultado |
+|---|---|
+| `scripts/check_ci_recipe_parity.py` | **exit 0** — «OK: …» |
+| `pytest tests/test_wi98_ci_recipe_parity.py` | **37 passed** |
+| la receta, ejecutada de verdad | **`Pipeline finished with SUCCESS`** |
+
+Cero menciones de la etapa en su salida, y cero de su `VEREDICTO`. Una receta
+que ejecuta menos se ejecuta igual de bien. C4 exigía que quien ejecuta
+`pytest` esté **conectado** a la receta; nadie exigía que la receta
+**contenga** los contratos.
+
+### C5 — sin lista
+
+```
+C5  todo `scripts/check_*.py` lo invoca la receta canónica
+```
+
+El conjunto sale del repo, no de una constante. Una lista de contratos
+obligatorios dentro del guard es la misma trampa que `DIRECTORIOS_NO_RECETA`
+en WI-99: obliga a mantener enumerado lo que el guard debería comprobar solo.
+Así un checker nuevo entra en el contrato el día que se escribe, y borrar una
+etapa se detecta porque el checker que invocaba deja de estar invocado.
+
+Cubre también el caso inverso, hasta ahora invisible: **escribir un checker
+y no enchufarlo en la receta**.
+
+### Después del arreglo
+
+| quién debía enterarse | antes | ahora |
+|---|---|---|
+| `check_ci_recipe_parity.py` | exit 0 | **exit 1** + `sg_ci_contrato_huerfano` |
+| `pytest test_wi98_ci_recipe_parity.py` | 37 passed | **3 failed** |
+| la receta, ejecutada de verdad | `SUCCESS` | **`Pipeline finished with FAILURE`** |
+
+La tercera fila es la importante: **la receta se detecta a sí misma**. Mutaciones
+6/6, y la sexta vuelve a borrar la etapa en el fichero real — un invariante que
+solo sabe fallar con informes sintéticos no ha medido nada.
+
 ## [0.20.2] - 2026-10-02 — el bundle de auditoría certificaba UATs que no ejecutaba
 
 **PATCH**: `git log v0.20.1..HEAD` = 0 `feat`, 1 `fix`, 1 `docs`, 0 breaking.

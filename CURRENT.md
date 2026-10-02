@@ -1,5 +1,60 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-03 (catorceava tanda) cerrado — WI-102, release `v0.20.3`.**
+> Versión activa `0.20.3.dev0`; último tag `v0.20.3`. 2673 passed.
+>
+> **WI-102 — la receta canónica puede perder un contrato y seguir verde.**
+> Tercera vía de la serie «qué declara el repo que nada comprueba», y la
+> más seria: no era un script que midiera mal, era el instrumento que
+> **certifica** los contratos y que no comprobaba que los contratos
+> estuvieran.
+>
+> **Medido con el comando canónico de verdad.** Se borró el bloque entero de
+> la etapa `coverage-floors` de `.pipeline.kts` —la que impone los suelos que
+> `§6.3` declara exigibles— y:
+>
+> | quién debía enterarse | resultado |
+> |---|---|
+> | `scripts/check_ci_recipe_parity.py` | **exit 0** — «OK: …» |
+> | `pytest tests/test_wi98_ci_recipe_parity.py` | **37 passed** |
+> | la receta, ejecutada de verdad | **`Pipeline finished with SUCCESS`** |
+>
+> C3 leía las etapas del script —bien hecho, es lo que evita un guard que
+> vigila su propia lista— pero comprobaba que la lista fuera **legible**, y
+> una lista vacía por legibilidad es tan válida como una completa. C4 exigía
+> que quien ejecuta `pytest` esté *conectado* a la receta; nadie exigía que
+> la receta *contenga* los contratos.
+>
+> **C5, deliberadamente sin lista:** todo `scripts/check_*.py` lo invoca la
+> receta. El conjunto sale del repo (`scripts/check_ci_recipe_parity.py:421`
+> el descubrimiento, `scripts/check_ci_recipe_parity.py:589` la evaluación),
+> no de una constante — porque una lista de contratos obligatorios dentro
+> del guard es la misma trampa que `DIRECTORIOS_NO_RECETA` en WI-99.
+>
+> **Y un aviso sobre el guard de citas de este propio bloque.**
+> `test_toda_cita_del_bloque_vivo_resuelve` comprueba que la línea exista, no
+> que diga lo que el texto afirma: las primeras citas de este bloque
+> apuntaban a `:352` y `:479` —líneas que existen y no son las de C5— y el
+> guard las dio por buenas. Escritas ya en las líneas certas. Queda medido
+> que el guard de citas verifica *resolubilidad*, no *verdad*: la misma
+> familia que este bloque lleva tres workitems cerrando, una capa más
+> arriba.
+>
+> **Después del arreglo, misma mutación:** guard exit 1 con el nombre del
+> checker huérfano, 3 tests en rojo, y **la receta ella misma**
+> `Pipeline finished with FAILURE`. Se detecta a sí misma. Mutaciones 6/6,
+> la sexta sobre el fichero real; run `efebb07c`, 8/8 stages, 2673 passed.
+>
+> **Un fallo propio lo encontró una lectura, no un test:** el descubrimiento
+> usaba `rglob` y el lector no aceptaba subdirectorios, así que un checker
+> en `scripts/sub/` se reportaba huérfano siendo un contrato que la receta
+> ejecuta. Un guard que señala al código equivocado entrena a su lector a
+> ignorar sus avisos (`d94c333`).
+>
+> **Sin push**: 118 commits sin publicar, `origin/main` en `0ebbd58`.
+
+---
+
 > **Bloque 2026-10-02 (decimotercera tanda) cerrado — WI-101, release `v0.20.2`.**
 > Versión activa `0.20.2.dev0`; último tag `v0.20.2`. 2661 passed.
 >

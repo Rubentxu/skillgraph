@@ -11491,3 +11491,155 @@ Corregido con cuatro citas que resuelven (`tests/uat_audit.py:1854`, `:1962`,
 5. `python3 - <<'PY'` con `\\.sh` dentro de un escalar YAML de una línea:
    Python deja `\.` y **YAML no acepta ese escape**. Se rompe al parsear,
    muy lejos del sitio donde se escribió. Evitar escapes en esos campos.
+
+---
+
+## 2026-10-03 — WI-102: la receta puede perder un contrato y seguir verde
+
+Ciclo `p-b7740b96d79ec013/wi102-recipe-contracts-vanish`. Release `v0.20.3`
+(PATCH). Run de certificación `efebb07c-1aee-4a15-8462-27efd4eca8f2`.
+
+### El más serio de la serie, y no por lo que parecía
+
+WI-99 y WI-100 eran instrumentos que **medían** mal. Este es el
+instrumento que **certifica** mal: la receta canónica no comprobaba que
+contuviera los contratos que dice contener.
+
+Se borró el bloque entero de la etapa `coverage-floors` de `.pipeline.kts` —
+la que impone los suelos que `AGENTS.md §6.3` declara exigibles— y se
+ejecutó el comando canónico de verdad:
+
+| quién debía enterarse | resultado |
+|---|---|
+| `scripts/check_ci_recipe_parity.py` | **exit 0** — «OK: …» |
+| `pytest tests/test_wi98_ci_recipe_parity.py` | **37 passed** |
+| la receta, ejecutada de verdad | **`Pipeline finished with SUCCESS`** |
+| menciones de `coverage-floors` | **0** |
+| menciones de su `VEREDICTO` | **0** |
+
+Una etapa borrada, ninguna rotura. Una receta que ejecuta menos se ejecuta
+igual de bien.
+
+### Causa
+
+`evaluar_etapas` (C3) comprobaba que `etapas_canonicas` fuera **legible**.
+Leer del script es correcto —es lo que evita un guard que vigila su propia
+lista—, pero **leer** y **exigir** son dos cosas y solo se implementó la
+primera. Una lista de etapas vacía por legibilidad es tan válida como una
+completa.
+
+C4 exigía que quien ejecuta `pytest` esté **conectado** a la receta. Nadie
+exigía que la receta **contenga** los contratos. Conectar sin contener, y
+contener sin conectar, fallan igual.
+
+### C5, sin lista
+
+```
+C5  todo `scripts/check_*.py` lo invoca la receta canónica
+```
+
+El conjunto sale del repo, no de una constante. Una lista de contratos
+obligatorios dentro del guard es `DIRECTORIOS_NO_RECETA` otra vez: obliga a
+mantener enumerado lo que el guard debería comprobar solo.
+
+Cubre también el caso inverso, invisible hasta ahora: **escribir un checker
+y no enchufarlo en la receta**.
+
+Lo que no cubre, declarado: la convención es `check_*.py`. Un contrato con
+otro nombre queda fuera, igual que un script sin extensión quedaba fuera de
+C3 antes de WI-100.
+
+### La receta se detecta a sí misma
+
+Después del arreglo, misma mutación: guard exit **1** con el nombre del
+checker huérfano, 3 tests en rojo, y **la receta ella misma**
+`Pipeline finished with FAILURE`. Porque el stage `ci-parity` corre el
+checker, el checker sale con 1, la etapa falla. Una receta a la que le
+quitas un contrato ya no puede afirmar que lo cumple.
+
+Mutaciones **6/6**. La sexta vuelve a borrar la etapa en el **fichero
+real**: un invariante que solo sabe fallar con informes sintéticos está
+limpio en las pruebas y ciego en el repo, que es la forma exacta de M5 de
+WI-101.
+
+La quinta es la única que produce un **falso positivo**, y por eso es la que
+más justifica el mutar: el lector sin subdirectorios señala como huérfano
+un contrato que la receta ejecuta. Un guard que no vigila es visible; uno
+que señala al código equivocado entrena a su lector a ignorar sus avisos.
+
+### Tres cosas que salieron mal y hubo que arreglar
+
+1. **El descubrimiento y el lector no veían lo mismo.**
+   `checkers_de` usa `rglob` (subdirectorios incluidos) y la regex del
+   lector no admitía carpetas entre `scripts/` y `check_`. Un checker en
+   `scripts/sub/` se reportaba huérfano siendo un contrato que la receta
+   ejecuta. Lo destapó una **lectura**, no un test. Es la **tercera** vez
+   en este bloque de tres workitems que un guard descubre por una sintaxis
+   y lee por otra: WI-99 (hooks sin extensión), WI-100 (`rglob("*.sh")`),
+   WI-102 (aquí). Arreglado en `d94c333`.
+
+2. **Una certificación contaminada.** El run `bbf59e06` terminó en SUCCESS
+   **mientras las mutaciones reescribían la receta**. Editar durante la
+   certificación la invalida: no porque el resultado fuera falso, sino
+   porque nadie sabe qué ficheros leyó el `pytest` de dentro. Se repitió
+   sobre el árbol quieto. Un run verde sobre un árbol que se movía no es
+   una certificación: es una coincidencia.
+
+3. **Citas falsas que el guardno detectó.** Escribí en el bloque vivo de
+   `CURRENT.md` `scripts/check_ci_recipe_parity.py:352` y `:479`. Esas
+   líneas existen y no son las de C5, que están en 421 y 589.
+   `test_toda_cita_del_bloque_vivo_resuelve` las dio por buenas: comprueba
+   que la línea exista, **no que diga lo que el texto afirma**. Anotado y
+   no arreglado — es la misma serie una capa más arriba, y abrirlo aquí
+   sería otro workitem. Las citas se corrigieron y el hecho queda escrito
+   en el propio `CURRENT.md`.
+
+### Mutaciones: 6/6
+
+`.pipelinek/wi102_mutate.sh` + `wi102_muts/m1..m6.py`. Las mutaciones viven
+en ficheros Python aparte, no en `python -c` dentro del shell: anidar
+comillas y barras invertidas entre bash y Python se rompió **dos veces**
+durante este bloque, y un script de medición con el escapado mal puesto no
+mide — falla por otra cosa y parece que midió.
+
+El trap de la primera versión borraba los ficheros de mutación al terminar.
+Un script de mutación que se borra a sí mismo no se puede volver a ejecutar
+para comprobar nada.
+
+### Cierre
+
+- `2673 passed in 224,37 s` en la CI canónica, run `efebb07c`, 8/8 stages,
+  **0 `StepFailed`**, sobre el árbol quieto.
+- SHA-256 de `.pipeline.kts` sin cambios desde WI-98.
+- 43 ciclos CLOSED, 0 pendientes.
+
+### Lo que NO se resolvió
+
+- **C5 no exige un número de etapas.** Un número es una constante que hay
+  que actualizar cada vez que se añade una etapa, y actualizar una
+  constante para que un guard siga verde es el trabajo que el guard
+  debería hacer solo.
+- **C5 no vigila el contenido de las etapas.** Un checker que se degrada en
+  silencio sigue verde y sigue enchufado. Otro workitem.
+- **El guard de citas comprueba resolubilidad, no verdad** (§3 de arriba).
+- Hooks sin instalar. `bash scripts/install-hooks.sh` es decisión del
+  operador.
+- 118 commits sin publicar; `origin/main` en `0ebbd58`. Push no autorizado.
+- Credenciales Anthropic/OpenAI: siguen bloqueando H9 desde WI-91.
+- `release.complete` inalcanzable (exige `Cargo.toml`) → `cycle supersede`.
+- 4 errores de `sddk lint`: perfil autor de pack; este repo es consumidor.
+
+### Errores propios de esta sesión, para no repetirlos
+
+1. **Anidar escapados entre bash y Python dentro de `python -c`.** Se
+   rompió dos veces. Cuando una mutación necesita barras invertidas o
+   comillas, va en un fichero `.py` aparte.
+2. **Un trap que borra el experimento además del respaldo.** El respaldo
+   se borra al terminar; las mutaciones se conservan, que son la mitad del
+   experimento.
+3. **Certificar sobre un árbol que se mueve.** El run salió verde y no
+   cuenta. El árbol quieto no es un detalle de forma: es lo que hace que el
+   resultado signifique algo.
+4. **Escribir una cita sin abrir el fichero.** El guard de citas comprueba
+   que la línea exista. Escritas de memoria, tres de cuatro apuntaban a
+   líneas que existían y no eran las del texto.
