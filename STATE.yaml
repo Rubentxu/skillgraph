@@ -847,10 +847,10 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, release v0.16.14). 5/5 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 (el que fija mise.toml) con --rerun. El journal contiene StepStarted y EchoOutputCaptured con la linea 2451 passed in 103.12s, que es lo que distingue una ejecucion real de un veredicto cacheado: sin --rerun el run termina en SUCCESS sin ejecutar un solo step. stages unit-tests, lint y evidence en success."
-  ultima_ejecucion_local: 2026-10-02 18:16
-  resultado: "2451 passed in 103.12s (stage unit-tests de la CI canonica). 0 regresiones. ruff check: All checks passed!"
-  working_tree: "(3e6b1d7 + 0 ficheros del operador sin commitear: AGENTS.md +72 LoC secc pipelinek fue commiteado en el refactor v0.7.0; los demas CI local del operador no aparecen en este checkout)"
+  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, release v0.16.16). 5/5 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 (el que fija mise.toml) con --rerun. El journal contiene 8 StepStarted y 8 EchoOutputCaptured con la linea 2479 passed in 106.25s (0:01:46), que es lo que distingue una ejecucion real de un veredicto cacheado: sin --rerun el run termina en SUCCESS sin ejecutar un solo step. run_id 6015d426-6219-4fdc-8e05-ccfd86821e19. SHA-256 de .pipeline.kts = 0665345fda259a4d07eafd07e904874595f90fbad744d6553a7fb2a19d07eca4 (sin drift: ultimo cambio en 8ec0645)."
+  ultima_ejecucion_local: 2026-10-02 18:55
+  resultado: "2479 passed in 106.25s (stage unit-tests de la CI canonica de v0.16.16). 0 regresiones. ruff check: All checks passed!"
+  working_tree: "arbol limpio en 1c63c61; los ~36 commits del bloque siguen SIN PUSH (no autorizado)"
 
 open_questions: []
 nota_honesta_revision: >

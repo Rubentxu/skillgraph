@@ -9883,3 +9883,43 @@ destino, no el origen.
 
 - `evidence/sddk-wi90-verify-2026-10-02.md`
 - `.pipelinek/wi90_mutate.sh` (5/5 + autocontrol de aplicacion)
+
+### Cierre del bloque WI-90
+
+- **Release `v0.16.16`** (tag anotado `2a95a73`, commit `8a70667`). SemVer derivado de
+  `git log v0.16.15..HEAD` = 0 feat, 0 breaking, 1 fix, 1 docs, 1 chore => PATCH.
+  Bump post-release a `0.16.16.dev0` en `1c63c61`.
+- **CI canonica**: `Pipeline finished with SUCCESS`, 5/5 stages,
+  `run_id 6015d426-6219-4fdc-8e05-ccfd86821e19`, **2479 passed in 106.25s**.
+  Los 6 criterios de AGENTS se cumplen uno a uno: SUCCESS terminal; 8 `StepStarted` y
+  8 `EchoOutputCaptured` con la linea de pytest (que es lo que separa una ejecucion de
+  un veredicto cacheado); journal SQLite presente; control root con `last-run`,
+  `retry-control`, `wait-until-control` y `workspace`; 0 `StepFailed` y
+  `RunFinished/success`; SHA-256 de `.pipeline.kts` = `0665345f…` sin drift.
+- **Ciclo SDDK WI-90 CLOSED** (`cycle supersede`, `fencing_token=1`). **31 ciclos
+  CLOSED, 0 pendientes.**
+- **SIN PUSH.** ~36 commits sin publicar, no autorizado.
+
+### Corrupciones propias de este bloque
+
+- **El script que actualiza `STATE.yaml` busco las claves a sustituir por su valor
+  NUEVO en vez del viejo**, y aborto sin escribir nada. El autocontrol que se anadio en
+  WI-90 a proposito fue el que lo detecto: fallo ruidoso en vez de un fichero a medias.
+- **La cadena de `rationale` en `STATE.yaml` perdio la comilla de cierre**: el ultimo
+  fragmento de la concatenacion de Python dejo su delimitador como delimitador en vez
+  de contenido. Rompio el parseo YAML. Leccion: un fichero de estado que se genera con
+  un script de texto debe VALIDARSE con el parser despues de escribirse. Anadido
+  `yaml.compose` + deteccion de claves duplicadas como paso obligatorio tras cada
+  edicion programatica de `STATE.yaml`.
+- **El subject del commit de codigo incumplia AGENTS §7** (85 columnas sobre 72). No se
+  dejo anotado: se corrigio con `commit --amend` antes de publicar. El commit no estaba
+  publicado y su arbol es **byte-identico** (`git diff <antiguo> <nuevo>` vacio), luego
+  la certificacion sigue siendo valida para el mismo contenido. Reescribir un commit ya
+  publicado si seria una falta de provenance; reescribir uno local, sin cambios de
+  arbol, es corregir el mensaje.
+
+### Conocimiento negativo (anadido)
+
+- **Un script que edita un fichero de configuracion sin parsearlo después no es un
+  script que edita, es un script que escribe texto**. El fallo no aparece hasta que
+  otro consumidor lo lee, y entonces el sintoma aparece en el consumidor.
