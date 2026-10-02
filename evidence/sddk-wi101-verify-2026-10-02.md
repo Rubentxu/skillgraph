@@ -3,7 +3,10 @@
 - **Ciclo**: `p-b7740b96d79ec013/wi101-uat-audit-false-verdict`
 - **Sesión**: `wi101-20261002T224510Z`
 - **Fecha**: 2026-10-02
-- **Run de certificación**: `e5d046af-07e6-4cdf-910c-8bbd7c8f36b1`
+- **Run de certificación (el que cierra)**: `3feba714-7c90-4ed8-81ce-402a7fc8c6c2`
+  — 8/8 stages, 2661 passed, 0 `StepFailed`.
+- **Run previo, sobre el estado ya cerrado**: `8adb8929-4a05-44e1-abdf-9faf409e51e1`
+  — **falló**, y por qué importa está en §8.2.
 - **SHA-256 de `.pipeline.kts`**: `d865896832f1c391344cb76a1b52b14c68915b99cefd985e976381dfe8d3ddcc`
   (idéntico al de WI-98 y WI-100: sin drift en la receta)
 
@@ -234,9 +237,30 @@ Corregido con cuatro citas que resuelven y que son ciertas:
 certificaciones verdes y el bloque que lo describía era inverificable. Un
 documento que no se puede comprobar no certifica el documento que certifica.
 
-### 8.3 Run de cierre — sobre el estado ya corregido
+### 8.3 Run de cierre — `3feba714-7c90-4ed8-81ce-402a7fc8c6c2`
 
-Se registra en el commit de evidencia, tras esta corrida.
+Sobre el estado ya corregido (`b556649`):
+
+- **8/8 stages** `success`
+- **2661 passed in 229.56 s**
+- cobertura: global **95,22 %** (suelo 80 %), CLI 86,91 % (70 %), runtime 97,98 % (90 %)
+- **0 `StepFailed`**, `RunFinished=success`
+- SHA-256 de `.pipeline.kts` = `d8658968…3ddcc`, sin drift
+
+### 8.4 Los tres runs, leídos del journal
+
+Leyéndolos por `run_id` y no por la línea de salida, que es donde se me
+escapó el segundo:
+
+| run | qué mide | stages | `StepFailed` | `RunFinished` |
+|---|---|---|---|---|
+| `e5d046af` | el código | 8/8 | 0 | success |
+| `8adb8929` | estado final, 1.ª vez | **2/3** | **1** | **failure** |
+| `3feba714` | estado final, ya corregido | 8/8 | 0 | success |
+
+El intermedio no sobra: es el que encontró el fallo, y sin él este bloque
+habría terminado con una certificación verde sobre un documento de
+certificación inverificable.
 
 ## 9. Criterios de aceptación
 
