@@ -541,7 +541,7 @@ tests:
   total: 2463   # re-medido 2026-10-02 (bloque WI-89): 2463 passed. +12 sobre 2451 = los 12 tests de tests/test_wi89_audit_writes_outside_repo.py. Dato relevante: el hook de pre-commit, que antes dejaba `M audits/architecture-debt-<hoy>.md`, deja ahora el arbol LIMPIO. Ese era el sintoma visible del defecto.
   passed: 2463
   duration_s: 105.06   # re-medido 2026-10-02: 2463 passed in 105.06s (lo reporto el pre-commit al commitear 64a28a8).
-  package_version: "0.16.15"   # release v0.16.15. El tag se crea sobre el commit que lleva la version pura, que es lo que exige tests/test_release_governance.py::test_version_matches_git_tag (rama 1).
+  package_version: "0.16.15.dev0"   # trabajo post-release v0.16.15 (AGENTS 12). El tag v0.16.15 esta en 6819f99; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1099,12 +1099,16 @@ release:
   tag: v0.16.15
   fecha: 2026-10-02
   semver_bump: PATCH
-  rationale: "Bloque WI-87 + WI-88 (3 commits de trabajo, d47b7af..1a0c38b, mas 0a3fd1a de lint). SemVer derivado del historial: 0 feat, 1 fix (1a0c38b), 1 refactor (d47b7af), 1 docs, 1 style, 1 chore => PATCH. Sin capacidad observable nueva, pero el contrato externo de la CLI cambia en algo que un script necesita: antes rc==2 no distinguia un nombre de proyecto invalido de un comando mal escrito, y EXIT_USAGE (1) no se producia nunca; ahora 1 significa uso y 2 significa una sola cosa. 2451 passed (2430 en v0.16.13), ruff y format limpios. WI-87 no cambia comportamiento observable hoy (el CHECK y la constante ya coincidian): lo que cambia es que ya no PUEDEN dejar de coincidir, porque salen de la misma expresion. Con un solo fix en el historial, el bump lo triggera ese. CIERRE DE DOS DECISIONES DEL OPERADOR: (d) propiedad de dominio del vocabulario, resuelta con ADR-0015; (f) exit code de argparse, resuelta con ADR-0016. La medicion de (f) casi la cerro por el motivo equivocado: la primera ejecucion dio exit 1 en los tres casos y habria permitido declararla caducada, pero se habia medido /usr/bin/sg (la herramienta Unix de grupos) en vez del console script `skillgraph`. Leccion de bloque, no de codigo: medir el programa equivocado es la forma mas barata de cerrar un defecto por error."
+  rationale: "Bloque WI-89 (1 commit de trabajo, 64a28a8, mas 1 docs). SemVer derivado del historial: 0 feat, 1 fix (64a28a8), 2 docs, 1 chore => PATCH. El fix es observable en el propio hook de pre-commit, que hasta ahora dejaba M audits/architecture-debt-<hoy>.md en cada commit desde que el codigo se movia del ultimo informe generado. 2463 passed (2451 en v0.16.14), ruff y format limpios. CIERRA EL ULTIMO SEGUIMIENTO TECNICO de los items (a)-(i): (d) propiedad de dominio, WI-87 con ADR-0015; (f) exit code de argparse, WI-88 con ADR-0016; y la auditoria que escribia en audits/, WI-89. CORRECCION DE UNA MEDICION PROPIA: el seguimiento de WI-87 decia, con md5, que 9 tests verdes cambian el fichero; re-medido en un arbol limpio no se reproduce, porque el informe commiteado estaba al dia. La premisa era condicional —solo cuando el informe esta caducado— y la redaccion la presento como incondicional. El defecto real tenia ademas un segundo modo que no se habia medido: la primera corrida de cada dia crea un fichero NUEVO sin trackear en un directorio trackeado, sin que nada haya cambiado en el codigo."
   # Reconciliado con git el 2026-10-02 (WI-74): cada `sha` es el de su
   # etiqueta y resuelve a un commit real. Donde el valor anterior no
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.16.15
+      fecha: 2026-10-02
+      sha: "6819f994482464011b641c412255d01347937f9c"
+      nota: "WI-89: la auditoria deja de escribir dentro del repositorio que audita; cierra el ultimo seguimiento tecnico abierto de (a)-(i)"
     - tag: v0.16.14
       fecha: 2026-10-02
       sha: "3cfce09b96033411b79ae48bfcd9efb77fb9102b"

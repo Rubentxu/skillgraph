@@ -1,5 +1,34 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-02 (segunda tanda) cerrado — WI-89, release `v0.16.15`.**
+> Versión activa `0.16.15.dev0`; tag `v0.16.15` en `6819f99`. 2463 passed.
+>
+> **WI-89 — la auditoría escribía dentro del repositorio que audita**
+> (`64a28a8`): `audit_debt.py` tomaba su destino de `audits/`, relativo al
+> cwd, y los tests lo lanzaban desde la raíz. Como `audits/` está
+> **trackeado** y el nombre del informe lleva la fecha de ejecución, había
+> dos modos de fallo: el informe de hoy cambia si el código se movió, y la
+> **primera corrida de cada día crea un fichero nuevo sin trackear** sin
+> que nada haya cambiado. Ahora `--src-root` y `--out-dir` parametrizan
+> origen y destino. El síntoma era visible en cada commit: el hook dejaba
+> `M audits/architecture-debt-<hoy>.md`.
+>
+> **Con esto queda cerrado el último seguimiento técnico de los items
+> (a)–(i)**: (d) propiedad de dominio → WI-87 / ADR-0015; (f) exit code de
+> argparse → WI-88 / ADR-0016; auditoría que escribía en `audits/` → WI-89.
+>
+> **Corrección de una medición propia, en el bloque que la cerró**: el
+> seguimiento de WI-87 decía, con md5, que «9 tests verdes cambian el
+> fichero». Re-medido en un árbol limpio **no se reproduce**: el informe
+> commiteado estaba al día. La premisa era condicional y la redacción la
+> presentó como incondicional.
+>
+> **Queda abierto**: 63 informes fechados acumulados en `audits/` (deuda de
+> **datos**, no de código: es una política de retención, no un defecto);
+> `list_file_signatures_for_source`, medido que no está muerto —4 consumidores
+> reales— pero cuyo `cc 10` sigue sin medirse; y los commits siguen **sin
+> push**, que no está autorizado.
+
 > **Bloque 2026-10-02 cerrado — WI-87 y WI-88, release `v0.16.14`.**
 > Versión activa `0.16.14.dev0`; tag `v0.16.14` en `3cfce09`. 2451 passed.
 > Dos decisiones del operador cerradas, ambas con ADR y ambas medidas antes
