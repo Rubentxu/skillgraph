@@ -180,7 +180,7 @@ mise exec -- pipelinek run --rerun \
   --db .pipelinek/db.sqlite --control-root .pipelinek/control .pipeline.kts
 ```
 
-Run `e5d046af-07e6-4cdf-910c-8bbd7c8f36b1`:
+### 8.1 Run del código — `e5d046af-07e6-4cdf-910c-8bbd7c8f36b1`
 
 | stage | outcome |
 |---|---|
@@ -193,8 +193,50 @@ Run `e5d046af-07e6-4cdf-910c-8bbd7c8f36b1`:
 | `lint` | success |
 | `evidence` | success |
 
-`Pipeline finished with SUCCESS`. **0 `StepFailed`** en los eventos de este
-run (8 `StageStarted`, 8 `StageFinished/success`).
+`Pipeline finished with SUCCESS`. **0 `StepFailed`**. 8/8 stages.
+
+### 8.2 Run del estado final — `8adb8929-4a05-44e1-abdf-9faf409e51e1`: **FALLÓ**
+
+WI-100 dejó escrito que **la reproducibilidad hay que certificarla después de
+escribir la certificación**, y el release escribe la certificación. Así que se
+lanza una segunda corrida sobre el estado ya cerrado (commit `e58b783`, con el
+tag, el `STATE.yaml` y el `CURRENT.md` definitivos).
+
+**Falló**: 2/3 stages, `RunFinished=failure`, 1 `StepFailed`,
+`pytest: 1 failed, 2660 passed in 230.40s`.
+
+El fallo:
+
+```
+tests/test_wi92_measured_claims.py::TestBlockCitationsDelCurrentVivoResuelven::
+    test_el_bloque_vivo_tiene_al_una_cita_que_verificar
+AssertionError: el bloque vivo de CURRENT.md no cita ninguna linea
+```
+
+**El bloque vivo de `CURRENT.md` que escribí no tenía ninguna cita
+`fichero.py:línea` verificable.** Es exactamente el mismo modo de fallo que
+WI-100 ya había corregido una vez (`86d4a41`): el guard
+`test_el_bloque_vivo_tiene_al_una_cita_que_verificar` existe precisamente
+porque *un guard sobre cero citas no vigila nada*, y yo escribí un bloque que
+no le daba nada que vigilar.
+
+Corregido con cuatro citas que resuelven y que son ciertas:
+
+| cita | qué es |
+|---|---|
+| `tests/uat_audit.py:1854` | `_ESTADOS_CERTIFICABLES`, la lista blanca |
+| `tests/uat_audit.py:1962` | el `return` de `_verdict` |
+| `tests/uat_audit.py:1965` | `_divergencias` |
+| `tests/uat_audit.py:2088` | la rama `if args.verify:` de `main` |
+
+**La lección no es «añadir la cita».** Es que el fallo estaba en el
+*documento de certificación*, no en el código: el código llevaba tres
+certificaciones verdes y el bloque que lo describía era inverificable. Un
+documento que no se puede comprobar no certifica el documento que certifica.
+
+### 8.3 Run de cierre — sobre el estado ya corregido
+
+Se registra en el commit de evidencia, tras esta corrida.
 
 ## 9. Criterios de aceptación
 

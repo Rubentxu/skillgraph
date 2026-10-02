@@ -11422,20 +11422,72 @@ separarlos deja un estado intermedio inerte.
 - `release.complete` inalcanzable (exige `Cargo.toml`) → `cycle supersede`.
 - 4 errores de `sddk lint`: perfil autor de pack; este repo es consumidor.
 
+### La re-certificación del estado final falló, y era lo que faltaba comprobar
+
+WI-100 dejó escrito que la reproducibilidad hay que certificarla **después** de
+escribir la certificación. El release escribe la certificación, así que hacía
+falta una segunda corrida sobre el estado ya cerrado (`e58b783`, con el tag,
+el `STATE.yaml` y el `CURRENT.md` definitivos).
+
+**Falló**: 2/3 stages, `pytest: 1 failed, 2660 passed`. El fallo:
+
+```
+tests/test_wi92_measured_claims.py::TestBlockCitationsDelCurrentVivoResuelven
+AssertionError: el bloque vivo de CURRENT.md no cita ninguna linea
+```
+
+El bloque vivo de `CURRENT.md` que escribí no tenía **ninguna** cita
+`fichero.py:línea`. El guard existe por el motivo que dice su propio nombre:
+*un guard sobre cero citas no vigila nada*. Y yo le había dado exactamente eso.
+
+Es el mismo modo de fallo que WI-100 ya corrigió una vez (`86d4a41`). Lo
+repetí porque el guard que lo atrapa estaba ahí, funcionando, y porque el
+código llevaba tres certificaciones verdes: el fallo no estaba en el código,
+estaba en **el documento que certifica el código**. Un documento que no se
+puede comprobar no certifica el documento que certifica.
+
+Corregido con cuatro citas que resuelven (`tests/uat_audit.py:1854`, `:1962`,
+`:1965`, `:2088`).
+
 ### Errores propios de esta sesión, para no repetirlos
 
-1. **Un autocontrol que borra su propio respaldo dentro del paso que
+6. **Escribir el documento de certificación sin citas verificables.** El guard
+   `test_el_bloque_vivo_tiene_al_una_cita_que_verificar` existe porque un
+   guard sobre cero entradas no vigila nada. Y una re-certificación sobre el
+   estado final es lo único que lo habría atrapado a tiempo: la
+   certificación del código era verde y el bloque que la describía, no.
+7. **Contar un run como certificación sin mirar su outcome.** El filtro con el
+   que leí la salida (`grep -oE` sobre `Pipeline finished with SUCCESS`) se
+   comió precisamente esa línea, y el segundo run terminó con
+   `RunFinished=failure`. Sin leer el journal por `run_id`, «certificado» era
+   una palabra.
+8. **Un autocontrol que borra su propio respaldo dentro del paso que
    restaura.** Restaurar y limpiar son dos operaciones distintas, y la
    limpieza tiene que vivir en el `trap`, no en el restaurador.
-2. **Anclar un corte por una cadena que también aparece en un *docstring*.**
+9. **Anclar un corte por una cadena que también aparece en un *docstring*.**
    Un ancla textual no es un ancla si la frase está repetida; el fichero
    queda sin parsear y el error aparece lejos. Anclar por la **primera**
    ocurrencia o por un marcador inequívoco.
-3. **Un test que solo puede pasar por una de las dos razones que dice
-   vigilar.** Se mide preguntándose: «¿puedo hacer que falle por la razón
-   que me importa?». Si no, está confundido.
-4. **Una lista negra de cosas malas** en un dominio que se puede enumerar
-   cerrado. Enumerar lo bueno no tiene fin; enumerar lo malo sí.
-5. Recapitular en un docstring una medición que ya no es la actual
-   (`pytest a pelo son ~130 s` cuando son ~120). El número que acompaña a
-   una explicación caduca con la explicación.
+10. **Un test que solo puede pasar por una de las dos razones que dice
+    vigilar.** Se mide preguntándose: «¿puedo hacer que falle por la razón
+    que me importa?». Si no, está confundido.
+11. **Una lista negra de cosas malas** en un dominio que se puede enumerar
+    cerrado. Enumerar lo bueno no tiene fin; enumerar lo malo sí.
+12. Recapitular en un docstring una medición que ya no es la actual
+    (`pytest a pelo son ~130 s` cuando son ~120). El número que acompaña a
+    una explicación caduca con la explicación.
+
+### Errores propios de la tanda anterior (WI-100)
+
+1. **Comparar instrumentos con distinta configuración** (faltaba
+   `--cov-config=.coverage.rc`). Comparar con la misma config, siempre.
+2. **Repetir el fallo de descubrimiento de WI-99**: filtrar por `*.sh` y no
+   ver los hooks. Cuando el nombre lo pone una herramienta externa
+   (`git` busca `pre-push`), la extensión no es la identidad del fichero.
+3. **Un guard que confunde un mensaje con una ejecución.** Se decide por el
+   comando que lanza la línea, no por qué palabra hay antes.
+4. **Un test que ejecuta un subconjunto que se contiene a sí mismo.**
+   Medir con `tmp_path`, nunca con ficheros del repo.
+5. `python3 - <<'PY'` con `\\.sh` dentro de un escalar YAML de una línea:
+   Python deja `\.` y **YAML no acepta ese escape**. Se rompe al parsear,
+   muy lejos del sitio donde se escribió. Evitar escapes en esos campos.

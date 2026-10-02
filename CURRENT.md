@@ -4,8 +4,8 @@
 > Versión activa `0.20.2.dev0`; último tag `v0.20.2`. 2661 passed.
 >
 > **WI-101 — el bundle de auditoría certificaba UATs que no ejecutaba.**
-> WI-99 cerró el bloque de la evidencia «reproducible». Lo que hizo fue hacer
-> el bundle *reproducible*, no *verificador*: `scripts/audit_bundle.sh` invoca
+> `scripts/audit_bundle.sh` es el instrumento que existe *para* dar evidencia
+> reproducible a una auditoría independiente, e invoca
 > `python -m tests.uat_audit` sin flags, y ese es el modo lectura — no ejecuta
 > un solo UAT, relee los 26 JSON de `tests/uat-evidence/`. El `PASS=16` del
 > bundle de WI-99 se escribió mirando ficheros del commit `0ebbd58`, 111
@@ -23,10 +23,12 @@
 > indistinguibles de uno sano.
 >
 > **Lo que se arregla** (tres cosas, una propiedad): el exit code sale de
-> `_verdict`, compartido por los tres modos; `--verify` ejecuta, no persiste
-> y **confronta** cada veredicto con la evidencia persistida; y el resumen
-> cuenta los veredictos fuera de dominio en vez de tragárselos — antes
-> imprimía `PASS=15 FAIL=0` sobre 16 filas leídas.
+> `_verdict`, compartido por los tres modos (`tests/uat_audit.py:1962`, lista
+> blanca en `tests/uat_audit.py:1854`); `--verify` ejecuta, no persiste y
+> **confronta** cada veredicto con la evidencia persistida
+> (`tests/uat_audit.py:1965`, `tests/uat_audit.py:2088`); y el resumen cuenta
+> los veredictos fuera de dominio en vez de tragárselos — antes imprimía
+> `PASS=15 FAIL=0` sobre 16 filas leídas.
 >
 > **Verificado después del arreglo, no antes:** los 16 UAT se ejecutan y
 > **convergen** con la evidencia versionada. La evidencia era cierta; lo que
