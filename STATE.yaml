@@ -560,7 +560,7 @@ deliverables:
 tests:
   total: 2559   # re-medido 2026-10-02 (bloque WI-95): 2559 passed. +8 sobre 2551 = tests/test_wi95_changelog_release_claims.py.
   passed: 2559
-  duration_s: 214.07   # MEDIDO en la CI canonica del bloque WI-94 con la receta de cobertura (stage unit-tests). pytest a pelo son ~119 s: el delta de ~95 s es el coste medido de instrumentar, coherente con el +93 s medido en WI-93.
+  duration_s: 205.15   # MEDIDO en la CI canonica del bloque WI-95 con la receta de cobertura (stage unit-tests). pytest a pelo son ~111 s: el delta de ~94 s es el coste de instrumentar, coherente con los +93 s de WI-93 y +95 s de WI-94.
   package_version: "0.16.20.dev0"   # trabajo post-release v0.16.19 (AGENTS 12). El tag v0.16.19 esta en 9ea721a; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -867,10 +867,10 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, v0.16.19, bloque WI-94). 6/6 stages (discover-repo, sync-deps, unit-tests, coverage-floors, lint, evidence), 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. run_id 90464dee-038d-44da-bb4f-c97c759438ea. 9 StepStarted y 9 EchoOutputCaptured, y el journal CONTIENE la linea de resumen de pytest '2551 passed in 214.07s'. Control root completo. SHA-256 de .pipeline.kts = c05e97f510ce157345f75918e532266212275d14612439ed243a932348b4d83b (sin drift). HISTORIA DE ESTE BLOQUE: dos runs ROJAS antes de esta, y las dos eran defectos reales. (1) run 78fafc73 FAILURE con 9 tests rojos, todos de WI-94: leian el informe de cobertura combinado, que scripts/coverage.sh solo produce DESPUES de pytest. Dependencia circular introducida al escribir los tests. (2) El numero que yo habia reportado antes, 2552 passed con pytest a pelo, ERA CIERTO Y LAS CONDICIONES EN LAS QUE ERA CIERTO NO ERAN LAS DE LA CI: en local ya habia una medicion anterior que habia combinado los datos. Corregido en f0e9a33: que un paquete tenga modulos se pregunta al ARBOL, no al informe; y el test del informe real se elimino por circular y redundante (esa garantia la da el stage coverage-floors, que corre despues de la medicion)."
+  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, v0.16.20, bloque WI-95). 6/6 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. run_id 98e36598-0738-43a4-987a-eb884ae63ca6. 9 StepStarted y 9 EchoOutputCaptured, con la linea de resumen de pytest '2559 passed in 205.15s' en el journal. Control root completo. SHA-256 de .pipeline.kts = c05e97f510ce157345f75918e532266212275d14612439ed243a932348b4d83b (sin drift). Primera y unica run del bloque: verde a la primera."
   ultima_ejecucion_local: 2026-10-02 20:23
-  resultado: "2551 passed in 214.07s en el stage unit-tests de la CI canonica (receta de cobertura). 2552 antes; -1 = test_el_informe_real_no_tine_infracciones eliminado por circular. El stage coverage-floors dio 'VEREDICTO: todos los suelos declarados se cumplen'. ruff check y format limpios (253 archivos)."
-  working_tree: "arbol limpio salvo los ficheros de este commit; los commits del bloque siguen SIN PUSH (no autorizado)"
+  resultado: "2559 passed in 205.15s en el stage unit-tests de la CI canonica (receta de cobertura). 2551 antes; +8 = tests/test_wi95_changelog_release_claims.py. El stage coverage-floors dio 'VEREDICTO: todos los suelos declarados se cumplen'. ruff check y format limpios (254 archivos)."
+  working_tree: "arbol limpio; los commits del bloque siguen SIN PUSH (no autorizado)"
 
 open_questions: []
 nota_honesta_revision: >

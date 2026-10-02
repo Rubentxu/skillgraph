@@ -10599,3 +10599,24 @@ escribe hoy** (>= 0.14.1) siga en orden descendente.
 - `evidence/sddk-wi95-verify-2026-10-02.md`
 - `tests/test_wi95_changelog_release_claims.py` (8 tests)
 - `.pipelinek/wi95_mutate.py` (3/3 + baseline + autocontrol de aplicacion)
+
+### Cierre del bloque WI-95
+
+- **CI canonica: `Pipeline finished with SUCCESS`, 6/6 stages**, verde **a la
+  primera** (a diferencia de WI-93 y WI-94, que necesitaron tres y dos),
+  `run_id 98e36598-0738-43a4-987a-eb884ae63ca6`, **2559 passed in 205.15s**,
+  0 `StepFailed`, 9 `StepStarted`, journal con la linea de resumen,
+  SHA-256 de `.pipeline.kts` sin drift.
+- **Release `v0.16.20`** en `c234d0a`, version actual `0.16.20.dev0`.
+  18/18 gates de release, integridad y changelog en verde.
+- **Un hallazgo del propio guard, contra mi.** Anadi la seccion `[0.16.20]`
+  al CHANGELOG y el guard que acababa de escribir fallo en mi commit: el
+  changelog anunciaba una release que git aun no tenia. Tiene razon — entre
+  «commiteo la release» y «etiqueto» hay una ventana inevitable, la misma que
+  obliga a `HOOK_SKIP_TESTS=1` y a la rama «posterior a la etiqueta» de
+  `test_release_governance`. La excepcion que la cubre **solo** perdona la
+  version que `__version__` declara en PURO, y **se autolimpia** con el bump
+  a `.dev0`: si el tag se perdiera, el bump dejaria de estar justificado y el
+  guard volveria a fallar. Comprobado que no se dispara de mas.
+- **Ciclo SDDK WI-95 CLOSED**. **36 ciclos CLOSED, 0 pendientes.**
+- **SIN PUSH.** Sin autorizacion del operador.
