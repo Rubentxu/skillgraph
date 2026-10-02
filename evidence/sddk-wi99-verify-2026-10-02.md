@@ -267,6 +267,14 @@ SHA-256 de `.pipeline.kts` =
 **idéntico al de WI-98**: este bloque no toca la receta, y el hash lo
 demuestra en vez de afirmarlo.
 
+> **Sobre el commit que esto certifica.** La tabla dice «estado final» para
+> `86d4a41`, y el árbol está unas commits por encima. El delta es de un
+> único fichero —este mismo— y **ningún test lo lee** (comprobado, no
+> supuesto). Por tanto un clon de HEAD daría el mismo resultado, pero eso
+> es un argumento constructivo, no una medición: la medición es la de
+> `86d4a41`. Se deja dicho en lugar de volver a cambiar la etiqueta
+> «estado final» por otro commit que habría que medir otra vez.
+
 > **La lección que la corrección destapa.** El error no fue medir mal: la
 > medición del bundle era correcta y su número, exacto. El error fue
 > **escribir «divergencia 0» sin decir de qué commit era**, y hacerlo en el
