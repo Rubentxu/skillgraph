@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.cli.runner import _open_known_project, _open_project_storage
+from skillgraph.cli.commands.knowledge import _open_known_project
+from skillgraph.cli.support import _open_project_storage
 from skillgraph.platform.paths import DEFAULT_TENANT, catalog_path, project_db_path
 from skillgraph.platform.storage import Storage
 from skillgraph.resources.catalog import open_catalog

@@ -28,10 +28,12 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.cli.runner import (
-    DEFAULT_TENANT,
+from skillgraph.cli.commands.promotion import (
     _reconcile_summaries,
     _select_promotion_failpoint,
+)
+from skillgraph.cli.runner import (
+    DEFAULT_TENANT,
     cmd_expansion_show,
     cmd_init,
     cmd_pack_load,

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.cli.runner import _build_adapter
+from skillgraph.cli.commands.run import _build_adapter
 from skillgraph.core.errors import SkillGraphError, ValidationError
 from skillgraph.runtime.agent import FakeAgentAdapter
 
