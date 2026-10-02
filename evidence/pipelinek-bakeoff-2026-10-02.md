@@ -86,6 +86,42 @@ Se elige 0.39.0 porque es el canon ya documentado en AGENTS.md
 ("pipelinek v0.39.0"), no porque sea superior: los tres runs son
 equivalentes en veredicto.
 
+## Hallazgo posterior: el "SUCCESS cacheado" era real (no una texia)
+
+Al aplicar el pin y relanzar el comando **canonico** (journal
+`.pipelinek/db.sqlite`), el run devolvio `Pipeline finished with
+SUCCESS` en **72 ms**: 5/5 stages "success", pero **cero
+`StepStarted`, cero `EchoOutputCaptured`** y `grep -c "1880 passed"`
+= **0** sobre el log. No ejecuto nada.
+
+Causa raiz: el motor cachea el veredicto por `cacheKey` de compilacion
+del script. El `cacheKey` del run de hoy (`5c9500e0...`) coincide con
+el del run aislado 0.39.0, que si habia ejecutado; el motor reutilizo
+ese veredicto y se salto los steps. El `.pipeline.kts` no habia
+cambiado (SHA-256 `0665345f...` identico al inicio de la sesion).
+
+Esto NO era un problema de version: habria ocurrido con cualquiera de
+los tres binarios. Es un problema del **procedimiento documentado**, y
+justifica el `--rerun` obligatorio y el nuevo criterio 2 de AGENTS.md.
+
+Relanzando con `--rerun` (commit `3665262`):
+
+| Señal | Valor |
+|---|---|
+| Última línea | `Pipeline finished with SUCCESS` |
+| pytest capturado | `1880 passed in 85.34s` |
+| lint capturado | `All checks passed!` |
+| StepStarted / StepFinished / EchoOutputCaptured | 8 / 8 / 8 |
+| StageStarted / StageFinished | 5 / 5 |
+| StepFailed | 0 |
+
+## Corolario sobre el criterio 4 de AGENTS.md
+
+`run_id` **se reutiliza entre replays**: el bucket `a592fcf2` acumula
+2 `StepFailed` fechados 2026-09-28 y 2026-10-01 junto al `RunFinished`
+de hoy. Filtrar por `run_id` da falsos positivos; el criterio debe
+aplicarse a los eventos de la ejecucion actual (`occurred_at`).
+
 ## Decision pendiente del operador
 
 Ninguna sobre la version: los tres funcionan y 0.39.0 ya es el canon.
