@@ -14,6 +14,88 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.19.0] - 2026-10-02 — el remoto ejecutaba otra receta, y el guard buscaba cadenas
+
+**MINOR**: `git log v0.18.0..HEAD` = 1 `feat`, 2 `fix`, 3 `test`/`docs`, 0 breaking.
+**2625 passed** (2605 antes; +20).
+
+`AGENTS.md` dice, en una línea: *«GitHub Actions, GitLab CI, Jenkins o
+cualquier otro runner remoto **debe** invocar el mismo `.pipeline.kts`»*.
+No lo hacía, y no podía.
+
+### La divergencia, medida con el mismo instrumento
+
+| | receta local | `ci.yml` antes |
+|---|---|---|
+| stages ejecutados | **8** | **1** (`lint`) |
+| contratos exigibles | 4 | **0** |
+| `cli/commands/runs.py` | 87,96 % | **39 %** |
+| `cli/commands/run.py` | 96,09 % | 81 % |
+| `cli/support.py` | 85,71 % | **69 %** ← suelo declarado: 70 % |
+
+El remoto podía dar **verde** un paquete que no cumplía el suelo que el
+propio `AGENTS.md §6.3` declara. El contraste usa el **mismo** checker en
+las dos recetas: comparar el remoto, medido sin el hook `.pth`, contra un
+94 % de la instrumentada habría sido comparar dos cosas distintas y
+llamarles divergencia.
+
+### Added
+
+- `feat(ci)`: **`scripts/check_ci_recipe_parity.py`**, stage `ci-parity` —
+  el **cuarto** contrato exigible y el primero que vigila a los otros tres.
+  Comprueba que todo runner remoto invoque la receta canónica **en un paso
+  que se ejecuta** y que la receta se pueda ejecutar fuera de esta máquina.
+
+### Fixed
+
+- `fix(ci)`: **`.pipeline.kts` no era portable.** Llevaba diez rutas
+  absolutas a `/var/mnt/DiscoChino2-fast/...`, lo que arreglaba el síntoma
+  local y dejaba la receta **inejecutable en cualquier otra máquina**: la
+  regla de runners era una promesa que no se podía cumplir ni con el mejor
+  workflow. Ahora la raíz se resuelve con
+  `System.getenv("GITHUB_WORKSPACE") ?: System.getProperty("user.dir")` —
+  medido antes de escribir el código: el motor **sí** propaga el entorno a
+  los `sh()`.
+
+- `fix(ci)`: **`ci.yml` invoca la receta canónica** con un solo paso, con
+  `--rerun` y con token para `mise` (sin él, `pipelinek` resuelve el shim de
+  asdf, que es otro binario con la misma ruta de nombre). Se conserva la
+  subida de `coverage.xml`, que era una capacidad real y no un *string*,
+  exportándola del `.coverage` combinado e instrumentado.
+
+- `test(hooks)`: los **nueve** tests que buscaban cadenas en `ci.yml`
+  quedan sustituidos por ocho que miden propiedades. Uno de ellos aceptaba
+  `assert "pytest" in content or "test" in content.lower()`, que un
+  fichero con la palabra *test* en un comentario satisfacía.
+
+### El guard cayó en la trampa que viene a cerrar
+
+Las cinco primeras mutaciones dieron `rc=0`. El defecto no estaba en los
+tests: estaba en el diseño del invariante, y era el mismo defecto que el
+bloque viene a sustituir.
+
+- **C1** buscaba `.pipeline.kts` en el contenido entero del workflow. El
+  workflow menciona la receta en un comentario que explica que se usa, y
+  el guard encontraba la cadena ahí y aprobaba un workflow que ejecutaba
+  otra cosa. Ahora mira los **pasos ejecutables**.
+- **C2** buscaba rutas absolutas *dentro* de `sh(...)` y no veía nada
+  cuando la ruta estaba en una `val` de Kotlin — que es justo donde se
+  mueve una para arreglar el problema. **Un invariante que solo mira una
+  sintaxis concreta se esquiva cambiando de sintaxis.** Ahora son dos
+  condiciones verificables sin heurística: el script resuelve la raíz y no
+  contiene la raíz de este árbol.
+
+El script de mutaciones también estaba mal, por dos motivos que quedan
+escritos: `mktemp` pasa por un wrapper que manda el fichero recién creado a
+la papelera (los respaldos no existían), y las mutaciones sustituían una
+línea de un bloque `run: >` dejando las siguientes, con lo cual la receta
+seguía presente. **Un contraejemplo que no degrada nada no prueba que el
+guard funcione: prueba que el script de mutaciones está mal.**
+
+### Mutaciones
+
+**5/5**, con restauración byte a byte de los dos ficheros.
+
 ## [0.18.0] - 2026-10-02 — el paquete se construye, y alguien lo comprueba
 
 **MINOR**: `git log v0.17.0..HEAD` = 1 `feat`, 3 `fix`, 4 `test`/`docs`, 0 breaking.

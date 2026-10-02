@@ -10845,3 +10845,117 @@ solamente, los dos que leen el estado del árbol.
   ventana estructural conocida, no una regresión: HEAD sigue en el tag y
   `__version__` ya es `.dev0`.
 - **SIN PUSH.** Sin autorización del operador.
+
+---
+
+## 2026-10-02 — WI-98: el remoto ejecutaba otra receta, y no podía ejecutar esta
+
+**Bloque**: WI-98 · **Release**: `v0.19.0` (MINOR) · **SIN PUSH**
+
+### Lo que abre el bloque
+
+`AGENTS.md`, «Compatibilidad con otros runners»:
+
+> GitHub Actions, GitLab CI, Jenkins o cualquier otro runner remoto **debe**
+> invocar el mismo `.pipeline.kts` desde el mismo checkout.
+
+Medido: no lo hace, y —lo que este bloque midió— **no puede**.
+
+### La divergencia, medida con el mismo instrumento
+
+| | receta local | `ci.yml` antes |
+|---|---|---|
+| stages ejecutados | 8 | **1** (`lint`) |
+| contratos exigibles | 4 | **0** |
+| `cli/commands/runs.py` | 87,96 % | **39 %** |
+| `cli/commands/run.py` | 96,09 % | 81 % |
+| `cli/support.py` | 85,71 % | **69 %** ← suelo declarado: 70 % |
+
+El remoto podía dar **verde** un paquete que no cumplía el suelo que el
+propio `AGENTS.md §6.3` declara.
+
+**El contraste usa el mismo checker en las dos recetas.** Comparar el
+remoto —medido sin el hook `.pth`, que es como medía— contra un 94 % de la
+receta instrumentada habría sido comparar dos cosas distintas y llamarlas
+divergencia: el número habría sido dramático y falso.
+
+Y los nueve tests de `test_hooks_system.py::TestCIWorkflow` no comparaban
+nada: buscaban cadenas. Uno aceptaba
+`assert "pytest" in content or "test" in content.lower()`, que un fichero
+con la palabra *test* en un comentario satisface. **Ningún test del repo
+comparaba `ci.yml` con `.pipeline.kts`.**
+
+### Por qué no se cumplía: la regla era inejecutable
+
+`.pipeline.kts` llevaba **diez** rutas absolutas a
+`/var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph/...`, y `AGENTS.md`
+ («Extensión del script») **exigía** escribirlas así. La norma que la regla
+de runners hacía inejecutable estaba en el mismo fichero que la declara.
+
+Medido antes de escribir el código, no supuesto: el motor v0.39.0 **sí**
+propaga el entorno a los `sh()` — un `GITHUB_WORKSPACE` exportado llega
+intacto al shell — y `user.dir` es el repo cuando se invoca desde su raíz.
+Comprobado en los dos sentidos. La solución es una línea:
+
+```kotlin
+val repo = System.getenv("GITHUB_WORKSPACE") ?: System.getProperty("user.dir")
+```
+
+### El guard cayó en la trampa que viene a cerrar
+
+Las cinco primeras mutaciones dieron `rc=0`. El defecto no estaba en los
+tests: estaba en el diseño del invariante, y era **el mismo defecto que el
+bloque viene a sustituir**.
+
+- **C1** buscaba `.pipeline.kts` en el contenido entero del workflow. El
+  workflow real menciona la receta en un comentario que explica que se
+  usa, y el guard encontraba la cadena ahí. Ahora mira los **pasos
+  ejecutables**, con un parser que respeta comentarios, bloques escalares y
+  el prefijo `- ` de los pasos de YAML.
+- **C2** buscaba rutas absolutas *dentro* de `sh(...)` y no veía nada
+  cuando la ruta estaba en una `val` de Kotlin — que es justo donde se
+  mueve una para arreglar el problema. **Un invariante que solo mira una
+  sintaxis concreta se esquiva cambiando de sintaxis.** Ahora son dos
+  condiciones verificables sin heurística: el script **resuelve** la raíz y
+  **no contiene** la raíz de este árbol. `/usr/bin/uv` no ata el script a
+  ninguna máquina y no es deriva.
+
+El parser de pasos vive en el checker y **no** en el fichero de tests: el
+invariante depende de él, y duplicarlo es la forma de que dejen de contar
+lo mismo sin que nada lo note.
+
+### El script de mutaciones también estaba mal
+
+Dos motivos, ambos dignos de escribirse:
+
+1. `mktemp` pasa por un wrapper que **manda el fichero recién creado a la
+   papelera**. Los respaldos no existían, las cinco "mutaciones" leyeron el
+   árbol ya restaurado y el `ABORTO` final destapó el motivo. Un respaldo
+   que no se puede restaurar es peor que no tener respaldo: parece que lo
+   hay. Restaurado por contenido, como manda la regla.
+2. Las mutaciones sustituían **una línea** de un bloque `run: >` dejando
+   las siguientes, con lo cual la receta seguía presente en el paso. Dos de
+   ellas tampoco degradaban nada.
+
+**Un contraejemplo que no degrada nada no prueba que el guard funcione:
+prueba que el script de mutaciones está mal.**
+
+### Lo que se conserva
+
+La subida de `coverage.xml` era una capacidad real, no un *string*. Se
+mantiene, cambiando el **origen** del dato: se exporta del `.coverage`
+combinado e instrumentado que deja la receta, no de un `pytest --cov` a
+pelo que ya se sabe ciego.
+
+### Verificación
+
+- **Suite completa**: `2625 passed in 130.78s` (estado ya commiteado, sin
+  edición concurrente).
+- **CI canónica**: `Pipeline finished with SUCCESS`, **8/8 stages** (stage
+  nuevo `ci-parity`), run `32ffe214-5302-447c-a477-9e0b1015eecc`,
+  **0 `StepFailed`**, `2625 passed in 245.73s`. Los **cuatro** contratos
+  exigibles en verde.
+- **Mutaciones**: 5/5 con baseline verde, autocontrol de aplicación y
+  restauración byte a byte de los dos ficheros.
+- **SemVer**: `derive_semver.py` → `b/f/x/n/d: 0/1/2/3/0` → **MINOR**.
+- **SIN PUSH.** Sin autorización del operador.

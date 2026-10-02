@@ -1,49 +1,43 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-02 (novena tanda) cerrado — WI-97, release `v0.18.0`.**
-> Versión activa `0.18.0.dev0`; último tag `v0.18.0`. 2605 passed.
+> **Bloque 2026-10-02 (décima tanda) cerrado — WI-98, release `v0.19.0`.**
+> Versión activa `0.19.0.dev0`; último tag `v0.19.0`. 2625 passed.
 >
-> **WI-97 — el último eslabón de la cadena de release, que nadie ejecutaba.**
-> `pyproject.toml` declara cinco cosas sobre cómo se construye el paquete
-> (`[build-system]`, `[tool.hatch.version] path`, `[project.scripts]`,
-> contenido del wheel, contenido del sdist) y **ninguna la comprobaba
-> ninguna herramienta**: cero tests referenciaban `hatchling`, `uv build` o
-> `entry_points`, y los seis stages de `.pipeline.kts` no construían nada.
+> **WI-98 — el remoto ejecutaba otra receta, y el guard buscaba cadenas.**
+> `AGENTS.md` dice que todo runner remoto **debe** invocar el mismo
+> `.pipeline.kts`. No lo hacía, y —esto es lo que el bloque midió— **no
+> podía**: el script llevaba diez rutas absolutas a `/var/mnt/...`, así que
+> la regla era una promesa inejecutable.
 >
-> **La premisa del bloque era falsa, y eso es el hallazgo.** No es que el
-> paquete no construyera: es que **nadie lo había mirado nunca**. Medido
-> antes de decidir nada — `uv build` termina en **1,7 s**, produce un wheel
-> de 248 KB con los 80 módulos, instala en un venv limpio y
-> `skillgraph --help` responde. Toda la machinery de SemVer de WI-96 medía
-> un número sobre un artefacto que nadie había visto nacer.
+> **La divergencia, medida con el mismo instrumento:**
 >
-> **Lo que el checker encontró al ejecutarse:**
+> | | receta local | `ci.yml` antes |
+> |---|---|---|
+> | stages ejecutados | **8** | **1** (`lint`) |
+> | contratos exigibles | 4 | **0** |
+> | `cli/commands/runs.py` | 87,96 % | **39 %** |
+> | `cli/support.py` | 85,71 % | **69 %** ← suelo declarado: 70 % |
 >
-> - El sdist **declaraba nueve rutas y llevaba catorce**. El `include` de
->   hatchling es un filtro, no una lista blanca: `bench/` y `docs/` viajaban
->   sin declararse, y cambiando un solo patrón se colaba también `audits/`.
->   Corregido a `only-include`, que sí es lista blanca. El conjunto que
->   viaja no cambia; lo que cambia es que el artefacto queda determinado por
->   la lista.
-> - La invariante que más importa es `sg_build_sdist_no_versionado`: **el
->   artefacto no puede llevar nada que git no versiona**. Un sdist que
->   hereda del árbol de trabajo hace que dos árboles con el mismo commit
->   produzcan dos artefactos distintos, y `git` deja de poder decir qué se
->   publicó.
-> - Un `pytest.skip` en `test_cli_uat.py` era una **rama que nunca se
->   tomaba** (el snapshot está versionado) y llevaba `pragma: no cover`.
->   Verificado con un contraejemplo real, no leyendo el código.
+> El remoto podía dar **verde** un paquete que no cumplía el suelo que el
+> propio `AGENTS.md §6.3` declara.
 >
-> **Dos invariantes nacieron de las mutaciones, no al revés.** La primera
-> pasada cazó 5 de 7 y abrió dos agujeros: comparar «lo declarado» con «lo
-> publicado» es tautología a medias (lo publicado **se deriva** de lo
-> declarado, así que un target equivocado sale idéntico en los dos lados), y
-> una lista más corta no contradice a nada (no es una promesa rota: es una
-> promesa **retirada**). Las otras dos mutaciones no cazadas eran mutaciones
-> **inválidas**, no fallos del contrato.
+> **El guard cayó en la trampa que viene a cerrar.** Las cinco primeras
+> mutaciones dieron `rc=0`: C1 buscaba `.pipeline.kts` en el contenido
+> entero del workflow y lo encontraba en un comentario que explica que se
+> usa; C2 buscaba rutas absolutas solo dentro de `sh(...)` y no las veía
+> cuando estaban en una `val` de Kotlin, que es justo donde se mueven para
+> arreglar el problema. **Un invariante que solo mira una sintaxis
+> concreta se esquiva cambiando de sintaxis.**
 >
-> 38 tests, mutaciones **7/7**, stage propio `package-build` (**siete
-> stages**, coste 1,7 s — el más barato de los que miden algo).
+> El script de mutaciones tampoco estaba mal, por dos motivos que quedan
+> escritos: `mktemp` pasa por un wrapper que manda el fichero recién creado
+> a la papelera, y las mutaciones sustituían una línea de un bloque
+> `run: >` dejando las siguientes. **Un contraejemplo que no degrada nada
+> no prueba que el guard funcione: prueba que el script de mutaciones
+> está mal.**
+>
+> 20 tests, mutaciones **5/5**, stage nuevo `ci-parity` (**ocho stages**) —
+> el cuarto contrato exigible y el primero que vigila a los otros tres.
 >
 > **Lectura estricta, escrita como decisión y no como cita**: `AGENTS.md §6.3`
 > nombra `runtime` entre los módulos del core pero no enumera cada fichero. Se
