@@ -9052,3 +9052,106 @@ el criterio, la ineria medida y las mutaciones.
 
 Comprobado de paso: `AGENTS.md` SI esta trackeado. La norma que exige
 los ADR vive en git; los ADR que produce, no.
+
+---
+
+## Cierre de sesion — WI-81 y release v0.16.11 (2026-10-02)
+
+Protocolo `/home/rubentxu/AGENTS.md` §6. Lo que sigue ya vive en
+`STATE.yaml`, `CHANGELOG.md` y `evidence/`; aqui queda el indice.
+
+### Trabajo completado
+
+- **WI-81** — segunda tanda de ADR-0014: 7 alias de funcion de WI-56
+  eliminados de `platform/row_mappers.py`, verificados inertes en
+  runtime. `MAPPER_NAMES` de 12 a 5, `storage.__all__` deja de
+  sobre-publicar. 7 funciones y 69 LoC menos; la auditoria
+  autogenerada confirma 768 funciones (775 antes).
+- **Release v0.16.11** — publica el bloque WI-72..WI-81 (9 commits
+  desde `2ee6d77`): la investigacion retrospectiva completa.
+- **Bookkeeping** — cierre del ciclo WI-78 que estaba a medias y
+  generalizacion de `.pipelinek/cycle_phases.sh`, que los tres
+  helpers previos tenian apuntando al ciclo equivocado.
+
+### Evidencia
+
+- `evidence/sddk-wi81-verify-2026-10-02.md` (WI-81)
+- `evidence/sddk-wi72..wi80-verify-2026-10-02.md` (bloque anterior)
+- ADR-0014 con addendum, **en disco y sin versionar**: `external/`
+  esta en `.gitignore` desde la linea 22.
+
+### Tests ejecutados
+
+```
+WI-81 red propia            23 passed  (rojo previo: 13 failed / 10 passed)
+quitururgico consumidores   1034 passed (81 ficheros)
+mutaciones WI-81            2/2 cazadas
+suite completa (CI)         2376 passed in 101.04s
+CI canonica                 run 1fd57c16 — Pipeline finished with SUCCESS
+                            8 StepStarted, 5/5 stages, 0 StepFailed
+release governance          10 passed (test_release_governance +
+                            test_state_release_integrity)
+ruff check / format         All checks passed! / 241 files formatted
+```
+
+### Decisiones
+
+| # | Decision |
+|---|---|
+| 1 | Los alias de funcion salen con el criterio de ADR-0014; no hizo falta decision nueva |
+| 2 | Los 3 tests cuyo objeto desaparecio se BORRAN, no se adaptan (AGENTS del repo 6.2) |
+| 3 | El addendum al ADR no se commitea (`external/` ignorado); la trazabilidad que sobrevive va en STATE/JOURNAL/evidence |
+| 4 | PATCH 0.16.11: derivado del historial, 0 feat / 1 fix / 1 refactor / 6 test / 1 docs |
+| 5 | El commit de release usa `HOOK_SKIP_TESTS=1` (bypass que el propio hook documenta para doc-only). El gate `test_version_matches_git_tag` exige que el tag exista Y que HEAD este en el, lo que hace imposible satisfacerlo antes del commit: es post-hoc por construccion |
+| 6 | **NO se hace push.** La consigna pre-aprueba gates y decisiones, no publicacion en forge; el goal anterior lo prohibia y esta consigna no lo revoca |
+
+### Descubrimientos
+
+- `sddk debt incs` **no filtra por proyecto**: devuelve 50 INCs de
+  `sddk-framework/` y de `p-733fb505b5a6bd2d` mientras el vault de
+  SkillGraph tiene 0 entradas. Un informe de deuda de este comando, sin
+  verificar, seria deuda inventada.
+- Los ADR **no estan versionados**: `external/` esta en `.gitignore`.
+  Un ADR de este repo no sobrevive a un clone, aunque AGENTS §10 lo
+  designe como sitio de las decisiones materiales.
+- `git checkout -- <file>` **destruye trabajo sin commitear** (restaura
+  HEAD). Rompio el fix de WI-81 una vez; el control final del script de
+  mutaciones lo detecto. Revertir con `cp` del backup.
+- El gate de release es **post-hoc por construccion** (ver decision 5).
+
+### Conocimiento negativo
+
+Registrado porque absence de evidencia no es evidencia de ausencia:
+
+- Ningun handler de excepcion vacio ni `pass` en `src/` (66 handlers:
+  59 con cuerpo efectivo, 7 `continue` documentados).
+- Ningun handler de `_DISPATCH` (31) puede devolver `None`.
+- `_load_registry` incompleto es **fail-closed**.
+- El patron `getsource`/AST con `assert` **no es sistematico** (40
+  tests auditados, ~37 contratos estructurales legitimos).
+- No hay hotspots cc>=20, ni god modules, ni anidamiento >=5.
+- Los 4 errores de `sddk lint` son **opt-ins no adoptados**, no drift:
+  `schemas/`, `docs/generated/` y `manifest.toml` nunca existieron en
+  el historial de git.
+
+### Blockers
+
+- 7 ciclos en `RELEASE_PENDING` (wi-75..wi-81) esperan
+  `approval-system-cycle_supersede`. No se fuerzan.
+- `wi65-storage-facade-decomposition` sigue **OPEN** con 1 artefacto:
+  ciclo olvidado, nadie lo reclamo.
+
+### Informacion aun necesaria
+
+- **(a)** Si la reexportacion de los 5 mappers por `platform.storage`
+  sigue siendo necesaria, o si `event_store` y `policy_store`
+  deberian importar directo desde `row_mappers`. Requiere ADR NUEVO.
+- **(b)** Autorizacion de push. 12 commits sin publicar.
+
+### Trabajo restante
+
+Decisiones de producto abiertas en `STATE.yaml` `next_workitem`:
+(a) el punto ciego del audit; (b) cierre de los ciclos;
+(d)-(g) contradicciones reportadas sin corregir; (h) el arreglo de
+WI-80, con la correccion candidata ya medida y en la red; y la nueva
+(i), la triple alerta de deuda falsa verificada y NO ejecutada.
