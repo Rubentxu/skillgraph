@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.18"  # release limpia v0.16.18 (AGENTS §12): version pura, el tag se anota en este mismo commit
+__version__ = "0.16.18.dev0"  # trabajo post-release v0.16.18 (regla AGENTS §12): bump .dev0 inmediato tras el tag para no reproducir el drift
 
 from skillgraph.core.errors import (
     IdentityConflictError,
