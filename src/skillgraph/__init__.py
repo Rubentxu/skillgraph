@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.18.0"  # release WI-97: el contrato de empaquetado, ejecutable en cada commit
+__version__ = "0.18.0.dev0"  # trabajo post-release v0.18.0 (regla AGENTS §12): bump .dev0 inmediato tras el tag
 
 from skillgraph.core.errors import (
     IdentityConflictError,

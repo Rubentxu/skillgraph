@@ -10736,3 +10736,112 @@ escribe hoy** (>= 0.14.1) siga en orden descendente.
   guard volveria a fallar. Comprobado que no se dispara de mas.
 - **Ciclo SDDK WI-95 CLOSED**. **36 ciclos CLOSED, 0 pendientes.**
 - **SIN PUSH.** Sin autorizacion del operador.
+
+---
+
+## 2026-10-02 — WI-97: el paquete se construye, y alguien lo comprueba
+
+**Bloque**: WI-97 · **Release**: `v0.18.0` (MINOR) · **Tag**: `7ffc456`
+**Estado**: 2605 passed (+38) · CI 7/7 stages · **SIN PUSH**
+
+### Lo que abre el bloque
+
+La serie «¿qué declara el repo que nada comprueba?» llegaba a su último
+eslabón. `pyproject.toml` declara cinco contratos de empaquetado —
+`[build-system]`, `[tool.hatch.version] path`, `[project.scripts]`,
+contenido del wheel y contenido del sdist — y **ninguno lo comprobaba
+ninguna herramienta**. Medido: `grep -rE 'hatchling|uv build|entry_points|
+importlib.metadata|console_scripts' tests/` → **0 resultados**, y los seis
+stages de `.pipeline.kts` no construían nada.
+
+### La premisa del bloque era falsa, y medirla fue el trabajo
+
+La hipótesis de partida era «el build está roto, y por eso toda la apparatus
+de SemVer mide un número sobre un paquete que nadie puede instalar».
+**Medida, es falsa**: `uv build` tarda **1,7 s**, produce un wheel de 248 KB
+con los 80 módulos, instala en un venv limpio y `skillgraph --help` responde.
+El hueco no es que nada funcione: es que **nadie lo miraba nunca**.
+
+### Lo que encontró el checker al ejecutarse
+
+1. **El sdist declaraba nueve rutas y llevaba catorce.** El `include` de
+   hatchling es un filtro, no una lista blanca. `bench/` y `docs/` viajaban
+   sin declararse, y cambiando un solo patrón de la lista se colaba también
+   `audits/`. Corregido a `only-include`. El conjunto que viaja no cambia; lo
+   que cambia es que el artefacto queda determinado por la lista y no por lo
+   que el backend decida colar.
+2. **`sg_build_sdist_no_versionado`** es la invariante que más importa: el
+   artefacto no puede llevar nada que git no versiona. Un sdist que hereda
+   del árbol de trabajo hace que dos árboles con el mismo commit produzcan
+   dos artefactos distintos, y a partir de ahí git deja de poder decir qué
+   se publicó.
+3. **Un `pytest.skip` era una rama que nunca se tomaba.** En
+   `test_cli_uat.py` el snapshot está versionado, así que la guarda no
+   disparaba, y llevaba `pragma: no cover` que la hacía invisible al informe
+   de cobertura. `AGENTS.md §6.2` prohíbe `pytest.skip` para esconder
+   fallos. Verificado con un **contraejemplo real**, no leyendo el código:
+   moviendo el fichero a `/tmp`, el test pasa de saltarse a **fallar**.
+
+### Dos invariantes nacieron de las mutaciones, no al revés
+
+Primera pasada: **5/7**. Lo que no se cazó no era ruido:
+
+- **Comparar lo declarado con lo publicado es tautología a medias.** Lo
+  publicado **se deriva** de lo declarado: si `pyproject.toml` dice
+  `skillgraph.cli:principal`, el artefacto publica `skillgraph.cli:principal`
+  y los dos lados coinciden mientras el comando no existe. La invariante
+  nueva importa el módulo.
+- **Una lista más corta no contradice a nada.** Quitar `tests` del
+  `only-include` reduce el sdist y ningún check de git lo nota: no es una
+  promesa rota, es una promesa **retirada**. `src/skillgraph`, `tests` y
+  `docs/blueprint` se exigen ahora **en el artefacto**, no en la declaración.
+
+Las otras dos que no se cazaron eran mutaciones **inválidas**, no fallos del
+contrato: quitar el `include` del wheel no cambia el artefacto (`packages` ya
+lo recoge entero) y declarar `audits` es correcto porque `audits` sí está
+versionado. **Un contraejemplo que no debe cazarse también es un dato.**
+
+**M6** —revertir `only-include` a `include` con la misma lista— hace saltar
+`sg_build_sdist_sin_declarar`. Es la prueba de que el cambio a lista blanca
+del commit anterior no era cosmético.
+
+### Una corrida contaminada, registrada como tal
+
+Una corrida intermedia de `scripts/coverage.sh` dio 2 failed en
+`test_wi89_audit_writes_outside_repo.py::TestTheTestHelpersThemselvesWriteOutside`.
+**No se ha reproducido**: la suite completa sin instrumentar y la CI canónica
+(misma receta, con instrumentación) pasaron las dos. Los dos tests comparan
+`git status --porcelain` antes y después de un subproceso de ~1–2 s, y la
+causa más probable es edición concurrente del propio agente sobre `AGENTS.md`
+durante la corrida. Se registra como **corrida contaminada, no flakiness del
+repo**, y no se abre frente.
+
+**Lección transferible**: el agente que edita durante la certificación
+invalida la certificación. Los dos únicos tests que fallaron eran, exacta y
+solamente, los dos que leen el estado del árbol.
+
+### Deuda registrada, no abierta
+
+- `tests/test_wi41_cli_dispatch.py` tiene un
+  `pytest.skip("auditoria del dia no generada todavia")`: el gate D1 lee
+  `audits/architecture-debt-<hoy>.md` y el último informe versionado es del
+  `2026-10-01`. El gate sólo se ejecuta el día exacto en que se genera el
+  informe. **Mismo patrón que el skip que este bloque sí arregla**, pero
+  fuera de la superficie: se registra, no se abre.
+- `src/skillgraph.egg-info/` (rescoldo de un `setup.py` del 2026-09-23) sigue
+  en el árbol de trabajo. No está versionado, `.gitignore` lo tapa y el
+  contrato nuevo lo excluiría si colara en un artefacto. No es deuda.
+
+### Verificación
+
+- **CI canónica**: `Pipeline finished with SUCCESS`, **7/7 stages** (stage
+  nuevo `package-build`), run `c7c5790a-e532-46f9-a712-9b8996a81b54`,
+  **0 `StepFailed`**, 10 `StepStarted`, línea `2605 passed in 236.22s` en el
+  journal. SHA-256 de `.pipeline.kts` =
+  `224643595e637cb70bef837a4e083987581c15278ddad54bd7451c7a2bd6b3f9`.
+- **Mutaciones**: 7/7 con baseline verde y control de aplicación
+  (`MUTACION NO APLICO` si un `replace` no cambia bytes).
+- `test_release_governance` falla **con el bump sin commitear** — es la
+  ventana estructural conocida, no una regresión: HEAD sigue en el tag y
+  `__version__` ya es `.dev0`.
+- **SIN PUSH.** Sin autorización del operador.
