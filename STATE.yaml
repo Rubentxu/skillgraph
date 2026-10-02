@@ -1367,5 +1367,5 @@ release:
     footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"
     e2e_real_h6: "pack_loader declara Character/StoryArc desde narrative-core.md; valida instancias; shadowing de tipos core y namespaces reservados rechazados"
     e2e_real_h7: "reconcile_after_interruption_completes_pending: IN_PROGRESS dejado por crash -> reconcile_pending aplica apply_fn exactamente 1 vez por propuesta, sin duplicar"
-  push: false   # MEDIDO 2026-10-02 tras WI-92: sin autorizacion del operador; `sddk release apply --route local` haria push de trunk y tag, luego no es opcion. 33 ciclos SDDK CLOSED en ese punto; WI-93 los sube a 34.
+  push: false   # MEDIDO 2026-10-02 tras WI-93: sin autorizacion del operador, y `sddk release apply --route local` haria push de trunk y tag, luego no es opcion. MEDIDO con `git rev-list --count origin/main..HEAD`: **58 commits sin publicar**, con `origin/main` en 0ebbd58. El tag `v0.16.18` es local y no se ha publicado: existe en git pero no en ningun remoto. 34 ciclos SDDK CLOSED, 0 pendientes.
 
