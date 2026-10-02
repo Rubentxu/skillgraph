@@ -14,6 +14,106 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.20.0] - 2026-10-02 — la evidencia de auditoría no era reproducible
+
+**MINOR**: `git log v0.19.0..HEAD` = 1 `feat`, 3 `fix`, 3 `test`/`docs`/`chore`, 0 breaking.
+**2636 passed** (2625 antes; +11).
+
+`scripts/audit_bundle.sh` existe para dar evidencia reproducible a una
+auditoría independiente. La primera medición usó la respuesta, y no era la
+esperada.
+
+**Mismo commit `504b65d`, dos árboles:**
+
+| | resultado |
+|---|---|
+| árbol de trabajo (donde se construyó) | `2625 passed` |
+| **clon limpio del mismo commit** | **`2 failed, 2623 passed`** |
+
+Un guard que decía la verdad —su mensaje literal era *«afirmación sin
+respaldo»*— y fallaba justo en el sitio donde se audita. Eso no es un test
+rojo: es un entregable declarado cumplido cuya evidencia no viaja en el
+repo.
+
+### Causa raíz 1 — `.gitignore` tapaba la evidencia
+
+`STATE.yaml` declaraba dos entregables de H9 (E2 y E4) como cumplidos, con
+`docs/architecture/ADR-0015-threat-model-stride.md` y
+`docs/observability-runbook.md` como evidencia. **Ninguno versionado**: el
+patrón `docs/*` los cubría. De 150 referencias con forma de fichero, 3 no
+estaban versionadas, 1 no existía, 3 estaban bajo `external/` (correcto) y
+1 era una plantilla.
+
+El `.gitignore` se reescribió separando las dos categorías que `docs/*`
+trataba como una —evidencia que el código referencia frente a material de
+trabajo— y se versionaron los tres documentos. La referencia inexistente
+queda anotada como irrecuperable: **no se inventó el testigo**.
+
+### Causa raíz 2 — `scripts/ci.sh` era una cuarta receta
+
+| | receta canónica | `scripts/ci.sh` |
+|---|---|---|
+| stages | 8/8 | 3 |
+| contratos exigibles | 4/4 | **0** |
+| `cli/commands/runs.py` | 87,96 % | **39 %** |
+
+Y `audit_bundle.sh` lo invocaba: **el instrumento que existe para medir
+medía con el que no ve**. `ci.sh` pasa a **delegar** en `.pipeline.kts`;
+arreglar una vez arregla las dos cosas.
+
+### Causa raíz 3 — el comando canónico no arrancaba en un clon nuevo
+
+```
+mise: Trust them with `mise trust`
+java.sql.SQLException: path to '.pipelinek/db.sqlite': ... does not exist
+```
+
+`mise` no ejecuta las herramientas de un checkout en el que no confía, y
+`pipelinek` **abre el fichero SQLite, no el directorio que lo contiene**. Es
+el mismo patrón que WI-98 eliminó de `.pipeline.kts`: una regla que no se
+puede cumplir fuera de esta máquina no es un contrato, es una costumbre.
+Arreglo: `.pipelinek/.gitkeep` versionado y `ci.sh` resuelve ambas.
+
+### Added
+
+- `feat(ci)`: invariante **C4** en `check_ci_recipe_parity.py` — *un script
+  que ejecuta `pytest` tiene que ser un fragmento de la receta canónica o
+  delegar en ella*. Disyuntiva a propósito: la versión restrictiva hace del
+  propio fichero de cobertura una infracción y sólo admite una lista de
+  excepciones que el guard mantiene.
+- 11 tests (30 en el fichero del checker). **Mutaciones 6/6**, una de ellas
+  restaurando el `ci.sh` real de antes de WI-99, sacado de git.
+
+### Fixed
+
+- `fix(governance)`: tres documentos de `docs/` versionados; dos entregables
+  de H9 dejaban de declarar evidencia que git no llevaba.
+- `fix(ci)`: `scripts/ci.sh` delega en la receta canónica. `--quick` queda
+  como modo de iteración explícitamente **no certificante**.
+- `fix(ci)`: `.pipelinek/.gitkeep` versionado; el comando canónico
+  documentado es ejecutable en un clon nuevo.
+
+### Cierre medido
+
+`bash scripts/audit_bundle.sh 984289d` sobre un **clon limpio**:
+`Pipeline finished with SUCCESS`, **8/8 stages**, **2636 passed in 239.26s**,
+cobertura 95,22 %, `PASS=16 FAIL=0 BLOCKED=0` en UAT. **Divergencia final: 0**
+— el mismo commit da 2636 en el árbol y 2636 en el clon. Antes: 2625 y
+2623+2 failed.
+
+Evidencia completa: `evidence/sddk-wi99-verify-2026-10-02.md`.
+
+### Lo que este bloque NO resolvió
+
+97+ commits sin publicar (push no autorizado); credenciales Anthropic/OpenAI
+ausentes, que bloquean el criterio de salida de H9 desde WI-91;
+`release.complete` inalcanzable (se cierra con `cycle supersede`);
+`scripts/hooks/pre-push` sigue midiendo con el instrumento ciego y queda
+**excluido de C4 por escrito, con la exclusión fijada por un test**; los
+4 errores de `sddk lint` son checks de perfil **autor de pack** y este repo
+es perfil **consumidor**, así que adoptarlos sería cargo-culting. La deuda
+reportada de `raise ValueError`/`Exception` en el dominio se midió en **0**.
+
 ## [0.19.0] - 2026-10-02 — el remoto ejecutaba otra receta, y el guard buscaba cadenas
 
 **MINOR**: `git log v0.18.0..HEAD` = 1 `feat`, 2 `fix`, 3 `test`/`docs`, 0 breaking.

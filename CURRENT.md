@@ -1,5 +1,56 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-02 (undécima tanda) cerrado — WI-99, release `v0.20.0`.**
+> Versión activa `0.20.0.dev0`; último tag `v0.20.0`. 2636 passed.
+>
+> **WI-99 — la evidencia de auditoría no era reproducible.**
+> `scripts/audit_bundle.sh` existe para dar evidencia reproducible a una
+> auditoría independiente. La medición dio que no lo era:
+>
+> | mismo commit `504b65d` | resultado |
+> |---|---|
+> | árbol de trabajo | `2625 passed` |
+> | **clon limpio** | **`2 failed, 2623 passed`** |
+>
+> El mensaje literal del guard que fallaba era *«afirmación sin respaldo»*.
+> **Un guard que dice la verdad y falla donde se audita no es un test rojo:
+> es un entregable declarado cumplido cuya evidencia no viaja en el repo.**
+>
+> **Tres causas, las tres medidas antes de tocar nada:**
+>
+> 1. `.gitignore` tapaba la evidencia. `STATE.yaml` declaraba dos
+>    entregables de H9 cumplidos con documentos que **no estaban
+>    versionados**. De 150 referencias: 3 no versionadas, 1 inexistente
+>    (anotada como irrecuperable — *no se inventó el testigo*), 3 bajo
+>    `external/` y 1 plantilla.
+> 2. `scripts/ci.sh` era una **cuarta receta**: 3 stages, 0 contratos
+>    exigibles, `cli/commands/runs.py` al **39 %** frente al 87,96 % de la
+>    instrumentada. Y `audit_bundle.sh` lo invocaba — el instrumento que
+>    existe para medir medía con el que no ve. Ahora **delega**.
+> 3. El **comando canónico no arrancaba en un clon nuevo**: `mise trust` y
+>    que exista `.pipelinek/`. `pipelinek` abre el *fichero* SQLite, no el
+>    directorio. Misma categoría que las diez rutas absolutas de WI-98: una
+>    regla que no se puede cumplir fuera de esta máquina es una costumbre.
+>
+> **C4, el invariante que impide la recaída:** un script de `scripts/` que
+> ejecuta `pytest` tiene que ser un **fragmento** de la receta canónica o
+> **delegar** en ella. Disyuntiva a propósito: la versión restrictiva hace
+> del propio fichero de cobertura una infracción y sólo admite una lista de
+> excepciones que el guard mantiene.
+>
+> **Mutaciones 6/6**, y M1 restaura el `ci.sh` **real** de antes de WI-99,
+> sacado de git: un contraejemplo inventado demuestra que el test está bien,
+> no que el guard muerde. M6 —que amplía la exclusión hasta tapar
+> `scripts/`— no pone rojo el checker sino **el test que fija la
+> exclusión**: un guard que se puede silenciar a sí mismo no está verificado.
+>
+> **Cierre: divergencia 0.** Bundle sobre `984289d` en clon limpio —
+> `Pipeline finished with SUCCESS`, **8/8 stages**, **2636 passed**,
+> cobertura 95,22 %, `PASS=16 FAIL=0`. El mismo commit da 2636 en el árbol y
+> 2636 en el clon. Antes: 2625 y 2623+2 failed.
+>
+> Evidencia: `evidence/sddk-wi99-verify-2026-10-02.md`.
+
 > **Bloque 2026-10-02 (décima tanda) cerrado — WI-98, release `v0.19.0`.**
 > Versión activa `0.19.0.dev0`; último tag `v0.19.0`. 2625 passed.
 >

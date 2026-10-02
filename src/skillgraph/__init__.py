@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.19.0.dev0"  # trabajo post-release v0.19.0 (regla AGENTS §12): bump .dev0 inmediato tras el tag
+__version__ = "0.20.0"  # release WI-99: la evidencia de auditoria ahora es reproducible
 
 from skillgraph.core.errors import (
     IdentityConflictError,

@@ -10959,3 +10959,184 @@ pelo que ya se sabe ciego.
   restauración byte a byte de los dos ficheros.
 - **SemVer**: `derive_semver.py` → `b/f/x/n/d: 0/1/2/3/0` → **MINOR**.
 - **SIN PUSH.** Sin autorización del operador.
+
+---
+
+## 2026-10-02 — WI-99 · la evidencia de auditoría no era reproducible
+
+Ciclo `p-b7740b96d79ec013/wi99-audit-evidence-reproducible`. Release
+`v0.20.0` (MINOR). **SIN PUSH.**
+
+### La medición que abrió el bloque
+
+`scripts/audit_bundle.sh` existe para dar evidencia reproducible a una
+auditoría independiente. La primera medición dio que no lo era:
+
+| mismo commit `504b65d` | resultado |
+|---|---|
+| árbol de trabajo (donde se construyó) | `2625 passed` |
+| **clon limpio** | **`2 failed, 2623 passed`** |
+
+Los dos fallos eran de `tests/test_wi91_h9_conformance_record.py`, y el
+mensaje literal del guard era *«afirmación sin respaldo»*.
+
+**Un guard que dice la verdad y falla en el sitio donde se audita no es un
+test rojo. Es un entregable declarado cumplido cuya evidencia no viaja en el
+repo** — el que lo construye no lo recibe, y el que lo audita no lo puede
+leer.
+
+### Causa 1 — `.gitignore` tapaba la evidencia
+
+Barrido de las 150 referencias con forma de fichero de `STATE.yaml`:
+3 no versionadas, 1 inexistente, 3 bajo `external/` (correcto por diseño),
+1 plantilla.
+
+Las tres no versionadas eran la evidencia que `STATE.yaml` declara para los
+entregables E2 y E4 de H9. El patrón `docs/*` las cubría. La inexistente,
+`docs/architecture/h9-bslice3-runcontroller-storage.md`, queda anotada como
+irrecuperable: **no se inventó el testigo**.
+
+Decisión: **versionar la evidencia en vez de degradar el estado del
+entregable.** El trabajo se hizo; el `.gitignore` lo tapó por accidente.
+
+### Causa 2 — `scripts/ci.sh` era una cuarta receta
+
+| | receta canónica | `scripts/ci.sh` |
+|---|---|---|
+| stages | 8/8 | 3 |
+| contratos exigibles | 4/4 | **0** |
+| `cli/commands/runs.py` | 87,96 % | **39 %** |
+
+Sin el hook `.pth` de `scripts/coverage.sh`, el CLI ejecutado por
+subproceso no se ve. Y `audit_bundle.sh` lo invocaba: **el instrumento que
+existe para medir medía con el que no ve**.
+
+Arreglar una vez arregla las dos cosas: `ci.sh` delega en `.pipeline.kts`, y
+`audit_bundle.sh` pasa a producir la evidencia con el instrumento correcto
+sin tocar una línea.
+
+### Causa 3 — el comando canónico no arrancaba en un clon nuevo
+
+```
+mise: Trust them with `mise trust`
+java.sql.SQLException: path to '.pipelinek/db.sqlite': ... does not exist
+```
+
+`mise` no ejecuta las herramientas de un checkout en el que no confía, y
+`pipelinek` **abre el fichero SQLite, no el directorio que lo contiene**.
+
+Es la misma categoría que las diez rutas absolutas que WI-98 eliminó de
+`.pipeline.kts`: **una regla que no se puede cumplir fuera de esta máquina
+no es un contrato, es una costumbre.** Arreglo: `.pipelinek/.gitkeep`
+versionado (el `.gitignore` pasa a ignorar el **contenido**, no el
+directorio) y `scripts/ci.sh` resuelve ambas por su cuenta.
+
+Verificado con `git add --dry-run`, que es el instrumento que resuelve;
+`git check-ignore` no distingue aquí porque la última regla que coincide es
+la negación.
+
+### C4 — el invariante que impide la recaída
+
+> Un script de `scripts/` que ejecuta `pytest` tiene que ser un **fragmento**
+> de la receta canónica o **delegar** en ella.
+
+**Disyuntiva a propósito.** La versión restrictiva hace del propio fichero
+de cobertura una infracción, y su única salida es una lista de excepciones
+que el guard mantiene: un guard que vigila la lista que él mismo mantiene no
+vigila nada.
+
+Decisiones tomadas midiendo:
+
+- los fragmentos se **leen** de `.pipeline.kts`; una constante solo vigila
+  los que ya conocía;
+- los scripts se **descubren** por extensión dentro de `scripts/`, así que
+  un `verify.sh` nuevo entra solo en el contrato;
+- se buscan **órdenes**, no líneas. La invocación real de `ci.sh` está
+  partida con barras invertidas: buscarla por línea concluiría que ese
+  script no delega, y el defecto estaría en el invariante, no en el repo.
+  **Un invariante que solo mira una sintaxis concreta se esquiva cambiando
+  de sintaxis** — WI-98 lo sufrió dos veces y WI-99 lo confirma;
+- comentarios con la regla de «marca al inicio de la línea o tras un
+  espacio». Partir por el primer `//` trunca `https://mise.run`; por
+  cualquier `#`, trunca `echo "## CI Summary"`. La regla es la misma para
+  YAML y para shell, así que ahora es **una** función y no dos;
+- `scripts/hooks/` se **excluye, y un test fija la exclusión**.
+
+**Límite declarado**: un script que sí delega podría ejecutar `pytest`
+además en su camino certificante y seguir cumpliendo. Verlo exigiría un
+parser de flujo de bash, un instrumento mayor que el problema que se cierra.
+
+### Mutaciones 6/6
+
+| | mutación | veredicto |
+|---|---|---|
+| M1 | `ci.sh` vuelve a su receta propia — **el fichero real de `504b65d`** | rojo |
+| M2 | `.pipeline.kts` deja de invocar `coverage.sh` | rojo |
+| M3 | `ci.sh` ejecuta `pytest` sin delegar | rojo |
+| M4 | aparece un `verify.sh` con `pytest` a pelo | rojo |
+| M5 | `ci.sh` delega en **otro** pipeline | rojo |
+| M6 | la exclusión crece hasta tapar `scripts/` | rojo el **test** que la fija |
+
+M1 usa el contraejemplo real, no uno inventado: **un contraejemplo
+inventado demuestra que el test está bien, no que el guard muerde.** M6 no
+pone rojo el checker —se auto-excluye y por eso calla—, y por eso la
+comprobación es sobre el test: **un guard que se puede silenciar a sí mismo
+no está verificado.**
+
+### Cierre
+
+`bash scripts/audit_bundle.sh 984289d` sobre un **clon limpio**:
+`Pipeline finished with SUCCESS`, **8/8 stages**, run
+`2401fe95-d673-4a4e-b6c3-ac3e43501210`, **2636 passed in 239.26s**,
+cobertura 95,22 %, `PASS=16 FAIL=0 BLOCKED=0` en UAT.
+
+**Divergencia final: 0.** El mismo commit da 2636 en el árbol y 2636 en el
+clon. Antes: 2625 y 2623+2 failed.
+
+Evidencia completa: `evidence/sddk-wi99-verify-2026-10-02.md`.
+
+### Lo que NO se resolvió (registrado, sin abrir frentes)
+
+- **97+ commits sin publicar.** `origin/main` en `0ebbd58`. Sin
+  autorización del operador.
+- **Credenciales Anthropic/OpenAI** ausentes: bloquean el criterio de salida
+  de **H9**, incumplido desde WI-91.
+- **`release.complete` inalcanzable**: exige `release-receipt`, que solo
+  emite `sddk release apply`, cuyo plano exige `Cargo.toml` (VERSION
+  LOCKSTEP ERROR). Se cierra con `cycle supersede`.
+- **`scripts/hooks/pre-push`**: ejecuta la suite completa a pelo y emite
+  veredicto con el instrumento ciego. Excluido de C4 **por escrito** y con
+  la exclusión fijada por un test. Convergerlo es un workitem propio.
+- **`ADR-0015` designa dos documentos distintos**: decisión del mantenedor,
+  no ejecutada. Fuera de alcance.
+- **4 errores de `sddk lint`** (`schemas/`, `docs/generated/workflow.md`,
+  `docs/generated/inventory.md`, `manifest.toml`): checks de perfil **autor
+  de pack** (`sddk pack scaffold` dice «SDK author onboarding»). Este repo
+  es perfil **consumidor**. Sin opt-out y no está en ningún stage.
+  Adoptarlos sería cargo-culting.
+- **63 informes en `audits/`**: política de datos, decisión del mantenedor.
+- **Desorden antiguo del CHANGELOG**: medido y aceptado en WI-95.
+- **2 líneas con CJK en `AGENTS.md`** (119, 251): preexistentes, ajenas al
+  alcance.
+- **Alerta de deuda no verificada**: `raise ValueError`/`Exception` en el
+  dominio = **0**. `RuntimeError` (2, en `unwrap`), `KeyError` (5, DTOs) y
+  `TypeError` (5, guardas `isinstance`) son idiomáticos y defendibles. La
+  alerta no se sostiene.
+
+### Errores propios de esta sesión, para no repetirlos
+
+1. Garbage en mensajes de commit **dos veces** (`执行`, `seugnieron`,
+   `reasoning`, `seresolvede`, `mediciónhuso`). Barrido con regex CJK antes
+   de dar por bueno cualquier texto que vaya a git.
+2. `python3 - <<'PY'` con `\\\"` dentro: Python ** consume el escape y
+   escribe `"` sin escapar, y el YAML de `STATE.yaml` se rompe después. En
+   un escalar YAML de una línea, las comillas dobles internas no se
+   permiten: usar `«»` o backticks.
+3. Inventar un `old_string` en `edit` a partir de memoria: el edit falla y
+   se pierde el intento. Releer el fichero.
+4. `git check-ignore` **no** distingue cuando la última regla que coincide
+   es una negación. El instrumento que sí resuelve es
+   `git add --dry-run`.
+5. `sddk ledger events` trunca a **28 eventos por defecto**; con 454
+   eventos y 77 ciclos, sin `--limit` parecía que el ciclo de WI-99 no
+   existía. `--limit 1000`.
