@@ -126,7 +126,7 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-55   # corte 6 del estrangulamiento H-02 (ADR-0018): cluster run -> cli/commands/run.py; runner.py 838 -> 610 LoC, FUERA de god files (audit: 5 archivos >800); H-02 resuelto
+  current_workitem: WI-57   # investigacion retrospectiva del ciclo WI-49..WI-55: 2 regresiones confirmadas y corregidas (decorador perdido runtime-broken; imports de test rotos) + gate del hook reparado (enmascaraba exit de pytest) + red parser/dispatch; 1822/1822 reales
   next_workitem: WI-56   # siguiente estrangulamiento P1 segun audit vigente: runcontroller.py (1445 LoC) o knowledge_repository.py (986); requiere ADR propia (patron ADR-0018 replicable)
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:

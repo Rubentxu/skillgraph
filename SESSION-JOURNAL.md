@@ -7554,3 +7554,55 @@ Acumulado H-02 desde v0.16.9: **2357 → 610 LoC (−74%)**.
   remotos.
 - Siguiente: WI-56 = estrangulamiento de runcontroller.py o
   knowledge_repository.py (patrón replicable, requiere ADR).
+
+## 2026-10-02 (III) — WI-57: investigación retrospectiva del ciclo de estrangulamiento
+
+### Hallazgos (detalle en evidence/investigation-2026-10-02.md)
+
+1. **Regresión runtime**: `_open_project_storage` llegó a support SIN
+   `@contextmanager` (corte 2 perdió el decorador; los decoradores no
+   están en `FunctionDef.lineno`): `sg policy get/set` y `sg runs *`
+   rompían con TypeError. Único decorador perdido de 91 símbolos
+   (barrido AST contra v0.16.9).
+2. **Regresión de tests**: 3 módulos con ImportError de colección
+   (símbolos movidos sin actualizar imports). Suite completa en rojo
+   de colección desde el corte 3.
+3. **Gate decorativo**: el hook lanzaba `pytest -q 2>&1 | tail -30`;
+   el exit era el de tail. Misma trampa PIPESTATUS de .pipeline.kts.
+
+### Correcciones (atómicas)
+
+- `c3444a7` fix(cli): restaura el decorador (+import).
+- `ff5d246` fix(tests): repara los 3 imports.
+- `229c542` fix(tests): 4 ficheros de contrato (wi44/wi41/h9/wi52-guard)
+  a ubicaciones y contratos post-estrangulamiento (incluido el pin del
+  nuevo contrato bool-contador de WI-49).
+- `2cbc6c9` fix(ci): hook decide sobre el exit real de pytest.
+- `tests/test_wi57_dispatch_coverage.py`: red parser<->dispatch
+  bidireccional (hallazgo: contrato sin test; fallback silencioso
+  ayuda+EXIT_USAGE; estilo FLAT-ROUTER de backup documentado as-built).
+
+### Evidencia
+
+- Suite completa real: **1822/1822 en 81s** (primera completa honesta
+  desde los cortes). 96/96 en los 4 ficheros de contrato. 5/5 red de
+  dispatch. Contabilidad de nombres: 0 símbolos perdidos/duplicados.
+
+### Correcciones de honestidad
+
+- Mi reporte anterior afirmo "full suite por hook" en los cortes: era
+  FALSO (el pipe enmascaraba el resultado; la ultima completa real y
+  verde antes de hoy fue el bump v0.16.9). Queda registrado.
+- Un mensaje de commit quedo mutilado por sustitucion de comandos
+  (backticks en doble comilla): reset --soft inmediato y re-commit
+  (local, sin push), anotado aqui en vez de amend silencioso.
+- Colision de numeracion: ya existia un WI-52 previo
+  (test_wi52_guard_chain_contracts); la busqueda de disponibilidad no
+  cubria nombres de ficheros de test.
+
+### Estado de salida
+
+- HEAD `229c542`+docs, arbol limpio, gate 2/2. SIN push (regla de la
+  investigacion). Siguiente: push del acumulado (operador) y WI-58
+  (red subprocess de policy/runs o ADR de runcontroller).
+
