@@ -1284,5 +1284,5 @@ release:
     footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"
     e2e_real_h6: "pack_loader declara Character/StoryArc desde narrative-core.md; valida instancias; shadowing de tipos core y namespaces reservados rechazados"
     e2e_real_h7: "reconcile_after_interruption_completes_pending: IN_PROGRESS dejado por crash -> reconcile_pending aplica apply_fn exactamente 1 vez por propuesta, sin duplicar"
-  push: true   # CONFIRMADO 2026-10-02: bloque WI-65..WI-71 (61 commits desde e680b72) + release publicados en origin/main. origin/main = 5ddb600 = HEAD local, 0 pendientes. Etiqueta v0.16.10 publicada y apuntando a 2ee6d77 (el commit de release). Push autorizado expresamente por el operador
+  push: true   # CONFIRMADO 2026-10-02 (WI-72 incluido: origin/main = 4f3e359, 0 pendientes). Ciclo SDDK wi-72-p3-expansion-apply en RELEASE_PENDING con la APROBACION DE CIERRE PENDIENTE del operador: sddk cycle supersede exige approval-system-cycle_supersede y no se fuerza. 6 artefactos, 4 gates de verify evaluados: bloque WI-65..WI-71 (61 commits desde e680b72) + release publicados en origin/main. origin/main = 5ddb600 = HEAD local, 0 pendientes. Etiqueta v0.16.10 publicada y apuntando a 2ee6d77 (el commit de release). Push autorizado expresamente por el operador
 

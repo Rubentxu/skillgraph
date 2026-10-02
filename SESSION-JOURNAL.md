@@ -8121,3 +8121,55 @@ del constructor compartido (3 tests la cazan), `overwrite=True` en
 flujo (caza el test estructural) y **cambiar solo un valor** de
 `operations` (caza el oraculo de valores). Esa ultima es la que
 distingue un oraculo de verdad de un recuento de claves.
+
+### WI-72 (cont.) — la CI canonica cazo un flake PROPIO, y el ciclo espera aprobacion
+
+**El fallo de la primera CI de WI-72 era mio, no del codigo.**
+`Pipeline finished with FAILURE`, 2196 passed, con
+
+    {'created_at': '2026-10-02T09:55:40+00:00'} !=
+    {'created_at': '2026-10-02T09:55:41+00:00'}
+
+`created_at` lo estampa `propose()` en CADA invocacion, y el oraculo
+diferencial comparaba los payloads enteros de DOS PROCESOS DISTINTOS
+(primero `apply`, luego `propose` sobre el mismo fichero). Si el segundo
+cae en el segundo siguiente, difieren en ese campo y solo en ese. En las
+ejecuciones locales los dos caian dentro del mismo segundo; bajo la CI,
+con caches frias y 92 s de suite, no.
+
+Correccion: excluir el valor **por invocacion** de la igualdad y exigir
+que ambos sean ISO-8601 UTC. `proposal_id` NO se excluye (es hash estable
+del contenido y su igualdad es parte del contrato).
+
+Lo importante es que excluir un campo puede cegar un test, asi que se
+verifico en los dos sentidos: 5 ejecuciones seguidas en verde, y dos
+mutaciones de PRODUCCION sobre `created_at` (vacio, y con forma rota)
+cazadas por 2 tests cada una. El workitem acaba con seis mutaciones
+detectadas.
+
+**Aprendizaje transferible**: un oraculo diferencial que cruza dos
+invocaciones debe DECLARAR que valores son por invocacion. La suite local
+no lo ensino y la CI si. Es la segunda vez esta sesion que la CI aporta
+algo que la suite local no (la primera fue el SUCCESS cacheado): por eso
+no es decorativa.
+
+**El hook tambien atrapó un commit.** Al commitear la correccion del
+flake, `ruff format --check` fallo y el commit fue rechazado. Ruff si
+corre con `HOOK_SKIP_TESTS=1`: el bypass perdona pytest, no el formato.
+
+**El cierre del ciclo necesita aprobacion humana y no la fuerzo.**
+`sddk cycle supersede` pide `approval-system-cycle_supersede`, igual que
+pidio WI-64 (que approving el operador). El ciclo queda en
+`RELEASE_PENDING` con 6 artefactos y la aprobacion pendiente, decision
+que es del operador, no mia. Ledger verificado: `status: PASS`, 35
+streams, 110 eventos.
+
+Comandos que costaron tiempo y quedan anotados para la proxima sesion:
+- `sddk cycle lock acquire --owner <owner>` es obligatorio antes de
+  cualquier transicion; sin lease, `cycle next` responde "no active
+  cycle" y parece que el ciclo no existe.
+- Cada transicion libera el lease: hay que readquirirlo.
+- `--reason` de `supersede` usa guiones, no guiones bajos
+  (`external-obsolete`, no `external_obsolete`).
+- El evidence de `evaluate-gate` exige `argv`, `exit_code` y
+  `output_digest` en el NIVEL SUPERIOR del JSON, no anidados.
