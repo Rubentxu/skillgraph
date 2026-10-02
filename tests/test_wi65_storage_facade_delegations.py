@@ -287,14 +287,18 @@ class TestExtractionIsVerifiable:
         assert loc < 1807, f"storage.py sigue en {loc} LoC: el corte no ocurrio"
 
     def test_delegation_module_defines_no_surprising_top_level_state(self) -> None:
-        """El modulo nuevo solo debe definir los cinco mixin."""
+        """WI-65 metio los cinco mixin en un modulo; WI-68 los desdoblo en
+        uno por componente y dejo este como indice de re-export. Lo que
+        se sigue exigiendo aqui es que **no** vuelva a definirse una
+        clase aqui: el indice reexporta, no reproduce. El resto del
+        contrato de WI-68 esta en `test_wi68_storage_delegations_split`.
+        """
         from skillgraph.platform import storage_delegations
 
         path = Path(storage_delegations.__file__)
         tree = ast.parse(path.read_text())
-        classes = [n.name for n in tree.body if isinstance(n, ast.ClassDef)]
-        assert set(classes) == {m.__name__ for m in MIXINS}, (
-            f"clases inesperadas en el modulo: {classes}"
+        assert not [n for n in tree.body if isinstance(n, ast.ClassDef)], (
+            "el indice de WI-68 no debe definir ninguna clase: reexporta"
         )
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
