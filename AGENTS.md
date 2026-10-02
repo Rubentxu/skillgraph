@@ -798,6 +798,38 @@ mise exec -- pipelinek run --rerun \
 > stages "success" y ninguna línea de pytest en el journal. Es el modo
 > de fallo "SUCCESS cacheado" que esta misma sección ya describía.
 
+### En un clon nuevo (WI-99)
+
+El comando canónico tiene **dos precondiciones** que no se ven leyendo esta
+sección, y ambas se descubrieron midiendo en un clon recién hecho. Sin ellas,
+el comando de arriba no ejecuta nada y devuelve un error que no menciona
+esta sección:
+
+```bash
+mise trust                       # sin esto: "Trust them with `mise trust`"
+mkdir -p .pipelinek              # sin esto: java.sql.SQLException (abajo)
+```
+
+`mise` no ejecuta las herramientas de un checkout en el que no confía. Y
+`pipelinek` **abre el fichero SQLite, no el directorio que lo contiene**:
+
+```
+java.sql.SQLException: path to '.pipelinek/db.sqlite':
+'/ruta/al/clon/.pipelinek' does not exist
+```
+
+Por eso `.pipelinek/.gitkeep` está **versionado**: el directorio tiene que
+existir en un clon nuevo para que el comando documentado sea ejecutable tal
+cual. Los artefactos que viven dentro (journal, control root, logs) siguen
+sin versionarse; sólo existe el directorio. Es el mismo criterio que
+WI-98 aplicó a las rutas de `.pipeline.kts`, y por el mismo motivo: una
+regla que no se puede cumplir fuera de esta máquina no es un contrato, es
+una costumbre.
+
+`scripts/ci.sh` (modo por defecto) hace las dos cosas por ti y delega en el
+comando canónico. `bash scripts/ci.sh --quick` es un modo de iteración que
+corre `pytest` a pelo: más rápido, y por eso **no certifica**.
+
 ### Criterios de éxito (todos deben cumplirse)
 
 1. `Pipeline finished with SUCCESS` en la línea final del run.
@@ -868,6 +900,58 @@ dos se pueden comprobar sin heurística:
 
 Comparar contra la raíz real y no contra un patrón de «parece absoluta»
 importa: `/usr/bin/uv` es legítimo y no ata el script a ninguna máquina.
+
+### Una sola receta, también en local (WI-99)
+
+WI-98 lo dejó escrito: la receta canónica tiene que ser **portable**, para
+que un runner remoto pueda ejecutarla. WI-99 midió que faltaba la mitad
+anterior: que **nadie más la ejecute**.
+
+La receta canónica no es «la receta de este runner», es **la** receta. Un
+script local que corre `pytest` por su cuenta produce un veredicto con otro
+instrumento, y ese veredicto es el que llega a quien audita. Lo que se
+midió:
+
+| quién mide | Stages | contratos exigibles | `cli/commands/runs.py` |
+|---|---|---|---|
+| `.pipeline.kts` (canónica) | 8/8 | 4/4 | 87,96 % |
+| `scripts/ci.sh` (hasta WI-98) | 3 | **0** | 39 % |
+
+Y `scripts/audit_bundle.sh`, que existe **para** dar evidencia reproducible
+a una auditoría independiente, llamaba a ese segundo. Es decir: el
+instrumento que existe para medir medía con el que no ve.
+
+**La regla.** Un script de `scripts/` que ejecuta `pytest` tiene que estar
+conectado a la receta canónica: o es un **fragmento** que ella invoca
+(`scripts/coverage.sh`), o **delega** en ella (`scripts/ci.sh`).
+
+Es disyuntiva a propósito. La versión restrictiva —«nadie ejecuta pytest
+salvo `.pipeline.kts`»— hace del propio fichero de cobertura una
+infracción, y su única salida es una lista de excepciones que el guard
+mantiene: un guard que vigila la lista que él mismo mantiene no vigila
+nada.
+
+`scripts/check_ci_recipe_parity.py` lo vigila, y lo vigila sobre **órdenes
+ejecutadas**, no sobre el texto del fichero:
+
+* los fragmentos se **leen** de `.pipeline.kts`, no de una lista aparte;
+* los scripts se **descubren** por extensión dentro de `scripts/`, así que
+  un `verify.sh` nuevo entra en el contrato sin tocar el guard;
+* se ignoran comentarios y se unen las continuaciones con `\`, porque la
+  invocación real está partida en varias líneas.
+
+Medido: seis mutaciones, seis en rojo. Una de ellas restaura el
+`scripts/ci.sh` real de antes de WI-99, sacado de git, porque un
+contrajemplo inventado prueba que el test está bien, no que el guard
+muerda.
+
+*Deuda medida y no resuelta:* `scripts/hooks/pre-push` ejecuta la suite
+completa a pelo y emite veredicto con el instrumento ciego. Está excluido
+del invariante —un hook de git tiene un presupuesto de tiempo fijo y corto,
+y su salida es un filtro de evento, no el veredicto que este capítulo
+declara fuente de verdad— y esa exclusión está escrita en el guard y fijada
+por un test, para que ampliarla sea una decisión visible y no una puerta
+trasera. Convergerlo con la receta canónica es un workitem propio.
 
 ### Compatibilidad con otros runners
 
