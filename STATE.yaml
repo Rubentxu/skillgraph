@@ -560,7 +560,7 @@ deliverables:
 tests:
   total: 2567   # re-medido 2026-10-02 (bloque WI-96): 2567 passed. +8 sobre 2559 = tests/test_wi96_semver_rule.py.
   passed: 2567
-  duration_s: 205.15   # MEDIDO en la CI canonica del bloque WI-95 con la receta de cobertura (stage unit-tests). pytest a pelo son ~111 s: el delta de ~94 s es el coste de instrumentar, coherente con los +93 s de WI-93 y +95 s de WI-94.
+  duration_s: 218.73   # MEDIDO en la CI canonica del bloque WI-95 con la receta de cobertura (stage unit-tests). pytest a pelo son ~111 s: el delta de ~94 s es el coste de instrumentar, coherente con los +93 s de WI-93 y +95 s de WI-94.
   package_version: "0.17.0.dev0"   # trabajo post-release v0.16.19 (AGENTS 12). El tag v0.16.19 esta en 9ea721a; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -867,9 +867,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, v0.16.20, bloque WI-95). 6/6 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. run_id 98e36598-0738-43a4-987a-eb884ae63ca6. 9 StepStarted y 9 EchoOutputCaptured, con la linea de resumen de pytest '2559 passed in 205.15s' en el journal. Control root completo. SHA-256 de .pipeline.kts = c05e97f510ce157345f75918e532266212275d14612439ed243a932348b4d83b (sin drift). Primera y unica run del bloque: verde a la primera."
+  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, v0.17.0, bloque WI-96). 6/6 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. run_id de050072-689b-4919-9a61-5f9b1eca1eb4. 9 StepStarted y 9 EchoOutputCaptured, con la linea de resumen de pytest '2567 passed in 218.73s' en el journal. Control root completo. SHA-256 de .pipeline.kts = c05e97f510ce157345f75918e532266212275d14612439ed243a932348b4d83b (sin drift). Verde a la primera, como WI-95."
   ultima_ejecucion_local: 2026-10-02 20:23
-  resultado: "2559 passed in 205.15s en el stage unit-tests de la CI canonica (receta de cobertura). 2551 antes; +8 = tests/test_wi95_changelog_release_claims.py. El stage coverage-floors dio 'VEREDICTO: todos los suelos declarados se cumplen'. ruff check y format limpios (254 archivos)."
+  resultado: "2567 passed in 218.73s en el stage unit-tests de la CI canonica (receta de cobertura). 2559 antes; +8 = tests/test_wi96_semver_rule.py. El stage coverage-floors dio 'VEREDICTO: todos los suelos declarados se cumplen'. ruff check y format limpios."
   working_tree: "arbol limpio; los commits del bloque siguen SIN PUSH (no autorizado)"
 
 open_questions: []

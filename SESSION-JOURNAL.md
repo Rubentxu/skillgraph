@@ -10598,6 +10598,21 @@ presente**.
 - `tests/test_wi96_semver_rule.py` (8 tests)
 - `.pipelinek/wi96_mutate.py` (3/3 + baseline + autocontrol)
 
+### Cierre del bloque WI-96
+
+- **CI canonica: `Pipeline finished with SUCCESS`, 6/6 stages**, verde **a la
+  primera** (como WI-95), `run_id de050072-689b-4919-9a61-5f9b1eca1eb4`,
+  **2567 passed in 218.73s**, 0 `StepFailed`, journal con la linea de resumen,
+  SHA-256 sin drift.
+- **Release `v0.17.0`** en `1f26ba7`, version actual `0.17.0.dev0`. **MINOR**,
+  y el numero lo calculo `scripts/derive_semver.py`, no una persona.
+- **El guard del CHANGELOG (WI-95) volvio a pararme**, por tercera vez y por
+  la misma causa estructural: la seccion `[0.17.0]` se anuncia antes de que
+  exista el tag. La excepcion cubre la version que `__version__` declara en
+  puro y se autolimpia con el bump. Tres de tres: el guard hace su trabajo.
+- **Ciclo SDDK WI-96 CLOSED**. **37 ciclos CLOSED, 0 pendientes.**
+- **SIN PUSH.** Sin autorizacion del operador.
+
 ---
 
 ## 2026-10-02 — WI-95: el CHANGELOG decía [Unreleased] para bloques ya publicados
