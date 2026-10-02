@@ -155,7 +155,21 @@ def test_god_module_sizes_are_not_hardcoded() -> None:
     """Las LoC citadas para god modules coinciden con el archivo real."""
     text = _report_text()
     rows = re.findall(r"^\|\s*(\d+)\s*\|\s*`([^`]+\.py)`\s*\|$", text, re.MULTILINE)
-    assert rows, "la tabla de archivos grandes salio vacia"
+
+    # La tabla puede estar VACIA y seguir siendo correcta: desde WI-69
+    # el repo no tiene ningun fichero >800 LoC. El invariante real es
+    # de ida y vuelta: lo que el informe cita existe, y lo que existe
+    # esta citado. Exigir al menos una fila premia reintroducir deuda.
+    reported = {rel for _loc, rel in rows}
+    actual = {
+        str(f.relative_to(_PROJECT_ROOT))
+        for f in _SRC.rglob("*.py")
+        if len(f.read_text(encoding="utf-8").splitlines()) > 800
+    }
+    assert reported == actual, (
+        f"la tabla de god modules no coincide con el codigo: "
+        f"informe={sorted(reported)} real={sorted(actual)}"
+    )
 
     for claimed_loc, rel in rows:
         path = _PROJECT_ROOT / rel
