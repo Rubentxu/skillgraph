@@ -64,6 +64,22 @@ pipeline {
             sh("cd /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph && uv run python scripts/check_coverage_floors.py 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
         }
 
+        stage("package-build") {
+            // El TERCER contrato declarado, y el ultimo eslabon de la cadena
+            // de release: git -> __version__ -> pyproject -> wheel.
+            //
+            // Hasta WI-97 ese eslabon no se ejecutaba nunca. Cero tests
+            // referenciaban hatchling, `uv build` o `entry_points`, y ningun
+            // stage construia el paquete. Toda la regla de SemVer de
+            // AGENTS.md §12 media un numero sobre un artefacto que nadie
+            // habia visto nacer.
+            //
+            // MEDIDO: `uv build` tarda 1.7 s. No es un stage caro; es el mas
+            // barato de los que miden algo. Construye a un temporal, nunca a
+            // `dist/`, para no ensuciar `git status --porcelain`.
+            sh("cd /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph && uv run python scripts/check_package_build.py 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
+        }
+
         stage("lint") {
             sh("cd /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph && uv run ruff check src tests 2>&1 | tail -5; test \${PIPESTATUS[0]} -eq 0")
         }
