@@ -561,7 +561,7 @@ tests:
   total: 2552   # re-medido 2026-10-02 (bloque WI-94): 2552 passed. +23 sobre 2529 = tests/test_wi94_coverage_contract_symmetry.py.
   passed: 2552
   duration_s: 119.48   # re-medido 2026-10-02 en el bloque WI-94, pytest a pelo (sin cobertura). Con la receta de cobertura son ~206 s; el delta de +93 s es el coste medido de instrumentar.
-  package_version: "0.16.18.dev0"   # trabajo post-release v0.16.18 (AGENTS 12). El tag v0.16.18 esta en 1a0c55d; este bloque sigue en local y SIN PUSH.
+  package_version: "0.16.19"   # release limpia v0.16.19 (AGENTS 12). El bump a .dev0 va en el commit siguiente, tras el tag.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
