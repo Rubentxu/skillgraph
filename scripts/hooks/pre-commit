@@ -57,13 +57,22 @@ STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -
 
 if [ -n "$STAGED_PY" ] && [ "${HOOK_SKIP_TESTS:-0}" != "1" ]; then
     echo "[pre-commit] pytest -q (smoke, $(echo "$STAGED_PY" | wc -l) files staged)..."
-    run_in_toolchain run pytest -q 2>&1 | tail -30 || {
+    # WI-57: el exit code de `pytest | tail` es el de tail (0 siempre) y
+    # enmascaraba los fallos (misma trampa PIPESTATUS que documenta
+    # .pipeline.kts). El resultado se decide sobre el exit real de pytest.
+    PYTEST_LOG=$(mktemp)
+    if run_in_toolchain run pytest -q >"$PYTEST_LOG" 2>&1; then
+        tail -30 "$PYTEST_LOG"
+    else
+        tail -40 "$PYTEST_LOG"
+        rm -f "$PYTEST_LOG"
         echo ""
         echo "ERROR: pytest failed."
         echo "Bypass for doc-only commits: HOOK_SKIP_TESTS=1 git commit"
         echo "Bypass always: git commit --no-verify"
         exit 1
-    }
+    fi
+    rm -f "$PYTEST_LOG"
 fi
 
 echo "[pre-commit] OK"
