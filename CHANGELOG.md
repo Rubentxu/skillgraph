@@ -12,6 +12,62 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [Unreleased] — WI-89: la auditoría no escribe dentro del repositorio que audita
+
+**Sin bump todavía**: el `fix(audit)` de este bloque dispara el PATCH. 2463 passed
+(2451 antes).
+
+### Fixed
+
+- `fix(audit)` `64a28a8`: **`audit_debt.py` escribía su informe dentro del repositorio
+  que audita.** El destino era `AUDITS_DIR = pathlib.Path("audits")`, relativo al cwd, y
+  los tests lo lanzaban como subproceso desde la raíz. Como `audits/` está **trackeado**
+  (63 ficheros; sólo `*-audit-bundle.tar.gz` está en `.gitignore`) y el nombre lleva la
+  fecha de ejecución, había dos modos de fallo:
+  1. el código cambió desde la última generación → `M audits/architecture-debt-<hoy>.md`;
+  2. no hay informe para hoy, primera corrida del día → `?? audits/…`, un fichero
+     **nuevo sin trackear**. Este modo no requiere que cambie nada.
+
+  `--src-root` y `--out-dir` parametrizan origen y destino; los defaults siguen siendo
+  cwd-relativos, así que el comportamiento por defecto no se mueve. El
+  `AUDITS_DIR.mkdir(exist_ok=True)` que estaba a nivel de módulo —y creaba un directorio
+  al *importar* el script— pasa a estar en `main()`.
+
+  `test_audit_debt_accuracy.py` no puede usar un sandbox completo: su `_measure` recorre
+  `_PROJECT_ROOT/src` y compara la cc medida con las cifras citadas en el informe. Se
+  mueve el destino, no el origen, y una red nueva lo verifica comparando el recuento de
+  módulos del informe con el de `src/`.
+
+### Contradicciones
+
+- **La premisa del seguimiento registrado en WI-87 era condicional.** Decía, con md5
+  como prueba, que «9 tests verdes cambian el fichero». Re-medido en un árbol limpio **no
+  se reproduce**: el informe commiteado está al día y regenerarlo da bytes idénticos. Mi
+  redacción presentó como incondicional algo que sólo ocurre cuando el informe está
+  caducado. El defecto real era otro, y tenía un segundo modo que no se había medido.
+- **La primera red no vigilaba nada.** Invocaba el auditor *con* `--out-dir` y comparaba
+  `git status`; si alguien revierte los helpers, esa invocación no es la que se revirtió.
+  Dos mutaciones lo demostraron: `--src-root` ignorado no se cazaba porque el test usaba
+  un `cwd` cuyo `src/` de juguete coincidía con el default, y el helper revertido tampoco
+  porque, con el informe al día, escribir dentro del repo no cambia nada. La red final
+  ejecuta los `_run_audit()` **de verdad** de los dos ficheros de test y comprueba a dónde
+  apuntan.
+- **`ruff format audits/` reescribe recibos históricos.** Formatear el directorio
+  reescribió bloques Python embebidos en `audits/release-v0.15.0-receipt.md` y
+  `release-v0.16.0-receipt.md`. Son evidencia congelada de releases pasadas, así que se
+  revirtieron. El alcance canónico es `ruff format src tests`.
+
+### Verificación
+
+- **2463 passed** (2451 antes; +12). `ruff check` y `ruff format --check` limpios.
+- Mutaciones **5/5**: `--out-dir` ignorado, `mkdir` de vuelta al import, stdout distinto
+  de la ruta escrita, `--src-root` ignorado, y el helper al camino viejo con el informe
+  caducado (compuesta, porque el guard sólo dispara si se recrea la precondición).
+- **El hook de pre-commit, que antes dejaba `M audits/architecture-debt-<hoy>.md`, deja
+  ahora el árbol limpio.** Es la comprobación que importa: el defecto era visible en cada
+  commit desde el propio hook.
+- Evidencia: `evidence/sddk-wi89-verify-2026-10-02.md`.
+
 ## [Unreleased] — WI-88: los errores de uso devuelven EXIT_USAGE y el 2 queda libre
 
 **Sin bump todavía**: el `fix(cli)` de este bloque dispara el PATCH; la release que lo

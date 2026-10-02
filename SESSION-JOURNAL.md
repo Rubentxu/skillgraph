@@ -9721,3 +9721,93 @@ bloque en 12 sentencias, resuelto aparte en `0a3fd1a` con `combine-as-imports`
 - **`audits/architecture-debt-*.md` sigue ensuciando `git status`**: medido con
   md5, 9 tests verdes cambian el fichero. Registrado como seguimiento en WI-87.
 - **(push)** commits sin publicar. No autorizado.
+
+---
+
+## 2026-10-02 — WI-89: la auditoria no escribe dentro del repo que audita
+
+Ciclo `p-b7740b96d79ec013/wi-89-audit-writes-outside-repo`, path `A-full`.
+Commit `64a28a8`. Cierra el seguimiento que WI-87 registro como pendiente.
+
+### Primera correccion: mi premisa era condicional y la presente como incondicional
+
+El seguimiento de WI-87 decia, con md5 como prueba, que "9 tests verdes cambian el
+fichero". Re-medido en un arbol LIMPIO **no se reproduce**: antes y despues el md5 de
+`audits/architecture-debt-2026-10-02.md` es `30cf51b8…` y `git status` sigue vacio.
+
+Motivo: el informe commiteado estaba al dia, y regenerarlo produce bytes identicos.
+Cuando lo medi, en el commit de WI-87, si estaba caducado (+50 LoC). O sea: la medicion
+fue correcta en su momento y la redaccion la volvió general.
+
+### El defecto real, con dos modos
+
+`audits/` esta TRACKEADO (63 ficheros; solo `*-audit-bundle.tar.gz` en .gitignore) y el
+nombre del informe lleva la fecha: `today = datetime.now(UTC).date()` (audit_debt.py:168).
+
+  1. el codigo cambio desde la ultima generacion -> `M audits/architecture-debt-<hoy>.md`
+  2. NO hay informe para hoy (primera corrida del dia) -> `?? audits/…`, fichero NUEVO
+     sin trackear. **Este modo no requiere que cambie nada.**
+
+El modo 2 no estaba medido. Demostrado con fecha 2099-01-01 sobre una copia del script:
+`audits/architecture-debt-2099-01-01.md`, y su efecto en git: `??`.
+
+Reformulacion: el defecto no es "la suite ensucia el arbol", es que **una herramienta de
+auditoria escribe dentro del repositorio que audita**, con nombre derivado de la fecha.
+
+Ademas `AUDITS_DIR.mkdir(exist_ok=True)` estaba a nivel de modulo: importar el script ya
+creaba un directorio. Efecto lateral del import, no de su trabajo.
+
+### Cambios
+
+- `--src-root` y `--out-dir` parametrizan origen y destino; defaults cwd-relativos.
+- `mkdir` de modulo a `main()`.
+- `test_audit_debt_smoke` y `test_audit_debt_accuracy` pasan `--out-dir` con sandbox.
+- `test_wi40_audit_annals` pasa `main([])`: con `argv=None` argparse lee `sys.argv`, que
+  bajo pytest es la linea de ordenes de pytest. El comportamiento por defecto no cambia.
+
+`test_audit_debt_accuracy.py` NO puede usar sandbox completo: `_measure` recorre
+`_PROJECT_ROOT/src` y compara la cc medida con las cifras del informe. Se mueve el
+destino, no el origen.
+
+### Evidencia
+
+- `evidence/sddk-wi89-verify-2026-10-02.md`
+- `.pipelinek/wi89_mutate.sh` (5/5 + control final)
+
+### Tests ejecutados
+
+- `test_wi89_audit_writes_outside_repo.py`: 12
+- suite de auditoria (4 ficheros): 25 passed
+- suite completa: **2463 passed in 105.06s** (lo reporto el pre-commit)
+- **el hook, que antes dejaba `M audits/architecture-debt-<hoy>.md`, deja el arbol
+  limpio**. Ese es el sintoma visible del defecto, y era visible en cada commit.
+
+### Conocimiento negativo
+
+- **Un md5 que no cambia no es un "no pasa", es un "no se midio".**
+- **Una guarda que invoca su propia copia del codigo no guarda ese codigo.** La primera
+  version invocaba el auditor con `--out-dir`; revertir los helpers no la movia, y dos
+  mutaciones lo demostraron. La red final ejecuta los `_run_audit()` de verdad.
+- **Un guard que compara antes/despues solo ve lo que cambia.** Con el informe al dia,
+  la mitad de la propiedad es invisible. La asercion util es sobre el DESTINO.
+- **Mutar el codigo con un `replace` que no aplica produce un verde que no significa
+  nada** (ya me paso con WI-88; aqui M4 no se cazaba porque el test hacia el camino
+  indistinguible del default).
+- **`ruff format audits/` reescribe recibos historicos.** Reformateo bloques Python
+  embebidos en `audits/release-v0.15.0-receipt.md` y `release-v0.16.0-receipt.md`.
+  Evidencia congelada de releases pasadas: revertidos. El alcance canonico del proyecto
+  es `ruff format src tests`; salir de el reformatea documentos.
+- **El conjunto de restauracion de un script de mutacion debe incluir lo que la
+  mutacion toca, no solo el codigo fuente.** M5 escribe informes en `audits/` por
+  diseno; restaurarlos con `git checkout` habria destruido el fix sin commitear, asi
+  que se guardan por contenido.
+- **Comparar contra HEAD con trabajo sin commitear falla siempre** (tercera vez que me
+  pasa; la linea base del control es el estado de partida del script).
+
+### Sigue abierto
+
+- **(a)** `list_file_signatures_for_source`: no esta muerto (4 consumidores reales).
+  Falta medir si su cc 10 es necesario o delata responsabilidades mezcladas.
+- **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`. Politica de
+  datos, no se decide aqui.
+- **(push)** commits sin publicar. No autorizado.
