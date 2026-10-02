@@ -10479,6 +10479,20 @@ fuera y el calculo siguiente los ignora.
 ### Evidencia
 
 - `evidence/sddk-wi94-verify-2026-10-02.md`
-- `tests/test_wi94_coverage_contract_symmetry.py` (23 tests)
+- `tests/test_wi94_coverage_contract_symmetry.py` (22 tests)
 - `scripts/check_coverage_floors.py` (suelos por paquete + excepciones)
 - `.pipelinek/wi94_mutate.py` (4/4 + baseline + autocontrol de aplicacion)
+
+### Pendiente para la proxima sesion
+
+- **`cbc8c04` (`fix(test)`) queda SIN RELEASE, y es deliberado.** Va detras del
+  tag `v0.16.19` y es un `fix`, luego el SemVer derivado ya da **PATCH →
+  0.16.20**. No se emite ahora porque es la correccion de unos tests que se
+  publicaron rotos en `v0.16.19`, y abrir una etiqueta entera para eso es
+  justo la micro-release trivial que la regla de cadencia prohibe. Se lleva en
+  la siguiente release con contenido sustantivo, que es lo que la regla pide.
+  Y `v0.16.19` es un tag **local**: nadie fuera de esta maquina ha visto
+  todavia el estado roto, luego no hay urgencia real, solo una cuenta desalineada.
+- **66 commits sin publicar**, `origin/main` en `0ebbd58`. Sin autorizacion.
+- **Credenciales de proveedor real (Anthropic/OpenAI)**: ausentes, y son lo
+  unico que bloquea el criterio de salida de **H9**.
