@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -94,7 +93,13 @@ def commits(tags_: list[str], tag: str) -> list[str]:
 
 
 def clasificar(asunto_cuerpo: str) -> str:
-    """`breaking` | `feat` | `fix` | `neutro` para un commit."""
+    """`breaking` | `feat` | `fix` | `neutro` | `desconocido` para un commit.
+
+    `desconocido` existe para que un **tipo mal escrito** no se confunda con
+    «no bumpea». `featt(cli):` es un `feat` que nadie va a leer como tal, y
+    si cae en la rama de los neutros la release se pierde en silencio. Aqui
+    se cuenta aparte, y el informe lo enseña.
+    """
     asunto = asunto_cuerpo.split("\n", 1)[0]
     cuerpo = asunto_cuerpo.split("\n", 1)[1] if "\n" in asunto_cuerpo else ""
 
@@ -110,11 +115,13 @@ def clasificar(asunto_cuerpo: str) -> str:
         return "feat"
     if tipo == "fix":
         return "fix"
-    return "neutro" if tipo in NEUTRALES else "neutro"
+    if tipo in NEUTRALES:
+        return "neutro"
+    return "desconocido"
 
 
 def resumen(tags_: list[str], tag: str) -> dict[str, int]:
-    cuenta: dict[str, int] = {"breaking": 0, "feat": 0, "fix": 0, "neutro": 0}
+    cuenta: dict[str, int] = {"breaking": 0, "feat": 0, "fix": 0, "neutro": 0, "desconocido": 0}
     for c in commits(tags_, tag):
         cuenta[clasificar(c)] += 1
     return cuenta
@@ -140,10 +147,7 @@ def derivacion_esperada(tags_: list[str], tag: str) -> str | None:
     Se devuelve como etiqueta (`v0.16.21`) para poder compararla con la real.
     """
     i = tags_.index(tag)
-    if i == 0:
-        base = (0, 0, 0)
-    else:
-        base = _version(tags_[i - 1])
+    base = (0, 0, 0) if i == 0 else _version(tags_[i - 1])
 
     b = bump_esperado(tags_, tag)
     if b == "MAJOR":
@@ -162,7 +166,7 @@ def coincide(tag: str, esperado: str) -> bool:
 def main() -> int:
     """Informe: el bump real de cada etiqueta frente al que dicta la regla."""
     tags_ = tags()
-    print(f"{'etiqueta':<11} {'b/f/x/n':<12} {'regla':<7} {'esperada':<11} estado")
+    print(f"{'etiqueta':<11} {'b/f/x/n':<16} {'regla':<7} {'esperada':<11} estado")
     print("-" * 62)
     divergentes = 0
     for tag in tags_:
@@ -170,6 +174,8 @@ def main() -> int:
         b = bump_esperado(tags_, tag)
         esperado = derivacion_esperada(tags_, tag)
         conteo = f"{c['breaking']}/{c['feat']}/{c['fix']}/{c['neutro']}"
+        if c["desconocido"]:
+            conteo += f" (+{c['desconocido']} ?)"
         if esperado is None:
             estado = "SIN RELEASE (la regla no pide bump)"
         elif coincide(tag, esperado):
@@ -177,12 +183,26 @@ def main() -> int:
         else:
             estado = "DIVERGE"
             divergentes += 1
-        print(f"{tag:<11} {conteo:<12} {b or '-':<7} {esperado or '-':<11} {estado}")
+        print(f"{tag:<11} {conteo:<16} {b or '-':<7} {esperado or '-':<11} {estado}")
 
     print()
     print(f"etiquetas: {len(tags_)} | divergentes de la regla: {divergentes}")
     if divergentes:
         print("Las divergentes NO se corrigen: son historia publicada. Ver AGENTS.md §12.")
+
+    # Los `?` son commits cuyo tipo no está en la regla. MEDIDO: todos caen
+    # en el tramo anterior a v0.14, y son `H3 slice N:`, `merge ...` y
+    # `release(version):`, que preceden a los Conventional Commits. En la era
+    # actual hay CERO. No se amplia NEUTRALES para que el contador quede a
+    # cero: seria tapar la señal de que aquel tramo no sigue la regla.
+    desconocidos = sum(resumen(tags_, t)["desconocido"] for t in tags_)
+    if desconocidos:
+        print()
+        print(
+            f"tipos fuera de la regla: {desconocidos} commit(s), todos en el tramo "
+            "anterior a v0.14 (`H3 slice N:`, `merge ...`, `release(version):`, "
+            "`audit`), que precede a los Conventional Commits. En la era actual: 0."
+        )
     return 0
 
 
