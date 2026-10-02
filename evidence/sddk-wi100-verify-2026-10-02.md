@@ -208,6 +208,13 @@ dado verde por el motivo equivocado indefinidamente.
 
 ---
 
+> **Sobre qué commit está medida la certificación.** La tabla de arriba da
+> el run `8ccd1f6a`, que certifica el **código** del bloque. La trazabilidad
+> se escribió después, así que el estado de cierre tiene su propio run:
+> `051942ff-b46a-428e-b316-721c586c415a`, `Pipeline finished with SUCCESS`,
+> 8/8 stages, 0 `StepFailed`, **2647 passed in 228,82 s**, cobertura 95,22 %.
+> Se citan los dos, y con cuál, en vez de decir «la CI» sin decir de qué.
+
 ## 9. Lo que este bloque NO resolvió
 
 | | por qué |
