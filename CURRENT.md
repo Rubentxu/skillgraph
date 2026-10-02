@@ -1,5 +1,50 @@
 # CURRENT — puntero operativo
 
+> **WI-86 cerrado — los 5 consumidores de mappers dejan de pasar por el
+> facade `Storage`** (2026-10-02, commit `cf6539b`): el punto (a) de
+> `next_workitem`, abierto dos bloques con «requiere ADR NUEVO», resuelto
+> por medición. Los 7 símbolos que `storage.py` importaba y reexportaba
+> (`MAPPER_NAMES`, `_row_to_*` ×5, `_uid`) aparecían **exactamente dos
+> veces** cada uno —el import y `__all__`— y **cero** en código dentro
+> de `storage.py`: la capa entera existía para servir a hermanos. Y eran
+> **cinco** hermanos, no los dos que nombraba el comentario del propio
+> bloque. `row_mappers` es una **hoja** (importa `sqlite3`, `typing` y
+> `ports`; no depende de nada que dependa de él), así que el rodeo no
+> evitaba ningún ciclo — medido en runtime, `storage` no importa
+> `run_repository` ni `promotion_repository` a nivel de módulo. Los 5
+> importan ahora de la hoja y `storage` retira el bloque y las 7
+> entradas de `__all__`. Cero cambios de comportamiento: la red lo
+> comprueba por **identidad**, no por el nombre del símbolo. **No** se
+> tocan `PROMOTION_STATUSES` ni `NON_TERMINAL_RUN_STATES`: están
+> *definidos* en `storage.py`, no son re-exports, y que los consuman los
+> componentes es una pregunta de propiedad de dominio que sí merece ADR.
+> Es el mismo fallo que WI-81 una generación más abajo: anunciar en
+> `__all__` una superficie que no se sostiene. 4/4 mutaciones cazadas;
+> la cuarta (un consumidor enlaza el mapper equivocado) **no** la caza la
+> red estructural y no debe: esa red fija la *forma*, no *qué* mapper
+> corresponde a cada consumidor. Su oráculo son los tests
+> comportamentales, y cazan 17. **Dos errores propios**, ambos antes de
+> tocar `src/`: una aserción vacía que no podía fallar nunca (buscaba en
+> `storage` un import de `storage`), y una comprobación del script de
+> mutaciones que relajaba `is` a `==` esperando demostrar que el `is`
+> protegía — **falla, porque para funciones `==` e `is` son la misma
+> operación**; se retira en vez de dejar una que afirmara algo falso.
+> 2414 passed.
+> **Corrección de registro — «WI-65-fase-1» era falso** (2026-10-02):
+> el bloque anterior anotó como siguiente trabajo la fase 1 de WI-65 sin
+> verificar su premisa. Medido contra el árbol: `platform/storage.py`
+> son **613 LoC con 15 métodos**, no 1807/80, y los 5 mixins existen y
+> son live con 31/19/7/4/4 = 65 métodos. **WI-65 ya lo entregó ADR-0022**
+> y WI-68 lo remató. El informe de exploración del ciclo se commiteó
+> (`c471264`, 10:10) **81 minutos antes** de la release que lo implementó
+> (`v0.16.10`, `2ee6d77`, 11:31): el informe *acertaba en todo lo que
+> predecía*, estaba simplemente vencido. El ciclo
+> `wi65-storage-facade-decomposition` se cerró con `goal-replaced`: su
+> objetivo **fue entregado**, por otro bloque. El proyecto queda con
+> **27 ciclos CLOSED y 0 abiertos**. *Lección*: un informe de
+> exploración puede ser excelente y aun así estar vencido; la calidad del
+> análisis no dice nada sobre si su premisa sigue en pie.
+> Evidencia: `evidence/sddk-wi86-verify-2026-10-02.md`.
 > **Estado post-release**: `__version__ = 0.16.12.dev0`, etiqueta
 > `v0.16.12` (bloque WI-82..WI-84, higiene del árbol y estado SDDK).
 > El tag se crea sobre el commit que lleva el SemVer puro, que es lo que

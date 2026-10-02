@@ -9283,3 +9283,107 @@ traceback. Commit `2bd64da`.
   umbral de 800 LoC, asi que la fase 2 (modulo, DDL, dataclasses,
   `_tx`/`_atomic`) requiere ADR previa.
 - Decisiones de producto abiertas en `STATE.yaml` `next_workitem`.
+
+---
+
+## 2026-10-02 — Sesion WI-86: correccion de registro + la capa de re-export
+
+### Objetivo
+
+Dejar el repositorio coherente y seguir avanzando. Emitido
+`SDDK PRE-FLIGHT 15` con `Readiness: READY` antes de tocar codigo.
+
+### La correccion, primero
+
+El bloque anterior dejo anotado `WI-65-fase-1` como siguiente trabajo y en
+el mensaje al operador. **Era falso**, y no lo verifique antes de
+anotarlo: lei el informe de exploracion del ciclo como si describiera el
+presente. Medido contra el arbol:
+
+| | informe de exploracion | arbol real |
+|---|---:|---:|
+| `storage.py` LoC | 1807 | **613** |
+| metodos de `Storage` | 80 | **15** |
+| mixins | «5 previstos» | **5 vivos, 65 metodos (31/19/7/4/4)** |
+
+WI-65 lo entrego ADR-0022 y WI-68 lo remato. El informe se commiteo
+(`c471264`, 10:10:37) **81 minutos antes** de la release que lo implemento
+(`2ee6d77`, 11:31:53). El informe no estaba equivocado: **estaba vencido**,
+y acertaba en todo lo que predecía.
+
+Ciclo `wi65-storage-facade-decomposition` cerrado con `goal-replaced`. El
+proyecto queda con **27 ciclos CLOSED y 0 abiertos**.
+
+### WI-86: la capa de re-export de `platform.storage`
+
+Decision (a) de `next_workitem`, abierta dos bloques con «requiere ADR
+NUEVO». Resuelta por medicion:
+
+- Los 7 simbolos reexportados aparecian **2 veces** cada uno en
+  `storage.py` (import + `__all__`) y **0** en codigo.
+- Consumidores reales: **5**, no los 2 del comentario.
+- `row_mappers` es una **hoja**: `storage` no importa `run_repository` ni
+  `promotion_repository` a nivel de modulo, luego no hay ciclo que el
+  rodeo evitase.
+- `MAPPER_NAMES` no lo consumia nadie via el facade.
+
+Fix: los 5 importan de la hoja; `storage` retira el bloque y las 7
+entradas de `__all__`. Sin cambios de comportamiento. Commit `cf6539b`.
+
+### Tres errores propios, y que dicen
+
+1. **Asercion vacia.** `test_storage_does_not_import_them` buscaba en
+   `storage.py` un import desde `skillgraph.platform.storage` — desde si
+   mismo. Imposible: el test no podia fallar nunca. Una asercion que no
+   puede fallar es peor que ninguna, porque aparenta cubrir algo.
+2. **Comprobacion que afirmaba algo falso.** El script de mutaciones
+   relajaba `is` a `==` esperando demostrar que el `is` era load-bearing.
+   Falla: para funciones `==` e `is` son la misma operacion. Retirada.
+3. **Backup contaminado.** La v1 del script dejo
+   `promotion_repository.py` con el mapper equivocado enlazado, porque el
+   `restore` lo restauro desde un backup tomado ya con el fichero
+   mutado. Sin el control final que se le anadio, **ese arbol se
+   commiteaba**. Es la leccion de WI-81 pathogenesis otra vez, y por eso el
+   control final es parte del script y no un comentario.
+
+### Lo que NO se hizo, y por que
+
+- `PROMOTION_STATUSES` y `NON_TERMINAL_RUN_STATES` estan **definidos** en
+  `storage.py` (líneas 123 y 129), no son re-exports. Que los consuman los
+  componentes es una pregunta de propiedad de dominio — describen una
+  regla de runs o de promotions y viven en el facade — y esa si merece
+  ADR. Se registra como decision abierta.
+- No se reestructuran los ~130 LoC de snapshots de cobertura mal
+  anidados en `STATE.yaml` (WI-85): cirugia sobre el unico registro
+  durable, fuera de alcance.
+
+### Evidencia
+
+- `evidence/sddk-wi86-verify-2026-10-02.md`
+- `.pipelinek/wi86_mutate.sh` (4/4 + control final)
+
+### Tests ejecutados
+
+- `test_wi86_no_facade_hop.py` + `test_wi65_storage_schema_mappers.py` +
+  `test_wi81_dead_aliases.py` = 70 passed
+- suite completa: **2414 passed in 101.94s**
+- 4/4 mutaciones cazadas; red estructural 20 passed tras el control
+  final; ruff y format limpios
+
+### Informacion aun necesaria
+
+- **(a) Propiedad de dominio** de `PROMOTION_STATUSES` y
+  `NON_TERMINAL_RUN_STATES`: viven en el facade y las consumen los
+  componentes. Requiere ADR.
+- **(b) Autorizacion de push.** 18 commits sin publicar.
+- **(c)** Si la reexportacion de los 5 mappers promete algo a un
+  consumidor **fuera** del repo: medido, cero dentro.
+- **(d)** Exit code de argparse (2) vs `EXIT_USAGE` (1).
+- **(e)** Arreglo de WI-80: dos salidas no equivalentes.
+
+### Trabajo restante
+
+- La decision (a) de arriba, que es la unica deuda de arquitectura que
+  queda sin medir.
+- Revision periodica del informe de exploracion de los ciclos abiertos:
+  un informe de exploracion envejece aunque sea bueno.

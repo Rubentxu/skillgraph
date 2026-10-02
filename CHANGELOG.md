@@ -12,6 +12,55 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [Unreleased] — WI-86: los mappers se importan de la hoja, no a través del facade
+
+**Sin bump**: `refactor` + `test`, que según la regla de este CHANGELOG
+no mueven versión. 2414 passed (2394 en `v0.16.12`).
+
+### Refactor
+
+- `refactor(platform)` `cf6539b`: **los 5 consumidores de mappers dejan de
+  pasar por `platform.storage`**. Cierra el punto (a) de
+  `STATE.yaml.next_workitem`, que llevaba dos bloques abierto con «requiere
+  ADR NUEVO». Resuelto por medición: los 7 símbolos que `storage.py`
+  importaba y reexportaba aparecían **exactamente dos veces** cada uno —el
+  `import` y `__all__`— y **cero** en código dentro del fichero, así que la
+  capa entera existía para servir a hermanos. Y eran **cinco** hermanos, no
+  los dos que nombraba el comentario del propio bloque. `row_mappers` es una
+  hoja, de modo que el rodeo no evitaba ningún ciclo. Los 5 importan ahora de
+  la hoja; `storage` retira el bloque y las 7 entradas de `__all__`. Cero
+  cambios de comportamiento — la red comprueba **identidad**, no el nombre
+  del símbolo. `PROMOTION_STATUSES` y `NON_TERMINAL_RUN_STATES` **no** se
+  tocan: están *definidos* en `storage.py`, no son re-exports, y su
+  propiedad de dominio sí merece ADR.
+
+### Fixed
+
+- **Registro falso corregido.** El bloque anterior anotó `WI-65-fase-1` como
+  siguiente trabajo sin verificar su premisa. Medido contra el árbol:
+  `platform/storage.py` son **613 LoC con 15 métodos** (no 1807/80) y los 5
+  mixins existen y son live con 31/19/7/4/4 = 65 métodos. **WI-65 ya lo
+  entregó ADR-0022** y WI-68 lo remató: el informe de exploración se
+  commiteó 81 minutos **antes** de la release que lo implementó. El ciclo
+  `wi65-storage-facade-decomposition` se cerró con `goal-replaced` — su
+  objetivo fue entregado, por otro bloque. **27 ciclos CLOSED, 0 abiertos.**
+
+### Conocimiento negativo
+
+- Un informe de exploración puede ser **excelente y aun así estar vencido**.
+  Este acertaba en cada predicción (5 mixins, 31/19/7/4/4, cero ediciones
+  en callers) y aun así describía un árbol que ya no existía. La calidad
+  del análisis no dice nada sobre si su premisa sigue en pie.
+- **Para objetos función, `==` e `is` son la misma operación.** El script de
+  mutaciones llevaba una comprobación que relajaba `is` a `==` esperando
+  demostrar que el `is` era «load-bearing». Falla. El `is` sigue siendo lo
+  correcto de escribir, pero no protege nada que `==` no protegiera. Se
+  retiró en vez de dejar una comprobación que afirmara algo falso.
+- Un test cuyo objeto desaparece **no se adapta, se borra**; pero un test
+  cuyo *contrato* cambia deliberadamente **se actualiza**. Los 4 tests de
+  WI-65/WI-81 que afirmaban que los mappers se reexportaban estaban bien
+  sobre el contrato viejo: se actualizaron a fijar el nuevo, más fuerte.
+
 ## [0.16.12] - 2026-10-02 — WI-82..WI-84: el árbol de git deja de ensuciarse y el estado SDDK deja de mentir
 
 **Resumen**: publica el bloque de 2 commits desde `6edd27f` (WI-82 y WI-83/84).
