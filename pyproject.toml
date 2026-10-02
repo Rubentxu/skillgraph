@@ -57,9 +57,24 @@ packages = ["src/skillgraph"]
 include = ["src/skillgraph/py.typed"]
 
 [tool.hatch.build.targets.sdist]
-include = [
+# `only-include`, no `include` (WI-97).
+#
+# `include` es un FILTRO, no una lista blanca: lo que no nombra se cuela si
+# no lo detiene el `.gitignore`. Medido con la lista de nueve entradas de
+# antes, el sdist salia con catorce rutas de primer nivel: `bench/` y `docs/`
+# viajaban sin estar declaradas, y cambiando un solo patron se colaba
+# tambien `audits/`. `only-include` si es lista blanca.
+#
+# `bench/` y `docs/blueprint` se declaran explicitamente porque son fuentes de
+# desarrollo legitimas de un sdist: la suite versionada lee
+# `docs/blueprint/plan/UAT.md` (ver tests/test_cli_uat.py) y `bench/` es el
+# codigo de rendimiento del proyecto. Lo que no puede viajar es lo que git
+# no versiona — de eso se encarga `scripts/check_package_build.py`.
+only-include = [
     "src/skillgraph",
     "tests",
+    "bench",
+    "docs/blueprint",
     "pyproject.toml",
     "mise.toml",
     "uv.lock",
