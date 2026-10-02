@@ -561,7 +561,7 @@ tests:
   total: 2661   # re-medido 2026-10-02 (bloque WI-101) en la CI canonica run e5d046af: 2661 passed. +14 sobre 2647 = los guards de uat_audit (verificar la propagacion del exit code: FAIL, evidencia ausente, JSON ilegible, estado fuera de dominio, recuento que no se traga lo que no conoce), el modo --verify (ejecuta, confronta con la evidencia persistida y no escribe) y los dos guards de que el bundle ejecute de verdad.
   passed: 2661
   duration_s: 227.23   # MEDIDO en la CI canonica de WI-101 (stage unit-tests, recipe de cobertura), run e5d046af. pytest a pelo son ~120 s: el delta es el coste de instrumentar los subprocesos.
-  package_version: "0.20.1.dev0"   # trabajo post-release v0.20.1 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
+  package_version: "0.20.2.dev0"   # trabajo post-release v0.20.2 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1142,7 +1142,7 @@ release:
   releases:
     - tag: v0.20.2
       fecha: 2026-10-02
-      sha: "PENDIENTE"
+      sha: "ce31d0fdb75bc35fcdc1af4b88d1ff43579269af"
       nota: "WI-101: el bundle de auditoria deja de certificar UATs que no ejecuta. El modo lectura de tests/uat_audit.py hacia return 0 incondicional, asi que su exit code no significaba nada y la guarda del bundle no podia dispararse: con evidencia en FAIL imprimia PASS=15 FAIL=1 y salia con 0, y sin evidencia imprimia PASS=0 FAIL=0 y salia con 0. El exit code sale ahora de _verdict, compartido por los tres modos y con lista blanca de estados certificables; el modo nuevo --verify ejecuta los UATs y confronta cada veredicto con la evidencia persistida; y el resumen cuenta los veredictos fuera de dominio en vez de tragarselos. Verificado despues del arreglo: los 16 UAT se ejecutan y convergen. Mutaciones 9/9, una de ellas (M4) destapo un test confundido. 2661 passed, run e5d046af."
     - tag: v0.20.1
       fecha: 2026-10-02
