@@ -832,12 +832,42 @@ test -f .pipeline.kts && \
 Cualquier stage nuevo debe:
 
 * Declarar su propósito en el `echo` inicial del stage.
-* Usar **rutas absolutas** dentro de los `sh(...)` (el motor v0.39.0 no
-  resuelve el cwd del script).
+* Pasar por `repo` (ver abajo) en vez de escribir una ruta. **Nunca una
+  ruta absoluta a un árbol de trabajo concreto** (WI-98).
 * Producir efectos secundarios solo a través de los directorios
   `.pipelinek/` y `evidence/` (no contaminar el árbol del proyecto).
 * Mantener `discover-repo` como primer stage para que un run nuevo
   siempre documente el estado del repositorio.
+
+### La raíz se resuelve, no se escribe (WI-98)
+
+`.pipeline.kts` abre con:
+
+```kotlin
+val repo = System.getenv("GITHUB_WORKSPACE") ?: System.getProperty("user.dir")
+```
+
+**Por qué no rutas absolutas.** Hasta WI-98 el script llevaba diez
+apariciones de `/var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph/...`.
+Eso arreglaba el síntoma local —el motor no resuelve el cwd, así que
+`ls pyproject.toml` corría contra el workspace del motor— y dejaba la
+receta **inejecutable en cualquier otra máquina**. Una regla que no se
+puede cumplir no es un contrato: es la razón por la que el runner remoto
+llevaba su propia receta sin que nadie pareciera incumplir nada.
+
+**Por qué esto sí funciona.** El motor v0.39.0 no define `$REPO_ROOT`, pero
+**sí propaga el entorno a los `sh()`**: un `GITHUB_WORKSPACE` exportado llega
+intacto al shell. Medido, no supuesto. Y `user.dir` es el repo cuando el
+comando canónico se invoca desde su raíz, que es como se documenta.
+
+Dos invariantes de `scripts/check_ci_recipe_parity.py` lo vigilan, y las
+dos se pueden comprobar sin heurística:
+
+* el script **resuelve** la raíz (`System.getenv` o `user.dir`);
+* el script **no contiene** la raíz de este árbol de trabajo.
+
+Comparar contra la raíz real y no contra un patrón de «parece absoluta»
+importa: `/usr/bin/uv` es legítimo y no ata el script a ninguna máquina.
 
 ### Compatibilidad con otros runners
 
@@ -846,6 +876,27 @@ Jenkins o cualquier otro runner remoto **debe** invocar el mismo
 `.pipeline.kts` desde el mismo checkout. Si un runner remoto produce
 PASS y `pipelinek` local produce FAIL, prevalece `pipelinek` local hasta
 que la divergencia se investigue y documente en este mismo archivo.
+
+**Desde WI-98 esa regla es exigible, y lo es por stage.**
+`scripts/check_ci_recipe_parity.py` (stage `ci-parity`) comprueba que todo
+runner remoto invoque `.pipeline.kts` **en un paso que se ejecuta** —no en
+un comentario que lo mencione— y que la receta canónica se pueda ejecutar
+fuera de esta máquina.
+
+Medido cuando se añadió la comprobación:
+
+| receta local | `ci.yml` antes de WI-98 |
+|---|---|---|
+| stages ejecutados | **8** | **1** (`lint`) |
+| contratos exigibles | los 4 | **0** |
+| `cli/commands/runs.py` | 87,96 % | **39 %** |
+| `cli/support.py` | 85,71 % | **69 %** (suelo: 70 %) |
+
+El remoto podía dar **verde** un paquete que no cumplía el suelo que el
+propio `AGENTS.md §6.3` declara, porque no ejecutaba el checker y su
+medición no veía lo que el canónico ve. El número se midió con el mismo
+instrumento en las dos recetas: comparar el remoto contra un 94 % de otra
+base habría sido comparar dos cosas distintas y llamarles divergencia.
 
 ### Excepciones documentadas
 
