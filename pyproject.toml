@@ -117,6 +117,12 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+# Sin esto, ruff parte un bloque `X as X` (la forma de reexport
+# intencional que F401 respeta) en una sentencia por nombre: doce lineas
+# para los doce codigos de salida de la CLI. Medido en WI-88, ADR-0016.
+combine-as-imports = true
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]
 "src/skillgraph/__init__.py" = ["RUF067"]

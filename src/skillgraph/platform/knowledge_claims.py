@@ -15,8 +15,6 @@ from typing import Any
 from skillgraph.knowledge.graph import Claim
 from skillgraph.platform.knowledge_mappers import (
     row_to_claim as _row_to_claim,
-)
-from skillgraph.platform.knowledge_mappers import (
     row_to_stored_claim as _row_to_stored_claim,
 )
 from skillgraph.platform.storage import Storage, StoredClaim

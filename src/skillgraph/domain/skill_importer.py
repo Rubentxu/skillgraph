@@ -34,8 +34,7 @@ from functools import reduce
 from pathlib import Path
 from typing import Any, Literal
 
-from skillgraph.knowledge.graph import Source, SourceID
-from skillgraph.knowledge.graph import source_id as make_source_id
+from skillgraph.knowledge.graph import Source, SourceID, source_id as make_source_id
 from skillgraph.runtime.engine import now_iso
 
 Ambiguity = Literal["unparsed", "ignored", "needs_review"]

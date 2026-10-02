@@ -67,8 +67,7 @@ from skillgraph.platform.ports import (
 # WI-81 ya habia retirado los 7 alias de WI-56 (corte 3) de este mismo
 # bloque; este los retira por completo. Ver `tests/test_wi81_dead_aliases.py`
 # y `tests/test_wi86_no_facade_hop.py`.
-from skillgraph.platform.schema import SCHEMA_SQL as _SCHEMA_SQL
-from skillgraph.platform.schema import SCHEMA_VERSION
+from skillgraph.platform.schema import SCHEMA_SQL as _SCHEMA_SQL, SCHEMA_VERSION
 from skillgraph.platform.storage_delegations import (
     EventStoreDelegations,
     KnowledgeDelegations,
