@@ -7938,3 +7938,70 @@ exige >=1 operacion y manual_signed con granted_by/granted_at.
   fijar 0.46.0 canonico via mise y actualizar el canon obsoleto de
   AGENTS.md (v0.39.0 no instalado). Decision final del operador.
 
+
+### WI-70 — `extract_file_signatures` deriva la vigencia (P3 8 → 7)
+
+Medicion previa de las 8 candidatas P3: `compile_handoff_from_scopes`
+tiene cc 1 y `compile_handoff` cc 3, ambas lineales. Partirlas habria
+sido ceremonia, asi que se eligio la que mas se parecia a un problema
+real. El extractor pasa de 116 a 55 LoC; la regla fresh/stale se
+deriva del estado en un solo sitio y `SignatureVigencia.__post_init__`
+rechaza las combinaciones incoherentes. Sin ADR: no hay frontera de
+dominio, solo helpers privados en un modulo que ya era pequeno.
+
+### WI-71 — `analyze_skill` se descompone (P3 7 → 6)
+
+Candidata elegida por medicion AST, no por tamano: de las candidatas
+P3, `analyze_skill` era la de mayor cc real (11) porque su bucle
+llevaba dentro tres ramas `continue` (script / binario / desconocido)
+y los motivos de ambiguedad de cada una. `compile_handoff` (90, cc 3)
+y `compile_handoff_from_scopes` (85, cc 1) son mas largas pero
+lineales: partirlas no mejora nada.
+
+Corte (sin ADR, mismo criterio que WI-70: helpers privados, sin
+frontera de dominio):
+
+- `_resolve_source` (25 LoC, cc 3) — fichero unico o directorio, hash
+  estable, mensaje de error con la raiz ya resuelta.
+- `_classify_file` (51, cc 6) — el detalle verbatim de las tres ramas.
+- `_merge` — plegado puro, `(*xs, x)`, nunca muta.
+- `analyze_skill` (101 → 30, cc 11 → 1) — un `reduce` de una pasada.
+- Records frozen con `slots`: `_ImportSource`, `_FileVerdict`,
+  `_ScanResult`.
+
+**Por que el oraculo diferencial.** Un refactor "sin cambio de
+comportamiento" se demuestra, no se afirma. El test reimplementa el
+algoritmo original de una sola pasada (imperativo, sin helpers, que es
+justo la forma eliminada de produccion) y compara el informe campo a
+campo con el plegado. Un test mas que fija el arbol de muestra cubre
+las cuatro ramas, para que el acuerdo del oraculo no sea vacio.
+
+**Red verificada en los dos sentidos.** Tres mutaciones aplicadas y
+restauradas: reintroducir el detalle en `analyze_skill` la caza
+`test_analyze_skill_holds_no_classification_detail`; `_merge` que
+devuelve el mismo acumulador la cazan tres tests; perder la rama de
+markdown la cazan el oraculo y dos tests mas.
+
+**Dos rarezas preexistentes, fijadas y NO corregidas:**
+
+1. Importar un fichero suelto lo nombra `"."`. `Path(f).relative_to(f)`
+   es `"."`, no el nombre del archivo. Ningun test lo cubria: el
+   informe de una skill de un solo `.md` reporta
+   `files_structured[0].path == "."`.
+2. El mensaje de `FileNotFoundError` nombra la raiz RESUELTA, no la
+   que paso el llamador.
+
+La (1) es decision de producto: cambiarla altera el payload que
+consumen UAT y el informe de importacion. Se fija tal cual para que
+cualquiera que la toque vea el contrato vigente antes de propor una.
+
+**Dos expectativas mias equivocadas, corregidas antes de tocar
+produccion** (el patron se repite: primero el test, luego el bug mas
+probable son mis propias aserciones):
+
+- "exactamente un veredicto por archivo": es falso por diseno. Un
+  `.py` informa DOS datos, `script` (se conserva) y `ambiguous`
+  (`ignored`, UAT-14). El docstring del record afirmaba la invariante
+  falsa; se corrigio a "exactamente uno de structured/ambiguous, y
+  `script` acompana al caso python_script".
+- `# Titulo` como capacidad: las capacidades solo extraen h2/h3, no h1.

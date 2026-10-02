@@ -30,6 +30,7 @@ import hashlib
 import mimetypes
 import re
 from dataclasses import dataclass, field
+from functools import reduce
 from pathlib import Path
 from typing import Any, Literal
 
@@ -173,12 +174,67 @@ def _extract_capabilities_from_markdown(text: str) -> tuple[str, ...]:
     return tuple(f"{h.strip()}" for h in (h2 + h3) if h.strip())
 
 
-def analyze_skill(root: Path) -> SkillImportReport:
-    """Pipeline completo: IMPORT -> ANALYZE -> STRUCTURE -> VALIDATE -> REGISTER.
+@dataclass(frozen=True, slots=True)
+class _ImportSource:
+    """Raiz de import resuelta: que hash tiene y que ficheros hay que escanear.
 
-    `root` es un directorio o archivo que contiene la skill original.
-    El material NO se ejecuta. Se conserva el source y se genera un
-    informe de estructuracion.
+    Publico a proposito solo dentro del modulo: es el resultado intermedio
+    de `_resolve_source`, no parte del contrato de importacion.
+    """
+
+    root: Path
+    original_path: str
+    content_hash: str
+    files: tuple[Path, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _FileVerdict:
+    """Veredicto de UN archivo: clasificado, ambiguo, script ignorado.
+
+    Invariante: exactamente uno de `structured`/`ambiguous` viene
+    informado. `script` se informa ADEMAS en el caso `python_script`,
+    donde acompaña a la ambiguedad `ignored` (el script se conserva como
+    material original y se senala; por eso son dos datos, no uno). La
+    sostiene `_classify_file`, que siempre devuelve una de las ramas;
+    `_merge` la traduce a los acumuladores del informe.
+    """
+
+    structured: StructuredFile | None = None
+    ambiguous: AmbiguousEntry | None = None
+    script: str | None = None
+    capabilities: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class _ScanResult:
+    """Acumulador inmutable del escaneo de una raiz de import.
+
+    Es un acumulador, pero NO mutable: `_merge` devuelve siempre uno
+    nuevo, de modo que el plegado de `analyze_skill` sigue siendo puro.
+    """
+
+    structured: tuple[StructuredFile, ...] = ()
+    ambiguous: tuple[AmbiguousEntry, ...] = ()
+    scripts: tuple[str, ...] = ()
+    capabilities: tuple[str, ...] = ()
+
+
+# VALIDATE: no hay capacidades 'verificadas' (no tenemos Adapter real).
+# Los headers extraidos son SENALES, no decisiones.
+_NOTA_HONESTA = (
+    "Las capacidades extraidas son señales heurísticas (headers Markdown), "
+    "NO decisiones verificadas. La skill permanece en estado encapsulado "
+    "hasta que un Adapter real evalúe su comportamiento."
+)
+
+
+def _resolve_source(root: Path) -> _ImportSource:
+    """Resuelve la raiz de import: fichero unico o directorio.
+
+    El hash del contenido total es estable (orden alfabetico para
+    directorios). El mensaje de error nombra la raiz YA resuelta, que es
+    lo que el llamador paso; se conserva por compatibilidad con UAT-11.
     """
     root = Path(root).resolve()
     if not root.exists():
@@ -186,93 +242,116 @@ def analyze_skill(root: Path) -> SkillImportReport:
 
     # ANALYZE: hash del contenido total (estable, orden alfabetico).
     if root.is_file():
-        content_hash = _hash_bytes(root.read_bytes())
-        original_path = str(root)
-        files_iter = [root]
-    else:
-        content_hash = _hash_dir(root)
-        original_path = str(root)
-        files_iter = sorted(p for p in root.rglob("*") if p.is_file())
-
-    files_total = len(list(files_iter))
-
-    # STRUCTURE: clasificar cada archivo.
-    structured: list[StructuredFile] = []
-    ambiguous: list[AmbiguousEntry] = []
-    scripts: list[str] = []
-    capabilities: list[str] = []
-
-    for f in files_iter:
-        rel = f.relative_to(root).as_posix()
-        size = f.stat().st_size
-        fhash = _hash_bytes(f.read_bytes())
-        kind = _classify(f)
-
-        if kind == "python_script":
-            # Scripts: REGISTRADOS pero NUNCA EJECUTADOS.
-            scripts.append(rel)
-            ambiguous.append(
-                AmbiguousEntry(
-                    path=rel,
-                    reason=(
-                        "Script Python detectado. NO se ejecuta (criterio UAT-14/"
-                        "ADR-0009). Conservado como material original; su "
-                        "comportamiento permanece encapsulado hasta que un "
-                        "Adapter real lo evalue."
-                    ),
-                    ambiguity="ignored",
-                )
-            )
-            continue
-
-        if kind == "binary":
-            ambiguous.append(
-                AmbiguousEntry(
-                    path=rel,
-                    reason="Binario no textual. Sin capacidad de inspeccionar contenido.",
-                    ambiguity="unparsed",
-                )
-            )
-            continue
-
-        if kind == "unknown":
-            ambiguous.append(
-                AmbiguousEntry(
-                    path=rel,
-                    reason=f"Extension desconocida ({f.suffix!r}). Sin heuristica aplicable.",
-                    ambiguity="unparsed",
-                )
-            )
-            continue
-
-        structured.append(StructuredFile(path=rel, kind=kind, size_bytes=size, content_hash=fhash))
-
-        if kind == "markdown_doc":
-            text = _read_text_safely(f)
-            if text is not None:
-                capabilities.extend(_extract_capabilities_from_markdown(text))
-
-    # VALIDATE: no hay capacidades 'verificadas' (no tenemos Adapter real).
-    # Los headers extraidos son SENALES, no decisiones.
-    nota = (
-        "Las capacidades extraidas son señales heurísticas (headers Markdown), "
-        "NO decisiones verificadas. La skill permanece en estado encapsulado "
-        "hasta que un Adapter real evalúe su comportamiento."
+        return _ImportSource(
+            root=root,
+            original_path=str(root),
+            content_hash=_hash_bytes(root.read_bytes()),
+            files=(root,),
+        )
+    return _ImportSource(
+        root=root,
+        original_path=str(root),
+        content_hash=_hash_dir(root),
+        files=tuple(sorted(p for p in root.rglob("*") if p.is_file())),
     )
 
-    sid = make_source_id(f"skill:{original_path}")
+
+def _classify_file(root: Path, f: Path) -> _FileVerdict:
+    """Clasifica UN archivo del paquete. NO ejecuta nada (UAT-14/ADR-0009)."""
+    rel = f.relative_to(root).as_posix()
+    size = f.stat().st_size
+    fhash = _hash_bytes(f.read_bytes())
+    kind = _classify(f)
+
+    if kind == "python_script":
+        # Scripts: REGISTRADOS pero NUNCA EJECUTADOS.
+        return _FileVerdict(
+            script=rel,
+            ambiguous=AmbiguousEntry(
+                path=rel,
+                reason=(
+                    "Script Python detectado. NO se ejecuta (criterio UAT-14/"
+                    "ADR-0009). Conservado como material original; su "
+                    "comportamiento permanece encapsulado hasta que un "
+                    "Adapter real lo evalue."
+                ),
+                ambiguity="ignored",
+            ),
+        )
+
+    if kind == "binary":
+        return _FileVerdict(
+            ambiguous=AmbiguousEntry(
+                path=rel,
+                reason="Binario no textual. Sin capacidad de inspeccionar contenido.",
+                ambiguity="unparsed",
+            )
+        )
+
+    if kind == "unknown":
+        return _FileVerdict(
+            ambiguous=AmbiguousEntry(
+                path=rel,
+                reason=f"Extension desconocida ({f.suffix!r}). Sin heuristica aplicable.",
+                ambiguity="unparsed",
+            )
+        )
+
+    capabilities: tuple[str, ...] = ()
+    if kind == "markdown_doc":
+        text = _read_text_safely(f)
+        if text is not None:
+            capabilities = _extract_capabilities_from_markdown(text)
+
+    return _FileVerdict(
+        structured=StructuredFile(path=rel, kind=kind, size_bytes=size, content_hash=fhash),
+        capabilities=capabilities,
+    )
+
+
+def _merge(result: _ScanResult, verdict: _FileVerdict) -> _ScanResult:
+    """Plegado puro: acumula un veredicto y devuelve un `_ScanResult` NUEVO."""
+    return _ScanResult(
+        structured=result.structured
+        if verdict.structured is None
+        else (*result.structured, verdict.structured),
+        ambiguous=result.ambiguous
+        if verdict.ambiguous is None
+        else (*result.ambiguous, verdict.ambiguous),
+        scripts=result.scripts if verdict.script is None else (*result.scripts, verdict.script),
+        capabilities=(*result.capabilities, *verdict.capabilities),
+    )
+
+
+def analyze_skill(root: Path) -> SkillImportReport:
+    """Pipeline completo: IMPORT -> ANALYZE -> STRUCTURE -> VALIDATE -> REGISTER.
+
+    `root` es un directorio o archivo que contiene la skill original.
+    El material NO se ejecuta. Se conserva el source y se genera un
+    informe de estructuracion.
+
+    Orquestador de una pasada: resolver la raiz, plegar `_classify_file`
+    con `_merge` y publicar el informe. El detalle de por que un kind es
+    ambiguo vive en `_classify_file`, no aqui.
+    """
+    source = _resolve_source(root)
+    result = reduce(
+        lambda acc, f: _merge(acc, _classify_file(source.root, f)),
+        source.files,
+        _ScanResult(),
+    )
 
     return SkillImportReport(
-        source_id=sid,
-        original_path=original_path,
-        content_hash=content_hash,
+        source_id=make_source_id(f"skill:{source.original_path}"),
+        original_path=source.original_path,
+        content_hash=source.content_hash,
         imported_at=now_iso(),
-        files_total=files_total,
-        files_structured=tuple(structured),
-        entries_ambiguous=tuple(ambiguous),
-        scripts_detected=tuple(scripts),
-        capabilities_extracted=tuple(capabilities),
-        nota_honesta=nota,
+        files_total=len(source.files),
+        files_structured=result.structured,
+        entries_ambiguous=result.ambiguous,
+        scripts_detected=result.scripts,
+        capabilities_extracted=result.capabilities,
+        nota_honesta=_NOTA_HONESTA,
     )
 
 

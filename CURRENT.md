@@ -1,5 +1,31 @@
 # CURRENT — puntero operativo
 
+> **WI-71 cerrado — P3 7 → 6** (2026-10-02): `analyze_skill`
+> (importacion de skills, UAT-11) 101 → **30 LoC** y cc 11 → **1**.
+> Elegida por medicion, no por LoC: de las candidatas P3 era la de mayor
+> cc real (11), con un bucle que llevaba dentro tres ramas `continue`
+> (script / binario / desconocido) y sus motivos de ambiguedad. El
+> corte mueve el detalle verbatim a `_classify_file` (51 LoC, cc 6) y
+> la resolucion de la raiz a `_resolve_source` (25, cc 3); `analyze_skill`
+> queda como un plegado `reduce` de una sola pasada sobre `_merge`, con
+> tres records frozen con `slots` (`_ImportSource`, `_FileVerdict`,
+> `_ScanResult`). God modules sigue en 0 y el cc maximo del repo en 10.
+> La red (27 tests) incluye un **oraculo diferencial** que reimplementa
+> en el test el algoritmo original de una sola pasada y compara el
+> informe campo a campo: es lo que demuestra que el plegado no pierde
+> ni reordena nada. Verificado en los dos sentidos con tres mutaciones
+> (reintroducir el detalle, `_merge` que muta, perder la rama de
+> markdown): las tres las caza la red. Dos rarezas preexistentes que
+> ningun test cubria quedan fijadas, no corregidas: importar un fichero
+> suelto lo nombra `"."` (porque `relative_to(f)` sobre si mismo es
+> `"."`), y el mensaje de ruta inexistente usa la raiz ya resuelta.
+> Cambiar la primera altera el payload que consumen UAT e informe: es
+> decision de producto, no efecto del refactor. Verificacion: **2181
+> passed** (2154 + 27), ruff y format limpios.
+> Nota de metodo: la eleccion de candidata la hizo la medicion AST, no el
+> tamano. `compile_handoff` (90, cc 3) y `compile_handoff_from_scopes`
+> (85, cc 1) son mas largos pero son lineales: partirlas seria ceremonia,
+> no legibilidad. Siguen fuera del frente.
 > **GOD MODULES: 0** (2026-10-02, commits `405f49e` y `c29a848`):
 > el audit de deuda arquitectonica ya no reporta ningun fichero >800
 > LoC. El recorrido completo: `storage.py` 1807 → 623 (WI-65, H-01
