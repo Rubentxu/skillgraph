@@ -1,5 +1,12 @@
 # CURRENT — puntero operativo
 
+> **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
+> `v0.16.10` en `2ee6d77`. El bloque WI-65..WI-71 mas el commit de
+> release salen a `origin/main` en el push autorizado por el operador;
+> la confirmacion se anota en `STATE.yaml` (`release.push`) y en
+> `SESSION-JOURNAL.md` cuando el push termine. El numero `0.16.10` es
+> PATCH, derivado de la regla del CHANGELOG aplicada al historial (0
+> `feat`, 6 `fix`), no de un criterio propio.
 > **RELEASE v0.16.10** (2026-10-02): publica el bloque **WI-65..WI-71**
 > (57 commits) que estaba sin subir desde `e680b72`. Numero derivado del
 > historial segun la regla del CHANGELOG, no por criterio propio: el
