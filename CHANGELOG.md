@@ -404,10 +404,16 @@ ellos: son una hipótesis sin dato detrás.
 - Mutaciones **5/5** cazadas tras corregir M3.
 - Evidencia: `evidence/sddk-wi90-verify-2026-10-02.md`.
 
-## [Unreleased] — WI-89: la auditoría no escribe dentro del repositorio que audita
+## [0.16.15] - 2026-10-02 — WI-89: la auditoría no escribe dentro del repositorio que audita
 
-**Sin bump todavía**: el `fix(audit)` de este bloque dispara el PATCH. 2463 passed
-(2451 antes).
+PATCH: `git log v0.16.14..HEAD` = 1 fix. 2463 passed (2451 antes).
+
+> **Cabecera CORREGIDA en WI-95.** Decía `[Unreleased]` y era falso: este
+> bloque se publicó como **v0.16.15** (`6819f99`). El cuerpo decía «Sin bump
+> todavía», que era cierto al escribirlo y dejó de serlo al etiquetar. Medido:
+> el CHANGELOG declaraba sin publicar tres bloques que ya habían salido, y
+> `v0.16.14` y `v0.16.15` no tenían sección propia. Nada lo comprobaba —
+> `tests/test_wi95_changelog_release_claims.py` ahora sí.
 
 ### Fixed
 
@@ -460,10 +466,15 @@ ellos: son una hipótesis sin dato detrás.
   commit desde el propio hook.
 - Evidencia: `evidence/sddk-wi89-verify-2026-10-02.md`.
 
-## [Unreleased] — WI-88: los errores de uso devuelven EXIT_USAGE y el 2 queda libre
+## [0.16.14] - 2026-10-02 — WI-88: los errores de uso devuelven EXIT_USAGE y el 2 queda libre
 
-**Sin bump todavía**: el `fix(cli)` de este bloque dispara el PATCH; la release que lo
-contiene es `v0.16.14`. 2451 passed (2430 antes).
+PATCH: `git log v0.16.13..HEAD` = 1 fix. 2451 passed (2430 antes).
+
+> **Cabecera CORREGIDA en WI-95.** Decía `[Unreleased]`, y su propio cuerpo
+> decía ya «la release que lo contiene es `v0.16.14`»: el fichero se
+> contradecía a sí mismo en dos líneas. Lo que sigue sustituye a «Sin bump
+> todavía», que era una frase escrita antes de emitir el tag y que nunca se
+> volvió a revisar.
 
 ### Fixed
 
@@ -538,7 +549,12 @@ contiene es `v0.16.14`. 2451 passed (2430 antes).
   devolviendo 2 sin que nada lo note.
 - 18 tests nuevos. ADR-0016. Evidencia: `evidence/sddk-wi88-verify-2026-10-02.md`.
 
-## [Unreleased] — WI-87: el vocabulario de estados pasa a derivarse de su ADT
+## [0.16.14] (cont.) — WI-87: el vocabulario de estados pasa a derivarse de su ADT
+
+> **Cabecera CORREGIDA en WI-95.** Decía `[Unreleased]` y es la continuación
+> de **v0.16.14**, que también contiene WI-88. El cuerpo de este bloque sigue
+> diciendo «Sin bump», y es cierto: `refactor` + `docs` no mueven versión, y
+> el PATCH de v0.16.14 lo dispara el `fix(cli)` de WI-88.
 
 **Sin bump**: `refactor` + `docs`, que según la regla de este CHANGELOG no mueven
 versión. No hay capacidad observable nueva: hoy el `CHECK` y la constante ya
