@@ -191,6 +191,52 @@
 > abrir una micro-release. Salieron juntos, y ninguno de los dos es trivial:
 > es lo que hace útil la regla de cadencia.
 >
+> **Bloque 2026-10-02 (novena tanda) cerrado — WI-96, release `v0.17.0`.**
+> Versión activa `0.17.0.dev0`; último tag `v0.17.0`. 2567 passed.
+>
+> **WI-96 — la regla de SemVer estaba en el fichero equivocado y no la
+> comprobaba nadie** (`8e147e1`, `08d4a60`, `da86a66`). Tercera vez que se
+> hace la pregunta que abre estos bloques: *¿qué declara el repo que nada
+> comprueba?* Tras WI-93 (suelos de cobertura) y WI-95 (CHANGELOG contra
+> git tag), esta vez el contrato es **la regla que decide el número de
+> versión**.
+>
+> `AGENTS.md §12` se titula «Regla de release» y **no la contenía**. El único
+> enunciado estaba en la cabecera del `CHANGELOG.md`, que no es el dueño de
+> la gobernanza de releases. Medido sobre las **47 etiquetas** con la regla
+> tal como estaba escrita: **9** cuyo SemVer no se deduce de ella, **9** que la
+> regla dice que no deberían existir, y **3 con un cambio rompedor real que no
+> llegaron a 1.0.0** (`v0.7.0`, que eliminó 20 shims de retro-compatibilidad;
+> `v0.15.0`; `v0.16.2`). La exención 0.x que lo explica estaba escrita **en el
+> mensaje de esos tres commits y en ningún otro sitio**.
+>
+> **El giro del bloque: los tres precedentes no llevan el marcador.** Ni `!`
+> ni un footer `BREAKING CHANGE:` al principio de una línea — sino una **viñeta
+> de prosa**. Con el marcador ninguna herramienta puede verlos; sin él, el
+> bump se deduce mal y la exención queda sin justificación visible. El primer
+> clasificador buscaba la cadena en el cuerpo y **contaba como breaking el
+> propio commit que describía la cláusula**; al exigir la forma de footer, los
+> tres desaparecieron del recuento. La conclusión correcta no es «no eran
+> breaking», sino **«fueron breaking y no estaban marcados»**. Se reporta
+> aparte y **no cuenta** para el bump: ensanchar la convención después de ver
+> los datos sería rehacer la regla.
+>
+> **El número no lo decidió nadie**:
+> ```
+> == desde v0.16.20 hasta HEAD ==
+>   b/f/x/n/d: 0/1/1/2/0
+>   la regla pide MINOR -> v0.17.0
+> ```
+> `test_release_governance` ata la etiqueta a `__version__` —comprueba que el
+> número sea coherente consigo mismo—; `derive_semver.py` lo ata **al
+> historial**. Durante 47 releases ese cálculo se hizo a mano.
+>
+> Mutaciones **3/3**, y las dos primeras las encontró el propio guard: M1
+> vaciaba la cláusula 0.x **conservando el texto `0.x`**, y el test solo
+> buscaba esa cadena; M2 era el patrón que buscaba `->` en un fichero que usa
+> `→` y pasaba en verde con la tabla presente. *Un guard que busca una cadena
+> comprueba que la cadena exista, no la propiedad.*
+>
 > **Queda abierto**: las **credenciales de proveedor real** (Anthropic/OpenAI)
 > no están en este entorno, así que el criterio de salida de **H9 sigue
 > declarado incumplido** — con la mitad local del contrato probada (el

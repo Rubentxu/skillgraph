@@ -10499,6 +10499,107 @@ fuera y el calculo siguiente los ignora.
 
 ---
 
+## 2026-10-02 — WI-96: la regla de SemVer estaba en el fichero equivocado
+
+- **Commits**: `8e147e1` (`fix(governance)`, la regla a su dueno), `08d4a60`
+  (`feat(release)`, el calculo), `da86a66` (dos correcciones que impuso el uso),
+  mas trazabilidad y release.
+- **Suite**: 2567 passed (2559 antes; +8).
+- **SemVer**: **MINOR → v0.17.0**, y **calculado, no decidido**:
+  `b/f/x/n/d: 0/1/1/2/0`.
+
+### La medicion, contra la regla tal como estaba escrita
+
+La regla vivia **solo** en la cabecera del CHANGELOG. `AGENTS.md §12`, que
+se titula «Regla de release», **no la contenia**. Sobre las 47 etiquetas:
+
+| | |
+|---|---|
+| releases cuyo SemVer **no se deduce** de la regla | 9 |
+| releases que la regla dice que **no deberian existir** | 9 |
+| de las divergentes, con **cambio rompedor real** | 3 |
+
+`v0.7.0` (20 shims de retro-compatibilidad eliminados), `v0.15.0` y `v0.16.2`
+hicieron cambios rompientes y ninguna llego a 1.0.0. La exencion 0.x estaba
+escrita **en el mensaje de esos tres commits y en ningun otro sitio**.
+
+### EL GIRO: los tres precedentes no llevan el marcador
+
+Ni `!` ni un footer `BREAKING CHANGE:` al principio de una linea — una
+**vineta de prosa**. Con el marcador ninguna herramienta puede verlos; sin el,
+el bump se deduce mal y la exencion queda sin justificacion visible.
+
+El primer clasificador buscaba la cadena en el cuerpo, y contaba como breaking
+**el propio commit de este bloque que describia la clausula**. Al exigir la
+forma de footer, los tres desaparecieron del recuento. La conclusion correcta
+no es «no eran breaking», sino **«fueron breaking y no estaban marcados»**.
+
+Se reporta aparte y **no cuenta** para el bump. Ensanchar la convencion
+despues de ver los datos seria rehacer la regla.
+
+### Cambios
+
+1. La tabla se muda a `AGENTS.md §12` («Derivar la version») con la salvedad
+   0.x y sus tres precedentes. Salir de 0.x queda escrito como decision
+   explicita, no como efecto secundario.
+2. El CHANGELOG pasa a **referenciar** §12: dos enunciados de la misma regla
+   son dos fuentes que se desincronizan, y una ya se ha desincronizado.
+3. `scripts/derive_semver.py`: bump de cada etiqueta **y de HEAD**.
+4. Las trece divergencias se registran y **NO se corrigen**: son etiquetas
+   publicadas y su numero es provenance.
+
+### Mutaciones 3/3, y las dos primeras las encontro el propio guard
+
+| # | Mutacion | Resultado |
+|---|---|---|
+| M1 | borrar la salvedad 0.x de AGENTS.md §12 | **cazada** (tras arreglar la asercion) |
+| M2 | volver a escribir la regla en el CHANGELOG | **cazada** (tras arreglar el patron) |
+| M3 | que `clasificar` deje de reconocer `feat` | **cazada** |
+
+M1 no la cazo la primera vez: el test buscaba la cadena `0.x` y la mutacion la
+**conservaba** mientras vaciaba la clausula. M2 tampoco, y es la de WI-95: el
+patron buscaba `->` y el fichero usa `→`, luego pasaba en verde **con la tabla
+presente**.
+
+### Conocimiento negativo
+
+- **Un guard que busca una cadena comprueba que la cadena exista, no la
+  propiedad.** Dos veces aqui, con dos cadenas distintas.
+- **La decision correcta puede seguir siendo invisible.** Las tres veces que
+  no se subio a 1.0.0 se decidio bien; falto el marcador que la haria
+  citable por una maquina. **Marcar cuesta un caracter y no obliga a nada**
+  mientras se este en 0.x, porque la clausula lo exonera.
+- **La herramienta se corrigio usandola.** Los dos fallos del clasificador no
+  salieron leyendo el codigo, sino ejecutandolo.
+- **Un guard que exige algo que el propio repo no cumple se aprende a
+  ignorar.** La exigencia empieza en `v0.16.3` (18/18 coherentes) y las
+  divergencias se comparan **bidireccionalmente**: ni una nueva sin
+  registrar, ni una vieja «arreglada» sin quitar su nombre.
+
+### Sigue abierto (sin workitem)
+
+- **Credenciales de proveedor real (Anthropic/OpenAI)**: ausentes. Es la razon
+  por la que el criterio de salida de **H9 sigue declarado incumplido**.
+- **Colision de numeracion de ADR**: `ADR-0015` designa dos documentos distintos.
+  Medida, NO ejecutada: renombrar es decision del mantenedor.
+- **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`.
+- **Desorden del tramo antiguo del CHANGELOG**: MEDIDO y aceptado en WI-95.
+- **11 commits de tipo no reconocido** (`H3 slice N:`, `merge ...`,
+  `release(version):`, `audit`), todos anteriores a v0.14, que precede a los
+  Conventional Commits. En la era actual: **0**. No se amplia la lista de
+  neutros para que el contador quede a cero: seria tapar la señal.
+- **`sddk lint`: 4 errores** por opt-ins de pack no adoptados. Fuera de alcance.
+- **Push**: sin autorizacion del operador. No ejecutado.
+
+### Evidencia
+
+- `evidence/sddk-wi96-verify-2026-10-02.md`
+- `scripts/derive_semver.py` (bump por etiqueta y de HEAD)
+- `tests/test_wi96_semver_rule.py` (8 tests)
+- `.pipelinek/wi96_mutate.py` (3/3 + baseline + autocontrol)
+
+---
+
 ## 2026-10-02 — WI-95: el CHANGELOG decía [Unreleased] para bloques ya publicados
 
 - **Commits**: `9caeaa2` (`fix(docs)`, la correccion), `b06c258`

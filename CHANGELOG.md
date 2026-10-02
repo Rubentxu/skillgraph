@@ -14,6 +14,85 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.17.0] - 2026-10-02 — la versión se deriva, no se recuerda
+
+**MINOR**: `git log v0.16.20..HEAD` = 1 `feat`, 1 `fix`, 0 breaking.
+**2567 passed** (2559 antes; +8).
+
+Y el número no lo decidió nadie: lo calculó
+`scripts/derive_semver.py` sobre el historial.
+
+```
+== desde v0.16.20 hasta HEAD ==
+  b/f/x/n/d: 0/1/1/2/0
+  la regla pide MINOR -> v0.17.0
+```
+
+### Added
+
+- `feat(release)`: **`scripts/derive_semver.py`** recorre el historial y dice
+  cuál es el bump de cada etiqueta **y de HEAD**, además de las divergencias
+  y de los cambios rompedores sin marcar.
+  `test_release_governance` ata la etiqueta a `__version__` —comprueba que el
+  número sea coherente consigo mismo—; esto ata el número **al historial**.
+  Durante 47 releases ese cálculo se hizo a mano.
+
+- `test(governance)`: 8 tests sobre tres garantías — la regla tiene **un**
+  dueño, la salvedad 0.x está escrita donde se lee, y el bump se calcula.
+  Mutaciones **3/3**, y las dos primeras las encontró el propio guard.
+
+### Fixed
+
+- `fix(governance)`: **la regla de SemVer estaba en el fichero equivocado.**
+  `AGENTS.md §12` se titula «Regla de release» y no la contenía; el único
+  enunciado estaba en la cabecera del CHANGELOG, que no es el dueño de la
+  gobernanza de releases. Medido sobre 47 etiquetas con la regla tal como
+  estaba escrita: **9 releases cuyo SemVer no se deduce de ella**, 9 que la
+  regla dice que no deberían existir, y **3 con un cambio rompedor real que no
+  llegaron a 1.0.0**.
+
+  - La tabla se muda a `§12` («Derivar la versión») con la **salvedad 0.x** y
+    sus tres precedentes nombrados.
+  - El CHANGELOG pasa a **referenciar** §12: dos enunciados de la misma regla
+    son dos fuentes que se desincronizan, y una ya se ha desincronizado.
+  - **Las trece divergencias se registran y NO se corrigen**: son etiquetas
+    publicadas y su número es provenance.
+
+### El giro del bloque: los tres precedentes no llevan el marcador
+
+Al escribir el detector resultó que `v0.7.0`, `v0.15.0` y `v0.16.2` **no
+llevan el marcador de la convención**: no hay `!` ni un footer
+`BREAKING CHANGE:` al principio de una línea, sino una **viñeta de prosa**.
+
+Eso no es un detalle, es el problema entero: *con el marcador ninguna
+herramienta puede verlos; sin él, el bump se deduce mal y la exención queda
+sin justificación visible.*
+
+El primer clasificador buscaba la cadena `BREAKING CHANGE` en el cuerpo, y por
+eso contaba como breaking el propio commit que estaba describiendo la
+cláusula. Al exigir la forma de footer, los tres desaparecieron del recuento.
+La conclusión correcta no es «no eran breaking», sino **«fueron breaking y no
+estaban marcados»**. Se reporta aparte, **sin que cuente** para el bump:
+ensanchar la convención después de ver los datos sería rehacer la regla.
+
+### Conocimiento negativo
+
+- **Un guard que busca una cadena comprueba que la cadena exista, no la
+  propiedad.** Dos veces aquí: M1 vaciaba la cláusula 0.x conservando el
+  texto `0.x`, y el patrón de WI-95 buscaba `->` en un fichero que usa `→` y
+  pasaba en verde **con la tabla presente**.
+- **La decisión correcta puede seguir siendo invisible.** Las tres veces que
+  no se subió a 1.0.0 se decidió bien; faltó el marcador que la haría
+  citable por una máquina. **Marcar cuesta un carácter y no obliga a nada**
+  mientras se esté en 0.x, porque la cláusula lo exonera.
+- **La herramienta se corrigió usándola.** Los dos fallos del clasificador no
+  salieron leyendo el código, sino ejecutándolo.
+- **Un guard que exige algo que el propio repo no cumple se aprende a
+  ignorar.** La exigencia de coincidencia empieza en `v0.16.3` —donde la
+  regla se cumple 18/18— y las divergencias se comparan **bidireccionalmente**.
+
+- Evidencia: `evidence/sddk-wi96-verify-2026-10-02.md`.
+
 ## [0.16.20] - 2026-10-02 — el CHANGELOG deja de anunciar como pendiente lo ya publicado
 
 PATCH: `git log v0.16.19..HEAD` = 0 feat, 0 breaking, **2 fix**, 1 test, 2 docs,
