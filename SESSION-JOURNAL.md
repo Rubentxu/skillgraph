@@ -7678,3 +7678,38 @@ ultima fase.
   anterior al ADR; reset --soft inmediato y re-commit (local, sin
   push), anotado aqui.
 
+## 2026-10-02 (VI) — WI-60: ADR-0020 y fase 1 de knowledge_repository
+
+### Resumen
+
+Septima pasada autonomo. Tercer god module del audit:
+knowledge_repository.py (986 LoC; clase SqliteKnowledgeRepository de
+811 + 7 mappers puros de 117). ADR-0020 planifica: fase 1 mappers
+(ejecutada), fase 2 split de clase por clusters (claims /
+evidencias+relaciones / recursos) con conexion compartida, patron
+ADR-0016. Umbral <800 requiere fase 2.
+
+### Fase 1 ejecutada
+
+- Nuevo `src/skillgraph/platform/knowledge_mappers.py` (módulo puro
+  fila->DTO, sin SQL ni conexion): 138 LoC.
+- knowledge_repository 986 -> 874 LoC; re-import con noqa para shims
+  de storage.py (import diferido del corte 5 de ADR-0016) y metodos
+  de la clase: cero ediciones.
+
+### Evidencia
+
+- RED honesto (collection error). Identidad 7/7 + shim via getsource
+  (el shim es un WRAPPER con import diferido, no el mapper: la
+  asercion is inicial era incorrecta y se corrigio al contrato real).
+- Tests knowledge 44/44. Suite completa PASS por hook real. ruff/format
+  limpios.
+
+### Descubrimientos
+
+- Los mappers puros son el corte de menor riesgo de los god modules
+  platform: funcion pura fila->DTO, sin conexion, 1:1 movible.
+- El shims-vs-wrapper matiz: _row_to_source de storage.py NO es el
+  mapper (delega con import diferido); las redes de identidad deben
+  leer getsource cuando haya wrappers, no asumir mismo objeto.
+

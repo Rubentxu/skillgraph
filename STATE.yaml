@@ -126,7 +126,7 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-59   # fase 1 del estrangulamiento de RunController (ADR-0019): tipos/serializacion -> runtime/run_types.py; runcontroller 1445 -> 1289 LoC, re-export, identidad 8/8, criticos H9/H10 67/67. Fases 2-3 (motores snapshot/recovery y reconciliation) planificadas
+  current_workitem: WI-60   # fase 1 del estrangulamiento de knowledge_repository (ADR-0020): 7 mappers puros -> platform/knowledge_mappers.py; 986 -> 874 LoC, re-export para shims de storage, identidad 7/7 + shim via getsource. Fase 2 (split de clase por clusters) planificada
   next_workitem: WI-56   # siguiente estrangulamiento P1 segun audit vigente: runcontroller.py (1445 LoC) o knowledge_repository.py (986); requiere ADR propia (patron ADR-0018 replicable)
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
