@@ -14,6 +14,78 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.20.1] - 2026-10-02 — los hooks de git decían una cosa y hacían otra
+
+**PATCH**: `git log v0.20.0..HEAD` = 0 `feat`, 3 `fix`, 3 `test`/`docs`, 0 breaking.
+**2647 passed** (2636 antes; +11).
+
+WI-99 dejó escrito, en dos sitios, que `scripts/hooks/pre-push` era deuda
+medida. Una deuda con dueño escrito es una promesa.
+
+### La medición, mismo commit y mismo `.coverage.rc`
+
+Única variable: el hook `.pth` que `scripts/coverage.sh` instala para que
+los subprocesos se midan.
+
+| módulo | hooks | `coverage.sh` | Δ |
+|---|---|---|---|
+| `cli/commands/runs.py` | **39 %** | **88 %** | **−49** |
+| `cli/runner.py` | 55 % | 79 % | −24 |
+| `cli/support.py` | **69 %** | 86 % | **−17** |
+| TOTAL | 90,79 % | 95,22 % | −4,4 |
+
+`cli/support.py` mide **69 %** con el instrumento del pre-push, y el suelo
+que declara el propio `AGENTS.md §6.3` para la CLI es **70 %**. El gate más
+cercano al push podía dar **verde un paquete que no cumplía el suelo
+declarado**, y no ejecutaba ninguno de los cuatro contratos exigibles.
+
+### Changed
+
+- `scripts/hooks/pre-push` **delega** en `scripts/ci.sh`, que es el dueño de
+  cómo se llega a la receta canónica. No la reimplementa: la pide.
+- `scripts/hooks/pre-commit` hace el smoke que decía hacer: pasa `$STAGED_PY`
+  a pytest. **124,29 s → 0,83 s.** Antes seleccionaba los `.py` staged y no
+  se los pasaba: corría la suite entera anunciando «smoke, ~10 s».
+- **C4 se afina** a «pytest **sobre el repo entero**», y
+  `DIRECTORIOS_NO_RECETA` **desaparece**. Una propiedad que hay que mantener
+  al día no es una propiedad, es una suscripción.
+- `scripts/check_ci_recipe_parity.py` descubre scripts por **shebang**, no
+  solo por extensión: `pre-commit` y `pre-push` no tienen extensión, y el
+  invariante daba verde sin haberlos mirado nunca.
+
+### Fixed
+
+- Un `echo` de diagnóstico con `pytest` y `$N_STAGED` contaba como
+  invocación, y **C4 llevaba dos commits dando verde por el motivo
+  equivocado**. La regla correcta es *qué comando lanza la línea* —ver
+  `_VERBOS_DE_MENCION`—, que se decide por el primer token no estructural.
+  Es una lista de **palabras del lenguaje**, no de ficheros del repo: a
+  diferencia de la lista de excepciones de WI-99, no se desactualiza cuando
+  el repo crece.
+- `pytest src/` —un directorio— también cuenta como filtrado. Reconocer solo
+  ficheros `.py` habría hecho que un directorio se contara como suite entera.
+
+### Tests
+
+Siete guards de **cadena** sobre el `pre-push` pasan a medir **propiedad**.
+Dos de ellos **ejecutan** el hook sobre un repo de prueba con un
+`scripts/ci.sh` stub que falla si se invoca: es la primera vez que
+`tests/test_hooks_system.py` comprueba comportamiento y no forma. «El hook
+menciona el bypass» era indistinguible de «el bypass funciona».
+
+**Mutaciones 10/10.** M7 —degradar el `pre-commit` a la forma que corre la
+suite entera— es la que encontró el falso positivo del `echo`: sin ella, el
+invariante habría dado verde indefinidamente por el motivo equivocado.
+
+### Lo que este bloque NO resolvió
+
+El `pre-push` **no estaba instalado** en la máquina donde se operaba
+(medido), y el `pre-commit` instalado es la copia anterior: hasta que alguien
+corra `bash scripts/install-hooks.sh`, cada commit sigue pagando 124 s.
+Instalar el git local del operador es suyo.
+
+Evidencia completa: `evidence/sddk-wi100-verify-2026-10-02.md`.
+
 ## [0.20.0] - 2026-10-02 — la evidencia de auditoría no era reproducible
 
 **MINOR**: `git log v0.19.0..HEAD` = 1 `feat`, 3 `fix`, 3 `test`/`docs`/`chore`, 0 breaking.

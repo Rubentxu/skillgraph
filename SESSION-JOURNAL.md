@@ -11158,3 +11158,127 @@ Evidencia completa: `evidence/sddk-wi99-verify-2026-10-02.md`.
 5. `sddk ledger events` trunca a **28 eventos por defecto**; con 454
    eventos y 77 ciclos, sin `--limit` parecía que el ciclo de WI-99 no
    existía. `--limit 1000`.
+
+---
+
+## 2026-10-02 — WI-100 · los hooks de git decían una cosa y hacían otra
+
+Ciclo `p-b7740b96d79ec013/wi100-pre-push-delegates`. Release `v0.20.1`
+(PATCH). **SIN PUSH.**
+
+### De dónde salió
+
+WI-99 dejó escrito, en dos sitios, que `scripts/hooks/pre-push` era deuda
+medida: mide con un instrumento distinto del canónico, y su exclusión de
+C4 estaba en el checker y fijada por un test. Una deuda con dueño escrito
+es una promesa.
+
+### La medición
+
+Mismo commit, mismo `.coverage.rc`, única variable el hook `.pth`:
+
+| módulo | hooks | `coverage.sh` | Δ |
+|---|---|---|---|
+| `cli/commands/runs.py` | 39 % | 88 % | −49 |
+| `cli/runner.py` | 55 % | 79 % | −24 |
+| `cli/support.py` | **69 %** | 86 % | −17 |
+| TOTAL | 90,79 % | 95,22 % | −4,4 |
+
+`cli/support.py` mide **69 %**, y el suelo del `AGENTS.md §6.3` para la
+CLI es **70 %**. El gate más cercano al push podía dar **verde un paquete
+que no cumplía el suelo declarado**.
+
+Primera medición mal planteada: corrí `pytest --cov` **sin**
+`--cov-config=.coverage.rc`, que es lo que usa `coverage.sh`. Comparar con
+otra config mezcla dos variables. Se paró y se relanzó con la misma.
+
+### Lo que se decía y lo que se hacía
+
+- El `pre-push` afirmaba que «el CI solo verifica que la ejecución es
+  reproducible» — un mundo anterior a WI-98.
+- El `pre-commit` afirmaba ser un smoke de ~10 s sobre los `.py` staged.
+  Seleccionaba esos ficheros y **no se los pasaba**: `pytest -q` a secas.
+  **2636 tests, 124,29 s.** El selector existía; la instrucción no.
+
+También se midió que el `pre-push` **no estaba instalado** en
+`.git/hooks/`, y que el `pre-commit` instalado era la copia anterior. Su
+docstring de tests decía «Defensa en profundidad 3 capas, ya implementado»,
+y una de las tres no existía en la máquina.
+
+### Cambios
+
+- `pre-push` delega en `scripts/ci.sh` (el dueño de cómo se llega a la
+  receta). No la reimplementa.
+- `pre-commit` pasa `$STAGED_PY`: **0,83 s** frente a 124,29 s.
+- **C4 se afina** a «pytest sobre el repo entero» y
+  **`DIRECTORIOS_NO_RECETA` desaparece**.
+- Descubrimiento por **shebang**: el guard no veía los hooks.
+- Siete guards de cadena → propiedad; dos **ejecutan** el hook.
+
+### Dos fallos del propio guard
+
+**Ninguno lo encontró un test. Los encontró medir.**
+
+1. **El guard no veía los hooks.** `rglob("*.sh")` no encuentra ficheros
+   sin extensión. Es la **segunda vez** en este bloque: en WI-99, al
+   inventariar, conté cinco scripts donde había siete. Un guard que solo
+   descubre una sintaxis no vigila la otra.
+
+2. **Un `echo` de diagnóstico hacía que C4 diera verde.** El `pre-commit`
+   tiene `echo "[pre-commit] smoke: pytest sobre $N_STAGED fichero(s) .py
+   staged"`, que tiene la palabra, la variable y es una orden ejecutable.
+   C4 llevaba **dos commits dando verde por el motivo equivocado**. Lo
+   encontró la **mutación M7**.
+
+   La regla correcta resultó ser *qué comando lanza la línea*: en ese
+   `echo`, la palabra anterior a `pytest` es `smoke:`, no `echo`, así que
+   la regla de proximidad tampoco servía. Se decide por el primer token no
+   estructural. Y es una lista de **palabras del lenguaje**, no de
+   ficheros del repo — a diferencia de la lista de WI-99, no se
+   desactualiza cuando el repo crece.
+
+### Un bucle encontrado por el camino
+
+El test que medía si el smoke es rápido usaba
+`tests/test_hooks_system.py` como path. Ese fichero contiene el test del
+smoke → el smoke se llamaba a sí mismo: 106 s y tres fallos. No era un test
+lento; era un hook que, al tocar su propio fichero, se recursiona. Ahora
+mide con dos módulos triviales en `tmp_path`.
+
+### Mutaciones 10/10
+
+M4 es la más representativa: el hook **sigue diciendo**
+`HOOK_SKIP_PUSH_TESTS` en la cabecera, así que el guard de cadena de WI-99
+la habría aprobado. M1 usa el fichero real de `2bbb49e`, sacado de git.
+M7 es la que encontró el fallo de §2.
+
+### Cierre
+
+CI canónica: run `8ccd1f6a-6477-4ad6-9dd9-02e5cd59ebb7`, `Pipeline finished
+with SUCCESS`, 8/8 stages, **2647 passed in 233.06s**, cobertura 95,22 %, 0
+`StepFailed`. `ci-parity` con los **7** scripts en el informe.
+
+### Lo que NO se resolvió
+
+- **El `pre-push` no está instalado** y el `pre-commit` instalado es la
+  copia vieja. Instalarlo es decisión del operador:
+  `bash scripts/install-hooks.sh`. No se ejecutó.
+- Credenciales Anthropic/OpenAI: bloquean H9 desde WI-91.
+- 103+ commits sin publicar; push no autorizado.
+- `release.complete` inalcanzable (exige `Cargo.toml`) → `cycle supersede`.
+- 4 errores de `sddk lint`: perfil autor de pack; este repo es consumidor.
+
+### Errores propios de esta sesión, para no repetirlos
+
+1. **Comparar instrumentos con distinta configuración** (faltaba
+   `--cov-config=.coverage.rc`). Comparar con la misma config, siempre.
+2. **Repetir el fallo de descubrimiento de WI-99**: filtrar por `*.sh` y no
+   ver los hooks. Cuando el nombre lo pone una herramienta externa
+   (`git` busca `pre-push`), la extensión no es la identidad del fichero.
+3. **Un guard que confunde un mensaje con una ejecución.** Se decide por el
+   comando que lanza la línea, no por qué palabra hay antes.
+4. **Un test que ejecuta un subconjunto que se contiene a sí mismo.**
+   Medir con `tmp_path`, nunca con ficheros del repo.
+5. `python3 - <<'PY'` con `\\.sh` dentro de un escalar YAML de una línea:
+   Python deja `\.` y **YAML no acepta ese escape**. Se rompe al parsear,
+   muy lejos del sitio donde se escribió. Evitar escapes en esos campos.

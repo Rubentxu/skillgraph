@@ -1,5 +1,64 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-02 (duodécima tanda) cerrado — WI-100, release `v0.20.1`.**
+> Versión activa `0.20.1.dev0`; último tag `v0.20.1`. 2647 passed.
+>
+> **WI-100 — los hooks de git decían una cosa y hacían otra.**
+> WI-99 dejó escrito, en dos sitios, que `scripts/hooks/pre-push` era deuda
+> medida: mide con un instrumento distinto del canónico. Una deuda con
+> dueño escrito es una promesa; este bloque la paga.
+>
+> **La medición, mismo commit y mismo `.coverage.rc`, única variable el hook
+> `.pth`:**
+>
+> | módulo | hooks | `coverage.sh` | Δ |
+> |---|---|---|---|
+> | `cli/commands/runs.py` | **39 %** | **88 %** | **−49** |
+> | `cli/runner.py` | 55 % | 79 % | −24 |
+> | `cli/support.py` | **69 %** | 86 % | **−17** |
+> | TOTAL | 90,79 % | 95,22 % | −4,4 |
+>
+> `cli/support.py` mide **69 %**, y el suelo que declara el propio
+> `AGENTS.md §6.3` para la CLI es **70 %**. El gate más cercano al push
+> podía dar **verde un paquete que no cumplía el suelo declarado**, y no
+> ejecutaba ninguno de los cuatro contratos exigibles.
+>
+> **Lo que se decia y lo que se hacia.** El `pre-push` afirmaba que «el CI
+> solo verifica que la ejecución es reproducible» — un mundo anterior a
+> WI-98, donde el remoto era otro workflow. El `pre-commit` afirmaba ser un
+> smoke de ~10 s: seleccionaba los `.py` staged y **no se los pasaba**.
+> Medido: **2636 tests, 124,29 s**. El selector existía; la instrucción no.
+> Ahora son **0,83 s**.
+>
+> **C4 se afina y la excepción desaparece.** La condición pasa a «pytest
+> **sobre el repo entero**» (`evaluar_una_receta`,
+> `check_ci_recipe_parity.py:452`): un hook que filtra por paths no emite un
+> veredicto sobre el repo, y queda fuera sin una lista que lo diga
+> (`filtra_por_ficheros`, `check_ci_recipe_parity.py:306`).
+> `DIRECTORIOS_NO_RECETA` ya no existe. **Una propiedad que hay que
+> mantener al día no es una propiedad, es una suscripción.**
+>
+> **Dos fallos del propio guard, y ninguno lo encontró un test:**
+>
+> - El guard **no veía los hooks**: `rglob("*.sh")` no los encuentra
+>   porque no tienen extensión (`es_script_shell`,
+>   `check_ci_recipe_parity.py:286`). Es la **segunda vez** en este bloque.
+> - Un **`echo` de diagnóstico** con `pytest` y `$N_STAGED` hacía que
+>   `filtra_por_ficheros` lo tomara por invocación, y C4 llevaba **dos
+>   commits dando verde por el motivo equivocado** (`_VERBOS_DE_MENCION`,
+>   `check_ci_recipe_parity.py:210`). Un guard que confunde un **mensaje**
+>   con una **ejecución** no mide qué corre: mide qué se dice.
+>   Lo encontró la mutación M7 (`test_un_mensaje_no_es_una_invocacion`,
+>   `test_wi98_ci_recipe_parity.py:590`).
+>
+> **Mutaciones 10/10.** M4 es la más representativa: el hook **sigue
+> diciendo** `HOOK_SKIP_PUSH_TESTS` en la cabecera, así que el guard de
+> cadena de WI-99 la habría aprobado. Dos de los tests nuevos **ejecutan**
+> el hook sobre un repo de prueba (`test_hooks_system.py:269`): es la
+> primera vez que ese fichero comprueba comportamiento y no forma.
+>
+> Evidencia: `evidence/sddk-wi100-verify-2026-10-02.md`.
+
 > **Bloque 2026-10-02 (undécima tanda) cerrado — WI-99, release `v0.20.0`.**
 > Versión activa `0.20.0.dev0`; último tag `v0.20.0`. 2636 passed.
 >
