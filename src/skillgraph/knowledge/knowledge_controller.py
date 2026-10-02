@@ -301,12 +301,6 @@ class KnowledgeController:
         Returns:
             Tupla de FileSignatures deserializadas. Vacía si no hay.
         """
-        from skillgraph.knowledge.file_signature import (
-            FileSignature,
-            SignatureProcedencia,
-            SignatureVigencia,
-        )
-
         # Si only_stale=True, comprobar el freshness del source primero.
         source_is_stale = False
         if only_stale:
@@ -325,15 +319,11 @@ class KnowledgeController:
                 continue
             if not isinstance(e.content, dict):
                 continue
-            payload = e.content
-            sig = FileSignature(
-                foco=payload["foco"],
-                contrato=payload["contrato"],
-                cobertura=payload["cobertura"],
-                procedencia=SignatureProcedencia(**payload["procedencia"]),
-                vigencia=SignatureVigencia(**payload["vigencia"]),
-                metadata=payload.get("metadata", {}),
-            )
+            # WI-90: el inverso de `to_dict` lo declara el propio dataclass y
+            # valida la forma. Antes se reescribia aqui campo a campo con
+            # subindices crudos, y un payload incompleto reventaba con
+            # `KeyError` a tres capas de distancia (governance/improvement.py).
+            sig = FileSignature.from_dict(e.content)
             # Stale por signature O por source (regla H11).
             is_stale = sig.vigencia.stale or source_is_stale
             if only_stale and not is_stale:

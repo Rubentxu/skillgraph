@@ -26,13 +26,74 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-from skillgraph.core.errors import ValidationError
+from skillgraph.core.errors import ParseError, ValidationError
 
 # --- ADT cerrada (regla AGENTS §2.1) ---------------------------------
 
 ExtractionState = Literal["empty", "absent", "partial", "complete", "stale"]
 
 EXTRACTION_STATES: frozenset[str] = frozenset({"empty", "absent", "partial", "complete", "stale"})
+
+# --- Validacion de forma (WI-90) ---------------------------------------
+#
+# `from_dict` es el inverso de `to_dict`, y un inverso sin validacion no
+# compra nada: solo cambia donde revienta. Estos cinco helpers concentran
+# la comprobacion para que el "que formas validas" viva en un sitio y cada
+# `from_dict` se limite a declarar sus campos.
+
+
+def _require_mapping(value: Any, owner: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ParseError(f"{owner}: se esperaba un dict, recibio {type(value).__name__}")
+    return value
+
+
+def _require_keys(data: dict[str, Any], required: tuple[str, ...], owner: type) -> None:
+    """Faltan claves -> ParseError. Sobran -> ParseError tambien.
+
+    Lo que no hace es ignorar la de mas. Un payload escrito por una version
+    futura trae campos que esta no conoce, y perderlos en silencio deja al
+    consumidor creyendo que tiene el dato completo.
+    """
+    faltantes = [k for k in required if k not in data]
+    if faltantes:
+        raise ParseError(f"{owner.__name__}: faltan claves {sorted(faltantes)}")
+    sobrantes = sorted(set(data) - set(required) - {"metadata"})
+    if sobrantes:
+        raise ParseError(
+            f"{owner.__name__}: claves desconocidas {sobrantes}. Puede ser un payload "
+            "de una version posterior; no se ignoran en silencio."
+        )
+
+
+def _require_str(value: Any, name: str, owner: type) -> str:
+    if not isinstance(value, str):
+        raise ParseError(
+            f"{owner.__name__}.{name}: se esperaba str, recibio {type(value).__name__}"
+        )
+    return value
+
+
+def _require_int(value: Any, name: str, owner: type) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ParseError(
+            f"{owner.__name__}.{name}: se esperaba int, recibio {type(value).__name__}"
+        )
+    return value
+
+
+def _require_bool(value: Any, name: str, owner: type) -> bool:
+    if not isinstance(value, bool):
+        raise ParseError(
+            f"{owner.__name__}.{name}: se esperaba bool, recibio {type(value).__name__}"
+        )
+    return value
+
+
+def _require_optional_mapping(value: Any, name: str, owner: type) -> dict[str, Any]:
+    if value is None:
+        return {}
+    return _require_mapping(value, f"{owner.__name__}.{name}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +113,22 @@ class SignatureProcedencia:
             raise ValidationError("extraction_method no puede estar vacio")
         if not self.extractor_version:
             raise ValidationError("extractor_version no puede estar vacia")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "extraction_method": self.extraction_method,
+            "extractor_version": self.extractor_version,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Any) -> SignatureProcedencia:
+        """Inverso de `to_dict`. Ver `FileSignature.from_dict` (WI-90)."""
+        data = _require_mapping(payload, cls.__name__)
+        _require_keys(data, ("extraction_method", "extractor_version"), cls)
+        return cls(
+            extraction_method=_require_str(data["extraction_method"], "extraction_method", cls),
+            extractor_version=_require_str(data["extractor_version"], "extractor_version", cls),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +164,35 @@ class SignatureVigencia:
                 f"stale={self.stale} inconsistente con state={self.state!r} "
                 f"(esperaba stale={expected_stale})"
             )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "state": self.state,
+            "fresh": self.fresh,
+            "stale": self.stale,
+            "checked_at_revision": self.checked_at_revision,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Any) -> SignatureVigencia:
+        """Inverso de `to_dict`. Ver `FileSignature.from_dict` (WI-90).
+
+        `state` fuera de la ADT cerrada no se comprueba aqui: lo hace
+        `__post_init__`, que lanza `ValidationError` en vez de `ParseError`.
+        La distincion importa — la forma es valida y el valor no lo es — y
+        duplicar la comprobacion aqui seria inventarse un segundo sitio que
+        puede desincronizarse del primero.
+        """
+        data = _require_mapping(payload, cls.__name__)
+        _require_keys(data, ("state", "fresh", "stale", "checked_at_revision"), cls)
+        return cls(
+            state=_require_str(data["state"], "state", cls),
+            fresh=_require_bool(data["fresh"], "fresh", cls),
+            stale=_require_bool(data["stale"], "stale", cls),
+            checked_at_revision=_require_str(
+                data["checked_at_revision"], "checked_at_revision", cls
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +235,44 @@ class FileSignature:
             "vigencia": asdict(self.vigencia),
             "metadata": dict(self.metadata),
         }
+
+    @classmethod
+    def from_dict(cls, payload: Any) -> FileSignature:
+        """Inverso exacto de `to_dict` (WI-90).
+
+        Antes este inverso vivia escrito a mano en
+        `KnowledgeController.list_file_signatures_for_source`, con
+        subindices crudos. Medido, eso dava tres fallos: una clave que
+        faltaba reventaba con `KeyError`, un sub-dict incompleto con
+        `TypeError`, y **un campo de mas se perdia en silencio**. El
+        ultimo es el que mas duele: un consumidor creeria tener el dato
+        completo. Y anadir un campo obligatorio a este dataclass rompia
+        la lectura de lo ya persistido, no la escritura.
+
+        Aqui la forma se valida una vez y el error es `ParseError`
+        (`sg_parse`): el registro no se puede leer. El `ValidationError`
+        que lanza `__post_init__` es otra cosa — la forma es correcta y
+        los valores violan politica — y se deja propagar.
+
+        Args:
+            payload: dict tal y como lo emite `to_dict`.
+
+        Returns:
+            La `FileSignature` reconstruida.
+
+        Raises:
+            ParseError: si el payload no tiene la forma de esta clase.
+        """
+        data = _require_mapping(payload, cls.__name__)
+        _require_keys(data, ("foco", "contrato", "cobertura", "procedencia", "vigencia"), cls)
+        return cls(
+            foco=_require_str(data["foco"], "foco", cls),
+            contrato=_require_str(data["contrato"], "contrato", cls),
+            cobertura=_require_int(data["cobertura"], "cobertura", cls),
+            procedencia=SignatureProcedencia.from_dict(data["procedencia"]),
+            vigencia=SignatureVigencia.from_dict(data["vigencia"]),
+            metadata=_require_optional_mapping(data.get("metadata"), "metadata", cls),
+        )
 
 
 # --- Extractor determinista (puro, sin I/O) ---------------------------
