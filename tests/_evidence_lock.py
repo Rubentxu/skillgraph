@@ -14,6 +14,13 @@ Reglas:
   bloquean entre si).
 - Escritura atomica via `os.replace` desde `.tmp`: el lector nunca ve
   un archivo parcialmente escrito.
+- Escritura **idempotente en contenido**: con `volatile_keys`, un
+  payload que solo difiere en esas claves NO reescribe el fichero
+  (WI-82). La evidencia UAT es un registro de lo verificado, no un
+  log de ejecuciones; `revision` se rellena con `git rev-parse HEAD`
+  y no puede converger nunca (un fichero versionado no puede
+  contener el SHA del commit que lo versiona), asi que reescribirlo
+  solo encia `git status` en cada corrida del suite.
 - `fcntl.flock` es POSIX; en Windows cae a un no-op silencioso con
   warning (mismo patron que `runtime/locks.py`).
 - El archivo `.lock` se mantiene tras la escritura (mismo patron que
@@ -28,6 +35,7 @@ import contextlib
 import json
 import os
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +54,7 @@ def save_with_lock(
     payload: dict[str, Any],
     *,
     history_keep: bool = False,
+    volatile_keys: Sequence[str] = (),
 ) -> Path:
     """Escribe `payload` como `<uat_id>.json` bajo `evidence_dir` con lock.
 
@@ -58,6 +67,13 @@ def save_with_lock(
             previa en ``history/<uat_id>/<timestamp>-<status>.json``
             (patron de H8, usado solo por `_save_evidence` de uat_audit.py).
             Default False (escritura idempotente sin historial).
+        volatile_keys: claves cuyo valor cambia entre ejecuciones sin que eso
+            signifique que la evidencia haya cambiado (p.ej. ``("revision",)``,
+            que se rellena con ``git rev-parse HEAD``). Si el fichero ya
+            existe y coincide con `payload` en todas las claves restantes,
+            **no se reescribe**: escribir el mismo contenido con un sello
+            distinto encia el arbol de git en cada ejecucion del suite sin
+            aportar informacion. Ver WI-82.
 
     Returns:
         Path al archivo final escrito.
@@ -88,12 +104,48 @@ def save_with_lock(
         try:
             if history_keep and out.exists():
                 _archive_previous(out, evidence_dir / "history" / uat_id)
+            elif _says_the_same(out, payload, volatile_keys):
+                return out
             _atomic_write(out, content)
         finally:
             if _HAS_FCNTL:
                 with contextlib.suppress(OSError):
                     fcntl.flock(lock_fd, fcntl.LOCK_UN)
     return out
+
+
+def _without(data: Mapping[str, Any], keys: Sequence[str]) -> dict[str, Any]:
+    """Copia de `data` sin las claves de `keys` (si estaban presentes)."""
+    drop = frozenset(keys)
+    return {k: v for k, v in data.items() if k not in drop}
+
+
+def _says_the_same(
+    out: Path,
+    payload: Mapping[str, Any],
+    volatile_keys: Sequence[str],
+) -> bool:
+    """¿El fichero ya afirma lo mismo que `payload`, salvo `volatile_keys`?
+
+    Deliberadamente *fail-open*: si el fichero no existe, no se puede leer o
+    no es un objeto JSON, la respuesta es False y se escribe. Tragarse la
+    evidencia por una lectura fallida seria peor que el ruido que esto evita
+    — el mismo criterio que `knowledge/git_source.py` («un dato plausible y
+    falso es peor que un error»).
+
+    La comparacion es sobre el JSON *parseado*, no sobre bytes: el orden de
+    claves de un dict no es informacion, el de una lista si, y por eso las
+    listas se comparan tal cual.
+    """
+    if not volatile_keys or not out.exists():
+        return False
+    try:
+        existing = json.loads(out.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(existing, dict):
+        return False
+    return _without(existing, volatile_keys) == _without(payload, volatile_keys)
 
 
 def _archive_previous(out: Path, hist_dir: Path) -> None:

@@ -320,7 +320,7 @@ def _emit_uat_08_evidence(
             "patch opera a nivel de plan, no de ejecuciones."
         ),
     }
-    save_with_lock(evidence_dir, "UAT-08", evidence)
+    save_with_lock(evidence_dir, "UAT-08", evidence, volatile_keys=("revision",))
     assert (evidence_dir / "UAT-08.json").is_file()
     # Limpieza del tmp_path: pytest lo borra, no necesitamos hacer nada.
     del tmp_path, data_root
@@ -405,7 +405,7 @@ def _emit_uat_09_evidence(
             "cambia entre ejecuciones; el proposal_id SI es reproducible."
         ),
     }
-    save_with_lock(evidence_dir, "UAT-09", evidence)
+    save_with_lock(evidence_dir, "UAT-09", evidence, volatile_keys=("revision",))
     assert (evidence_dir / "UAT-09.json").is_file()
     del tmp_path, data_root
 
