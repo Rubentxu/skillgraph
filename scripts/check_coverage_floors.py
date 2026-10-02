@@ -15,20 +15,28 @@ El repositorio declara DOS contratos de cobertura distintos:
          CLI                                           >= 70 %
          paths.py                                      >= 60 %
 
-     **Este contrato no lo puede comprobar ninguna herramienta.**
-     `coverage report` no acepta umbrales por ruta, y ningun test del
-     repo lo mira. Es una cifra que se declara y no se verifica.
+     **Este contrato no lo puede comprobar `coverage report`.** Solo admite
+     un umbral global, y ningun test del repo lo miraba. Era una cifra que
+     se declaraba y no se verificaba.
 
-Este script es la parte que faltaba: lee el informe JSON de coverage y
-comprueba los suelos por modulo. Vive en `scripts/` y no en
+Este script es la parte que faltaba. Vive en `scripts/` y no en
 `.pipelinek/`, porque un guard que no esta versionado no es un guard.
 
-Como anadir el suelo de un modulo nuevo
-----------------------------------------
-Anadir una entrada a `SUELOS` con su ruta EXACTA (la clave de
-`coverage json`, que es relativa a la raiz del proyecto, con prefijo
-`src/skillgraph/`). La clave tiene que existir en el informe: si el
-modulo desaparece, el script aborta en vez de medir en silencio.
+Los suelos van POR PAQUETE, no por modulo
+-----------------------------------------
+WI-93 implemento este contrato con una lista de 21 modulos escrita a mano, y
+eso solo vigilaba `runtime/`: los otros siete paquetes podian recibir un
+modulo nuevo al 40 % sin que nadie se enterara. Era el mismo fallo que el
+propio WI-93 cerraba para `runtime/`, sin cerrar en el resto.
+
+Aqui el suelo lo **hereda el modulo de su paquete**:
+
+    SUELOS_POR_PAQUETE: prefijo de ruta -> suelo
+
+Una sola fuente, sin lista que mantener, y un modulo nuevo en CUALQUIER
+paquete cubierto queda vigilado en el momento de aparecer. La unica excepcion
+es `paths.py`, al que §6.3 le da un suelo propio (60 %) distinto del de su
+paquete; esta en `EXCEPCIONES` y se declara a proposito.
 
 Trampa conocida: la agregacion
 ------------------------------
@@ -36,7 +44,8 @@ Trampa conocida: la agregacion
 sentencias y ramas, y una rama parcial cuenta como media. Por eso este
 script **agrega recuentos, no porcentajes**: promediar porcentajes da
 mas de lo que hay, y un paquete al 95 % de media puede esconder un
-modulo al 60 %.
+modulo al 60 %. Los agregados se conservan como comprobacion ADICIONAL
+(`SUELOS_AGGREGADOS`), nunca en lugar de la comprobacion por modulo.
 """
 
 from __future__ import annotations
@@ -49,45 +58,54 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RC = ROOT / ".coverage.rc"
 
-# Ruta del informe (tal como la keya `coverage json`) -> suelo minimo.
-# Un mapa, no una lista de sueltos: asi el suelo viaja JUNTO al modulo
-# que gobierna y no puede olvidarse uno de los dos.
-SUELOS: dict[str, float] = {
-    # AGENTS §6.3, "modulos del core", nombrados uno a uno.
-    "src/skillgraph/core/errors.py": 90.0,
-    "src/skillgraph/core/recipe.py": 90.0,
-    "src/skillgraph/core/runtime_types.py": 90.0,
-    "src/skillgraph/resources/bricks.py": 90.0,
-    "src/skillgraph/resources/parser.py": 90.0,
-    "src/skillgraph/resources/registry.py": 90.0,
-    "src/skillgraph/resources/workflow.py": 90.0,
-    "src/skillgraph/resources/plan_loader.py": 90.0,
-    "src/skillgraph/platform/storage.py": 90.0,
-    "src/skillgraph/runtime/handoff.py": 90.0,
-    "src/skillgraph/runtime/agent.py": 90.0,
-    "src/skillgraph/runtime/engine.py": 90.0,
-    "src/skillgraph/runtime/runcontroller.py": 90.0,
-    "src/skillgraph/runtime/locks.py": 90.0,
-    "src/skillgraph/runtime/redaction.py": 90.0,
-    "src/skillgraph/runtime/http_adapter.py": 90.0,
-    "src/skillgraph/runtime/run_types.py": 90.0,
-    "src/skillgraph/runtime/node_execution_delegations.py": 90.0,
-    "src/skillgraph/runtime/run_budget_delegations.py": 90.0,
-    "src/skillgraph/runtime/run_observability_delegations.py": 90.0,
-    # AGENTS §6.3, resto del contrato.
+# AGENTS §6.3, por paquete. Todo modulo con codigo bajo uno de estos
+# prefijos hereda su suelo; no hay que listar modulos, y por eso no se puede
+# olvidar uno.
+SUELOS_POR_PAQUETE: dict[str, float] = {
+    "src/skillgraph/core/": 90.0,
+    "src/skillgraph/resources/": 90.0,
+    "src/skillgraph/runtime/": 90.0,
+    "src/skillgraph/platform/": 90.0,
+    "src/skillgraph/knowledge/": 90.0,
+    "src/skillgraph/governance/": 90.0,
+    "src/skillgraph/domain/": 90.0,
+    "src/skillgraph/cli/": 70.0,
+}
+
+# Modulos con suelo PROPIO, distinto del de su paquete. §6.3 exime a
+# `paths.py` explicitamente (`>= 60 %`): aplicarle el 90 % de `platform/`
+# haria fallar al unico modulo que el propio contrato exonera.
+EXCEPCIONES: dict[str, float] = {
     "src/skillgraph/platform/paths.py": 60.0,
 }
 
-# Prefijos que se comprueban como conjunto agregado.
+# Comprobacion ADICIONAL, por conjunto. No sustituye a la por modulo: es la
+# que atrapa el caso de un paquete entero que se degrada de golpe, que la
+# suma de modulosflojos tambien veria, pero con un mensaje que lo dice.
 SUELOS_AGGREGADOS: dict[str, float] = {
     "src/skillgraph/runtime/": 90.0,
     "src/skillgraph/cli/": 70.0,
 }
 
 # `pyproject.toml` -> [tool.coverage.report]. Se comprueba aparte porque
-# `coverage report` ya lo aplica, pero solo si alguien lo ejecuta: aquí
+# `coverage report` ya lo aplica, pero solo si alguien lo ejecuta: aqui
 # queda registrado que se comprobo, no solo que existe.
 SUELO_GLOBAL = 80.0
+
+
+def suelo_de(ruta: str) -> float | None:
+    """Suelo que hereda `ruta`, o `None` si §6.3 no gobierna ese modulo.
+
+    Precedencia: la excepcion propia gana al suelo del paquete. Se declara
+    aqui, y no repartida por `main()`, para que la regla sea una sola
+    pregunta y se pueda probar sola.
+    """
+    if ruta in EXCEPCIONES:
+        return EXCEPCIONES[ruta]
+    for prefijo, suelo in SUELOS_POR_PAQUETE.items():
+        if ruta.startswith(prefijo):
+            return suelo
+    return None
 
 
 def informe() -> dict[str, dict[str, object]]:
@@ -122,78 +140,94 @@ def porcentaje(entradas: list[dict[str, object]]) -> float:
     return 100.0 * cubierto / total if total else 100.0
 
 
-def main() -> int:
-    files = informe()
+def _tiene_codigo(entrada: dict[str, object]) -> bool:
+    s = entrada["summary"]  # type: ignore[index]
+    return int(s["num_statements"]) + int(s["num_branches"]) > 0  # type: ignore[index]
+
+
+def evaluar(files: dict[str, dict[str, object]]) -> tuple[list[str], list[str]]:
+    """Funcion PURA: informe de coverage -> (lineas para imprimir, fallos).
+
+    Separada de `main()` a proposito. El contrato se puede probar con
+    informes sinteticos, sin disco y sin subprocess, y un test que solo
+    lee el informe real no distingue «el contrato se cumple» de «el
+    contrato no mira aqui».
+
+    Recuentos, no porcentajes: ver la nota de la cabecera del modulo.
+    """
+    lineas: list[str] = []
     fallos: list[str] = []
 
-    print("== AGENTS §6.3, modulos con suelo individual ==")
-    for ruta, suelo in sorted(SUELOS.items()):
-        entrada = files.get(ruta)
-        if entrada is None:
-            msg = f"{ruta}: no aparece en el informe de coverage"
-            print(f"  ?    {msg}")
-            fallos.append(msg)
+    print("== AGENTS §6.3, por modulo (el suelo lo hereda del paquete) ==")
+    for ruta in sorted(files):
+        suelo = suelo_de(ruta)
+        if suelo is None:
+            continue  # §6.3 no gobierna este modulo
+        entrada = files[ruta]
+        if not _tiene_codigo(entrada):
+            # 0 sentencias y 0 ramas (los `__init__.py` de reexport):
+            # exigirle un suelo es medir un fichero vacio, y ademas hace
+            # division por cero. Un guard que revienta con ruido sobre lo
+            # que no importa teaches a ignorar al guard.
             continue
         p = porcentaje([entrada])
         ok = p >= suelo
-        print(f"  {'OK  ' if ok else 'BAJO'} {p:6.2f} %  (suelo {suelo:5.1f} %)  {ruta}")
+        marca = " (excepcion §6.3)" if ruta in EXCEPCIONES else ""
+        lineas.append(
+            f"  {'OK  ' if ok else 'BAJO'} {p:6.2f} %  (suelo {suelo:5.1f} %)  {ruta}{marca}"
+        )
         if not ok:
             fallos.append(f"{ruta} mide {p:.2f} %, por debajo de su suelo del {suelo:.0f} %")
 
-    print()
-    print("== AGENTS §6.3, conjuntos agregados ==")
-    for prefijo, suelo in sorted(SUELOS_AGGREGADOS.items()):
-        entradas = [e for f, e in files.items() if f.startswith(prefijo)]
-        if not entradas:
-            msg = f"{prefijo}: no hay modulos en el informe"
-            print(f"  ?    {msg}")
-            fallos.append(msg)
+    print("== paquetes declarados que no aportan ningun modulo ==")
+    for prefijo in sorted(SUELOS_POR_PAQUETE):
+        con_codigo = [f for f in files if f.startswith(prefijo) and _tiene_codigo(files[f])]
+        if con_codigo:
             continue
+        # Con suelos por paquete desaparece la via por la que WI-93
+        # detectaba un modulo fantasma (la lista lo nombraba). Esta es la
+        # asercion que la sustituye: si un paquete declarado no aporta ni un
+        # modulo, o se borro o se renombro, y hay que enterarse en vez de
+        # medir en silencio sobre un paquete que ya no existe.
+        msg = f"{prefijo}: paquete con suelo declarado y ningun modulo en el informe"
+        lineas.append(f"  ?    {msg}")
+        fallos.append(msg)
+    if not fallos or not any("ningun modulo" in f for f in fallos):
+        lineas.append("  OK   todo paquete declarado aporta modulos con codigo")
+
+    lineas.append("")
+    lineas.append("== AGENTS §6.3, conjuntos agregados (comprobacion adicional) ==")
+    for prefijo, suelo in sorted(SUELOS_AGGREGADOS.items()):
+        entradas = [e for f, e in files.items() if f.startswith(prefijo) and _tiene_codigo(e)]
+        if not entradas:
+            continue  # ya reportado arriba, con un mensaje mas claro
         p = porcentaje(entradas)
         ok = p >= suelo
-        print(
+        lineas.append(
             f"  {'OK  ' if ok else 'BAJO'} {p:6.2f} %  (suelo {suelo:5.1f} %)  "
             f"{prefijo} = {len(entradas)} modulos"
         )
         if not ok:
-            fallos.append(f"{prefijo} mide {p:.2f} %, por debajo del suelo del {suelo:.0f} %")
+            fallos.append(
+                f"{prefijo} agregado mide {p:.2f} %, por debajo del suelo del {suelo:.0f} %"
+            )
 
-    print()
-    print("== pyproject.toml, suelo global ==")
-    p = porcentaje(list(files.values()))
+    lineas.append("")
+    lineas.append("== pyproject.toml, suelo global ==")
+    p = porcentaje([e for e in files.values() if _tiene_codigo(e)])
     ok = p >= SUELO_GLOBAL
-    print(f"  {'OK  ' if ok else 'BAJO'} {p:6.2f} %  (fail_under = {SUELO_GLOBAL:.0f} %)")
+    lineas.append(f"  {'OK  ' if ok else 'BAJO'} {p:6.2f} %  (fail_under = {SUELO_GLOBAL:.0f} %)")
     if not ok:
         fallos.append(f"global mide {p:.2f} %, por debajo de {SUELO_GLOBAL:.0f} %")
 
-    print()
-    print("== todo modulo de runtime/ tiene suelo (el paquete que §6.3 nombra) ==")
-    # Sin esto, el checker solo comprueba lo que le dijeron: anadir un
-    # modulo nuevo a runtime/ sin suelo pasaria desapercibido, que es
-    # exactamente el fallo que este guard viene a cerrar. Un guard que
-    # solo vigila la lista que el mismo mantiene no vigila nada.
-    #
-    # Se excluyen los modulos SIN NADA que cubrir (0 sentencias y 0
-    # ramas, tipicamente `__init__.py` de reexport): exigirles un suelo
-    # seria exigir medir un fichero vacio, y ademas hace division por
-    # cero. Un guard que revienta con ruido sobre lo que no importa
-    # teaches a ignorar al guard.
-    sin_suelo: list[str] = []
-    for f in sorted(files):
-        if not f.startswith("src/skillgraph/runtime/") or not f.endswith(".py"):
-            continue
-        if f in SUELOS:
-            continue
-        s = files[f]["summary"]  # type: ignore[index]
-        if int(s["num_statements"]) + int(s["num_branches"]) == 0:  # type: ignore[index]
-            continue
-        sin_suelo.append(f)
-    for f in sin_suelo:
-        msg = f"{f}: modulo de runtime/ con codigo y sin suelo declarado en SUELOS"
-        print(f"  ?    {msg}")
-        fallos.append(msg)
-    if not sin_suelo:
-        print("  OK   todo modulo de runtime/ con codigo tiene suelo declarado")
+    return lineas, fallos
+
+
+def main() -> int:
+    files = informe()
+    lineas, fallos = evaluar(files)
+    for linea in lineas:
+        print(linea)
 
     print()
     if fallos:
