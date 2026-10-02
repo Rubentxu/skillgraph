@@ -83,7 +83,24 @@ echo "[audit_bundle] ejecutando bash scripts/ci.sh..."
 bash scripts/ci.sh 2>&1 | tee ci-output-cleanroom.txt
 
 echo "[audit_bundle] ejecutando uat_audit..."
-uv run python tests/uat_audit.py 2>&1 | tee uat-audit-cleanroom.txt
+# `-m tests.uat_audit`, no `python tests/uat_audit.py`: en la forma de
+# fichero, sys.path[0] es `tests/` y el `from tests._evidence_lock import`
+# de nivel de modulo falla con ModuleNotFoundError (exit 1). Con `-m` el
+# repo raiz queda en sys.path y la importacion resuelve.
+#
+# El `| tee` se come el exit code (sin pipefail el script seguiria como si
+# nada), asi que se captura con PIPESTATUS: un UAT audit que falla tiene
+# que abortar el bundle, no producir un informe con traceback y salir 0.
+# Mismo workaround que el pre-push hook y que .pipeline.kts.
+UAT_LOG="${SCRATCH}/skillgraph-${SHORT_SHA}/uat-audit-cleanroom.txt"
+set +e
+uv run python -m tests.uat_audit 2>&1 | tee "$UAT_LOG"
+UAT_RC="${PIPESTATUS[0]}"
+set -e
+if [ "$UAT_RC" -ne 0 ]; then
+    echo "[audit_bundle] ERROR: uat_audit fallo (exit ${UAT_RC}); bundle NO certificable" >&2
+    exit "$UAT_RC"
+fi
 
 echo ""
 echo "[audit_bundle] resultados en ${SCRATCH}/skillgraph-${SHORT_SHA}/:"
