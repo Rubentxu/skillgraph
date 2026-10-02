@@ -7713,3 +7713,45 @@ ADR-0016. Umbral <800 requiere fase 2.
   mapper (delega con import diferido); las redes de identidad deben
   leer getsource cuando haya wrappers, no asumir mismo objeto.
 
+## 2026-10-02 (VII) — WI-61: fase 2a de knowledge_repository — fuera de god files
+
+### Resumen
+
+Octava pasada autonomo. Fase 2 (subconjunto) de ADR-0020: cluster
+CLAIMS (9 metodos, 290 LoC) extraido a `platform/knowledge_claims.py`
+como `SqliteClaimRepository` con conexion compartida via `_storage`.
+**knowledge_repository 874 -> 702 LoC: FUERA de god files** — el audit
+regenerado baja a **4 archivos >800** (storage 1807, runcontroller
+1289, ports 927, graph_expansion 862). Fases 2b/2c de ADR-0020 quedan
+OPCIONALES: el umbral ya se cruzo.
+
+### Base de la costura
+
+AST de los 33 metodos de la clase: CERO llamadas self-to-self (todos
+los clusters independientes); unico acoplamiento = `_storage` (de el
+deriva `_conn`). Costura sin friccion.
+
+### Evidencia
+
+- RED honesto (collection error). Afectados 62/62 (identidad 10 +
+  knowledge 44 + H9 coverage). Suite completa PASS por hook REAL (exit
+  de pytest decidido por el hook reparado). ruff/format limpios.
+- Commit fase 2a: ver git log (refactor(platform): WI-61 fase 2a).
+
+### Descubrimientos (cirugia AST, 3 intentos, 0 dano en disco)
+
+- `kwonlyargs` NO estan en `args.args` del AST (firmas con `*`
+  keyword-only): la primera cirugia genero delegados con coma
+  huerfana. El compile-before-write detecto el SyntaxError ANTES de
+  escribirse; git checkout + reintento con captura correcta.
+- El slice de cuerpo es [body_first_idx, end_lineno) EXCLUSIVO: usar
+  b-1 dejaba la ultima linea colgando (detectado igual).
+- En shims-wrappers la red de identidad debe leer getsource (el shim
+  delega con import diferido, no es el mismo objeto).
+
+### Estado de salida
+
+- Arbol limpio tras chore(uat); SIN push (acumulado pendiente del
+  operador). Siguiente: fases 2b/2c opcionales de ADR-0020, fase 2 de
+  ADR-0019 (snapshot/recovery, requiere diseno), o push.
+

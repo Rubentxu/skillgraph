@@ -126,7 +126,7 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-60   # fase 1 del estrangulamiento de knowledge_repository (ADR-0020): 7 mappers puros -> platform/knowledge_mappers.py; 986 -> 874 LoC, re-export para shims de storage, identidad 7/7 + shim via getsource. Fase 2 (split de clase por clusters) planificada
+  current_workitem: WI-61   # fase 2a de knowledge_repository (ADR-0020): cluster CLAIMS -> SqliteClaimRepository (platform/knowledge_claims.py); 874 -> 702 LoC, FUERA de god files (<800); fachada delegante con firmas keyword-only identicas; 0 self-calls verificado por AST
   next_workitem: WI-56   # siguiente estrangulamiento P1 segun audit vigente: runcontroller.py (1445 LoC) o knowledge_repository.py (986); requiere ADR propia (patron ADR-0018 replicable)
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
