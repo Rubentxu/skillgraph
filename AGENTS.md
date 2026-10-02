@@ -341,7 +341,11 @@ Antes de abrir un PR (o commit, si AUTO):
    `SESSION-JOURNAL.md` con el nuevo workitem.
 9. [ ] He corrido `mise exec -- uv run pytest` y `ruff check src tests`
    y todo está verde.
-10. [ ] El commit message describe el "por qué", no el "qué".
+10. [ ] Si toqué `pyproject.toml`, `src/skillgraph/__init__.py` o
+    cualquier cosa que entre en el paquete, he corrido
+    `mise exec -- uv run python scripts/check_package_build.py`
+    y el contrato de empaquetado está verde (§12).
+11. [ ] El commit message describe el "por qué", no el "qué".
 
 ---
 
@@ -971,6 +975,46 @@ Y rechaza dos derivas reales:
 
 Si el test falla, **la release queda bloqueada** hasta que
 `__version__` y la etiqueta vuelvan a coincidir.
+
+### La cadena termina en un artefacto, y el artefacto se comprueba (WI-97)
+
+El gate anterior cierra la cadena `git → __version__`. Faltaba el último
+eslabón, que es el que de verdad produce lo que se distribuye:
+
+```
+git ──▶ __version__ ──▶ pyproject (hatch) ──▶ wheel / sdist
+ ▲         ▲                ▲                     ▲
+derive_semver.py      el valor lo lee        ESTE NO SE COMPROBABA
+                       hatchling de aqui       NUNCA, HASTA WI-97
+```
+
+Hasta WI-97 ese último tramo no lo ejecutaba nadie: cero tests
+referenciaban `hatchling`, `uv build` o `entry_points`, y ningún stage de
+`.pipeline.kts` construía el paquete. Toda la machinery de esta sección
+medía un número sobre un artefacto que nadie había visto nacer.
+
+Ahora lo verifica `scripts/check_package_build.py`, stage propio
+`package-build`:
+
+| Invariante | Qué impide |
+|---|---|
+| `sg_build_version_drift` | que el número del artefacto no sea el del código |
+| `sg_build_target_no_resoluble` | que un `[project.scripts]` apunte a algo que no existe |
+| `sg_build_modulo_faltante` | que el wheel deje de recoger un módulo del paquete |
+| `sg_build_py_typed_ausente` | que el paquete declare `py.typed` y no lo lleve |
+| `sg_build_sdist_no_versionado` | que el artefacto herede del árbol de trabajo y no del commit |
+| `sg_build_sdist_falta` / `..._sin_declarar` | que el `only-include` y el artefacto dejen de corresponderse |
+
+El más importante es `sg_build_sdist_no_versionado`: un artefacto que
+hereda de ficheros sin versionar hace que dos árboles con el mismo commit
+produzcan dos sdists distintos, y `git` deja de poder decir qué se publicó.
+
+`sg_build_target_no_resoluble` existe por una razón que conviene no
+olvidar: comparar «lo declarado» con «lo publicado» es tautología a medias,
+porque lo publicado **se deriva** de lo declarado. Un target equivocado sale
+idéntico en los dos lados. Solo importar el módulo distingue «declaré algo
+que existe» de «declaré algo que no existe y el backend lo copió sin
+mirarlo».
 
 ### Erratum histórico: `v0.14.0`
 
