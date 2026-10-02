@@ -1,4 +1,4 @@
-"""WI-80: un rechazo ilegible degrada a `PROPOSED` sin avisar.
+"""WI-80: un rechazo ilegible degradaba a `PROPOSED` sin avisar. **CORREGIDO.**
 
 Investigacion retrospectiva, senal "fallbacks silenciosos" del goal.
 
@@ -14,8 +14,9 @@ juicio:
    registry". Un registry incompleto hace que la comprobacion FALLE
    (I3) en vez de pasar: **fail-closed, correcto**. Hipotesis retirada.
 
-2. `_collect_rejection_ids` (expansion.py:86) se salta un
-   `expansion_rejections/*.json` ilegible. Este es el hallazgo.
+2. `_collect_rejection_ids` (expansion.py:86) se saltaba un
+   `expansion_rejections/*.json` ilegible. Este era el hallazgo, y era
+   real.
 
 El precedente del propio repo es explicito. `knowledge/git_source.py:365`:
 
@@ -31,30 +32,43 @@ Y `governance/backups.py:358`:
 
 Los dos degradan el dato corrupto. Pero los dos son HONESTOS: `None` y
 "no aparece en la lista" son afirmaciones que el operador puede
-interpretar. Aqui la degradacion es peor: un rechazo ilegible se
-convierte en la afirmacion contraria — "esta propuesta NO esta
-rechazada" — y `list` la imprime como `stage=PROPOSED` sin una linea de
+interpretar. Aqui la degradacion era peor: un rechazo ilegible se
+convertia en la afirmacion contraria — "esta propuesta NO esta
+rechazada" — y `list` la imprimia como `stage=PROPOSED` sin una linea de
 aviso. Un operador que filtra por `--stage REJECTED` no la ve, y un
-operador que lea la lista conclude que hay una propuesta pendiente que
-en realidad ya fue rechazada con evidencia persistida.
+operador que lea la lista concluye que hay una propuesta pendiente que en
+realidad ya fue rechazada con evidencia persistida.
 
 ALCANCE MEDIDO, no supuesto:
 
 - El registry de rechazos NO gobierna la aplicacion. `cmd_expansion_apply`
   no consulta `_collect_rejection_ids`; re-aplicar una propuesta rechazada
-  la re-valida contra el plan. Por tanto NO es un falso éxito de
-  escritura: nada se aplica dos veces por esta via. `apply` es
-  idempotente por re-validacion, no por consulta de rechazos.
-- El alcance real es de **visualizacion**: `cmd_expansion_list`
-  (expansion.py:450) y `cmd_expansion_show` (expansion.py:482). Ambos
-  devuelven EXIT_OK y muestran un `stage` equivocado.
+  la re-valida contra el plan. Por tanto NO era un falso exito de
+  escritura: nada se aplicaba dos veces por esta via. El alcance real
+  era de **visualizacion**: `cmd_expansion_list` y `cmd_expansion_show`.
 
-QUE HACE ESTA RED: fija el comportamiento REAL, con el caso base
-(REJECTED visible) al lado del caso degradado, para que la diferencia sea
-visible y no un misterio. No "corrige" el codigo: cambiar la salida de
-`expansion list` es cambio de contrato externo del CLI (AGENTS 6.4) y
-tiene un coste de migracion de consumidores. Se reporta como decision de
-producto.
+POR QUE NO SE CORRIGIO EN SU DIA, Y POR QUE SI AHORA. La red original
+fijaba el comportamiento REAL a proposito (`test_caso_corrupto_muestra_
+proposed_y_no_avisa`) y la consigna era "arreglarlo exige tocar el test
+a proposito". Motivo: cambiar la salida de `expansion list` se leyo como
+cambio de contrato externo (AGENTS 6.4). Ese criterio era erroneo, y la
+razon es que confundio **cambiar un contrato** con **corregir una
+afirmacion falsa**: el contrato de `--stage REJECTED` no es "oculta las
+rechazadas cuyo fichero esta roto", y ningun consumidor razonable
+depende de que `stage=PROPOSED` se imprima para algo que si fue
+rechazado. La correccion hace el contrato MAS HONESTO, no menos.
+
+EL FIX. `record_rejection` escribe siempre `<proposal_id>.json`
+(`graph_expansion.py:618`), asi que el stem del fichero ES el
+proposal_id por construccion. `_collect_rejection_ids` deja de saltarse
+el fichero: usa el stem, y ademas lo reporta en `unreadable` para que
+`list`/`show` avisen en stderr. Sin ese aviso, la correccion habria
+sustituido una mentira silenciosa por otra mas pequena: decir REJECTED
+como si la evidencia estuviera sana.
+
+QUE HACE ESTA RED: fija el contrato YA CORREGIDO, con el caso base
+(REJECTED legible) al lado del caso degradado (REJECTED por nombre de
+fichero + aviso), para que la diferencia sea visible y no un misterio.
 """
 
 from __future__ import annotations
@@ -235,31 +249,60 @@ def _escenario_rechazada(tmp_path: Path) -> tuple[Path, Path, Path]:
 class TestCollectRejectionIds:
     def test_legible_devuelve_el_id(self, tmp_path: Path) -> None:
         _data_root, rejections, _f = _escenario_rechazada(tmp_path)
-        ids = _collect_rejection_ids(rejections)
-        assert len(ids) == 1, f"se esperaba 1 rechazo legible, vino {ids}"
+        scan = _collect_rejection_ids(rejections)
+        assert len(scan.ids) == 1, f"se esperaba 1 rechazo legible, vino {scan.ids}"
+        assert scan.unreadable == (), (
+            f"una evidencia legible no puede estar damaged: {scan.unreadable}"
+        )
 
-    def test_ilegible_se_salta_en_silencio(self, tmp_path: Path) -> None:
-        """El dato: un rechazo truncado NO aparece. Sin excepcion, sin aviso."""
+    def test_ilegible_conserva_el_id_por_nombre(self, tmp_path: Path) -> None:
+        """WI-80: un rechazo truncado NO se pierde, y se reporta como ilegible.
+
+        `record_rejection` escribe siempre `<proposal_id>.json`
+        (`graph_expansion.py:618`), asi que el stem ES el proposal_id. No
+        es una heuristica: es la convencion de escritura leida al reves.
+        """
         _data_root, rejections, f = _escenario_rechazada(tmp_path)
+        expected = f.stem
         f.write_text(f.read_text()[:20], encoding="utf-8")  # JSON truncado
         with pytest.raises(json.JSONDecodeError):
             json.loads(f.read_text())  # el fichero esta roto de verdad
-        assert _collect_rejection_ids(rejections) == set(), (
-            "comportamiento real: un rechazo ilegible se pierde"
-        )
 
-    def test_ilegible_cambia_el_stage_inferido(self, tmp_path: Path) -> None:
-        """Y con ello, la propuesta se presenta como PROPOSED."""
+        scan = _collect_rejection_ids(rejections)
+        assert expected in scan.ids, (
+            f"el rechazo ilegible se perdio: {expected!r} no esta en {scan.ids}. "
+            f"Degradarlo a 'no rechazado' es una afirmacion falsa (WI-80)"
+        )
+        assert scan.unreadable == (f,), f"debe reportarse como ilegible: {scan.unreadable}"
+
+    def test_ilegible_ya_no_cambia_el_stage_inferido(self, tmp_path: Path) -> None:
+        """Con ello, la propuesta sigue siendo REJECTED, no PROPOSED."""
         _data_root, rejections, f = _escenario_rechazada(tmp_path)
         proposal_id = json.loads(f.read_text())["proposal_id"]
         prop_path = tmp_path / "prop.json"
 
-        antes = _infer_proposal_stage(prop_path, proposal_id, _collect_rejection_ids(rejections))
+        antes = _infer_proposal_stage(
+            prop_path, proposal_id, _collect_rejection_ids(rejections).ids
+        )
         assert antes == "REJECTED"
 
         f.write_text(f.read_text()[:20], encoding="utf-8")
-        despues = _infer_proposal_stage(prop_path, proposal_id, _collect_rejection_ids(rejections))
-        assert despues == "PROPOSED", f"comportamiento real tras corromper el rechazo: {despues}"
+        despues = _infer_proposal_stage(
+            prop_path, proposal_id, _collect_rejection_ids(rejections).ids
+        )
+        assert despues == "REJECTED", (
+            f"una corrupcion del fichero no puede convertir una propuesta rechazada "
+            f"en PROPOSED: {despues}"
+        )
+
+    def test_json_valido_sin_proposal_id_tambien_se_recupera(self, tmp_path: Path) -> None:
+        """JSON bien formado pero sin `proposal_id`: mismo nombre, misma regla."""
+        _data_root, rejections, f = _escenario_rechazada(tmp_path)
+        f.write_text(json.dumps({"reason": "I3"}), encoding="utf-8")
+
+        scan = _collect_rejection_ids(rejections)
+        assert f.stem in scan.ids
+        assert scan.unreadable == (f,)
 
 
 # --- Red 2: el contrato externo (exit code + salida) ---------------------
@@ -272,32 +315,46 @@ class TestExpansionListUnderCorruptRejection:
         assert out.returncode == 0, out.stderr
         assert "stage=REJECTED" in out.stdout
 
-    def test_caso_corrupto_muestra_proposed_y_no_avisa(self, tmp_path: Path) -> None:
-        """Comportamiento REAL, fijado a proposito. No es lo que deberia ser.
+    def test_caso_corrupto_sigue_diciendo_rejected_y_avisa(self, tmp_path: Path) -> None:
+        """WI-80: la corrupcion no puede cambiar lo que el producto afirma.
 
-        `expansion list` sale con 0 y dice `stage=PROPOSED` para una
-        propuesta que SI fue rechazada y tiene su evidencia persistida.
-        No hay ninguna linea que advierta de que hubo una lectura
-        fallida. La diferencia con el caso base es el unico sintoma
-        observable, y no es visible.
+        Antes de esta correccion, `expansion list` salia con 0 y decia
+        `stage=PROPOSED` para una propuesta que SI fue rechazada, sin
+        ninguna linea de aviso. Ahora dice `REJECTED` —que es la verdad—
+        y ademas avisa en stderr de que la evidencia esta ilegible, para
+        que el operador sepa que la conclusion viene del nombre del
+        fichero y no de su cuerpo.
         """
         data_root, rejections, f = _escenario_rechazada(tmp_path)
         f.write_text(f.read_text()[:20], encoding="utf-8")
 
         out = _run_cli("expansion", "list", "demo", cwd=tmp_path, data_root=data_root)
         assert out.returncode == 0, out.stderr
-        assert "stage=PROPOSED" in out.stdout, out.stdout
-        assert "stage=REJECTED" not in out.stdout
+        assert "stage=REJECTED" in out.stdout, out.stdout
+        assert "stage=PROPOSED" not in out.stdout, out.stdout
         # El fichero roto sigue en disco: la evidencia NO se borra.
-        # Esto si es correcto y es lo que lo separa de una perdida de datos.
         assert f.is_file(), "la evidencia del rechazo debe preservarse"
-        # Lo que falta: ningun aviso de que la lectura fallo.
-        assert "ilegible" not in out.stdout.lower()
-        assert "corrupt" not in out.stdout.lower()
         assert rejections.is_dir()
+        # Y el operador se entera de que la lectura fallo.
+        assert "ilegible" in out.stderr.lower(), (
+            f"sin aviso en stderr, el operador no puede distinguir una "
+            f"evidencia sana de una danada:\n{out.stderr}"
+        )
 
-    def test_filtrar_por_rejected_oculta_la_propuesta(self, tmp_path: Path) -> None:
-        """Consecuencia operativa: el filtro deja de listarla."""
+    def test_evidencia_sana_no_avisa(self, tmp_path: Path) -> None:
+        """El aviso es por lectura fallida, no por presencia de rechazos.
+
+        Si `expansion list` gritara en cada rechazo, el aviso dejaria de
+        informar: seria ruido, y el ruido es lo que hace que nadie lea
+        los avisos.
+        """
+        data_root, _rejections, _f = _escenario_rechazada(tmp_path)
+        out = _run_cli("expansion", "list", "demo", cwd=tmp_path, data_root=data_root)
+        assert out.returncode == 0, out.stderr
+        assert "ilegible" not in out.stderr.lower(), f"aviso espurio:\n{out.stderr}"
+
+    def test_filtrar_por_rejected_la_sigue_listando(self, tmp_path: Path) -> None:
+        """La consecuencia operativa que se corrigio: el filtro la conserva."""
         data_root, _rejections, f = _escenario_rechazada(tmp_path)
         f.write_text(f.read_text()[:20], encoding="utf-8")
 
@@ -305,6 +362,8 @@ class TestExpansionListUnderCorruptRejection:
             "expansion", "list", "demo", "--stage", "REJECTED", cwd=tmp_path, data_root=data_root
         )
         assert out.returncode == 0, out.stderr
-        assert "sin propuestas en stage=REJECTED" in out.stdout, (
-            "una propuesta rechazada desaparece del filtro por la corrupcion del fichero"
+        assert "stage=REJECTED" in out.stdout, (
+            f"una propuesta rechazada sigue desapareciendo del filtro por la "
+            f"corrupcion del fichero:\n{out.stdout}"
         )
+        assert "sin propuestas en stage=REJECTED" not in out.stdout

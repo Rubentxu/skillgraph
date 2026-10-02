@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
 
@@ -42,6 +43,19 @@ from skillgraph.platform.storage import Storage
 from skillgraph.resources.workflow import WorkflowNode, WorkflowTransition
 
 
+@dataclass(frozen=True, slots=True)
+class RejectionScan:
+    """Resultado de leer ``expansion_rejections/`` (WI-80).
+
+    ``ids`` son los ``proposal_id`` rechazados, incluidos los deducidos del
+    nombre del fichero cuando el JSON no se pudo leer. ``unreadable`` son
+    los ficheros de los que no se confio en su cuerpo, para poder avisar.
+    """
+
+    ids: frozenset[str]
+    unreadable: tuple[Path, ...]
+
+
 def _utcnow_iso() -> str:
     """ISO-8601 UTC con sufijo +00:00 (legible, ordenable lexicograficamente)."""
     from datetime import datetime
@@ -70,24 +84,66 @@ def _infer_proposal_stage(
     return "PROPOSED"
 
 
-def _collect_rejection_ids(rejections_dir: Path) -> set[str]:
+def _collect_rejection_ids(rejections_dir: Path) -> RejectionScan:
     """Lee ``expansion_rejections/*.json`` y devuelve proposal_ids rechazados.
 
-    Tolerante a JSON corrupto y a archivos sin ``proposal_id``.
+    WI-80. Antes, un JSON ilegible se saltaba con ``continue`` y el
+    ``proposal_id`` se perdia. La degradacion era peor que un simple dato
+    ausente: ``_infer_proposal_stage`` caia a ``PROPOSED``, o sea el
+    producto afirmaba **«esta propuesta NO esta rechazada»** cuando si lo
+    esta, con exit 0 y sin una linea de aviso. Un operador que filtra por
+    ``--stage REJECTED`` no la ve, y uno que lee la lista concluye que hay
+    una propuesta pendiente que ya fue rechazada con evidencia persistida.
+
+    Es el patron que el propio repo ya rechazo en
+    `knowledge/git_source.py:365` («un dato plausible y falso es peor que
+    un error») y que `governance/backups.py:358` acota («lo ignoramos en
+    `list`, pero NO lo borramos: preservar evidencia para el operador»).
+
+    El fix no adivina: `record_rejection` escribe **siempre**
+    `expansion_rejections/<proposal_id>.json` (`graph_expansion.py:618`),
+    asi que el nombre del fichero ES el ``proposal_id`` por construccion.
+    Cuando el cuerpo no se puede leer, se usa el stem, y el fichero se
+    reporta en `unreadable` para que el operador sepa que la evidencia esta
+    danada en vez de sana.
     """
     ids: set[str] = set()
+    unreadable: list[Path] = []
     if not rejections_dir.is_dir():
-        return ids
-    for p in rejections_dir.iterdir():
+        return RejectionScan(frozenset(), ())
+    for p in sorted(rejections_dir.iterdir()):
         if p.suffix != ".json":
             continue
         try:
             d = json.loads(p.read_text())
         except (json.JSONDecodeError, OSError):
+            # No se descarta: el stem es el proposal_id por construccion.
+            ids.add(p.stem)
+            unreadable.append(p)
             continue
         if isinstance(d, dict) and "proposal_id" in d:
             ids.add(str(d["proposal_id"]))
-    return ids
+        else:
+            # JSON valido pero sin proposal_id: mismo nombre, misma regla.
+            ids.add(p.stem)
+            unreadable.append(p)
+    return RejectionScan(frozenset(ids), tuple(unreadable))
+
+
+def _warn_unreadable_rejections(scan: RejectionScan) -> None:
+    """Avisa en stderr de la evidencia de rechazo danada.
+
+    El listing sigue saliendo con exit 0: una sola evidencia corrupta no
+    debe volver inutil el comando. Lo que no puede ser es que el operador
+    no se entere, porque «stage=PROPOSED» sin aviso es una afirmacion
+    falsa y silenciosa.
+    """
+    for p in scan.unreadable:
+        print(
+            f"WARNING: evidencia de rechazo ilegible en {p}; "
+            f"se infiere proposal_id={p.stem} del nombre del fichero",
+            file=sys.stderr,
+        )
 
 
 def _load_registry(project_db: Path, *, tenant_id: str, project_id: str) -> dict[str, str]:
@@ -447,7 +503,8 @@ def cmd_expansion_list(args: argparse.Namespace) -> int:
     proposals_dir = project_dir.parent.parent / "expansion_proposals"
     rejections_dir = project_dir / "expansion_rejections"
 
-    rejection_ids = _collect_rejection_ids(rejections_dir)
+    scan = _collect_rejection_ids(rejections_dir)
+    _warn_unreadable_rejections(scan)
 
     rows = _scan_proposals_dir(proposals_dir)
     if not rows:
@@ -457,7 +514,7 @@ def cmd_expansion_list(args: argparse.Namespace) -> int:
     shown = 0
     for path, data in rows:
         proposal_id = str(data.get("proposal_id", path.stem))
-        stage = _infer_proposal_stage(path, proposal_id, rejection_ids)
+        stage = _infer_proposal_stage(path, proposal_id, scan.ids)
         if args.stage is not None and args.stage != stage:
             continue
         created = data.get("created_at", "?")
@@ -479,12 +536,13 @@ def cmd_expansion_show(args: argparse.Namespace) -> int:
     proposals_dir = project_dir.parent.parent / "expansion_proposals"
     rejections_dir = project_dir / "expansion_rejections"
 
-    rejection_ids = _collect_rejection_ids(rejections_dir)
+    scan = _collect_rejection_ids(rejections_dir)
+    _warn_unreadable_rejections(scan)
 
     rows = _scan_proposals_dir(proposals_dir)
     for path, data in rows:
         if str(data.get("proposal_id", "")) == args.proposal_id:
-            stage = _infer_proposal_stage(path, str(data["proposal_id"]), rejection_ids)
+            stage = _infer_proposal_stage(path, str(data["proposal_id"]), scan.ids)
             payload = {**data, "stage": stage}
             print(json.dumps(payload, indent=2, sort_keys=True))
             return EXIT_OK
