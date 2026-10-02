@@ -7634,3 +7634,47 @@ run inexistente (EXIT_DOMAIN).
 - 6/6 nuevos; suite completa PASS por hook (ya no enmascarado).
 - HEAD `b3ec...` (ver git log); SIN push (pendiente operador).
 
+## 2026-10-02 (V) — WI-59: ADR-0019 y fase 1 del estrangulamiento de RunController
+
+### Resumen
+
+Sexta pasada autonomo. Ejecuta el siguiente P1 del audit: RunController
+(god-class de 1193 LoC dentro de 1445). A diferencia del CLI, no hay
+tabla de dispatch: es orquestacion de dominio con los caminos atomicos
+criticos. ADR-0019 planifica fases de riesgo creciente con la regla de
+que las variantes *_atomically (ADR-0017) no cambian de firma hasta la
+ultima fase.
+
+### Fase 1 ejecutada
+
+- Nuevo `src/skillgraph/runtime/run_types.py`: bloque puro de modulo
+  verbatim (RunBudget, RunSnapshot, RuntimeEventLog,
+  BudgetViolationKind, plan_to_json/from_json, result_to_jsonable,
+  is_outcome_declared, has_self_loop, new_run_id,
+  new_node_execution_id, _noop_lock): ~250 LoC sin dependencias de
+  Storage.
+- runcontroller 1445 -> 1289 LoC; re-export para los 39 consumidores
+  (RunController x25, RunBudget x10, 4 sueltos): cero ediciones.
+
+### Evidencia
+
+- RED honesto (collection error). Identidad 8/8
+  (tests/test_wi59_run_types_extraction.py). Criticos runtime
+  (H9 lifecycle/H10 integracion/characterization/runcontroller)
+  67/67. Suite completa por hook ya no enmascarado. Auditoria
+  regenerada.
+
+### Descubrimientos
+
+- Fases 2-3 (motores snapshot/recovery y reconciliation) requieren
+  diseno propio: los metodos referencian self._runs/_events/_locks;
+  la extraccion exige threading de dependencias o colaborador con
+  puerto. No es mecanico como el CLI.
+- BudgetViolationKind es Assign simple (no AnnAssign) y los
+  decoradores (@contextmanager) NO estan en FunctionDef.lineno: las
+  cirugias AST ya incorporan ambos aprendizajes (el script de esta
+  fase compilo los tres ficheros antes de escribir).
+- Desliz de comit corregido: un `-C HEAD` copio el asunto del commit
+  anterior al ADR; reset --soft inmediato y re-commit (local, sin
+  push), anotado aqui.
+
