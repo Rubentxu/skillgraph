@@ -7925,3 +7925,16 @@ default 20); `runs cancel` PROPAGA NotFoundError (main la traduce a
 EXIT_DOMAIN — la red wi58 subprocess ya fija ese lado); `propose`
 exige >=1 operacion y manual_signed con granted_by/granted_at.
 
+### Bake-off pipelinek resuelto con datos (desbloquea el backlog)
+
+- pipelinek 0.46.0 (mise x pipelinek@0.46.0): veredicto CONFIABLE
+  validado sobre .pipeline.kts real — unit-tests 87.7s con
+  EchoOutputCaptured (1880 passed en el journal del engine), SUCCESS
+  completo. runId 15fbceb1.
+- pipelinek 0.43.0 (shim asdf activo): NO confiable (FAILURE falso
+  ~10s / SUCCESS sin ejecucion), ya documentado en la investigacion
+  WI-57.
+- Recomendacion al operador (evidence/pipelinek-bakeoff-2026-10-02.md):
+  fijar 0.46.0 canonico via mise y actualizar el canon obsoleto de
+  AGENTS.md (v0.39.0 no instalado). Decision final del operador.
+
