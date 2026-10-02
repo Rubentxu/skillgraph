@@ -5,11 +5,11 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **65** modulos Python, **19956** LoC, **755** funciones.
+- **65** modulos Python, **19983** LoC, **758** funciones.
 - **3** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **0** funciones privadas con cc>=20 (refactor opcional).
-- **10** funciones >80 LoC (legibilidad mejorable).
+- **9** funciones >80 LoC (legibilidad mejorable).
 - **0** funciones con anidamiento >=5 niveles.
 
 ## Archivos grandes (>800 LoC)
@@ -40,7 +40,6 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 | 101 | `analyze_skill` | `src/skillgraph/domain/skill_importer.py` |
 | 92 | `cmd_expansion_apply` | `src/skillgraph/cli/commands/expansion.py` |
 | 90 | `compile_handoff` | `src/skillgraph/knowledge/context_controller.py` |
-| 89 | `_resolve_run_inputs` | `src/skillgraph/cli/commands/run.py` |
 | 86 | `aggregate_file_signatures` | `src/skillgraph/knowledge/knowledge_controller.py` |
 | 85 | `compile_handoff_from_scopes` | `src/skillgraph/knowledge/file_handoff.py` |
 | 84 | `promote_candidate` | `src/skillgraph/governance/improvement.py` |
@@ -69,7 +68,7 @@ P0 sin que nadie tenga que acordarse de borrarla.
 
 - Ninguno.
 
-**P3 - Funciones largas >80 LoC**: 10 en total.
+**P3 - Funciones largas >80 LoC**: 9 en total.
 En su mayoria son orquestadores con baja cc y helpers atomicos con
 cobertura; ver la tabla de arriba. Prioridad baja.
 

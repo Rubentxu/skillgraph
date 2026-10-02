@@ -29,36 +29,80 @@ from skillgraph.platform.storage import Storage
 from skillgraph.resources.plan_loader import load_plan_file
 
 if TYPE_CHECKING:
+    from skillgraph.resources.workflow import WorkflowPlan
     from skillgraph.runtime.runcontroller import RunController
 
 
 def _resolve_run_inputs(
     args: argparse.Namespace,
-) -> tuple[RunController, Storage, str, str, str, str]:
+) -> tuple[RunController, Storage, str, str, str, int | None]:
     """Valida input + construye controller + Run (nuevo o resumed).
+
+    Pipeline en tres fases, cada una con su reporte de error:
+
+    - `_open_run_project`: resuelve el proyecto y valida su DB.
+    - `_load_plan_or_report`: carga y parsea el WorkflowPlan.
+    - `_build_run_session`: fixtures, adapter, Storage, controller y
+      resume-or-start (UAT-06) con RunBudget opt-in.
 
     Returns:
         Tupla ``(ctl, storage, run_id, tenant_id, project_name,
-        project_db_error, plan_or_None)``. ``project_db_error`` es el
-    exit code si algo fallo (no-None), y ``plan_or_None`` es None en
-    el caso de fallo (el caller propaga el error al usuario).
+        exit_code)``. ``exit_code`` es distinto de None si algo fallo
+        (las demas posiciones vienen None) y el caller propaga el
+        error al usuario.
     """
-    from skillgraph.runtime.runcontroller import RunBudget, RunController
-
-    project, err = resolve_project(args, args.project)
-    if err is not None:
+    project, err = _open_run_project(args)
+    if err is not None or project is None:
         return None, None, None, None, None, err
+    plan, err = _load_plan_or_report(args)
+    if err is not None or plan is None:
+        return None, None, None, None, None, err
+    return _build_run_session(args, project, plan)
+
+
+def _open_run_project(
+    args: argparse.Namespace,
+) -> tuple[dict[str, str] | None, int | None]:
+    """Fase 1: proyecto resuelto en el catalogo (sin validar su DB:
+    esa comprobacion ocurre en fase 3, preservando el orden original
+    plan-antes-de-DB)."""
+    return resolve_project(args, args.project)
+
+
+def _load_plan_or_report(
+    args: argparse.Namespace,
+) -> tuple[WorkflowPlan | None, int | None]:
+    """Fase 2: plan presente y parseable."""
     if not args.plan.is_file():
         print(
             f"ERROR: plan no encontrado: {args.plan}",
             file=sys.stderr,
         )
-        return None, None, None, None, None, EXIT_PLAN_NOT_FOUND
+        return None, EXIT_PLAN_NOT_FOUND
     try:
-        plan = load_plan_file(args.plan)
+        return load_plan_file(args.plan), None
     except ParseError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-        return None, None, None, None, None, EXIT_PARSE
+        return None, EXIT_PARSE
+
+
+def _build_run_session(
+    args: argparse.Namespace,
+    project: dict[str, str],
+    plan: WorkflowPlan,
+) -> tuple[RunController, Storage, str, str, str, None]:
+    """Fase 3: fixtures/adapter/storage/controller + resume-or-start.
+
+    Si ya existe un Run no terminal para este proyecto, lo reanudamos
+    (UAT-06): el usuario puede re-invocar `run` tras un crash y el
+    controller retoma el mismo Run con su current_node y sus
+    NodeExecutions. Si no, crea uno nuevo con RunBudget opt-in (S4:
+    solo se construye budget si el usuario paso al menos un limite).
+    """
+    from skillgraph.runtime.runcontroller import RunBudget, RunController
+
+    fixtures_root = args.fixtures_root or agents_root(resolve_data_root(args.data_root))
+    fixtures_root.mkdir(parents=True, exist_ok=True)
     db_path = Path(project["db_path"])
     if not db_path.exists():
         print(
@@ -66,9 +110,6 @@ def _resolve_run_inputs(
             file=sys.stderr,
         )
         return None, None, None, None, None, EXIT_DB_MISSING
-
-    fixtures_root = args.fixtures_root or agents_root(resolve_data_root(args.data_root))
-    fixtures_root.mkdir(parents=True, exist_ok=True)
     adapter = _build_adapter(args, fixtures_root)
     storage = Storage(db_path)
     ctl = RunController(
@@ -78,10 +119,6 @@ def _resolve_run_inputs(
         adapter=adapter,
     )
 
-    # Resume-or-start: si ya existe un Run no terminal para este
-    # proyecto, lo reanudamos. Asi el usuario puede re-invocar
-    # `run` tras un crash y el controller reanuda el mismo Run
-    # con su current_node y sus NodeExecutions. Cumple UAT-06.
     existing_run_id = _find_active_run_id(
         storage,
         tenant_id=project["tenant_id"],
@@ -90,9 +127,6 @@ def _resolve_run_inputs(
     if existing_run_id is not None:
         run_id = existing_run_id
     else:
-        # S4 Etapa 7: construye RunBudget solo si el usuario paso
-        # al menos un limite. Si los tres son None, budget=None
-        # (compat con Runs anteriores).
         budget: RunBudget | None = None
         if any(
             v is not None
@@ -113,14 +147,7 @@ def _resolve_run_inputs(
             plan=plan,
             budget=budget,
         )
-    return (
-        ctl,
-        storage,
-        run_id,
-        project["tenant_id"],
-        project["name"],
-        None,
-    )
+    return ctl, storage, run_id, project["tenant_id"], project["name"], None
 
 
 def _reconcile_until_terminal(
