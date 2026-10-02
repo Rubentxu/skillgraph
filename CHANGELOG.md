@@ -12,9 +12,9 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
-## [Unreleased] — WI-91: el registro de conformidad H9 afirmaba cuatro cosas falsas
+## [0.16.17] - 2026-10-02 — WI-91: el registro de conformidad H9 afirmaba cuatro cosas falsas
 
-**Sin bump todavía**: el `fix(state)` de este bloque dispara el PATCH. 2493 passed
+PATCH: `git log v0.16.16..HEAD` = 0 feat, 0 breaking, 2 fix, 2 docs, 1 chore. 2493 passed
 (2479 antes).
 
 ### Fixed

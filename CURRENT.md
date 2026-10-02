@@ -1,5 +1,40 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-02 (cuarta tanda) cerrado — WI-91, release `v0.16.17`.**
+> Versión activa `0.16.17.dev0`; tag `v0.16.17` en `321fa10`. 2493 passed.
+>
+> **WI-91 — el registro de conformidad H9 afirmaba cuatro cosas falsas** (`04a0476`).
+> `goal.h9_addendum_2026_09_25` es el artefacto que decide si el hito H9 del
+> blueprint está cumplido, y su `conformance_score` es la cifra que se cita al
+> decidir si la iniciativa se cierra. Se escribió el 2026-09-25; el 2026-09-26,
+> `v0.14.7` entregó los cuatro entregables que daba por incompletos y el registro
+> no se revalidó. **Nada lo comprobaba**.
+>
+> Medido: E1 «no hay adapter HTTP/LLM/anthropic/openai» → existe
+> `HttpAgentAdapter` (`http_adapter.py:330`, Anthropic + OpenAI) y la CLI acepta
+> `--adapter=http`. E2 «threat model NO ejecutado» → existe
+> `ADR-0015-threat-model-stride.md` con su test. E3 «grieta de no-atomicidad
+> abierta, 300-800 LoC» → `create_run_atomically` hace ambas escrituras en una
+> sola transacción y está viva vía `RunController`. E4 «no hay runbook» → existe
+> `docs/observability-runbook.md`. E5 16/16 UAT → **cierto**. Los 23 tests que
+> respaldan E1/E2/E3 estaban verdes mientras el registro afirmaba lo contrario.
+>
+> **Cada entregable lleva ahora `evidencia_paths` y un guard exige que estado y
+> evidencia sean verdad A LA VEZ, en las dos direcciones**: un guard de una sola
+> vía deja pasar justo la mitad de los fallos, que es la mitad que se cuela en un
+> documento.
+>
+> **H9 no se declara cerrada.** Los cinco entregables están entregados, pero el
+> criterio de salida exige ejecutar contra un proveedor real y eso necesita
+> credenciales. Declararla cerrada sería el mismo defecto en la dirección
+> contraria: sustituir una afirmación falsa por otra que nadie ha medido.
+>
+> **Queda abierto**: `ADR-0015` designa dos documentos distintos (colisión medida,
+> no ejecutada: renombrar es decisión del mantenedor); 63 informes fechados en
+> `audits/` (deuda de **datos**); `governance/receipts.py:473-480` y
+> `runtime/agent.py:57-64` replican el patrón de inverso manual (**hipótesis sin
+> medir**); y los commits siguen **sin push**, que no está autorizado.
+
 > **Bloque 2026-10-02 (tercera tanda) cerrado — WI-90, release `v0.16.16`.**
 > Versión activa `0.16.16.dev0`; tag `v0.16.16` en `8a70667`. 2479 passed.
 >

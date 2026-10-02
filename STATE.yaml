@@ -561,7 +561,7 @@ tests:
   total: 2493   # re-medido 2026-10-02 (bloque WI-91): 2493 passed. +14 sobre 2479 = los tests de tests/test_wi91_h9_conformance_record.py.
   passed: 2493
   duration_s: 110.39   # re-medido 2026-10-02: 2493 passed in 110.39s (lo reporto el pre-commit al commitear 04a0476).
-  package_version: "0.16.16.dev0"   # trabajo post-release v0.16.16 (AGENTS 12). El tag v0.16.16 esta en 8a70667; este bloque sigue en local y SIN PUSH.
+  package_version: "0.16.17.dev0"   # trabajo post-release v0.16.17 (AGENTS 12). El tag v0.16.17 esta en 321fa10; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1123,15 +1123,19 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.16.16
+  tag: v0.16.17
   fecha: 2026-10-02
   semver_bump: PATCH
-  rationale: "Bloque WI-90 (1 commit de trabajo, e4fefb0, mas 1 docs). SemVer derivado del historial: 0 feat, 0 breaking, 1 fix (e4fefb0), 1 docs, 1 chore => PATCH. CIERRA LA DECISION (a) DEL ROADMAP, el ultimo item tecnico abierto: FileSignature sabia serializarse y no deserializarse, con el inverso de to_dict escrito a mano en list_file_signatures_for_source (knowledge_controller.py:329-336) con subindices crudos. Tres fallos medidos, y el caro no era de los tres: un campo de mas en el payload SE PERDIA EN SILENCIO, sin KeyError ni TypeError que lo delatara. Los tres explotaban sin proteccion en governance/improvement.py:208, 268, 324 — otra capa y otro vocabulario de errores, luego el fallo cruzaba la frontera de bounded context como excepcion de Python y no como SkillGraphError. DECISION: SignatureVigencia.from_dict NO comprueba state contra EXTRACTION_STATES porque esa validacion ya vive en __post_init__; duplicarla recrearia un segundo sitio desincronizable, que es el defecto que cerro WI-87 con ADR-0015. La medicion de WI-87 sobre esta funcion era correcta pero incompleta: no era ni muerta ni un punto ciego de uso (4 consumidores reales), y su cc 10 venia de 8 lineas de deserializador duplicado. NO se refactorizo la funcion entera porque la medicion no lo respaldaba. 2479 passed (2463 en v0.16.15), ruff y format limpios. Sin push."
+  rationale: "Bloque WI-91 (2 commits de trabajo: 04a0476 el addendum H9 y 3878aab push=false, mas 1 docs). SemVer derivado del historial: 0 feat, 0 breaking, 2 fix, 2 docs, 1 chore => PATCH. EL REGISTRO DE CONFORMIDAD H9 AFIRMABA CUATRO COSAS FALSAS. goal.h9_addendum_2026_09_25 es el artefacto que decide si el hito H9 del blueprint esta cumplido y su conformance_score es la cifra que se cita al decidir si la iniciativa se cierra. Se escribio el 2026-09-25; el 2026-09-26 v0.14.7 entrego los cuatro entregables que daba por incompletos (WI-12 a WI-17) y el registro no se revalido. MEDIDO: E1 no habia adapter HTTP/LLM/anthropic/openai segun el registro, y existen runtime/http_adapter.py:330 HttpAgentAdapter (Anthropic+OpenAI) con la CLI aceptando --adapter=http (run.py:265); E2 decia que el threat model T3 no se habia ejecutado, y existen docs/architecture/ADR-0015-threat-model-stride.md y tests/test_t3_threat_model_attestation.py; E3 decia que la grieta workflow_runs <-> runtime_events seguia abierta con 300-800 LoC de coste, y create_run_atomically (run_repository.py:641) hace ambas escrituras en UNA transaccion y esta viva via RunController.create_run; E4 decia que no habia runbook, y existe docs/observability-runbook.md; E5 decia 16/16 UAT y es CIERTO, reverificado con python -m tests.uat_audit. Los 23 tests que respaldan E1/E2/E3 estaban verdes todo el tiempo que el registro afirmaba lo contrario. FIX: cada entregable lleva evidencia_paths y un guard exige que estado y evidencia sean verdad A LA VEZ en las dos direcciones. H9 NO SE DECLARA CERRADA: el criterio de salida exige ejecutar contra un proveedor real y eso necesita credenciales; declararla cerrada seria el mismo defecto en la direccion contraria. El segundo fix es de gobernanza: STATE.yaml declaraba push: true con 0 pendientes, cierto a las 18:00 y falso a las 18:05. 2493 passed (2479 en v0.16.16), ruff y format limpios. Sin push."
   # Reconciliado con git el 2026-10-02 (WI-74): cada `sha` es el de su
   # etiqueta y resuelve a un commit real. Donde el valor anterior no
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.16.17
+      fecha: 2026-10-02
+      sha: "321fa1055b293644b217bfdaa955fdff47ec596f"
+      nota: "WI-91: el registro de conformidad H9 afirmaba cuatro de sus cinco entregables incompletos; cada entregable lleva evidencia_paths y un guard bidireccional lo verifica"
     - tag: v0.16.16
       fecha: 2026-10-02
       sha: "8a706679a92aa5a237a287ef0780d19be98f3ab5"
