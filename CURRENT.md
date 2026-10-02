@@ -1,5 +1,23 @@
 # CURRENT — puntero operativo
 
+> **WI-66 cerrado** (2026-10-02, commit `e07413b`, ADR-0023):
+> `RunController._execute_one` 143 → **74 LoC**, en cuatro fases
+> nombradas cuyo nombre dice qué invariante protegen: `_node_guard`
+> (budget e idempotencia antes de tocar el nodo), `_compile_node_handoff`
+> (H9-context-in-run: FAILED sin invocar el adapter),
+> `_invoke_node_adapter` (frontera con código externo que no tumba el
+> run) y `_settle_node_outcome` (outcome declarado y cierre atómico).
+> El hallazgo P3 del audit baja de **9 a 8** funciones >80 LoC.
+> **Coste medido y consciente**: el fichero crece 1289 → 1421 LoC, así
+> que se arregla P3 empeorando el número de god module (sigue en 3).
+> Son métricas distintas y el módulo estaba y sigue sobre el umbral, así
+> que el plan no cambia: fase 2 de ADR-0019. La red (16 tests) fija el
+> **orden de los colaboradores de primer nivel** — que es lo que
+> sostiene H9/H10 — por orden de primera aparición, porque el log plano
+> mezcla las llamadas internas de `_is_budget_exhausted` y fijarlas
+> produciría un contrato frágil que describe la implementación, no la
+> invariante. Verificación: **1966 passed** (1950 + 16), incluidos los
+> 433 de runtime/H9/H10.
 > **H-01 CERRADO — WI-65 completo** (2026-10-02, commits `9c104ac` y
 > `2f5f7e4`, ADR-0022): la god class `Storage` (1807 LoC, 80 métodos)
 > deja de figurar como god module. `storage.py` queda en **623 LoC**
