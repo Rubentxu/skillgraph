@@ -541,7 +541,7 @@ tests:
   total: 2479   # re-medido 2026-10-02 (bloque WI-90): 2479 passed. +16 sobre 2463 = los tests de tests/test_wi90_signature_round_trip.py.
   passed: 2479
   duration_s: 106.17   # re-medido 2026-10-02: 2479 passed in 106.17s (lo reporto el pre-commit al commitear e4fefb0).
-  package_version: "0.16.15.dev0"   # trabajo post-release v0.16.15 (AGENTS 12). El tag v0.16.15 esta en 6819f99; este bloque sigue en local y SIN PUSH.
+  package_version: "0.16.16.dev0"   # trabajo post-release v0.16.16 (AGENTS 12). El tag v0.16.16 esta en 8a70667; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1096,15 +1096,19 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.16.15
+  tag: v0.16.16
   fecha: 2026-10-02
   semver_bump: PATCH
-  rationale: "Bloque WI-89 (1 commit de trabajo, 64a28a8, mas 1 docs). SemVer derivado del historial: 0 feat, 1 fix (64a28a8), 2 docs, 1 chore => PATCH. El fix es observable en el propio hook de pre-commit, que hasta ahora dejaba M audits/architecture-debt-<hoy>.md en cada commit desde que el codigo se movia del ultimo informe generado. 2463 passed (2451 en v0.16.14), ruff y format limpios. CIERRA EL ULTIMO SEGUIMIENTO TECNICO de los items (a)-(i): (d) propiedad de dominio, WI-87 con ADR-0015; (f) exit code de argparse, WI-88 con ADR-0016; y la auditoria que escribia en audits/, WI-89. CORRECCION DE UNA MEDICION PROPIA: el seguimiento de WI-87 decia, con md5, que 9 tests verdes cambian el fichero; re-medido en un arbol limpio no se reproduce, porque el informe commiteado estaba al dia. La premisa era condicional —solo cuando el informe esta caducado— y la redaccion la presento como incondicional. El defecto real tenia ademas un segundo modo que no se habia medido: la primera corrida de cada dia crea un fichero NUEVO sin trackear en un directorio trackeado, sin que nada haya cambiado en el codigo."
+  rationale: "Bloque WI-90 (1 commit de trabajo, e4fefb0, mas 1 docs). SemVer derivado del historial: 0 feat, 0 breaking, 1 fix (e4fefb0), 1 docs, 1 chore => PATCH. CIERRA LA DECISION (a) DEL ROADMAP, el ultimo item tecnico abierto: FileSignature sabia serializarse y no deserializarse, con el inverso de to_dict escrito a mano en list_file_signatures_for_source (knowledge_controller.py:329-336) con subindices crudos. Tres fallos medidos, y el caro no era de los tres: un campo de mas en el payload SE PERDIA EN SILENCIO, sin KeyError ni TypeError que lo delatara. Los tres explotaban sin proteccion en governance/improvement.py:208, 268, 324 — otra capa y otro vocabulario de errores, luego el fallo cruzaba la frontera de bounded context como excepcion de Python y no como SkillGraphError. DECISION: SignatureVigencia.from_dict NO comprueba state contra EXTRACTION_STATES porque esa validacion ya vive en __post_init__; duplicarla recrearia un segundo sitio desincronizable, que es el defecto que cerro WI-87 con ADR-0015. La medicion de WI-87 sobre esta funcion era correcta pero incompleta: no era ni muerta ni un punto ciego de uso (4 consumidores reales), y su cc 10 venia de 8 lineas de deserializador duplicado. NO se refactorizo la funcion entera porque la medicion no lo respaldaba. 2479 passed (2463 en v0.16.15), ruff y format limpios. Sin push."
   # Reconciliado con git el 2026-10-02 (WI-74): cada `sha` es el de su
   # etiqueta y resuelve a un commit real. Donde el valor anterior no
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.16.16
+      fecha: 2026-10-02
+      sha: "8a706679a92aa5a237a287ef0780d19be98f3ab5"
+      nota: "WI-90: FileSignature gana from_dict y el lector deja de deserializar a mano; cierra la decision (a) del roadmap"
     - tag: v0.16.15
       fecha: 2026-10-02
       sha: "6819f994482464011b641c412255d01347937f9c"

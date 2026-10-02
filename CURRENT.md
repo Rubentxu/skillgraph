@@ -1,5 +1,39 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-02 (tercera tanda) cerrado — WI-90, release `v0.16.16`.**
+> Versión activa `0.16.16.dev0`; tag `v0.16.16` en `8a70667`. 2479 passed.
+>
+> **WI-90 — `FileSignature` tenía round-trip partido** (`e4fefb0`): sabía
+> serializarse (`to_dict`) y **no** deserializarse. El inverso estaba escrito a
+> mano dentro de `list_file_signatures_for_source`
+> (`knowledge/knowledge_controller.py:329-336`) con subíndices crudos.
+>
+> Tres fallos medidos. El caro no era de los tres: un campo de más en el payload
+> **se perdía en silencio** — sin `KeyError` ni `TypeError` que lo delatara. Los
+> tres explotaban sin protección en `governance/improvement.py:208, 268, 324`, que
+> es otra capa con otro vocabulario de errores: el fallo cruzaba la frontera de
+> bounded context como excepción de Python, no como `SkillGraphError`.
+>
+> **Con esto queda cerrada la decisión (a) del roadmap**: no queda ningún item
+> técnico abierto de (a)–(i). (d) → WI-87 / ADR-0015 · (f) → WI-88 / ADR-0016 ·
+> auditoría en `audits/` → WI-89 · `list_file_signatures_for_source` → WI-90.
+>
+> **Decisión registrada**: `SignatureVigencia.from_dict` **no** comprueba `state`
+> contra `EXTRACTION_STATES` porque esa validación ya vive en `__post_init__`.
+> Duplicarla recrearía un segundo sitio desincronizable, que es exactamente el
+> defecto que cerró WI-87 con ADR-0015.
+>
+> **Corrección de un incumplimiento propio en este bloque**: el subject del commit
+> de código tenía 85 columnas contra las 72 de AGENTS §7. Se corrigió con `commit
+> --amend` antes de publicar —el commit no estaba publicado y su árbol es
+> byte-idéntico—, no se dejó anotado y sin corregir.
+>
+> **Queda abierto**: 63 informes fechados acumulados en `audits/` (deuda de
+> **datos**, no de código: política de retención, no un defecto);
+> `governance/receipts.py:473-480` y `runtime/agent.py:57-64` replican el patrón
+> de inverso manual (**hipótesis registrada, no medida** — no se afirma que estén
+> mal); y los commits siguen **sin push**, que no está autorizado.
+
 > **Bloque 2026-10-02 (segunda tanda) cerrado — WI-89, release `v0.16.15`.**
 > Versión activa `0.16.15.dev0`; tag `v0.16.15` en `6819f99`. 2463 passed.
 >

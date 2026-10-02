@@ -12,9 +12,9 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
-## [Unreleased] — WI-90: `FileSignature` tiene round-trip y el lector deja de deserializar a mano
+## [0.16.16] - 2026-10-02 — WI-90: `FileSignature` tiene round-trip y el lector deja de deserializar a mano
 
-**Sin bump todavía**: el `fix(knowledge)` de este bloque dispara el PATCH. 2479 passed
+PATCH: `git log v0.16.15..HEAD` = 0 feat, 0 breaking, 1 fix, 1 docs, 1 chore. 2479 passed
 (2463 antes).
 
 ### Fixed
