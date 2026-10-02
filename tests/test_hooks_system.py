@@ -18,6 +18,50 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOK_PATH = REPO_ROOT / "scripts" / "hooks" / "pre-commit"
+
+
+def _pasos_ejecutables(contenido: str) -> list[str]:
+    """Los `run:` de un workflow, incluidos los multilínea, sin comentarios.
+
+    Un guard que busca una cadena en el fichero entero encuentra la cadena
+    en un comentario que habla de ella. Solo los pasos se ejecutan, y solo
+    ellos pueden romper algo.
+
+    Un bloque escalar (`run: |`, `run: >`) termina cuando una línea deja de
+    estar más indentada que la clave `run:`. Sin esa condición el parser se
+    comería el resto del fichero y devolvería como «pasos» las claves
+    siguientes.
+    """
+    pasos: list[str] = []
+    sangria_bloque: int | None = None
+    for linea in contenido.splitlines():
+        # Un comentario YAML empieza por `#` al inicio de la linea o
+        # tras un espacio. Partir por cualquier `#` rompia `## CI Summary`
+        # y las URLs con fragmento.
+        sin_comentario = linea
+        for marca in ("#",):
+            pos = sin_comentario.find(marca)
+            if pos == 0 or (pos > 0 and sin_comentario[pos - 1].isspace()):
+                sin_comentario = sin_comentario[:pos]
+                break
+        if not sin_comentario.strip():
+            continue
+        sangria = len(sin_comentario) - len(sin_comentario.lstrip())
+        if sangria_bloque is not None:
+            if sangria > sangria_bloque:
+                pasos.append(sin_comentario.strip())
+                continue
+            sangria_bloque = None
+        if not sin_comentario.strip().startswith("run:"):
+            continue
+        valor = sin_comentario.split("run:", 1)[1].strip()
+        if valor in ("|", ">", "|-", ">-"):
+            sangria_bloque = sangria
+        elif valor:
+            pasos.append(valor)
+    return pasos
+
+
 PRE_PUSH_HOOK_PATH = REPO_ROOT / "scripts" / "hooks" / "pre-push"
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install-hooks.sh"
 CI_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"
@@ -245,7 +289,21 @@ class TestPrePushHook:
 
 
 class TestCIWorkflow:
-    """El workflow GH en .github/workflows/ci.yml ejecuta los gates."""
+    """El workflow GH ejecuta los gates.
+
+    WI-98: nueve de estos tests buscaban **cadenas** en `ci.yml`
+    («lint» en el contenido, «pytest» en el contenido). Un guard que busca
+    una cadena comprueba que la cadena exista, no la propiedad: el workflow
+    anterior 执行 `mise run lint` y `pytest --cov` y por eso pasaban, siendo
+    una reejecución parcial de la receta canónica que se quedaba sin
+    los tres contratos exigibles.
+
+    Lo que queda son las propiedades que no se deducen de la receta
+    canonica: los triggers, el toolchain, el cache y el artefacto de
+    cobertura. Que el remoto ejecute lint, format y los tests ya no lo
+    vigila este fichero: lo vigila
+    `tests/test_wi98_ci_recipe_parity.py`, y lo hace por la via que importa.
+    """
 
     def test_workflow_exists(self) -> None:
         assert CI_WORKFLOW_PATH.exists(), f"Workflow no encontrado: {CI_WORKFLOW_PATH}"
@@ -261,17 +319,51 @@ class TestCIWorkflow:
         content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
         assert "mise" in content.lower(), "Workflow no usa mise"
 
-    def test_workflow_runs_lint(self) -> None:
-        content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
-        assert "lint" in content.lower(), "Workflow no ejecuta lint"
+    def test_workflow_invokes_the_canonical_recipe(self) -> None:
+        """La receta, por su NOMBRE.
 
-    def test_workflow_runs_format_check(self) -> None:
+        Es la propiedad que sustituye a las cuatro pruebas de cadenas que
+        havia antes (lint, format, pytest y la de instrumentacion). Buscar
+        el nombre del script es lo unico que distingue «ejecuta lo mismo»
+        de «ejecuta algo parecido»; y si el remoto dejara de invocarla, la
+        regla de AGENTS.md («el runner remoto debe invocar el mismo
+        .pipeline.kts») seria falsa otra vez.
+        """
         content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
-        assert "format" in content.lower(), "Workflow no ejecuta format --check"
+        assert ".pipeline.kts" in content, (
+            "Workflow sin la receta canonica. AGENTS.md declara que el runner "
+            "remoto DEBE invocar el mismo .pipeline.kts; si esto falla, o el "
+            "workflow cambio de receta o la regla hay que revisarla — no las dos"
+        )
 
-    def test_workflow_runs_pytest(self) -> None:
+    def test_workflow_passes_rerun_to_the_canonical_recipe(self) -> None:
+        """`--rerun` no es opcional: sin el el motor cachea el veredicto.
+
+        Medido en AGENTS.md: un run cuyo script no ha cambiado termina en
+        SUCCESS sin ejecutar un solo step. Un remoto que invoca la receta
+        SIN `--rerun` es un remoto verde que no verifica nada.
+        """
         content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
-        assert "pytest" in content or "test" in content.lower(), "Workflow no ejecuta pytest"
+        assert "--rerun" in content, (
+            "El remoto invoca la receta canonica sin --rerun: pipelinek "
+            "cachea el veredicto por cacheKey de compilacion y devuelve "
+            "SUCCESS sin ejecutar un step"
+        )
+
+    def test_workflow_gives_mise_a_token_for_the_github_backend(self) -> None:
+        """`mise.toml` fija pipelinek como backend `github:`, no del registro.
+
+        Sin token, `jdx/mise-action` no puede bajarlo y `mise exec --
+        pipelinek` resuelve el shim de asdf, que es OTRO binario con la
+        misma ruta de nombre. Es el mismo problema que `mise.toml`
+        documenta en local, y aqui se manifestaria como «funciona, pero no
+        es el que crees».
+        """
+        content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+        assert "github_token" in content, (
+            "El workflow instala un backend `github:` sin token; pipelinek "
+            "no se bajara y se ejecutara otro binario"
+        )
 
     def test_workflow_uses_uv_cache(self) -> None:
         """El workflow debe cachear ~/.cache/uv para reducir tiempo de CI."""
@@ -283,11 +375,41 @@ class TestCIWorkflow:
         assert "UV_CACHE_DIR" in content, "Workflow sin UV_CACHE_DIR env var"
 
     def test_workflow_uploads_coverage_artifact(self) -> None:
-        """El workflow debe subir coverage.xml como artifact."""
+        """El workflow debe subir coverage.xml como artifact.
+
+        Esta capacidad se conserva al pasar a la receta canonica, pero
+        cambiando el ORIGEN del dato: se exporta del `.coverage`
+        combinado e instrumentado que deja la receta, no de un `pytest
+        --cov` a pelo que mediria la mitad.
+        """
         content = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
         assert "upload-artifact" in content, "Workflow sin upload-artifact para coverage"
         assert "coverage.xml" in content, "Artifact no incluye coverage.xml"
-        assert "--cov" in content, "pytest sin flag --cov (sin cobertura)"
+        assert "coverage xml" in content, (
+            "coverage.xml se sube pero no se genera: falta exportar el "
+            "informe. O se mudo de paso y nadie lo nota, o se rompió"
+        )
+
+    def test_workflow_does_not_reimplement_the_recipe(self) -> None:
+        """El remoto no vuelve a medir lo que la receta ya midió.
+
+        Es la diferencia entre apoyarse en la instrumentación correcta y
+        volver a medir a mano con el instrumento que ya se sabe ciego.
+
+        Mira **los pasos ejecutables**, no el fichero entero: la primera
+        versión de este test buscaba la cadena en todo el contenido y
+        fallaba porque el `ci.yml` la menciona en un comentario que explica
+        por qué no debe usarse. Buscar una cadena en un fichero del que se
+        habla de la cadena es buscar en el sitio equivocado — que es
+        exactamente la clase de guard que este bloque viene a cerrar.
+        """
+        pasos = _pasos_ejecutables(CI_WORKFLOW_PATH.read_text(encoding="utf-8"))
+        assert not any("pytest --cov" in paso for paso in pasos), (
+            "El workflow vuelve a medir con `pytest --cov` a pelo: sin el "
+            "hook .pth de scripts/coverage.sh el CLI ejecutado por "
+            "subproceso no se ve. Medido: 39 % en cli/commands/runs.py "
+            f"frente a 87.96 % de la instrumentada. Pasos: {pasos}"
+        )
 
 
 class TestMiseTasksContract:

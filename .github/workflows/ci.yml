@@ -1,5 +1,25 @@
 name: ci
 
+# AGENTS.md, «CI Local Obligatorio»:
+#
+#   `pipelinek` es la fuente de verdad local. GitHub Actions, GitLab CI,
+#   Jenkins o cualquier otro runner remoto **debe** invocar el mismo
+#   `.pipeline.kts` desde el mismo checkout.
+#
+# WI-98: hasta entonces este workflow ejecutaba SU PROPIA receta
+# (`mise run lint` + `pytest --cov`) y no `.pipeline.kts`. De los siete
+# stages canonicos reproducia UNO, y los tres contratos exigibles
+# (coverage-floors, package-build y el unit-tests con la receta de
+# cobertura) no existian aqui. Con el mismo instrumento, la divergencia
+# se ve en los numeros: `cli/commands/runs.py` media 39 % aqui frente a
+# 87.96 % en la receta canonica, y `cli/support.py` 69 % — por debajo del
+# suelo del 70 % que declara AGENTS.md §6.3. Este workflow podia dar
+# VERDE un paquete que no cumplia su propio contrato.
+#
+# Ahora hay UN solo gate y es el de aqui. Si esto diverge de
+# `.pipeline.kts`, no es este fichero el que se actualiza: se actualiza
+# `.pipeline.kts`, y el stage `ci-parity` lo comprueba.
+
 on:
   push:
     branches: [main]
@@ -7,13 +27,22 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-test:
+  canonical:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # La receta canonica tarda ~4 min (receta de cobertura) + los
+    # contratos. 15 min era el techo de la version anterior, que hacia
+    # una cuarta parte del trabajo.
+    timeout-minutes: 25
 
     env:
       # Ubicacion explicita del cache uv (necesaria para actions/cache).
       UV_CACHE_DIR: ${{ github.workspace }}/.cache/uv
+      # `mise.toml` fija pipelinek como backend `github:` (no un binario
+      # de un registro). Sin token, `jdx/mise-action` no puede bajarlo y
+      # `mise exec -- pipelinek` resolveria el shim de asdf, que es OTRO
+      # binario con la misma ruta de nombre. Es el mismo problema que
+      # documenta `mise.toml` en local, resuelto en el remoto.
+      MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout
@@ -21,6 +50,9 @@ jobs:
 
       - name: Install mise
         uses: jdx/mise-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          install: true
 
       - name: List installed tool versions
         run: mise list
@@ -37,25 +69,38 @@ jobs:
             uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
             uv-${{ runner.os }}-
 
-      - name: Sync dependencies
-        run: mise run sync
+      - name: Verificacion canonica
+        # UN solo paso, y es el que manda. El `--rerun` no es opcional:
+        # sin el, el motor reutiliza el veredicto cacheado por `cacheKey`
+        # de compilacion del script y termina en SUCCESS sin ejecutar un
+        # solo step. Ver AGENTS.md, «CI Local Obligatorio».
+        #
+        # `GITHUB_WORKSPACE` lo exporta el propio runner y es lo que
+        # `.pipeline.kts` usa para resolver la raiz del checkout.
+        run: >
+          mise exec -- pipelinek run --rerun
+          --db .pipelinek/db.sqlite
+          --control-root .pipelinek/control
+          .pipeline.kts
 
-      - name: Lint (ruff check)
-        run: mise run lint
-
-      - name: Format gate (ruff format --check)
-        run: mise run format --check
-
-      - name: Smoke test (pytest + coverage)
-        # pytest-cov ya esta en dev deps. Configuracion en
-        # [tool.coverage.run] de pyproject.toml (branch=true, source=skillgraph).
-        # Genera coverage.xml para Codecov/Coveralls (futuro) y muestra
-        # term-missing para visibilidad inline.
-        run: mise exec -- uv run pytest --cov=skillgraph --cov-report=xml --cov-report=term-missing -q
+      - name: Export coverage (XML)
+        # La receta canonica ya dejo `.coverage` COMBINADO y con los
+        # subprocesos instrumentados (hook .pth de scripts/coverage.sh).
+        # Esto solo cambia el formato; no vuelve a medir.
+        #
+        # OJO: esto no sustituye a la cobertura de la receta canonica.
+        # `pytest --cov` directo mide 39 % en cli/commands/runs.py frente
+        # al 87.96 % de la instrumentada, porque el CLI se ejecuta por
+        # subproceso y sin el hook no se ve. Exportar desde el dato
+        # combinado es correcto; volver a medir a mano no lo seria.
+        if: always()
+        run: mise exec -- uv run coverage xml -o coverage.xml
 
       - name: Upload coverage artifact
         # coverage.xml para consumo externo (Codecov, badges, etc.).
-        # if: always() para que el artifact se suba incluso si pytest fallo.
+        # `if: always()` para que el artifact se suba incluso si el
+        # pipeline fallo: un run rojo con su cobertura vale mas que un
+        # run rojo sin ella.
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -64,7 +109,7 @@ jobs:
           retention-days: 30
 
       - name: Minimize uv cache
-        # Reduce tamano del cache antes de guardarlo. Optimizado para CI.
+        # Reduce tamano del cache antes de guardarlo.
         if: always()
         run: mise exec -- uv cache prune --ci
 
@@ -73,7 +118,5 @@ jobs:
         run: |
           echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "- Toolchain: $(mise current)" >> $GITHUB_STEP_SUMMARY
-          echo "- Ruff check: ${{ steps.lint.outcome }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Format gate: ${{ steps.format.outcome }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Pytest+cov: ${{ steps.smoke-test-pytest-coverage.outcome }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Coverage artifact: ${{ steps.upload-coverage-artifact.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Receta canonica: \`.pipeline.kts\` (\`ci-parity\` stage included)" >> $GITHUB_STEP_SUMMARY
+          echo "- Verificacion canonica: ${{ steps.verificacion-canonica.outcome }}" >> $GITHUB_STEP_SUMMARY
