@@ -251,14 +251,28 @@ def test_propose_and_apply_write_identical_payloads(tmp_path: Path) -> None:
 
     from_propose = json.loads((_proposals_dir(data_root) / f"{pid}.json").read_text("utf-8"))
 
-    assert from_apply == from_propose, (
-        f"propose y apply divergen:\n  apply  ={from_apply}\n  propose={from_propose}"
-    )
-    # El juego de claves SI se compara contra el oraculo literal. Los
-    # valores no: `proposal_id` y `created_at` los genera `propose()` en
-    # cada invocacion, asi que aqui solo pueden compararse entre si. La
-    # comparacion de VALORES contra el literal es cosa del test
-    # unitario de `_proposal_payload`, donde la propuesta es un stub fijo.
+    # `created_at` lo estampa `propose()` en CADA invocacion, y aqui son dos
+    # procesos distintos: si el segundo cruza un segundo de reloj, los dos
+    # payloads difieren en ese campo y solo en ese. La primera version de
+    # este test comparaba los dicts enteros y era un flake por construccion;
+    # la CI canonica lo cazo (los dos comandos cayeron en 09:55:40 y
+    # 09:55:41). Se excluye el valor POR INVOCACION y se exige ademas que
+    # ambos sean ISO-8601, para que el campo no se degrade en silencio.
+    # El resto, incluido `proposal_id` (que es un hash estable del
+    # contenido), tiene que ser identico byte a byte.
+    volatile = {"created_at"}
+    assert {k: v for k, v in from_apply.items() if k not in volatile} == {
+        k: v for k, v in from_propose.items() if k not in volatile
+    }, f"propose y apply divergen:\n  apply  ={from_apply}\n  propose={from_propose}"
+    for payload in (from_apply, from_propose):
+        assert payload["created_at"].endswith("+00:00"), (
+            f"created_at con forma inesperada: {payload['created_at']!r}"
+        )
+    # El juego de claves SI se compara contra el oraculo literal. El resto de
+    # valores no: `proposal_id` y `created_at` los genera `propose()` en cada
+    # invocacion, asi que aqui solo pueden compararse entre si. La
+    # comparacion de VALORES contra el literal es cosa del test unitario de
+    # `_proposal_payload`, donde la propuesta es un stub fijo.
     assert set(from_apply) == set(_expected_payload(proposal)), (
         f"claves distintas a las del contrato: {sorted(set(from_apply) ^ set(_expected_payload(proposal)))}"
     )
