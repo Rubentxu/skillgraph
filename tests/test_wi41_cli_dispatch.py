@@ -204,14 +204,23 @@ def _run_cli(*args: str, cwd: Path, data_root: Path) -> subprocess.CompletedProc
 
 class TestDispatchObservableBehaviour:
     def test_comando_desconocido_devuelve_usage(self, tmp_path: Path) -> None:
-        """Comando invalido lo atrapa argparse con exit=2, no llega a main.
+        """Comando invalido lo atrapa argparse, y ahora con exit=EXIT_USAGE.
 
-        Mismo contrato que `test_cli_branches.TestCliExitUsage`: el
-        `EXIT_USAGE` (1) de main es dead code en la practica porque
-        argparse declara choices para todos los subcomandos.
+        Este test se llamaba `..._devuelve_usage` y afirmaba 2: el nombre
+        decia una cosa y el cuerpo otra. Su docstring llego mas lejos y
+        declaraba que `EXIT_USAGE` (1) era "dead code en la practica porque
+        argparse declara choices para todos los subcomandos".
+
+        WI-88 (ADR-0016): no era codigo muerto, era **código secuestrado**.
+        argparse interceptaba antes y salia con su 2, de modo que el 1
+        nunca se producia — y un numero que nunca ocurre no se parece a
+        codigo muerto sino a codigo inalcanzable por un equivoco. Y ese
+        2 era `EXIT_BAD_NAME`, que `runner.py:131` devuelve vivo, luego
+        un script no podia separar "nombre invalido" de "me equivoque al
+        escribir el comando".
         """
         proc = _run_cli("no-existe", cwd=tmp_path, data_root=tmp_path / "sg-data")
-        assert proc.returncode == 2, proc.stderr
+        assert proc.returncode == runner.EXIT_USAGE, proc.stderr
 
     def test_sin_comando_imprime_ay_devuelve_ok(self, tmp_path: Path) -> None:
         proc = _run_cli(cwd=tmp_path, data_root=tmp_path / "sg-data")

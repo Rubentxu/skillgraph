@@ -10,6 +10,14 @@ unicos nombres libres son `argparse`, `Path`, `int` y `float`, y no
 llama a ninguna funcion de este paquete. Por eso puede importarse sin
 arrastrar los handlers ni el almacenamiento.
 
+ADR-0016 (WI-88): la unica excepcion es `skillgraph.cli.exit_codes`, un
+modulo hoja sin dependencias. Hace falta porque `argparse` abortaba los
+errores de invocacion con su codigo **2**, que en esta CLI ya significa
+`EXIT_BAD_NAME` (`runner.py:131` lo devuelve vivo). Tres fallos sin
+relacion devolvian el mismo numero y un script no podia separarlos.
+`_UsageParser` devuelve `EXIT_USAGE`; el unico coste es un import de una
+tabla de doce enteros, que no arrastra ni handlers ni almacenamiento.
+
 `runner._build_parser` se mantiene como reexport, de modo que cualquier
 import previo del simbolo sigue funcionando sin cambios.
 """
@@ -17,13 +25,36 @@ import previo del simbolo sigue funcionando sin cambios.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
+from typing import NoReturn
+
+from skillgraph.cli.exit_codes import EXIT_USAGE
 
 __all__ = ["build_parser"]
 
 
+class _UsageParser(argparse.ArgumentParser):
+    """Parser cuyos errores de invocacion salen con `EXIT_USAGE`.
+
+    `argparse` aborta con 2, que es su convencion universal pero que en
+    esta CLI colisiona con `EXIT_BAD_NAME`. Sobrescribir `error()` lo
+    resuelve sin envolver `main` en un `except SystemExit`, que no
+    podria distinguir el 2 de `argparse` del 2 de un handler una vez
+    ocurrido.
+
+    `argparse` propaga `type(self)` a los subparsers y a los
+    sub-subparsers, de modo que una sola clase cubre los tres niveles.
+    `--help` no pasa por aqui: usa `exit(0)` y sigue saliendo con 0.
+    """
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_USAGE, f"{self.prog}: error: {message}\n")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
+    p = _UsageParser(
         prog="skillgraph",
         description="SkillGraph: workflows declarativos para agentes.",
     )

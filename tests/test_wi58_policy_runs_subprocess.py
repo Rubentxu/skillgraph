@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from skillgraph.cli.support import EXIT_USAGE
+
 
 def _run_cli(*args: str, cwd: Path, data_root: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -64,7 +66,12 @@ class TestPolicySubprocess:
         assert "policy=metadata" in result.stdout
 
     def test_policy_set_rejects_invalid_choice(self, tmp_path: Path) -> None:
-        """Caso contrafactual: choice invalido -> argparse lo rechaza (2)."""
+        """Caso contrafactual: choice invalido -> argparse lo rechaza.
+
+        WI-88 (ADR-0016): antes rechazaba con 2, el codigo de argparse, que
+        en esta CLI colisiona con `EXIT_BAD_NAME`. Ahora rechaza con
+        `EXIT_USAGE`, que es lo que el contrato declaraba.
+        """
         data_root = _init_project(tmp_path)
         result = _run_cli(
             "policy",
@@ -75,7 +82,7 @@ class TestPolicySubprocess:
             cwd=tmp_path,
             data_root=data_root,
         )
-        assert result.returncode == 2
+        assert result.returncode == EXIT_USAGE, result.stderr
         assert "invalid choice" in result.stderr
 
 

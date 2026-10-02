@@ -5,6 +5,25 @@ H-02). `runner` re-importa estos nombres, de modo que los call-sites
 internos y la tabla de dispatch (WI-41) no se editan. Los componentes
 de comando (`cli/commands/*`) importan desde aqui, nunca desde
 `runner`, para no crear un ciclo de imports.
+
+## Codigos de salida (AGENTS.md 11.15 / contrato CLI)
+
+La tabla de los doce codigos vive en `cli/exit_codes.py`, un modulo hoja
+sin imports, y aqui se reexporta para no romper a los importadores
+previos. Lo movio ADR-0016 (WI-88): `parser.py` necesita `EXIT_USAGE`
+para no devolver el 2 de `argparse`, que en esta CLI colisionaba con
+`EXIT_BAD_NAME`; importar este modulo desde el parser habria arrastrado
+`Storage`, `BrickRegistry`, `pack_loader`, `catalog`, `plan_loader` y
+`workflow` — y el parser es, por diseño, autocontenido.
+
+La forma `X as X` del import no es redundante: es la que ruff reconoce
+como reexport intencional. Sin ella, F401 borra los nombres que este
+modulo no usa internamente y rompe a sus importadores. Medido: al
+migrar, `EXIT_DOMAIN` dejo de exportarse y
+`cli/commands/expansion.py` dejo de importar. Leccion de la misma
+familia que WI-81 (alias muertos) y WI-86 (capa de re-export muerta):
+un re-export que el linter no puede ver como intencional, no es un
+reexport, es un accidente a la espera de ocurrir.
 """
 
 from __future__ import annotations
@@ -17,6 +36,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from skillgraph import BrickRegistry, ResourceIdentity, load_defaults
+from skillgraph.cli.exit_codes import (
+    EXIT_BAD_NAME as EXIT_BAD_NAME,
+    EXIT_DB_MISSING as EXIT_DB_MISSING,
+    EXIT_DOMAIN as EXIT_DOMAIN,
+    EXIT_OK as EXIT_OK,
+    EXIT_PARSE as EXIT_PARSE,
+    EXIT_PLAN_NOT_FOUND as EXIT_PLAN_NOT_FOUND,
+    EXIT_PROJECT_EXISTS as EXIT_PROJECT_EXISTS,
+    EXIT_PROJECT_NOT_FOUND as EXIT_PROJECT_NOT_FOUND,
+    EXIT_RUN_FAILED as EXIT_RUN_FAILED,
+    EXIT_RUN_INCOMPLETE as EXIT_RUN_INCOMPLETE,
+    EXIT_USAGE as EXIT_USAGE,
+    EXIT_VALIDATION as EXIT_VALIDATION,
+)
 from skillgraph.core.errors import SkillGraphError
 from skillgraph.domain.pack_loader import declare_types_from_pack
 from skillgraph.platform.paths import (
@@ -29,32 +62,6 @@ from skillgraph.resources.bricks import Brick
 from skillgraph.resources.catalog import open_catalog
 from skillgraph.resources.plan_loader import load_plan_file
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan, WorkflowTransition
-
-# --- Codigos de salida tipados (AGENTS.md §11.15 / contrato CLI) -------------
-#  0 OK
-#  1 argumento desconocido o falta subcomando
-#  2 nombre de proyecto invalido
-#  3 proyecto ya existe
-#  4 proyecto no existe
-#  5 base de datos ausente
-#  6 plan no encontrado
-# 10 error de dominio SkillGraph (catch-all)
-# 11 parse error (workflow o brick)
-# 12 validacion semantica (kind desconocido o regla violada)
-# 20 run FAILED
-# 21 run no terminal tras max-iterations (CANCELLED / WAITING / ACTIVE)
-EXIT_OK = 0
-EXIT_USAGE = 1
-EXIT_BAD_NAME = 2
-EXIT_PROJECT_EXISTS = 3
-EXIT_PROJECT_NOT_FOUND = 4
-EXIT_DB_MISSING = 5
-EXIT_PLAN_NOT_FOUND = 6
-EXIT_DOMAIN = 10
-EXIT_PARSE = 11
-EXIT_VALIDATION = 12
-EXIT_RUN_FAILED = 20
-EXIT_RUN_INCOMPLETE = 21
 
 
 @dataclass(frozen=True, slots=True)

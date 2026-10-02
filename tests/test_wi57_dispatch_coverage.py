@@ -119,10 +119,16 @@ class TestDispatchCoversParser:
 def test_unknown_subcommand_of_table_nested_is_argparse_usage() -> None:
     """Caso contrafactual: SUB desconocido de un comando TABLE-NESTED.
 
-    argparse valida los choices y aborta con SystemExit(2) ANTES de
-    llegar a `_resolve_handler`: el fallback ayuda+EXIT_USAGE de `main`
-    aplica a comandos flat sin handler, nunca a subs desconocidos.
+    argparse valida los choices y aborta ANTES de llegar a
+    `_resolve_handler`. WI-88 (ADR-0016): antes abortaba con SystemExit(2),
+    y el nombre de este test ya decia "usage" mientras el cuerpo afirmaba
+    2 — el mismo patron que se corrigio en test_wi41_cli_dispatch.py.
+
+    Antes el docstring sostenia que el fallback de EXIT_USAGE "aplica a
+    comandos flat sin handler, nunca a subs desconocidos". Tras ADR-0016
+    los dos caminos devuelven EXIT_USAGE, luego ya no se distinguen, y esa
+    era justo la prueba de que el 1 no se producia nunca.
     """
     with pytest.raises(SystemExit) as excinfo:
         runner.main(["runs", "bogus-sub"])
-    assert excinfo.value.code == 2
+    assert excinfo.value.code == runner.EXIT_USAGE

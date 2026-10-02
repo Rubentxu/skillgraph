@@ -52,7 +52,7 @@ from pathlib import Path
 import pytest
 
 from skillgraph.cli import runner
-from skillgraph.cli.runner import EXIT_OK, EXIT_USAGE, main
+from skillgraph.cli.runner import EXIT_BAD_NAME, EXIT_OK, EXIT_USAGE, main
 
 # --- Instrumento: recorrido del AST de un handler ------------------------
 
@@ -197,24 +197,29 @@ class TestMainReturnsInt:
         assert exc.value.code != EXIT_OK
         assert "usage" in capsys.readouterr().err.lower()
 
-    def test_argparse_error_is_not_success(self) -> None:
+    def test_argparse_error_is_the_canonical_usage_code(self) -> None:
         """`runs budget` sin `project`/`run_id`: argparse corta antes del handler.
 
-        HALLAZGO DE CONTRATO (as-built, no corregir sin ADR): argparse sale
-        con codigo 2, mientras que el `EXIT_USAGE` canonico de la CLI es
-        1 (`src/skillgraph/cli/support.py:47`). Un operador o un script
-        que clasifique por `EXIT_USAGE` no ve el error de invocacion. Se
-        fija el comportamiento REAL a proposito; la unificacion es una
-        decision de producto, no un fix de test.
+        WI-88 (ADR-0016). Esta prueba consignaba el comportamiento as-built:
+        argparse salia con 2 mientras `EXIT_USAGE` era 1, y fijaba el 2 a
+        proposito. La consignacion era correcta sobre la contradiccion, pero
+        estaba incompleta: 2 no era un numero libre, era `EXIT_BAD_NAME`, que
+        `runner.py:131` devuelve vivo. Tres fallos sin relacion —un nombre
+        invalido, un comando inexistente y un subcomando sin argumentos—
+        devolvian el mismo numero, y un script no podia separarlos.
+
+        Unificar NO era "un fix de test" como decia la nota anterior, sino
+        lo que la nota daba por supuesto: que 2 no significaba nada. Ahora
+        `EXIT_USAGE` es observable por fin y el 2 significa una sola cosa.
         """
         with pytest.raises(SystemExit) as exc:
             main(["runs", "budget"])
         assert isinstance(exc.value.code, int)
-        assert exc.value.code == 2
-        assert exc.value.code != EXIT_USAGE, (
-            "si argparse pasara a devolver EXIT_USAGE, este test documenta "
-            "el cambio de contrato y hay que actualizarlo a proposito"
+        assert exc.value.code == EXIT_USAGE, (
+            "argparse debe salir con EXIT_USAGE; si vuelve a 2, el 2 ha "
+            "vuelto a colisionar con EXIT_BAD_NAME y hay que revisar ADR-0016"
         )
+        assert exc.value.code != EXIT_BAD_NAME
         assert exc.value.code != EXIT_OK
 
     def test_failed_subcommand_does_not_report_success(self, tmp_path: Path) -> None:

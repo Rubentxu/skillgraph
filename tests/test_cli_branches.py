@@ -290,19 +290,20 @@ class TestCliExitRunIncomplete:
 
 
 class TestCliExitUsage:
-    def test_unknown_command_returns_exit_2(self, tmp_path: Path) -> None:
-        """argparse ya devuelve exit=2 para choice invalid.
+    def test_unknown_command_returns_exit_usage(self, tmp_path: Path) -> None:
+        """argparse devuelve `EXIT_USAGE` para un choice invalido.
 
-        El EXIT_USAGE (1) del CLI es un dead code en la practica
-        porque argparse anidado tiene choices para todos los
-        sub-subcomandos y atrapa los invalidos antes de llegar al
-        dispatch de cmd_main. Mantenemos la constante por si en el
-        futuro queremos reportar errores de uso propios; este test
-        documenta la frontera actual con argparse.
+        WI-88 (ADR-0016). Este test documentaba "la frontera actual con
+        argparse" y mantenia `EXIT_USAGE` "por si en el futuro queremos
+        reportar errores de uso propios". El futuro era este commit: la
+        frontera ya no existe, porque `parser.py` usa `_UsageParser` y
+        argparse sale con el codigo que el contrato declaraba.
+
+        El nombre de la clase era correcto y su cuerpo no; ahora coinciden.
         """
         data_root = _init_project(tmp_path)
         result = _run_cli("totally-unknown-command", cwd=tmp_path, data_root=data_root)
-        assert result.returncode == 2
+        assert result.returncode == runner.EXIT_USAGE, result.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -336,10 +337,13 @@ class TestCliArgparseErrors:
     `main()` sin duplicar los tests de acceptance.
     """
 
-    def test_main_unknown_flag_exits_with_2(
+    def test_main_unknown_flag_exits_with_usage(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """`main(["--bogus-flag"])` -> argparse eleva SystemExit(2)."""
+        """`main(["--bogus-flag"])` -> argparse eleva SystemExit(EXIT_USAGE).
+
+        WI-88 (ADR-0016): antes 2, que en esta CLI es `EXIT_BAD_NAME`.
+        """
         with pytest.raises(SystemExit) as exc_info:
             runner.main(
                 [
@@ -349,15 +353,18 @@ class TestCliArgparseErrors:
                     "init",
                 ]
             )
-        assert exc_info.value.code == 2
+        assert exc_info.value.code == runner.EXIT_USAGE
         err = capsys.readouterr().err
         assert "unrecognized arguments" in err
         assert "--no-such-flag" in err
 
-    def test_main_project_invalid_subcommand_exits_with_2(
+    def test_main_project_invalid_subcommand_exits_with_usage(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """`main(["project", "bogus"])` -> argparse 'invalid choice'."""
+        """`main(["project", "bogus"])` -> argparse 'invalid choice'.
+
+        WI-88 (ADR-0016): antes 2, que en esta CLI es `EXIT_BAD_NAME`.
+        """
         with pytest.raises(SystemExit) as exc_info:
             runner.main(
                 [
@@ -367,14 +374,17 @@ class TestCliArgparseErrors:
                     "bogus-sub",
                 ]
             )
-        assert exc_info.value.code == 2
+        assert exc_info.value.code == runner.EXIT_USAGE
         err = capsys.readouterr().err
         assert "invalid choice" in err
 
-    def test_main_project_list_extra_positional_exits_with_2(
+    def test_main_project_list_extra_positional_exits_with_usage(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """`main(["project", "list", "extra"])` -> argparse 'unrecognized'."""
+        """`main(["project", "list", "extra"])` -> argparse 'unrecognized'.
+
+        WI-88 (ADR-0016): antes 2, que en esta CLI es `EXIT_BAD_NAME`.
+        """
         with pytest.raises(SystemExit) as exc_info:
             runner.main(
                 [
@@ -385,7 +395,7 @@ class TestCliArgparseErrors:
                     "extra-positional",
                 ]
             )
-        assert exc_info.value.code == 2
+        assert exc_info.value.code == runner.EXIT_USAGE
         err = capsys.readouterr().err
         assert "unrecognized arguments" in err
 
