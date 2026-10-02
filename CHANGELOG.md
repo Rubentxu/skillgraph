@@ -12,13 +12,91 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [Unreleased] — WI-87: el vocabulario de estados pasa a derivarse de su ADT
+
+**Sin bump**: `refactor` + `docs`, que según la regla de este CHANGELOG no mueven
+versión. No hay capacidad observable nueva: hoy el `CHECK` y la constante ya
+coincidían. Lo que cambia es que ya **no pueden** dejar de coincidir.
+
+### Fixed
+
+- `refactor(core)` `d47b7af`: **el vocabulario de estados tenía dos fuentes de verdad y
+  el test que lo cubría verificaba una copia de sí mismo**.
+
+  `core/runtime_types.py:142` ya definía `TERMINAL_RUN_STATES` (con su helper
+  `is_terminal_run_state`), y `platform/storage.py:123` reimplementaba **su
+  complemento** a mano, sin relación verificada. Del mismo modo, el `CHECK` de
+  `promotion_outbox` en `schema.py:262` y `PROMOTION_STATUSES` en `storage.py:117`
+  eran dos listas escritas a mano sin ninguna ligadura.
+
+  El único test que declaraba cubrir esa ligadura
+  (`tests/test_h9_storage_promo_list.py:114-116`) comparaba el `frozenset` contra un
+  literal repetido en el propio test, **sin leer `schema.py`**. Habría seguido en
+  verde con el `CHECK` cambiado, que es justo lo que su nombre y su docstring
+  declaran proteger.
+
+  **Fallo concreto que esto habilitaba**: añadir un estado a `RunState` sin tocar
+  `storage.py` lo hacía terminal, `find_active_run()` no lo encontraba, y el CLI
+  creaba **un segundo run** para el mismo trabajo lógico — duplicación silenciosa, sin
+  log, sin error y sin test rojo. UAT-06 (reanudar tras crash) era el que se
+  incumplía.
+
+  Es la misma clase que QW-E, donde la validación rechazaba `skill_pack` por
+  divergencia, pero con consecuencia peor: allí se rechazaba un valor, aquí se
+  duplica trabajo. El repositorio ya había resuelto este antipatrón dos veces
+  (QW-D para `EVENT_KINDS`, QW-E para `SOURCE_KINDS`); aquí se les había escapado.
+
+### Changed
+
+- `NON_TERMINAL_RUN_STATES` se **deriva** por complemento de `TERMINAL_RUN_STATES`
+  sobre `get_args(RunState)`: la partición es exacta por construcción.
+- `PROMOTION_STATUSES` se **deriva** de la nueva Literal `PromotionStatus`, y
+  `platform/schema.py` genera el `CHECK` de SQLite desde ese conjunto. Base de datos
+  y validador de entrada no pueden divergir porque salen de la misma expresión.
+- **Polaridad invertida**: se declara lo *terminal* y lo demás queda vivo. Un estado
+  nuevo es reanudable salvo que se declare terminal; antes, olvidar el segundo
+  fichero mataba el run. La dirección del fallo por omisión pasa de «perder trabajo»
+  a «reanudar de más», y sólo en estados que nadie ha visto todavía.
+- `promotion_repository` y `run_repository` toman las constantes de la hoja
+  `core.runtime_types` en vez de la fachada `storage.py`.
+- `SCHEMA_VERSION` sigue en **1**: el conjunto de valores aceptados no cambia, no hay
+  migración.
+
+### Contradicciones
+
+- Una primera versión de la red de tests, y el docstring de un helper que añadí,
+  afirmaban que «un estado desconocido cuenta como no terminal». Es **falso**:
+  `RunState` es una ADT cerrada, y un valor que no está en el Literal no pertenece al
+  vocabulario en ninguno de los dos sentidos. Se corrigió la afirmación, no el
+  criterio. El intento de probarlo con `PAUSED` fue lo que lo reveló.
+- `is_non_terminal_run_state()` se añadió y se retiró en el mismo bloque: cero
+  consumidores. WI-81 borró alias muertos y WI-86 la capa de re-export muerta;
+  introducir un tercero contradice las dos.
+- `tests/test_wi82_evidence_write_idempotence.py:179` limita su `git status --porcelain`
+  a `-- tests/uat-evidence/`, así que no puede ver que **`audits/architecture-debt-*.md`
+  sigue ensuciando el árbol** en cada corrida: `test_audit_debt_smoke.py:25` y
+  `test_audit_debt_accuracy.py:43` lanzan `audit_debt.py` desde la raíz del repo. Es
+  una instancia distinta de la clase que corrigió WI-82, no un descuido de aquel
+  arreglo. Registrado como seguimiento, no corregido aquí por ser de otra superficie.
+  El informe regenerado se incluye en este bloque porque es una medición real del
+  árbol (20779 → 20829 LoC).
+
+### Verificación
+
+- **2430 passed** (2416 antes; +14 = los tests nuevos). `ruff check` y
+  `ruff format --check` limpios.
+- Mutaciones: **4 cazadas**, **2 imposibles por construcción**, 0 sin cazar. Las dos
+  imposibles (reescribir `NON_TERMINAL_RUN_STATES` a mano con el mismo valor; romper
+  la disyunción) son la demostración de que la derivación hace el fallo imposible, y
+  una mutación acompañante prueba que la red de seguridad detecta el olvido en cuanto
+  `RunState` cambia.
+- ADR-0015. Evidencia: `evidence/sddk-wi87-verify-2026-10-02.md`.
+
 ## [0.16.13] - 2026-10-02 — WI-86 y WI-80: la capa de re-export y el rechazo ilegible
 **Resumen**: 2 commits de trabajo desde `v0.16.12` (`cf6539b`, `eb19942`). SemVer derivado del
 historial: **0 `feat`, 1 `fix`, 1 `refactor`, 1 `docs`, 1 `chore`** → **PATCH**. Sin capacidad
 observable nueva ni cambio de API pública. **2416 passed** (2394 en `v0.16.12`), ruff y format
 limpios, CI canónica `Pipeline finished with SUCCESS`.
- un rechazo ilegible ya no se presenta como `PROPOSED` sin avisar
-
 
 ### Fixed
 
@@ -45,7 +123,10 @@ limpios, CI canónica `Pipeline finished with SUCCESS`.
   fichero está roto», y ningún consumidor razonable depende de que se
   imprima `stage=PROPOSED` para algo que sí fue rechazado.
 
-## [Unreleased] — WI-86: los mappers se importan de la hoja, no a través del facade
+## [0.16.13] (cont.) — WI-86: los mappers se importan de la hoja, no a través del facade
+
+> Esta sección se rotuló `Unreleased` por error: el trabajo de WI-86 salió en
+> `v0.16.13` (`cf6539b`). No es un release pendiente.
 
 **Sin bump**: `refactor` + `test`, que según la regla de este CHANGELOG
 no mueven versión. 2414 passed (2394 en `v0.16.12`).

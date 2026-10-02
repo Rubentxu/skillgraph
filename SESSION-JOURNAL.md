@@ -9483,3 +9483,118 @@ antes de seguir.
   ciego del audit.
 - **(f)** exit code de argparse (2) vs `EXIT_USAGE` (1).
 - **(push)** 21 commits sin publicar.
+
+---
+
+## 2026-10-02 — WI-87: el vocabulario de estados como fuente unica (ADR-0015)
+
+Ciclo `p-b7740b96d79ec013/wi-87-single-source-state-vocabulary`, path `A-full`.
+Commit de trabajo `d47b7af`. Cierra la decision **(d)** de `next_workitem`.
+
+### Que se midio antes de decidir
+
+La premisa de (d) era correcta pero incompleta, y medirla la supero:
+
+- `core/runtime_types.py:142` **ya tenia** `TERMINAL_RUN_STATES`, con su helper
+  `is_terminal_run_state()` en :177.
+- `platform/storage.py:123` reimplementaba **su complemento** a mano, sin
+  relacion verificada con el original.
+- `platform/schema.py:262` (CHECK) y `platform/storage.py:117`
+  (`PROMOTION_STATUSES`): dos listas a mano, sin ligadura.
+- El unico test que declaraba cubrir esa ligadura comparaba el valor contra
+  un literal **repetido en el propio test**, sin leer `schema.py`.
+
+El repositorio ya habia resuelto este antipatron dos veces — QW-D para
+`EVENT_KINDS`, QW-E para `SOURCE_KINDS`, ambos derivando con
+`get_args()`. Se les habia escapado estos dos.
+
+### Fallo concreto que habilitaba
+
+Anadir un estado a `RunState` sin tocar `storage.py` lo hacia terminal;
+`find_active_run()` no lo encontraba; el CLI creaba **un segundo run** para
+el mismo trabajo. Sin log, sin error, sin test rojo. UAT-06 incumplido
+en silencio.
+
+### Decisiones
+
+1. Propiedad del dominio, no de persistencia: la constante vive en `core`.
+2. Todo `frozenset` de vocabulario se deriva de su Literal. Regla general.
+3. El `CHECK` de SQLite se genera desde la constante. Base de datos y
+   validador no pueden divergir. `SCHEMA_VERSION` sigue en 1.
+4. **Polaridad invertida**: se declara lo terminal, lo demas queda vivo. Un
+   estado nuevo es reanudable salvo que se declare terminal. Antes, olvidar
+   el segundo fichero mataba el run.
+
+### Por que no bastaba un test de igualdad
+
+Comprobado antes de tocar nada: el CHECK y la constante **coincidian hoy**
+(`coinciden hoy: True`), y el DDL si llevaba el vocabulario a mano. Un test de
+igualdad habria sido verde desde el primer dia. La red lleva dos
+comprobaciones que no se sustituyen: la igualdad (el invariante) y una que
+lee el AST de `schema.py` y falla si el DDL vuelve a escribirse a mano.
+
+### Evidencia
+
+- `evidence/sddk-wi87-verify-2026-10-02.md`
+- `external/blueprint-v1/adr/ADR-0015-vocabulario-de-estados-como-fuente-unica.md`
+  (**no versionada**: `external/` esta en `.gitignore`; la trazabilidad
+  durable va en CHANGELOG, STATE y este journal)
+- `.pipelinek/wi87_mutate.sh` (4 cazadas, 2 imposibles, 0 sin cazar)
+
+### Tests ejecutados
+
+- `test_wi87_state_vocabulary_single_source.py`: 14
+- afectados (3 ficheros del WI): 37 passed
+- con storage y sus contratos (WI-65/81/86, WI-45): 144 passed
+- amplio `-k 'promotion or storage or run_state or runtime_types or terminal'`: 423
+- suite completa: **2430 passed in 106.01s** (lo reporto el pre-commit)
+- ruff y format limpios; 0 no-cazadas en las mutaciones
+
+### Conocimiento negativo (propio, y sirve)
+
+- **Una red puede afirmar algo falso y sus tests seguir verdes.** Mi primera
+  version de la red —y el docstring de un helper que anadi— decia que
+  "un estado desconocido cuenta como no terminal". Es falso: `RunState` es
+  ADT cerrada y un valor fuera del Literal no pertenece al vocabulario en
+  ninguno de los dos sentidos. Lo revelo intentar probarlo con `PAUSED`.
+  Se corrigio la afirmacion, no el criterio.
+- **Un helper nuevo sin consumidores es un helper muerto.** Anadi
+  `is_non_terminal_run_state()` y lo retire en el mismo bloque: cero usos.
+  WI-81 borro alias muertos y WI-86 la capa de re-export muerta; no se puede
+  introducir un tercero.
+- **El primer script de mutaciones NUNCA corrio los tests.** `mutate`
+  capturaba la salida de la *mutacion*, no la de pytest, y reportaba todo
+  "no cazado" — un informe que afirmaba una medicion inexistente.
+- **Un control que siempre falla no es un control.** La restauracion se
+  verificaba con `git diff --quiet` contra HEAD con el arbol sin commitear.
+  Ahora `cmp` contra el backup. (Mismo error que ya se habia documentado en
+  un bloque anterior; conviene repetir la leccion, no basta con escribirla.)
+- **No toda mutacion que no se caza es un agujero.** M4 (reescribir a mano
+  con el mismo valor) y M6 (romper la disyunion) son imposibles por
+  construccion. Anotarlas "no cazadas" seria afirmar que hay un agujero donde
+  no lo hay. El script distingue `caught` / `structural` / sin cazar.
+- **Una ADT cerrada hace imposible el test que uno quiere escribir.** Para
+  probar "un estado nuevo es reanudable" habria que anadirlo al Literal, y
+  eso es un cambio de contrato (AGENTS §2.1) que exige ADR. Se prueba la
+  regla, no el caso.
+
+### Sigue abierto (medido, no ejecutado)
+
+- **`audits/architecture-debt-*.md` sigue ensuciando `git status`**, igual
+  que hacia `tests/uat-evidence/` antes de WI-82. Medido con md5: 9 tests
+  verdes cambian el fichero. Causa: `test_audit_debt_smoke.py:25` y
+  `test_audit_debt_accuracy.py:43` lanzan `audit_debt.py` desde la raiz del
+  repo y `audit_debt.py:326` escribe en `audits/` relativo al cwd. El test de
+  WI-82 no lo ve porque su `git status` esta limitado a
+  `-- tests/uat-evidence/`. **Instancia distinta de la misma clase**, no un
+  descuido de aquel arreglo. Decidido: el informe regenerado **se commitea**
+  (es medicion real: 20779 -> 20829 LoC); revertirlo dejaba el informe
+  versionado mintiendo sobre el codigo. Lo que quedaria bien es que los tests
+  lo generen en sandbox, como hizo WI-82.
+- **(a)** `list_file_signatures_for_source`: MEDIDO que **no esta muerto** —
+  4 consumidores reales (3 en `governance/improvement.py`: 208/268/324, 1 en
+  `knowledge_controller.py:442`). Falta medir si su cc 10 es necesario o
+  delata responsabilidades mezcladas.
+- **(f)** exit code de argparse (2) vs `EXIT_USAGE` (1): cambiarlo altera el
+  contrato externo de los tests de subproceso. Sin workitem.
+- **(push)** 23 commits sin publicar. No autorizado.

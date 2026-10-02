@@ -5,7 +5,7 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **78** modulos Python, **20779** LoC, **769** funciones.
+- **78** modulos Python, **20829** LoC, **769** funciones.
 - **0** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **0** funciones privadas con cc>=20 (refactor opcional).
