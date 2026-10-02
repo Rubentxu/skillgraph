@@ -140,6 +140,57 @@
 > SemVer hay que derivarlo siempre sobre el último **tag**, no sobre «lo que
 > hizo este bloque».
 >
+> **Bloque 2026-10-02 (octava tanda) cerrado — WI-95, release `v0.16.20`.**
+> Versión activa `0.16.20.dev0`; último tag `v0.16.20`. 2559 passed.
+>
+> **WI-95 — el CHANGELOG decía `[Unreleased]` para bloques ya publicados**
+> (`9caeaa2`, `b06c258`). Misma pregunta que abrió WI-93 y WI-94: *¿qué
+> contratos declara el repo que nada comprueba?* `STATE.yaml` tiene una red
+> que lo ata a `git tag` desde WI-74. **El CHANGELOG no tenía ninguna**, y
+> por eso llevaba **dos releases de desfase** sin que nada lo notara.
+>
+> | Medición | Valor |
+> |---|---|
+> | tags SemVer en git | 46 |
+> | tags **sin sección** | **2** (`v0.16.14`, `v0.16.15`) |
+> | cabeceras `[Unreleased]` falsas | **3** (WI-87, WI-88, WI-89) |
+> | tests que parseen el CHANGELOG | **0** |
+>
+> **El fichero se contradecía a sí mismo.** La sección de WI-88 decía, en dos
+> líneas consecutivas: «Sin bump todavía» y «la release que lo contiene es
+> `v0.16.14`». Ambas eran ciertas al escribirlas —el tag aún no existía— y
+> dejaron de serlo al etiquetar, sin que nadie volviera a leer la frase.
+> *La contradicción interna es más fácil de detectar que la falsa afirmación
+> aislada, y estaba debajo de la vista.*
+>
+> Corrección de las tres cabeceras a su versión real (`v0.16.15`, `v0.16.14`,
+> `v0.16.14 (cont.)`), cada una con su nota `CORREGIDA`. Corregir una etiqueta
+> de versión no es reescribir historia: el relato del cambio no se toca, y la
+> afirmación corregida es sobre el **presente** (*¿esto salió o no?*).
+>
+> **El guard tenía un agujero y lo encontró la mutación M3 al primer intento.**
+> La aserción sobre `(cont.)` contaba repeticiones, y dos secciones no son
+> «más de dos», así que convertir un `(cont.)` en una versión más pasaba
+> desapercibido. El invariante correcto no es contar: **sólo la primera
+> aparición de una versión puede no ser continuación**. Sin eso la convención
+> `(cont.)` es decorativa, porque nada obliga a marcarla. Mutaciones **3/3**,
+> aplicadas al **artefacto**: lo que hay que demostrar es que el guard detecta
+> cuando el documento vuelve a mentir.
+>
+> **El desorden antiguo se mide y NO se arregla**: `0.14.1 → 0.7.0 → … →
+> 0.3.0 → 0.8.1 → … → 0.14.0`, diez pares fuera de orden. Es cosmético y
+> preexistente, y mover 20 secciones de texto histórico es el riesgo que este
+> proyecto lleva cuatro bloques evitando. Exigir orden global haría fallar el
+> guard en el primer run por secciones de 2026-09, y **un guard que falla por
+> ruido se aprende a ignorar**. Lo que sí se vigila es que la zona que se escribe
+> hoy siga en orden descendente.
+>
+> **El SemVer agrupa un fix pendiente**: `git log v0.16.19..HEAD` = 0 feat,
+> 0 breaking, **2 fix**, 1 test, 2 docs, 1 chore → PATCH. Los dos `fix` son el
+> de este bloque y `cbc8c04`, que WI-94 dejó pendiente **a propósito** para no
+> abrir una micro-release. Salieron juntos, y ninguno de los dos es trivial:
+> es lo que hace útil la regla de cadencia.
+>
 > **Queda abierto**: las **credenciales de proveedor real** (Anthropic/OpenAI)
 > no están en este entorno, así que el criterio de salida de **H9 sigue
 > declarado incumplido** — con la mitad local del contrato probada (el

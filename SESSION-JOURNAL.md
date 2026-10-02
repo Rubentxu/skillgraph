@@ -10496,3 +10496,106 @@ fuera y el calculo siguiente los ignora.
 - **66 commits sin publicar**, `origin/main` en `0ebbd58`. Sin autorizacion.
 - **Credenciales de proveedor real (Anthropic/OpenAI)**: ausentes, y son lo
   unico que bloquea el criterio de salida de **H9**.
+
+---
+
+## 2026-10-02 — WI-95: el CHANGELOG decía [Unreleased] para bloques ya publicados
+
+- **Commits**: `9caeaa2` (`fix(docs)`, la correccion), `b06c258`
+  (`test(governance)`, el guard), mas trazabilidad y release.
+- **Suite**: 2559 passed (2551 antes; +8).
+- **SemVer derivado del historial**: `git log v0.16.19..HEAD` = 0 feat,
+  0 breaking, **2 fix**, 1 test, 2 docs, 1 chore → **PATCH → v0.16.20**.
+
+### La medicion, antes de tocar nada
+
+| | |
+|---|---|
+| tags SemVer en git | 46 |
+| versiones distintas en CHANGELOG | 44 |
+| tags **sin seccion** | **2** (`v0.16.14`, `v0.16.15`) |
+| cabeceras `[Unreleased]` falsas | **3** (WI-87, WI-88, WI-89) |
+| tests que parseen el CHANGELOG | **0** |
+
+`STATE.yaml` tiene una red que lo ata a `git tag` con igualdad exacta desde
+WI-74. **El CHANGELOG no tenia ninguna**, y por eso llevaba dos releases
+desfasado.
+
+### El fichero se contradedia a si mismo
+
+La seccion de WI-88 decia, en dos lineas consecutivas: «Sin bump todavia» y
+«la release que lo contiene es `v0.16.14`». Ambas eran ciertas al escribirlas
+—el tag aun no existia— y dejaron de serlo al etiquetar. La **contradiccion
+interna** es mas facil de detectar que la falsa afirmacion aislada, y estaba
+debajo de la vista.
+
+Correccion de las tres cabeceras (`v0.16.15`, `v0.16.14`, `v0.16.14
+(cont.)`), cada una con su nota CORREGIDA. Corregir una etiqueta de version
+**no es reescribir historia**: el relato del cambio no se toca, y lo que se
+corrige es una afirmacion sobre el **presente** («¿esto salio o no?»).
+
+### El guard tenia un agujero, y lo encontro M3 al primer intento
+
+La primera asercion sobre `(cont.)` contaba repeticiones: ninguna version con
+mas de dos secciones. M3 —convertir un `(cont.)` en una seccion de version
+mas— **no la cazo**, porque dos secciones no son «mas de dos».
+
+El invariante correcto no es contar, es de forma: **solo la primera aparicion
+de una version puede no ser continuacion**. Sin eso la convencion `(cont.)` es
+**decorativa**, porque nada obliga a marcarla.
+
+Las mutaciones se aplican al **artefacto** (el CHANGELOG), no al codigo del
+guard: lo que hay que demostrar es que el guard detecta cuando el documento
+vuelve a mentir. 3/3 con baseline y control final byte-identico.
+
+| # | Mutacion | Resultado |
+|---|---|---|
+| M1 | volver a `[Unreleased]` una release publicada | **cazada** |
+| M2 | anunciar `v0.16.99`, que git no tiene | **cazada** |
+| M3 | convertir un `(cont.)` en version suelta | **cazada** (tras cerrar el hueco) |
+| M4 | control final byte-identico | **OK** |
+
+### El desorden antiguo: medido, documentado, NO arreglado
+
+`... 0.14.1 | 0.7.0 0.7.1 0.7.2 0.8.0 0.7.3 0.6.0 0.5.0 0.4.1 0.4.0 0.3.0 |
+0.8.1 ... 0.14.0` — diez pares fuera de orden y un `0.8.0 -> 0.7.3` suelto.
+
+**Decision, no pereza**: es cosmetico, preexistente, y mover 20 secciones de
+texto historico es el riesgo que este proyecto lleva cuatro bloques evitando.
+Exigir orden global haria fallar el guard en el primer run por secciones de
+2026-09, y **un guard que falla por ruido se aprende a ignorar**, que es peor
+que el defecto que vigila. Lo que si se vigila es que **la zona que se
+escribe hoy** (>= 0.14.1) siga en orden descendente.
+
+### Conocimiento negativo
+
+- **Un documento puede contradecirse a si mismo linea a linea.** Cuando dos
+  frases del mismo parrafo se contradicen, una se quedo en el tiempo: hay que
+  preguntarse **cual cambio**, no cual es falsa.
+- **Un regex que se queda en el primer `]` no ve el `(cont.)`**, porque va
+  fuera de los corchetes. Un test que cuenta continuaciones asi cuenta cero y
+  da verde sin comprobar nada. Misma familia que el `rc` de un `| tail`.
+- **Un guard que exige un orden que el propio fichero no cumple se aprende a
+  ignorar.**
+- **Agrupar un fix pendiente es lo que hace util la regla de cadencia.** En
+  WI-94 se resistio abrir una etiqueta por un `fix` de tests; una release mas
+  tarde salio con dos `fix` —el pendiente y el nuevo— y ninguno es trivial.
+
+### Sigue abierto (sin workitem)
+
+- **Credenciales de proveedor real (Anthropic/OpenAI)**: ausentes. Es la razon
+  por la que el criterio de salida de **H9 sigue declarado incumplido**.
+- **Colision de numeracion de ADR**: `ADR-0015` designa dos documentos distintos.
+  Medida, NO ejecutada: renombrar es decision del mantenedor.
+- **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`.
+- **Desorden del tramo antiguo del CHANGELOG**: MEDIDO y aceptado (ver arriba).
+  Reversible si alguien lo toma con criterio.
+- **`sddk lint`: 4 errores** por opt-ins de pack no adoptados (`schemas/`,
+  `docs/generated/`, `manifest.toml`). Registrado, **fuera de alcance**.
+- **Push**: sin autorizacion del operador. No ejecutado.
+
+### Evidencia
+
+- `evidence/sddk-wi95-verify-2026-10-02.md`
+- `tests/test_wi95_changelog_release_claims.py` (8 tests)
+- `.pipelinek/wi95_mutate.py` (3/3 + baseline + autocontrol de aplicacion)

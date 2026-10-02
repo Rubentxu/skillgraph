@@ -12,6 +12,86 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.20] - 2026-10-02 — el CHANGELOG deja de anunciar como pendiente lo ya publicado
+
+PATCH: `git log v0.16.19..HEAD` = 0 feat, 0 breaking, **2 fix**, 1 test, 2 docs,
+1 chore. 2559 passed (2551 antes; +8).
+
+Los dos `fix` son el de este bloque y el que WI-94 dejó pendiente a propósito
+(`cbc8c04`, la dependencia circular). Agruparlos es exactamente lo que pedía
+la regla de cadencia: en WI-94 resisted la tentación de abrir una etiqueta
+para un `fix` de tests, y una release mas tarde salió con contenido de verdad.
+
+### Fixed
+
+- `fix(docs)`: **`CHANGELOG.md` declaraba `[Unreleased]` para tres bloques que
+  se publicaron hace dos releases.** Medido antes de tocar nada:
+
+  | | |
+  |---|---|
+  | tags SemVer en git | 46 |
+  | versiones distintas en el CHANGELOG | 44 |
+  | tags **sin sección** | 2 (`v0.16.14`, `v0.16.15`) |
+  | cabeceras `[Unreleased]` falsas | 3 (WI-87, WI-88, WI-89) |
+  | tests que parseen el CHANGELOG | **0** |
+
+  `STATE.yaml` tiene una red que lo ata a `git tag` con igualdad exacta desde
+  WI-74. **El CHANGELOG no tenía ninguna**, y por eso llevaba dos releases
+  desfasado sin que nada lo notara.
+
+  Lo más incómodo era que el fichero se contradecía a sí mismo: la sección de
+  WI-88 decía, en dos líneas consecutivas, «Sin bump todavía» y «la release
+  que lo contiene es `v0.16.14`». La cabecera ya sabía la verdad y el cuerpo
+  no.
+
+  | Antes | Ahora | Tag |
+  |---|---|---|
+  | `## [Unreleased] — WI-89` | `## [0.16.15]` | `6819f99` |
+  | `## [Unreleased] — WI-88` | `## [0.16.14]` | `3cfce09` |
+  | `## [Unreleased] — WI-87` | `## [0.16.14] (cont.)` | — |
+
+  Cada sección lleva una nota `CORREGIDA` que dice que lo estaba y por qué, en
+  la línea de lo que hizo WI-91 con las afirmaciones propagadas: la corrección
+  se escribe en el documento, no se aplica en silencio.
+
+- `fix(test)`: la cola de WI-94. Los tests de WI-94 leían el informe de
+  cobertura que `scripts/coverage.sh` sólo combina **después** de pytest, así
+  que la CI los daba por buenos mientras en local pasaban. *Pendiente desde
+  WI-94 a propósito; entra aquí.*
+
+### Added
+
+- `test(governance)`: 8 tests que atan `CHANGELOG.md` a `git tag` — todo tag
+  tiene sección, toda sección tiene tag, nada publicado se anuncia como
+  `[Unreleased]`, y una `(cont.)` tiene su versión padre justo antes. Mutaciones
+  **3/3**.
+
+### Conocimiento negativo
+
+- **La primera versión del guard tenía un agujero y lo encontró la mutación M3
+  al primer intento.** La aserción sobre `(cont.)` solo miraba el número de
+  repeticiones, y dos secciones no son «más de dos», así que convertir un
+  `(cont.)` en una sección de versión más pasaba desapercibido. El invariante
+  correcto no es contar: es que **sólo la primera aparición de una versión
+  puede no ser continuación**. Sin eso, la convención `(cont.)` es decorativa,
+  porque nada obliga a marcarla.
+- **Un guard que exige un orden que el propio fichero no cumple se aprende a
+  ignorar.** El tramo antiguo (`0.14.1 → 0.7.0 → … → 0.3.0 → 0.8.1 → … →
+  0.14.0`) está desordenado desde antes. Exigir orden global habría hecho fallar
+  el guard en el primer run por 20 secciones de 2026-09. Lo que se vigila es
+  que **la zona que se escribe hoy** siga en orden descendente; lo antiguo queda
+  medido y documentado, **no arreglado**: es cosmético, y mover texto
+  histórico es el riesgo que este proyecto lleva cuatro bloques evitando.
+- **Un regex que se queda en el primer `]` no ve el `(cont.)`**, porque va
+  fuera de los corchetes: `## [0.16.19] (cont.)`. Un test que cuenta
+  continuaciones con ese regex cuenta cero, y da verde sin comprobar nada.
+- **Un documento puede contradecirse a sí mismo línea a línea.** «Sin bump
+  todavía» y «la release que lo contiene es v0.16.14» convivían en el mismo
+  párrafo. La contradicción interna es más fácil de detectar que la falsa
+  afirmación aislada, y aquí estaba debajo de la vista.
+
+- Evidencia: `evidence/sddk-wi95-verify-2026-10-02.md`.
+
 ## [0.16.19] - 2026-10-02 — los dos `fix` de la cola de WI-93 salen en release
 
 PATCH: `git log v0.16.18..HEAD` = 0 feat, 0 breaking, **2 fix**, 1 refactor,
