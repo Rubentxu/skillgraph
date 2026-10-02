@@ -1141,7 +1141,7 @@ release:
   releases:
     - tag: v0.20.1
       fecha: 2026-10-02
-      sha: "PENDIENTE"
+      sha: "44bb5cb4999b7c93cdeeba0d156adfff573a8b09"
       nota: "WI-100: los hooks de git cesan de medir con un instrumento distinto del canonico; el pre-push delega, el pre-commit hace el smoke que decia hacer (124 s -> 0,83 s), y el invariante C4 se afina para que la exclusion de scripts/hooks/ pueda desaparecer"
     - tag: v0.20.0
       fecha: 2026-10-02
