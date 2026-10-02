@@ -12,6 +12,67 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [Unreleased] — WI-90: `FileSignature` tiene round-trip y el lector deja de deserializar a mano
+
+**Sin bump todavía**: el `fix(knowledge)` de este bloque dispara el PATCH. 2479 passed
+(2463 antes).
+
+### Fixed
+
+- `fix(knowledge)` `e4fefb0`: **`FileSignature` tenía `to_dict()` pero no `from_dict()`.**
+  El inverso estaba escrito a mano dentro de `list_file_signatures_for_source`
+  (`knowledge/knowledge_controller.py:329-336`) con subíndices crudos: el inverso de un
+  método público reimplementado a mano en uno de sus consumidores.
+
+  Tres fallos, **medidos y no supuestos**:
+  1. una clave de más en el payload → el campo **se pierde en silencio**, sin aviso;
+  2. falta una clave → `KeyError` crudo;
+  3. `procedencia` incompleta → `TypeError` crudo.
+
+  Los tres explotan sin protección en los tres puntos que consumen el resultado
+  (`governance/improvement.py:208, 268, 324`), que es otra capa y otro vocabulario de
+  errores: el fallo cruzaba la frontera de bounded context como `ValueError`/`KeyError` de
+  Python, no como `SkillGraphError`.
+
+  `from_dict` en `SignatureProcedencia`, `SignatureVigencia` y `FileSignature`, con la
+  validación concentrada en seis helpers (`_require_mapping`, `_require_keys`,
+  `_require_str`, `_require_int`, `_require_bool`, `_require_optional_mapping`).
+  `ParseError` (`sg_parse`) para la **forma** del payload; los valores fuera de política
+  siguen lanzando el `ValidationError` que ya lanza `__post_init__`.
+
+### Contradicciones
+
+- **`SignatureVigencia.from_dict` no comprueba `state` contra `EXTRACTION_STATES`, a
+  propósito.** Esa validación ya vive en `__post_init__` de la clase. Duplicarla aquí
+  crearía un segundo sitio desincronizable — exactamente el defecto que cerró WI-87 con
+  ADR-0015, donde un conjunto de vocabulario duplicado a mano hacía que añadir un estado
+  produjera runs duplicados en silencio.
+- **La medición de la decisión (a) de WI-87 era correcta pero estaba incompleta.** Decía
+  que la función no estaba muerta ni era un punto ciego de uso, y era cierto: 4
+  consumidores reales. Lo que no se midió fue **dónde** estaba su complejidad. De las 58
+  líneas con cc 10, ocho eran el deserializador duplicado. Ese bloque desaparece y el resto
+  queda por debajo del umbral. **No se refactorizó la función entera**: la medición no lo
+  respaldaba.
+- **La tercera medición del bloque que daba bien sin medir nada.** El script de
+  mutaciones contaba M3 como «no cazada» sin haber modificado nada: el `replace` no
+  aplicaba porque el texto no coincidía con el formato que deja `ruff format`. Se añadió
+  **autocontrol de aplicación** al script — si un `replace` no cambia el fichero, se
+  reporta `MUTACION NO APLICO`, no «no cazada». Una mutación que no se aplica no es una
+  mutación sobrevivida: es una ausência de medición, y las dos se reportan igual si no se
+  distingue el caso.
+
+### Deuda tangencial registrada, no medida
+
+`governance/receipts.py:473-480` y `runtime/agent.py:57-64` replican el mismo patrón de
+inverso escrito a mano. **No se afirma que estén mal** y no se ha abierto frente sobre
+ellos: son una hipótesis sin dato detrás.
+
+### Verificación
+
+- **2479 passed** (2463 antes; +16). `ruff check` y `ruff format --check` limpios.
+- Mutaciones **5/5** cazadas tras corregir M3.
+- Evidencia: `evidence/sddk-wi90-verify-2026-10-02.md`.
+
 ## [Unreleased] — WI-89: la auditoría no escribe dentro del repositorio que audita
 
 **Sin bump todavía**: el `fix(audit)` de este bloque dispara el PATCH. 2463 passed

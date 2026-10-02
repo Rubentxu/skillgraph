@@ -9811,3 +9811,75 @@ destino, no el origen.
 - **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`. Politica de
   datos, no se decide aqui.
 - **(push)** commits sin publicar. No autorizado.
+
+## 2026-10-02 — WI-90: `FileSignature` tiene round-trip
+
+### Resumen
+
+- Cierra la decision **(a)** del `next_workitem`, el ultimo item tecnico abierto del
+  roadmap. `FileSignature` tenia `to_dict()` pero no `from_dict()`: el inverso estaba
+  escrito a mano en `list_file_signatures_for_source`
+  (`knowledge/knowledge_controller.py:329-336`) con subindices crudos.
+- Tres fallos medidos, no supuestos: clave de mas -> el campo **se pierde en
+  silencio**; clave ausente -> `KeyError` crudo; `procedencia` incompleta ->
+  `TypeError` crudo. Los tres explotan sin proteccion en `governance/improvement.py:
+  208, 268, 324` — otra capa, otro vocabulario de errores: el fallo cruzaba la frontera
+  de bounded context como excepcion de Python, no como `SkillGraphError`.
+- Commit `e4fefb0`. Hook: **2479 passed in 106.17s**.
+
+### Cambios aplicados
+
+- `from_dict` en `SignatureProcedencia`, `SignatureVigencia` y `FileSignature`, con la
+  validacion concentrada en seis helpers. `ParseError` (`sg_parse`) para la forma;
+  `ValidationError` de `__post_init__` se deja propagar para valores fuera de politica.
+- `list_file_signatures_for_source` usa `FileSignature.from_dict(e.content)`; el
+  import local de las sub-clases desaparece.
+- `tests/test_wi90_signature_round_trip.py`: 16 tests.
+
+### Decisiones
+
+- **`SignatureVigencia.from_dict` NO comprueba `state` contra `EXTRACTION_STATES`.**
+  Esa validacion ya vive en `__post_init__`. Duplicarla aqui recrearia un segundo
+  sitio desincronizable: es el mismo defecto que cerro WI-87 con ADR-0015, donde un
+  conjunto de vocabulario duplicado a mano hacia que anadir un estado produjera un
+  segundo run en silencio (UAT-06).
+- **No se refactorizo la funcion entera.** La medicion de WI-87 era correcta pero
+  incompleta: la funcion no era ni muerta ni un punto ciego de uso (4 consumidores
+  reales), y su cc 10 venia de 8 lineas de deserializador duplicado. Ese bloque desaparece
+  y el resto queda por debajo del umbral. Refactorizar el resto haberia sido cambiar la
+  forma porque el numero moleste, no porque la medicion lo pidiera.
+
+### Contradicciones del propio trabajo
+
+- **La tercera medicion del bloque que daba bien sin medir nada.** El script conto M3
+  como "no cazada" sin haber modificado el fichero: el `replace` no aplicaba por el
+  formato que deja `ruff format`. Se anadio **autocontrol de aplicacion**: si un
+  `replace` no cambia el fichero, se reporta `MUTACION NO APLICO`. Una mutacion que no
+  se aplica no es una mutacion sobrevivida; es una ausencia de medicion.
+- Al actualizar `STATE.yaml` por script, el propio script busco las claves a sustituir
+  **por su valor nuevo** en vez del viejo, y aborta sin escribir nada. El autocontrol
+  funciono: fallo ruidoso en vez de `STATE.yaml` a medias. Segundo fallo de la misma
+  familia en el bloque.
+
+### Conocimiento negativo
+
+- **Un metodo publico con el inverso ausente no es una falta de cobertura: es una
+  reimplementacion que garantiza que crecera sola.** El primer duplicado aparece en el
+  primer consumidor; el segundo ya tendra el doble de codigo y la mitad de la
+  validacion.
+- **Un `KeyError` que cruza bounded contexts no se ve hasta que alguien lee el
+  traceback de la capa equivocada.** El fallo no se manifesto en la capa que lo produce.
+
+### Sigue abierto (sin workitem)
+
+- **Deuda tangencial, NO medida**: `governance/receipts.py:473-480` y
+  `runtime/agent.py:57-64` replican el patron de inverso manual. Hipotesis sin dato.
+  Registrado, no ejecutado.
+- **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`. Politica de
+  datos, no se decide aqui.
+- **Push**: sin autorizacion del operador. No ejecutado.
+
+### Evidencia
+
+- `evidence/sddk-wi90-verify-2026-10-02.md`
+- `.pipelinek/wi90_mutate.sh` (5/5 + autocontrol de aplicacion)
