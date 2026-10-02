@@ -561,7 +561,7 @@ tests:
   total: 2567   # re-medido 2026-10-02 (bloque WI-96): 2567 passed. +8 sobre 2559 = tests/test_wi96_semver_rule.py.
   passed: 2567
   duration_s: 205.15   # MEDIDO en la CI canonica del bloque WI-95 con la receta de cobertura (stage unit-tests). pytest a pelo son ~111 s: el delta de ~94 s es el coste de instrumentar, coherente con los +93 s de WI-93 y +95 s de WI-94.
-  package_version: "0.17.0"   # trabajo post-release v0.16.19 (AGENTS 12). El tag v0.16.19 esta en 9ea721a; este bloque sigue en local y SIN PUSH.
+  package_version: "0.17.0.dev0"   # trabajo post-release v0.16.19 (AGENTS 12). El tag v0.16.19 esta en 9ea721a; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1123,7 +1123,7 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.16.20
+  tag: v0.17.0
   fecha: 2026-10-02
   semver_bump: PATCH
   rationale: "Bloque WI-93 (2 commits de trabajo: 66be602 los tests de http_adapter y 3866454 el gate de CI, mas 1 fix de gobernanza). SemVer derivado del historial: 0 feat, 0 breaking, 1 fix, 2 test, 3 docs, 1 chore => PATCH. EL REPO DECLARABA DOS CONTRATOS DE COBERTURA Y LA CI NO COMPROBABA NINGUNO. Uno: pyproject.toml [tool.coverage.report] fail_under = 80, que `coverage report` si comprueba, pero solo si alguien invoca scripts/coverage.sh a mano — la pipeline no tenia stage de cobertura. Dos: AGENTS.md 6.3, suelos POR MODULO (core >=90 %, CLI >=70 %, paths.py >=60 %) que `coverage report` NO PUEDE expresar porque solo admite un umbral global. Ese segundo contrato no lo comprobaba ninguna herramienta del repo. LA PREMISA HEREDADA, MEDIDA: scripts/coverage.sh excluia la cobertura de la CI a proposito con un motivo escrito en su cabecera — «la instrumentacion de subproceso multiplica el tiempo de suite». Decision documentada, no descuido, pero su motivo era una afirmacion sin medir. MEDIDO dos veces en el mismo arbol: pytest a pelo ~110 s frente a la receta completa 203 s, delta +93 s (~1.85x). NO multiplica: cuesta un minuto y medio mas. Y sin el hook .pth el CLI que la suite lanza por subproceso mide 65.86 % en vez de 94 %, o sea que el numero sin instrumentar es ceguera del instrumento, no una medicion. EL HUECO REAL QUE ENCONTRO EL CHECKER: runtime/http_adapter.py media 88.04 %, por debajo del 90 % que le toca por ser modulo del core. Sus 19 sentencias sin cubrir eran guardas alcanzables, y el modulo trae failpoints y `client` inyectable justamente para probarlas sin red; los tests de red existentes usan respx con cliente inyectado, y por eso la rama de produccion que construye su propio httpx.Timeout no la tocaba nadie. MEDIDO DESPUES: 88.04 % -> 99 % (solo queda la linea 424, que el propio codigo marca como defensiva e inalcanzable), runtime/ agregado 95.11 % -> 97.98 %, global 94.75 % -> 95.22 %. 30 tests nuevos. DECISIONES DEL CHECKER (scripts/check_coverage_floors.py): agrega RECUENTOS y no porcentajes, porque con branch=true una rama parcial cuenta como media y promediar porcentajes da mas de lo que hay (un paquete al 95 % de media puede esconder un modulo al 60 %); un suelo sobre un modulo fantasma es un FALLO y no un silencio; los modulos vacios quedan excluidos por division por cero; y exige suelo para todo modulo de runtime/ CON CODIGO, porque un guard que solo vigila la lista que el mismo mantiene no vigila nada. DECISION DE ALCANCE, escrita como tal y no como cita literal de 6.3: se eligio la lectura ESTRICTA —todo modulo de runtime/ hereda el 90 %— porque es la que hace util el contrato y la que encuentra el hueco. CI: .pipeline.kts pasa a 6 stages; unit-tests corre la RECETA en vez de pytest a pelo, de modo que UNA sola pasada hace tests y cobertura (correr pytest dos veces costaria 110+203 s), y hay un stage nuevo coverage-floors que ejecuta el checker. Mutaciones del checker 3/3 con baseline y control final byte-identico. 2529 passed, ruff y format limpios. Sin push."
@@ -1132,6 +1132,10 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.17.0
+      fecha: 2026-10-02
+      sha: "1f26ba78795eb97f19685efa795e33a2523adf1a"
+      nota: "WI-96: la regla de SemVer se muda a AGENTS.md 12 con la salvedad 0.x, y scripts/derive_semver.py calcula el bump desde el historial en vez de a mano"
     - tag: v0.16.20
       fecha: 2026-10-02
       sha: "c234d0ab381342490dae5e2dad6fdc2846061d01"
@@ -1375,5 +1379,5 @@ release:
     footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"
     e2e_real_h6: "pack_loader declara Character/StoryArc desde narrative-core.md; valida instancias; shadowing de tipos core y namespaces reservados rechazados"
     e2e_real_h7: "reconcile_after_interruption_completes_pending: IN_PROGRESS dejado por crash -> reconcile_pending aplica apply_fn exactamente 1 vez por propuesta, sin duplicar"
-  push: false   # MEDIDO 2026-10-02 tras WI-93: sin autorizacion del operador, y `sddk release apply --route local` haria push de trunk y tag, luego no es opcion. MEDIDO con `git rev-list --count origin/main..HEAD`: **58 commits sin publicar**, con `origin/main` en 0ebbd58. El tag `v0.16.18` es local y no se ha publicado: existe en git pero no en ningun remoto. 36 ciclos SDDK CLOSED, 0 pendientes (35 tras WI-94, 36 con WI-95).
+  push: false   # MEDIDO 2026-10-02 tras WI-93: sin autorizacion del operador, y `sddk release apply --route local` haria push de trunk y tag, luego no es opcion. MEDIDO con `git rev-list --count origin/main..HEAD`: **58 commits sin publicar**, con `origin/main` en 0ebbd58. El tag `v0.16.18` es local y no se ha publicado: existe en git pero no en ningun remoto. 37 ciclos SDDK CLOSED, 0 pendientes (35 tras WI-94, 36 con WI-95, 37 con WI-96).
 
