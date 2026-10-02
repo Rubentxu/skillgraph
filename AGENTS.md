@@ -770,27 +770,49 @@ with SUCCESS` terminal.
 
 ### Binario
 
-`pipelinek` v0.39.0 — instalable desde `pipelinek-0.39.0.zip` (build local:
-`v2/pipeline-application/build/install/pipelinek/bin/pipelinek`). Comando
-canónico desde la raíz del proyecto:
+`pipelinek` v0.39.0. La versión se fija en `mise.toml` con el id de
+backend completo (`"github:Rubentxu/pipeline-kotlin" = "0.39.0"`); no
+confíes en el `pipelinek` que aparezca en el `PATH`, porque `asdf`
+expone un shim con la MISMA ruta de nombre y otra versión. Resuelve con
+`mise which pipelinek` antes de ejecutar.
+
+Comando canónico desde la raíz del proyecto:
 
 ```bash
-pipelinek run --db .pipelinek/db.sqlite \
+mise exec -- pipelinek run --rerun \
+              --db .pipelinek/db.sqlite \
               --control-root .pipelinek/control \
               .pipeline.kts
 ```
 
+> **`--rerun` no es opcional.** El motor cachea el resultado por
+> `cacheKey` de compilación del script. Sin `--rerun`, un run cuyo
+> script no ha cambiado **reutiliza el veredicto previo y termina en
+> `Pipeline finished with SUCCESS` sin ejecutar un solo step**: cero
+> `StepStarted`, cero `EchoOutputCaptured`, stages completados en
+> milisegundos. Medido el 2026-10-02: run canónico de 72 ms con 5/5
+> stages "success" y ninguna línea de pytest en el journal. Es el modo
+> de fallo "SUCCESS cacheado" que esta misma sección ya describía.
+
 ### Criterios de éxito (todos deben cumplirse)
 
 1. `Pipeline finished with SUCCESS` en la línea final del run.
-2. Journal SQLite presente en `.pipelinek/db.sqlite` con eventos tipados
+2. **El run ejecutó pasos de verdad**: el journal contiene al menos un
+   `StepStarted` y un `EchoOutputCaptured` cuyo contenido incluya la
+   línea de resumen de pytest (`N passed in Xs`). Este criterio es el
+   que separa una verificación real de un veredicto cacheado; el
+   criterio 1 por sí solo lo satisfacen runs que no ejecutan nada.
+3. Journal SQLite presente en `.pipelinek/db.sqlite` con eventos tipados
    (`CompilationStarted`, `RunStarted`, `StageStarted`, `StepStarted`,
    `EchoOutputCaptured` o equivalente, `StageFinished/success`,
    `RunFinished/success`).
-3. Control root presente en `.pipelinek/control/{last-run, retry-control,
+4. Control root presente en `.pipelinek/control/{last-run, retry-control,
    wait-until-control, workspace/<stage-name>}`.
-4. Cero `StepFailed` ni `RunFinished/failure` en el journal del último run.
-5. SHA-256 del `.pipeline.kts` registrado en la sesión y comparable con
+5. Cero `StepFailed` ni `RunFinished/failure` **en los eventos de la
+   ejecución actual** (filtrar por `occurred_at` de este run: el
+   `run_id` se reutiliza entre replays y arrastra `StepFailed`
+   históricos).
+6. SHA-256 del `.pipeline.kts` registrado en la sesión y comparable con
    `git log -- .pipeline.kts` para detectar drift no intencional.
 
 ### Comando de validación rápida
