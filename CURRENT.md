@@ -1,5 +1,20 @@
 # CURRENT — puntero operativo
 
+> **GOD MODULES: 0** (2026-10-02, commits `405f49e` y `c29a848`):
+> el audit de deuda arquitectonica ya no reporta ningun fichero >800
+> LoC. El recorrido completo: `storage.py` 1807 → 623 (WI-65, H-01
+> cerrado), `runcontroller.py` 1421 → 665 (WI-66/67),
+> `storage_delegations.py` 915 → índice de 29 LoC con cinco módulos
+> por componente (WI-68) y `ports/__init__.py` 927 → `dto.py` (448) +
+> `repositories.py` (442) + índice de 55 (WI-69). Verificación:
+> **2132 passed** (1880 originales + 252 nuevos), ruff y format
+> limpios, CI canónica con 8 StepStarted/EchoOutputCaptured y 0
+> StepFailed. Quedan 8 funciones >80 LoC (P3); el mayor es
+> `build_parser` (409), un orquestador declarativo con cc baja.
+> Nota de método: los dos últimos ficheros no tenían problema de
+> concentración (la clase mayor de `ports` era 179 LoC, la de
+> `storage_delegations` 366): estallaban por **anchura**, y el corte
+> los resolvió separando familias, no partiendo clases.
 > **WI-67 cerrado — god modules 3 → 2** (2026-10-02, commit `57121ed`,
 > ADR-0024, completa ADR-0019 fase 2): `runcontroller.py` 1421 → **665
 > LoC** con 14 métodos. La medición AST no dio un bloque sino seis
