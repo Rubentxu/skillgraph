@@ -507,21 +507,99 @@ class TestC4UnaSolaReceta:
         assert "scripts/coverage.sh" in informe.scripts
         assert "scripts/ci.sh" in informe.scripts
 
-    def test_la_exclusion_de_los_hooks_es_explicita_y_real(self) -> None:
-        """`scripts/hooks/pre-push` ejecuta pytest a pelo y no entra en C4.
+    def test_los_hooks_ya_no_necesitan_exclusion(self) -> None:
+        """La puerta trasera de WI-99 está cerrada: `DIRECTORIOS_NO_RECETA` no existe.
 
-        Se comprueba que la exclusión EXISTE y que lo que excluye es
-        exactamente lo que dice: si algún día `DIRECTORIOS_NO_RECETA`
-        creciera para tapar `scripts/ci.sh`, este test seguiría verde y el
-        guard no miraría nada. Fijar la exclusión es la forma de que dejar
-        de ser un acuerdo.
+        En WI-99 el pre-push ejecutaba `pytest` a pelo con el instrumento
+        ciego —`cli/support.py` al 69 %, por debajo del suelo del 70 % que
+        declara el propio `AGENTS.md`— y la salida fue excluir `scripts/hooks/`
+        por constante, con un test que fijaba la exclusión para que no
+        creciera en silencio.
+
+        WI-100 cierra las dos cosas. El pre-push delega en `scripts/ci.sh`, y
+        el pre-commit filtra por `$STAGED_PY` en vez de correr el repo
+        entero. Ninguno de los dos necesita una excepción, así que la
+        constante desaparece: una propiedad que hay que mantener al día no
+        es una propiedad, es una suscripción.
+        """
+        assert not hasattr(par, "DIRECTORIOS_NO_RECETA"), (
+            "DIRECTORIOS_NO_RECETA vuelve a existir. Si hace falta para cubrir "
+            "un caso, el caso no cumple C4 y hay que arreglar el script, no "
+            "la lista"
+        )
+
+    def test_los_hooks_entran_en_el_contrato_por_shebang(self) -> None:
+        """Descubrir por extensión no basta: los hooks no tienen extensión.
+
+        Los dos se llaman `pre-commit` y `pre-push` porque es como git los
+        busca. MEDIDO en WI-100: con `rglob("*.sh")` el invariante daba
+        verde sin haber mirado nunca esos dos ficheros — y ya había pasado
+        al inventariarlos en WI-99. Un guard que solo descubre una sintaxis
+        no vigila la otra.
         """
         informe = par.medir(ROOT)
-        assert "scripts/hooks/pre-push" not in informe.scripts
-        assert not any(s.startswith("scripts/hooks/") for s in informe.scripts)
-        pre_push = ROOT / "scripts" / "hooks" / "pre-push"
-        assert par.ejecuta_pytest(pre_push.read_text(encoding="utf-8"))
-        assert par.DIRECTORIOS_NO_RECETA == ("scripts/hooks",)
+        assert "scripts/hooks/pre-push" in informe.scripts
+        assert "scripts/hooks/pre-commit" in informe.scripts
+
+    def test_el_pre_push_cumple_por_delegar_y_el_pre_commit_por_filtrar(self) -> None:
+        """Las dos salidas de C4, y ninguna es una excepcion.
+
+        El pre-push no ejecuta pytest: pide la receta. El pre-commit ejecuta
+        pytest pero sobre lo que alguien tiene a medio escribir, que es un
+        filtro de evento y no un veredicto sobre el repo.
+        """
+        informe = par.medir(ROOT)
+        assert informe.hubo_error is False, informe.error
+        pre_push = informe.scripts["scripts/hooks/pre-push"]
+        pre_commit = informe.scripts["scripts/hooks/pre-commit"]
+        assert not par.ejecuta_pytest(pre_push), "el pre-push ejecuta pytest"
+        assert "scripts/ci.sh" in par.rutas_de_script(pre_push, "#")
+        assert par.ejecuta_pytest(pre_commit)
+        assert par.filtra_por_ficheros(pre_commit), (
+            "el pre-commit dejo de filtrar y vuelve a ser un veredicto con "
+            "el instrumento equivocado"
+        )
+        assert par.CODIGO_RECETA_SUYA not in par.codigos_de(par.evaluar(informe))
+
+    def test_un_path_literal_no_es_una_variable_de_paths(self) -> None:
+        """Las dos formas de filtrar, y las dos se measen.
+
+        La primera version de `filtra_por_ficheros` solo reconocia paths que
+        acababan en `.py`, y por eso era CIEGA a la forma que usa de verdad
+        `scripts/hooks/pre-commit`: `pytest -q $STAGED_PY`. El hook filtraba
+        y el invariante no lo veia — un invariante ciego que da verde es peor
+        que uno que no existe, porque ocupa el sitio del que habria avisado.
+        """
+        assert par.filtra_por_ficheros("run pytest -q $STAGED_PY")
+        assert par.filtra_por_ficheros('run pytest -q "$STAGED_PY"')
+        assert par.filtra_por_ficheros("run pytest -q tests/test_wi98_ci_recipe_parity.py")
+
+    def test_el_valor_de_una_opcion_no_es_un_path(self) -> None:
+        """La opposite: un invariante que se cumple siempre no vigila nada.
+
+        `--cov=skillgraph` y `--cov-config="$RC"` contienen un token con `$`
+        y otro con letras. Si contaran como paths, TODA invocacion de pytest
+        pareceria filtrada y C4 se vaciaria de contenido sin que nadie lo
+        notara. Este test es el que impide que eso pase por unnoticed.
+        """
+        assert not par.filtra_por_ficheros('uv run pytest -q --cov=skillgraph --cov-config="$RC"')
+        assert not par.filtra_por_ficheros("mise exec -- uv run pytest --tb=short")
+        assert not par.filtra_por_ficheros('python -m pytest -q -k "nombre"')
+        assert not par.filtra_por_ficheros("run pytest -q -p no:cacheprovider")
+
+    def test_un_script_se_reconoce_por_extension_o_por_shebang(self) -> None:
+        """Las dos vias del descubrimiento, porque hay ficheros sin extension.
+
+        `scripts/hooks/pre-commit` se llama asi porque git lo busca asi. Con
+        descubrimiento solo por extension, el invariante daba verde sin
+        haberlo mirado nunca.
+        """
+        assert par.es_script_shell("x", ".sh")
+        assert par.es_script_shell("x", ".bash")
+        assert par.es_script_shell("#!/usr/bin/env sh\necho hola\n", "")
+        assert par.es_script_shell("#!/bin/bash\necho hola\n", "")
+        assert not par.es_script_shell("import os\n", ".py")
+        assert not par.es_script_shell("", "")
 
     def test_el_contrato_real_no_tiene_problemas(self) -> None:
         """La prueba que importa: contra los ficheros de verdad."""

@@ -2,18 +2,42 @@
 # Pre-push hook for SkillGraph.
 #
 # Enforces:
-#   - Suite completa de pytest (no smoke) sobre la revision que se va a pushear.
+#   - LA RECETA CANONICA (.pipeline.kts), la misma que corre la CI remota.
 #
 # Por que existe:
 #   - El pre-commit hook ejecuta pytest en modo smoke (~10s, subset) para
 #     feedback rapido en commits. Eso atrapa regresiones triviales pero
 #     deja pasar tests flaky o tests que requieren el suite completo
 #     (e.g. tests de concurrencia, UAT, integracion real).
-#   - El CI workflow ejecuta la suite completa, pero solo despues del
-#     push. Si un test roto llega a main, el dev se entera tarde (tras el
-#     push y tras la espera del CI).
-#   - Este hook cierra el gap: ejecuta la suite completa (~190s) ANTES
-#     de aceptar el push. Si falla, aborta el push con un error claro.
+#   - Este hook cierra el gap: antes de dejar salir los commits, ejecuta la
+#     verificacion completa. Si falla, aborta el push con un error claro.
+#
+# MEDIDO en WI-100, y este es el motivo del rewrite: este hook corria
+# `pytest -q` a pelo. Eso es la MISMA suite con un instrumento DISTINTO, y
+# el distinto ve menos:
+#
+#     modulo                este hook    coverage.sh    delta
+#     cli/commands/runs.py     39 %         88 %          -49
+#     cli/runner.py            55 %         79 %          -24
+#     cli/support.py           69 %         86 %          -17
+#     TOTAL                 90.79 %      95.22 %        -4.4
+#
+# `cli/support.py` mide 69 %, y el suelo que declara el propio
+# AGENTS.md 6.3 para la CLI es 70 %. Es decir: el gate mas cercano al push
+# podia dar VERDE un paquete que no cumplia el suelo declarado. Misma
+# instrumentacion, mismo commit, unica variable: el hook `.pth` que
+# `scripts/coverage.sh` instala para medir los SUBPROCESOS. Sin el, el CLI
+# ejecutado por subproceso no se ve, y es justo donde vive casi todo el CLI.
+#
+# Ademas no ejecutaba NINGUNO de los cuatro contratos exigibles
+# (`coverage-floors`, `package-build`, `ci-parity`, ni la unit-tests con la
+# receta instrumentada).
+#
+# Lo que hace ahora: invocar `scripts/ci.sh`, que es el dueno de COMO se
+# llega a la receta canonica (resuelve `mise trust` y `.pipelinek/`, y
+# propaga el exit code sin pipe). Este hook no reimplementa la receta: la
+# pide. Es la misma regla que `AGENTS.md` («CI Local Obligatorio») y la
+# misma que el runner remoto ejecuta.
 #
 # Bypass para casos legitimos:
 #   - git push --no-verify
@@ -23,45 +47,46 @@
 # Set up: este archivo se copia a .git/hooks/pre-push (chmod +x) por
 # scripts/install-hooks.sh (idempotente). El hook vive en scripts/hooks/
 # para ser commiteable y viajar con el repo.
+#
+# MEDIDO tambien en WI-100: en la maquina donde se operaba, este hook NO
+# estaba instalado en .git/hooks/ — solo pre-commit. El docstring de sus
+# tests decia «Defensa en profundidad 3 capas, ya implementado», y una de
+# las tres no existia. Instalar el hook es decision del operador:
+# `bash scripts/install-hooks.sh`.
 
 set -e
 
 # -------------------------------------------------------------------
-# Toolchain dispatch: prefer `mise exec` if available (project pinned),
-# fall back to `uv run` directly. Patron identico al pre-commit hook.
+# Localizacion del repo.
+#
+# Un hook de git se ejecuta con el cwd en la RAIZ del repo en un push normal,
+# pero no esta garantizado cuando git lo invoca desde otro worktree. Sin esto,
+# `scripts/ci.sh` no se encontraria y el fallo seria un "no such file" que
+# no explica nada.
 # -------------------------------------------------------------------
-run_in_toolchain() {
-    if command -v mise >/dev/null 2>&1; then
-        mise exec -- uv "$@"
-    else
-        uv "$@"
-    fi
-}
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$REPO_ROOT"
 
 # -------------------------------------------------------------------
-# 1. Suite completa de pytest (~190s).
-#
-# Diferencia con pre-commit: este NO corre smoke, sino la suite completa,
-# porque el push es el ultimo gate local antes del remoto. Si pasa aqui,
-# el CI solo verifica que la ejecucion es reproducible (mismo commit,
-# mismas deps via uv.lock).
+# 1. La receta canonica, por el delegado.
 # -------------------------------------------------------------------
 if [ "${HOOK_SKIP_PUSH_TESTS:-0}" != "1" ]; then
-    echo "[pre-push] pytest -q (suite completa, puede tardar ~3min)..."
+    echo "[pre-push] verificacion canonica (.pipeline.kts)..."
+    echo "[pre-push] puede tardar ~4min: es la misma corrida que hace la CI."
     # NOTA: el comando va SIN pipe (| tail -N) porque con `set -e` el
     # exit code del pipe es el del ultimo comando (tail = 0) y la rama
     # de error NUNCA se ejecutaria. Mismo workaround que `.pipeline.kts`.
     # Capturamos el output a un tempfile para mostrar las ultimas 30 lineas.
     _log="$(mktemp)"
     # Trap para limpiar tempfile en EXIT (cubre exito, fallo, signal SIGTERM/SIGINT).
-    # Si pytest corre ~3min, el usuario podria Ctrl-C y dejar el tempfile
-    # huérfano en /tmp. El trap EXIT garantiza limpieza en cualquier camino.
+    # Si la verificacion corre ~4min, el usuario podria Ctrl-C y dejar el tempfile
+    # huerfano en /tmp. El trap EXIT garantiza limpieza en cualquier camino.
     trap 'rm -f "$_log"' EXIT
-    if ! run_in_toolchain run pytest -q >"$_log" 2>&1; then
+    if ! sh scripts/ci.sh >"$_log" 2>&1; then
         echo ""
         tail -30 "$_log"
         echo ""
-        echo "ERROR: pytest failed (suite completa)."
+        echo "ERROR: la verificacion canonica fallo (Pipeline finished with SUCCESS no alcanzado)."
         echo "Bypass para ramas experimentales: HOOK_SKIP_PUSH_TESTS=1 git push"
         echo "Bypass siempre: git push --no-verify"
         exit 1
@@ -69,7 +94,7 @@ if [ "${HOOK_SKIP_PUSH_TESTS:-0}" != "1" ]; then
     rm -f "$_log"
     trap - EXIT
 else
-    echo "[pre-push] HOOK_SKIP_PUSH_TESTS=1 -> saltando suite completa"
+    echo "[pre-push] HOOK_SKIP_PUSH_TESTS=1 -> saltando la verificacion canonica"
 fi
 
-echo "[pre-push] OK"
+echo "[pre-push] OK: la receta canonica dio SUCCESS sobre $(git rev-parse --short HEAD)"

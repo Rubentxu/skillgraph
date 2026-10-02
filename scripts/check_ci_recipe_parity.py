@@ -95,20 +95,6 @@ PATRONES_RUNNER: Final[tuple[str, ...]] = ("*.yml", "*.yaml")
 #: `sh()`, así que esto no es un truco sino una línea.
 _RESUELVE_RAIZ: Final = re.compile(r'System\.getenv\(|System\.getProperty\(\s*"user\.dir"\s*\)')
 
-#: Directorios de `scripts/` cuyos ficheros **no** son recetas de verificación.
-#:
-#: MEDIDO en WI-99: `scripts/hooks/pre-push` ejecuta la suite completa de
-#: `pytest` a pelo y emite un veredicto sobre el árbol antes de dejar pushear.
-#: Con el mismo instrumento, ese veredicto no ve el CLI ejecutado por
-#: subproceso (`cli/commands/runs.py`: 39 % frente al 87,96 % de la
-#: instrumentada). Queda como **deuda medida y no resuelta**, no como
-#: conformidad: un hook de git tiene un presupuesto de tiempo fijo y corto
-#: (el `pre-commit` es un smoke de ~10 s) y su salida es un filtro de evento,
-#: no el veredicto que `AGENTS.md` («CI Local Obligatorio») declara como
-#: fuente de verdad. Convergerlo con la receta canónica es un workitem
-#: propio, no una excepción disguise de este guard.
-DIRECTORIOS_NO_RECETA: Final[tuple[str, ...]] = ("scripts/hooks",)
-
 
 @dataclass(frozen=True, slots=True)
 class Problema:
@@ -197,10 +183,91 @@ _INVOCA_PYTEST: Final = re.compile(r"(?:^|[\s/])pytest(?:\s|$)")
 #: Python invocado directamente por la receta no es un script de shell.
 _RUTA_SCRIPT: Final = re.compile(r"[\w./-]*scripts/[\w.-]+\.sh")
 
+#: Un path literal de pytest: algo que termina en `.py`.
+_PATH_LITERAL: Final = re.compile(r"[\w./*-]+\.py$")
+
+
+def es_path_de_pytest(token: str) -> bool:
+    """¿Este argumento de la orden de pytest selecciona ficheros?
+
+    Tres formas, y las tres están en el repo de verdad:
+
+    * ``tests/test_x.py`` — un path literal.
+    * ``$STAGED_PY`` — una variable que los expande. Es la que usa
+      `scripts/hooks/pre-commit`, y la primera versión de este invariante
+      no la veía porque no sabía leer un nombre de variable como un path.
+    * ``"$RC"`` — entrecomillado, que en shell es lo mismo que `$RC`.
+
+    Lo que NO cuenta es lo que empieza por `-`. Y esa restricción es la que
+    hace el invariante utilizable: sin ella, `--cov=skillgraph` y
+    `--cov-config="$RC"` aportarían dos tokens más y TODA invocación
+    parecería filtrada. Un invariante que se cumple siempre no vigila nada,
+    y se nota tarde.
+    """
+    limpio = token.strip("\"'")
+    if limpio.startswith("-"):
+        return False
+    if limpio.startswith("$"):
+        return True
+    return bool(_PATH_LITERAL.search(limpio))
+
+
+#: Sufijos que ya delatan un script de shell.
+_SUFIJOS_SCRIPT: Final = frozenset({".sh", ".bash"})
+
+#: Un shebang de shell. Es la SEGUNDA via de descubrimiento, y hace falta
+#: porque `scripts/hooks/pre-commit` y `scripts/hooks/pre-push` no tienen
+#: extensión: se llaman así porque git los busca con ese nombre.
+#:
+#: MEDIDO en WI-100, y es la segunda vez que este guard no ve lo que vigila
+#: por culpa del descubrimiento. En WI-99, `git ls-files | grep '\.sh$'`
+#: dejó fuera los dos hooks al inventariarlos. En WI-100, el `rglob("*.sh")`
+#: del propio checker los dejó fuera otra vez, y el invariante daba verde
+#: sin haber mirado nunca el fichero. Un guard que solo descubre una
+#: sintaxis no vigila la otra: se esquiva cambiando de sintaxis, que es la
+#: misma trampa de WI-98 por el otro lado.
+_SHEBANG_SHELL: Final = re.compile(r"^#!.*(?:/env\s+)?(?:ba)?sh\b")
+
+
+def es_script_shell(contenido: str, sufijo: str) -> bool:
+    """¿Este fichero es un script de shell, por extensión o por shebang?"""
+    if sufijo in _SUFIJOS_SCRIPT:
+        return True
+    lineas = contenido.splitlines()
+    return bool(lineas) and bool(_SHEBANG_SHELL.search(lineas[0]))
+
+
+def rutas_de_script(contenido: str, marca: str) -> frozenset[str]:
+    """Qué scripts de shell invoca un fichero, leídos de sus órdenes."""
+    return frozenset(
+        ruta for orden in logicas_de(contenido, marca) for ruta in _RUTA_SCRIPT.findall(orden)
+    )
+
 
 def ejecuta_pytest(contenido: str) -> bool:
     """¿El script lanza pytest en algún momento?"""
     return any(_INVOCA_PYTEST.search(orden) for orden in logicas_de(contenido, "#"))
+
+
+def filtra_por_ficheros(contenido: str) -> bool:
+    """¿Alguna invocación de pytest SELECCIONA paths?
+
+    Un hook que corre `pytest -q $STAGED_PY` no emite un veredicto sobre el
+    repo: emite uno sobre lo que alguien tiene a medio escribir. Es un
+    filtro de evento, no una medición, y por eso queda fuera de C4 sin
+    necesitar una lista de excepciones que lo diga.
+
+    MEDIDO en WI-100: `scripts/hooks/pre-commit` seleccionaba los `.py`
+    staged y **no se los pasaba** — corría la suite entera (2636 tests,
+    124 s) anunciando «smoke, ~10 s». El selector existía; la instrucción
+    no. Los dos hechos son incompatibles y solo uno estaba escrito.
+    """
+    return any(
+        es_path_de_pytest(token)
+        for orden in logicas_de(contenido, "#")
+        if _INVOCA_PYTEST.search(orden)
+        for token in orden.split()
+    )
 
 
 def delega_en_canonica(contenido: str) -> bool:
@@ -222,9 +289,7 @@ def scripts_invocados_por(canonica: str) -> frozenset[str]:
     Se lee del script y no de una constante: los fragmentos de la receta
     cambian con ella, y una lista aparte sólo sabría de los que ya había.
     """
-    return frozenset(
-        ruta for orden in logicas_de(canonica, "//") for ruta in _RUTA_SCRIPT.findall(orden)
-    )
+    return rutas_de_script(canonica, "//")
 
 
 def evaluar_recetas(informe: InformeRunners) -> tuple[Problema, ...]:
@@ -327,13 +392,13 @@ def evaluar_etapas(informe: InformeRunners) -> tuple[Problema, ...]:
 
 
 def evaluar_una_receta(informe: InformeRunners) -> tuple[Problema, ...]:
-    """C4. Quien ejecuta pytest está conectado a la receta canónica.
+    """C4. Quien emite veredicto sobre el REPO está conectado a la receta.
 
     La propiedad es **disyuntiva**, y por eso no necesita una lista de
     excepciones:
 
-        ejecuta pytest  ⟹  lo invoca la receta canónica
-                          o delega en la receta canónica
+        pytest sobre el repo entero  ⟹  lo invoca la receta canónica
+                                     o delega en ella
 
     MEDIDO en WI-99. `scripts/ci.sh` era la contraejemplo: ejecutaba
     `ruff`, `ruff format --check` y `pytest` a pelo, y por eso
@@ -343,11 +408,15 @@ def evaluar_una_receta(informe: InformeRunners) -> tuple[Problema, ...]:
     frente al 87,96 % de la instrumentada) y sin ejecutar ninguno de los
     cuatro contratos exigibles.
 
-    Las dos ramas son distinguibles sin instrumentar nada:
-    `scripts/coverage.sh` ejecuta pytest y es un **fragmento** (la receta
-    canónica lo invoca); `scripts/ci.sh` lo ejecuta y **delega** (invoca
-    pipelinek con la receta). Un `verify.sh` futuro con pytest a pelo no
-    cumple ninguna de las dos, y eso es exactamente lo que se quiere cazar.
+    MEDIDO en WI-100, y es lo que hace la regla precisa. La condición es
+    «pytest **sobre el repo**», no «pytest». Un hook que corre
+    `pytest -q $STAGED_PY` filtra por lo que alguien tiene a medio escribir:
+    es un filtro de evento, no un veredicto, y queda fuera sin necesitar una
+    lista que lo diga. En WI-99 `scripts/hooks/` estaba excluido por
+    constante, y esa constante era una puerta trasera: en cuanto el pre-push
+    dejó de delegar, la exclusión tenía que crecer para seguir cubriendo un
+    caso que ya no era el mismo. Una propiedad que hay que mantener al día
+    no es una propiedad, es una suscripción.
 
     Lo que este invariante NO distingue, y conviene no vender de más: un
     script que sí delega podría ejecutar pytest *además* en su camino
@@ -358,17 +427,18 @@ def evaluar_una_receta(informe: InformeRunners) -> tuple[Problema, ...]:
     problemas: list[Problema] = []
     for ruta in sorted(informe.scripts):
         contenido = informe.scripts[ruta]
-        if not ejecuta_pytest(contenido):
+        if not ejecuta_pytest(contenido) or filtra_por_ficheros(contenido):
             continue
         if delega_en_canonica(contenido) or ruta in informe.fragmentos:
             continue
         problemas.append(
             Problema(
                 CODIGO_RECETA_SUYA,
-                f"{ruta} ejecuta pytest por su cuenta y no esta conectado a "
-                f"{informe.receta_canonica}: ni lo invoca la receta canonica ni "
-                f"delega en ella. Su veredicto se mide con otro instrumento, "
-                f"y es el que produce la evidencia de auditoria",
+                f"{ruta} ejecuta pytest sobre el repo entero y no esta conectado "
+                f"a {informe.receta_canonica}: ni lo invoca la receta canonica "
+                f"ni delega en ella. Su veredicto se mide con otro instrumento, "
+                f"y el suyo es el que puede dar verde un paquete que no "
+                f"cumple los suelos que el propio AGENTS.md declara",
             )
         )
     return tuple(problemas)
@@ -471,17 +541,28 @@ def scripts_de(raiz: Path) -> dict[str, str]:
     Se recorre el directorio `scripts/` y no el árbol entero a propósito:
     es donde vive la caja de herramientas local, y donde un fichero escrito
     para ser la verificación llega a ser la receta que alguien ejecuta.
+
+    MEDIDO en WI-100: hasta aquí se excluía `scripts/hooks/` por constante.
+    La exclusión desaparece —no porque el hook se conforme, sino porque la
+    propiedad se afinó hasta que el hook no necesita una. Un hook que
+    delega (pre-push) cumple por la vía normal; uno que filtra por ficheros
+    (pre-commit) cumple por la suya. Y `scripts/hooks/` entra en el
+    contrato, que es donde tenía que estar desde el principio.
     """
     base = raiz / "scripts"
     if not base.is_dir():
         return {}
-    encontrados: dict[str, str] = {}
-    for fichero in sorted(base.rglob("*.sh")):
-        relativa = fichero.relative_to(raiz).as_posix()
-        if any(relativa.startswith(f"{d}/") for d in DIRECTORIOS_NO_RECETA):
+    scripts: dict[str, str] = {}
+    for fichero in sorted(base.rglob("*")):
+        if not fichero.is_file() or "__pycache__" in fichero.parts:
             continue
-        encontrados[relativa] = fichero.read_text(encoding="utf-8")
-    return encontrados
+        try:
+            contenido = fichero.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if es_script_shell(contenido, fichero.suffix):
+            scripts[fichero.relative_to(raiz).as_posix()] = contenido
+    return scripts
 
 
 def medir(raiz: Path) -> InformeRunners:

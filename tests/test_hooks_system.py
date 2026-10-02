@@ -1,17 +1,27 @@
 """Tests para el sistema de git hooks del proyecto.
 
-Estos tests verifican que:
-1. El hook pre-commit existe y es ejecutable.
-2. El script install-hooks.sh existe, es ejecutable y tiene shebang valido.
-3. El hook pre-commit en scripts/hooks/ contiene los comandos clave.
-4. El CI workflow existe y referencia las tareas mise correctas.
+WI-100: siete de estos tests buscaban **cadenas** en el contenido del hook
+pre-push («pytest» esta, «HOOK_SKIP_PUSH_TESTS» esta, «run_in_toolchain»
+esta). Con cadenas asi, el hook anterior pasaba: ejecutaba `pytest -q` a
+pelado con el instrumento que no ve los subprocesos, y sus propios tests
+lo confirmaban.
 
-Los tests NO ejecutan el hook (eso seria un side effect sobre el repo
-del usuario). Solo verifican la presencia y la forma.
+Lo que sustituye a cada uno comprueba la PROPIEDAD, y dos de ellos
+**ejecutan** el hook sobre un repo de prueba con un `scripts/ci.sh` stub
+que falla si se invoca. Es la primera vez que este fichero comprueba
+comportamiento y no forma: hasta aqui, «el hook menciona el bypass» era
+indistinguible de «el bypass funciona».
+
+Los parsers viven en `scripts/check_ci_recipe_parity.py` y no aqui. El
+invariante C4 depende de ellos, y duplicarlos entre el guard y su test es
+la forma de que dejen de contar lo mismo sin que nada lo note (WI-98).
 """
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,12 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOK_PATH = REPO_ROOT / "scripts" / "hooks" / "pre-commit"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from check_ci_recipe_parity import pasos_ejecutables as _pasos_ejecutables  # noqa: E402
-
-# El parser de `run:` vive en `scripts/check_ci_recipe_parity.py` y no aqui.
-# El invariante C1 depende de el, y duplicarlo entre el guard y su test es
-# la forma de que dejen de contar lo mismo sin que nada lo note (WI-98).
-
+import check_ci_recipe_parity as _par  # noqa: E402
 
 PRE_PUSH_HOOK_PATH = REPO_ROOT / "scripts" / "hooks" / "pre-push"
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install-hooks.sh"
@@ -167,91 +172,278 @@ class TestInstallHooksScript:
             assert mode & stat.S_IXUSR, f"{name} no ejecutable tras installer"
 
 
-class TestPrePushHook:
-    """El hook pre-push ejecuta la suite completa de pytest antes del push.
+def _hook_pre_push() -> str:
+    return PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
 
-    Defensa en profundidad 3 capas:
-      1. Pre-commit (lint + format + smoke pytest)  [ya implementado]
-      2. CI workflow (lint + format + full pytest)  [ya implementado]
-      3. Pre-push (suite completa de pytest)         [este test]
+
+def _repo_de_prueba(tmp_path: Path, ci_sh: str) -> Path:
+    """Un repo git minimo con el hook instalado y un `ci.sh` estejado.
+
+    El hook real, sin modificar, en un repo que no es el de desarrollo: por
+    eso se puede ejecutar sin tocar nada. El `ci.sh` decides el resultado,
+    asi que el test mide COMO el hook consulta a su delegado, no si el
+    delegado funciona — eso lo mide el otro test.
+    """
+    repo = tmp_path / "repo"
+    (repo / "scripts" / "hooks").mkdir(parents=True)
+    (repo / "scripts" / "ci.sh").write_text(ci_sh, encoding="utf-8")
+    shutil.copy(PRE_PUSH_HOOK_PATH, repo / "scripts" / "hooks" / "pre-push")
+    (repo / "un-fichero").write_text("x", encoding="utf-8")
+    for cmd in (
+        ["init", "-q"],
+        ["config", "user.email", "hook@test.invalid"],
+        ["config", "user.name", "hook test"],
+        ["add", "-A"],
+        ["commit", "-qm", "inicial"],
+    ):
+        subprocess.run(["git", *cmd], cwd=repo, check=True, capture_output=True)
+    return repo
+
+
+class TestPrePushHookDelega:
+    """El pre-push pide la receta; no la tiene.
+
+    MEDIDO en WI-100: el hook corria `pytest -q` a pelo, o sea la MISMA
+    suite con un instrumento distinto y menos informacion. Con el mismo
+    `.coverage.rc` y el mismo commit, unica variable el hook `.pth`:
+
+        modulo                pre-push    coverage.sh    delta
+        cli/commands/runs.py     39 %         88 %          -49
+        cli/runner.py            55 %         79 %          -24
+        cli/support.py           69 %         86 %          -17
+
+    `cli/support.py` mide 69 %, y el suelo que declara el propio
+    AGENTS.md 6.3 para la CLI es 70 %. El gate mas cercano al push podia
+    dar VERDE un paquete que no cumplia el suelo declarado. Ademas no
+    ejecutaba ninguno de los cuatro contratos exigibles.
+
+    Los tres primeros tests ya existian y se quedan: existen, son
+    ejecutables, tienen shebang. Los demas miraban la cadena.
     """
 
     def test_hook_exists(self) -> None:
         assert PRE_PUSH_HOOK_PATH.exists(), f"Hook no encontrado: {PRE_PUSH_HOOK_PATH}"
 
     def test_hook_is_executable(self) -> None:
-        """El hook debe tener bit +x (stat S_IXUSR).
-
-        El install-hooks.sh debe re-aplicar chmod +x al copiar al directorio
-        .git/hooks/ (que no se commitea).
-        """
         import stat
 
         mode = PRE_PUSH_HOOK_PATH.stat().st_mode
         assert mode & stat.S_IXUSR, f"Hook no ejecutable: {PRE_PUSH_HOOK_PATH}"
 
     def test_hook_has_shebang(self) -> None:
-        first_line = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8").splitlines()[0]
+        first_line = _hook_pre_push().splitlines()[0]
         assert first_line.startswith("#!"), f"Hook sin shebang: {first_line!r}"
         assert "sh" in first_line or "bash" in first_line, (
             f"Shebang no apunta a shell: {first_line!r}"
         )
 
-    def test_hook_enforces_pytest(self) -> None:
-        """El hook debe ejecutar pytest para validar la suite antes del push."""
-        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
-        assert "pytest" in content, "Hook no ejecuta pytest"
+    def test_el_hook_delega_en_el_dueno_de_la_receta(self) -> None:
+        """Invoca `scripts/ci.sh`, que es quien sabe llegar a `.pipeline.kts`.
 
-    def test_hook_uses_toolchain_dispatcher(self) -> None:
-        """El hook debe usar el dispatcher run_in_toolchain (mise/uv) para coherencia con pre-commit."""
-        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
-        assert "run_in_toolchain" in content or "mise exec" in content, (
-            "Hook no usa toolchain dispatcher (mise/uv)"
-        )
-
-    def test_hook_provides_bypass_for_experimental_branches(self) -> None:
-        """El hook debe permitir bypass via env var HOOK_SKIP_PUSH_TESTS.
-
-        Casos de uso legitimos:
-          - Push de rama experimental sin tests listos
-          - CI config / docs-only changes en worktree de otro dev
-          - Smoke test de hooks system sin esperar 190s
+        Y no se busca `.pipeline.kts` en el hook: el hook no lo menciona, y
+        no deberia. La propiedad es la DELEGACION, y su ruta es el owner's.
+        Duplicar el comando canonico en el hook crearia un segundo dueno de
+        la misma regla, que es exactamente lo que `AGENTS.md` («CI Local
+        Obligatorio») prohibe.
         """
-        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
-        assert "HOOK_SKIP_PUSH_TESTS" in content, (
-            "Hook sin mecanismo de bypass HOOK_SKIP_PUSH_TESTS"
+        assert "scripts/ci.sh" in _par.rutas_de_script(_hook_pre_push(), "#"), (
+            "El pre-push no invoca scripts/ci.sh. Sin esa indireccion nadie "
+            "resuelve mise trust ni .pipelinek/, y el hook se convierte en "
+            "una receta mas con un instrumento distinto"
         )
 
-    def test_hook_uses_consistent_log_prefix(self) -> None:
-        """El hook debe usar prefijo [pre-push] para identificarse en logs."""
-        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
-        assert "[pre-push]" in content, "Hook sin prefijo [pre-push] en logs"
+    def test_el_hook_no_tiene_receta_propia(self) -> None:
+        """La mitad de la que se esperaba: no ejecuta pytest, lo pide.
 
-    def test_hook_documents_purpose(self) -> None:
-        """El header debe explicar por qué existe el hook (que problema evita)."""
-        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
-        # El header debe contener palabras clave de proposito
-        header_lines = "\n".join(content.splitlines()[:15])
-        assert "push" in header_lines.lower(), "Hook no documenta relacion con push"
-        assert "pytest" in header_lines.lower() or "test" in header_lines.lower(), (
-            "Hook no documenta relacion con pytest"
-        )
-
-    def test_hook_cleans_up_tempfile_on_exit(self) -> None:
-        """El hook debe limpiar el tempfile en EXIT (cubre exito, fallo, SIGTERM/SIGINT).
-
-        Sin trap, un Ctrl-C durante pytest (3min) dejaria un tempfile huerfano
-        en /tmp. El trap EXIT garantiza limpieza en cualquier camino de salida.
+        La version anterior ejecutaba `pytest -q`; por eso
+        `test_hook_enforces_pytest` («pytest» esta en el contenido) pasaba
+        y el hook era una cuarta receta. Ahora esa asercion seria la
+        equaciona del defecto.
         """
-        content = PRE_PUSH_HOOK_PATH.read_text(encoding="utf-8")
-        # El trap debe estar en el bloque donde se crea el tempfile (_log="$(mktemp)")
-        assert "trap" in content, "Hook sin trap para limpieza"
-        # Verifica que el trap referencia EXIT (cubre todos los caminos de salida)
-        assert "trap '" in content and "EXIT" in content, (
-            "Hook sin trap EXIT para cubrir exito/fallo/signal"
+        assert not _par.ejecuta_pytest(_hook_pre_push()), (
+            "El pre-push ejecuta pytest. Si lo ejecuta, tiene su propia "
+            "receta y su veredicto se mide con un instrumento distinto al "
+            "de la receta canonica"
         )
-        # El trap debe limpiar $_log (el tempfile)
-        assert "rm -f" in content and '_log"' in content, "Trap no limpia $_log"
+
+    def test_el_bypass_salta_la_verificacion_de_verdad(self, tmp_path: Path) -> None:
+        """«HOOK_SKIP_PUSH_TESTS» esta en el contenido: eso no es un bypass.
+
+        Ejecuta el hook real sobre un repo de prueba cuyo `ci.sh` falla. Si
+        el bypass no funciona, el hook sale != 0 y este test cae. Antes solo
+        se comprobaba que la variable aparecia en el texto, cosa que un
+        comentario satisface igual.
+        """
+        repo = _repo_de_prueba(tmp_path, "#!/bin/sh\necho STUB-EJECUTADO\nexit 9\n")
+        r = subprocess.run(
+            ["sh", "scripts/hooks/pre-push"],
+            cwd=repo,
+            env={**os.environ, "HOOK_SKIP_PUSH_TESTS": "1"},
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "STUB-EJECUTADO" not in r.stdout, (
+            "Con el bypass puesto, el hook ejecuto la verificacion. El "
+            "bypass se declara en la cabecera pero no hace nada"
+        )
+
+    def test_el_hook_aborta_cuando_el_dueno_falla(self, tmp_path: Path) -> None:
+        """La otra mitad: sin bypass, un fallo del delegado ES un push abortado.
+
+        Es la propiedad que justifica el tempfile sin pipe. Con
+        `sh scripts/ci.sh | tail -30`, el exit code seria el de `tail` — que
+        es 0 — y el hook daria verde con la receta en rojo. La trampa la
+        documenta `.pipeline.kts`, el `pre-commit` y el propio hook.
+        """
+        repo = _repo_de_prueba(tmp_path, "#!/bin/sh\necho STUB-EJECUTADO\nexit 9\n")
+        r = subprocess.run(
+            ["sh", "scripts/hooks/pre-push"],
+            cwd=repo,
+            env={**os.environ, "HOOK_SKIP_PUSH_TESTS": "0"},
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert r.returncode != 0, (
+            "El hook dio verde con el delegado en rojo. O el exit code se "
+            "perdio por un pipe, o el error no se propaga"
+        )
+        assert "STUB-EJECUTADO" in r.stdout, (
+            "El hook ni siquiera llego a invocar a su delegado. Con "
+            f"HOOK_SKIP_PUSH_TESTS=0 deberia haberlo hecho:\n{r.stdout}"
+        )
+
+    def test_la_invocacion_del_dueno_no_trae_pipe(self) -> None:
+        """El rc de un pipe es el de su ultimo comando, no el del que importa.
+
+        `tail` sale 0 siempre. Un pipe entre el hook y su delegado
+        convertiria «la receta fallo» en «el push pasa», y ningun test que
+        mire el texto lo notaria.
+        """
+        ordenes = [o for o in _par.logicas_de(_hook_pre_push(), "#") if "scripts/ci.sh" in o]
+        assert ordenes, "el hook no invoca a scripts/ci.sh"
+        con_pipe = [o for o in ordenes if "|" in o]
+        assert not con_pipe, (
+            f"La invocacion del delegado va con pipe: el exit code seria el "
+            f"de tail (0) y el hook daria verde con la receta en rojo: {con_pipe}"
+        )
+
+    def test_el_hook_se_situa_en_la_raiz_antes_de_verificar(self) -> None:
+        """Sin esto, `scripts/ci.sh` no se encuentra y el fallo no explica nada.
+
+        git ejecuta los hooks con el cwd en la raiz en un push normal, pero
+        eso no esta garantizado cuando el hook corre desde otro worktree. El
+        fallo que produce sin esto es «no such file», que no dice nada de la
+        causa.
+        """
+        ordenes = _par.logicas_de(_hook_pre_push(), "#")
+        assert any("rev-parse --show-toplevel" in o for o in ordenes), (
+            "El hook no resuelve la raiz del repo antes de invocar a su "
+            "delegado; dependeria del cwd con el que git lo lance"
+        )
+
+    def test_el_prefijo_de_log_se_usa(self) -> None:
+        """Convencion de logs, no propiedad de comportamiento: se queda como cadena.
+
+        Se declara explicitamente la excepcion, porque un guard tiene que
+        saber cuando mira texto a proposito. Aqui no hay forma de que un
+        prefijo mal puesto cambie lo que el hook acepta o rechaza.
+        """
+        assert "[pre-push]" in _hook_pre_push(), "Hook sin prefijo [pre-push] en logs"
+
+
+class TestPreCommitHookFiltraDeVerdad:
+    """El smoke que decia ser, y no era.
+
+    MEDIDO en WI-100: el hook seleccionaba los `.py` staged y **no se los
+    pasaba** a pytest. Ejecutaba `pytest -q` a secas, o sea la suite
+    entera:
+
+        anunciado   "smoke, N files staged",  ~10 s
+        real        2636 tests,               124.29 s
+
+    El selector existia; la instruccion no. Y ningun test lo noto, porque
+    buscaban «pytest» en el contenido — y el hook SI tiene `pytest`.
+    """
+
+    def test_los_ficheros_staged_llegan_a_pytest(self) -> None:
+        """La propiedad: pytest recibe paths. Sin paths no hay smoke.
+
+        Con `"$STAGED_PY"` entrecomillado, pytest recibiria UN argumento con
+        todos los paths pegados y no correria nada: el hook pasaria en
+        verde sin haber ejecutado un test. Por eso la comprobacion mira la
+        orden de verdad y no si la variable aparece en el texto.
+        """
+        ordenes = [
+            o
+            for o in _par.logicas_de(HOOK_PATH.read_text(encoding="utf-8"), "#")
+            if _par._INVOCA_PYTEST.search(o)
+        ]
+        assert ordenes, "el pre-commit no lanza pytest"
+        con_paths = [o for o in ordenes if _par.filtra_por_ficheros(o)]
+        assert con_paths, (
+            "El pre-commit lanza pytest SIN pasarle los ficheros staged: "
+            f"eso es la suite entera, no un smoke. Ordenes: {ordenes}"
+        )
+        quoted = [o for o in ordenes if '"$STAGED_PY"' in o or "'$STAGED_PY'" in o]
+        assert not quoted, (
+            f"STAGED_PY va entrecomillado: pytest recibiria un solo argumento "
+            f"con todos los paths pegados y no correria nada: {quoted}"
+        )
+
+    def test_el_pre_commit_ya_no_es_un_verdicto_sobre_el_repo(self) -> None:
+        """Por eso queda fuera de C4 sin necesitar una lista de excepciones.
+
+        C4 mide «pytest sobre el repo entero». Este hook filtra, asi que no
+        emite veredicto sobre el repo: emite sobre lo que alguien tiene a
+        medio escribir. El veredicto lo dan el pre-push y la receta.
+        """
+        contenido = HOOK_PATH.read_text(encoding="utf-8")
+        assert _par.ejecuta_pytest(contenido)
+        assert _par.filtra_por_ficheros(contenido), (
+            "El pre-commit dejo de filtrar: si corre pytest sobre el repo "
+            "entero, es una receta mas con un instrumento distinto, y vuelve "
+            "a ser un veredicto que no es el de la receta canonica"
+        )
+
+    def test_el_smoke_es_rapido_por_diseno_no_por_suerte(self, tmp_path: Path) -> None:
+        """Un filtro que tarda 124 s no es un filtro: nadie lo espera.
+
+        Mide un smoke sobre dos modulos triviales en `tmp_path`, NO sobre
+        ficheros del repo. La primera version de este test usaba
+        `tests/test_hooks_system.py`, y resulto ser un bucle: el smoke
+        corria un fichero que contiene el test del smoke, que volvia a
+        correr el smoke. No era solo un test lento — era un hook que, al
+        tocar su propio fichero de tests, se llama a si mismo.
+
+        El coste medido con ficheros reales fue de 0.83 s frente a los
+        124.29 s de la suite entera.
+        """
+        import time
+
+        modulos = []
+        for i in range(2):
+            f = tmp_path / f"mod_{i}.py"
+            f.write_text("def test_verdad() -> None:\n    assert True\n", encoding="utf-8")
+            modulos.append(str(f))
+
+        inicio = time.monotonic()
+        r = subprocess.run(
+            ["mise", "exec", "--", "uv", "run", "pytest", "-q", "-p", "no:cacheprovider", *modulos],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        elapsed = time.monotonic() - inicio
+        assert r.returncode == 0, r.stdout[-3000:]
+        assert elapsed < 60, (
+            f"El smoke tardo {elapsed:.1f}s sobre 2 modulos. La suite entera "
+            "tardaba 124.29 s: eso no es un smoke, es la receta anterior "
+            "repetida con otro nombre"
+        )
 
 
 class TestCIWorkflow:
@@ -369,7 +561,7 @@ class TestCIWorkflow:
         habla de la cadena es buscar en el sitio equivocado — que es
         exactamente la clase de guard que este bloque viene a cerrar.
         """
-        pasos = _pasos_ejecutables(CI_WORKFLOW_PATH.read_text(encoding="utf-8"))
+        pasos = _par.pasos_ejecutables(CI_WORKFLOW_PATH.read_text(encoding="utf-8"))
         assert not any("pytest --cov" in paso for paso in pasos), (
             "El workflow vuelve a medir con `pytest --cov` a pelo: sin el "
             "hook .pth de scripts/coverage.sh el CLI ejecutado por "

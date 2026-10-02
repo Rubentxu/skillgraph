@@ -4,7 +4,13 @@
 # Enforces:
 #   1. `ruff check src tests`        (lint)
 #   2. `ruff format --check src tests` (format gate)
-#   3. `pytest -q` smoke              (only if .py files staged)
+#   3. `pytest -q` smoke SOBRE LOS FICHEROS .py STAGED
+#
+# MEDIDO en WI-100: hasta entonces el punto 3 decia "smoke" pero corria la
+# suite entera (2636 tests, 124 s). Este hook es un FILTRO, no una medicion:
+# por eso filtra. El veredicto sobre el repo entero lo dan
+# `scripts/hooks/pre-push` y la receta canonica, ambos con el instrumento
+# correcto.
 #
 # Bypass for emergency or doc-only commits:
 #   git commit --no-verify
@@ -51,23 +57,47 @@ run_in_toolchain run ruff format --check src tests || {
 }
 
 # -------------------------------------------------------------------
-# 3. Smoke pytest — only if .py files staged.
+# 3. Smoke pytest sobre LO QUE SE TOCA — only if .py files staged.
+#
+# MEDIDO en WI-100, y era un bug de 12x. Este hook seleccionaba los .py
+# staged en la linea 56 y NO se los pasaba a pytest: ejecutaba
+# `pytest -q` a secas, es decir la suite ENTERA. Lo que se media:
+#
+#     anunciado   "smoke, N files staged", ~10 s
+#     real        2636 tests, 124.29 s
+#
+# El selector existia; la instruccion, no. Y como no habia nada que lo
+# comprobara, el hook decia una cosa hacia 124 s y nadie lo noto en meses.
+# Un guard que busca la cadena `pytest` lo aprueba igual: el hook SI tiene
+# `pytest`. Por eso este test ahora mira la PROPIEDAD — que los ficheros
+# staged lleguen a pytest — y no la cadena.
+#
+# Que el smoke se pase a proposito no es un relajar el gate: el veredicto
+# sobre el repo entero lo dan `scripts/hooks/pre-push` y la receta
+# canonica, ambos con el instrumento correcto. Este solo evita que un
+# error de sintaxis llegue a existir 124 s.
 # -------------------------------------------------------------------
 STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '\.py$' || true)
 
 if [ -n "$STAGED_PY" ] && [ "${HOOK_SKIP_TESTS:-0}" != "1" ]; then
-    echo "[pre-commit] pytest -q (smoke, $(echo "$STAGED_PY" | wc -l) files staged)..."
-    # WI-57: el exit code de `pytest | tail` es el de tail (0 siempre) y
-    # enmascaraba los fallos (misma trampa PIPESTATUS que documenta
-    # .pipeline.kts). El resultado se decide sobre el exit real de pytest.
+    N_STAGED=$(echo "$STAGED_PY" | wc -l | tr -d ' ')
+    echo "[pre-commit] smoke: pytest sobre $N_STAGED fichero(s) .py staged"
+    # Sin `| tail` porque con `set -e` el exit code del pipe seria el de
+    # tail (siempre 0) y la rama de error NUNCA se ejecutaria. Mismo
+    # workaround que `.pipeline.kts` y que el pre-push.
     PYTEST_LOG=$(mktemp)
-    if run_in_toolchain run pytest -q >"$PYTEST_LOG" 2>&1; then
-        tail -30 "$PYTEST_LOG"
+    # Sin `# shellcheck disable=SC2086`: los paths DEBEN partirse en
+    # palabras. Con "$STAGED_PY" entrecomillado, pytest recibiria un unico
+    # argumento con todos los paths pegados y no encontraria nada que
+    # correr — el hook pasaria por verde sin haber ejecutado un test.
+    if run_in_toolchain run pytest -q $STAGED_PY >"$PYTEST_LOG" 2>&1; then
+        tail -5 "$PYTEST_LOG"
+        echo "[pre-commit] smoke OK ($N_STAGED ficheros)"
     else
         tail -40 "$PYTEST_LOG"
         rm -f "$PYTEST_LOG"
         echo ""
-        echo "ERROR: pytest failed."
+        echo "ERROR: el smoke sobre lo staged fallo."
         echo "Bypass for doc-only commits: HOOK_SKIP_TESTS=1 git commit"
         echo "Bypass always: git commit --no-verify"
         exit 1
