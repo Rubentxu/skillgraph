@@ -30,7 +30,9 @@ Lo que este script mide
 C1  todo runner remoto declarado invoca la receta canónica;
 C2  la receta canónica es ejecutable fuera de esta máquina (no lleva rutas
     absolutas a un árbol de trabajo concreto);
-C3  las etapas canónicas se leen **del script**, no de una lista paralela.
+C3  las etapas canónicas se leen **del script**, no de una lista paralela;
+C4  quien ejecuta `pytest` está conectado a la receta canónica: o es un
+    fragmento que ella invoca, o delega en ella (WI-99).
 
 Por qué C2 está aquí y no en un documento
 -----------------------------------------
@@ -38,6 +40,15 @@ Cumplir C1 sin C2 produce una promesa inejecutable: el remoto invoca la
 receta canónica y falla en el primer `ls` porque la ruta no existe en su
 disco. Las dos cosas son la misma regla mirada desde los dos lados, y medirlas
 por separado produce un falso verde en cualquiera de las dos.
+
+Por qué C4 está aquí y no en un documento
+-----------------------------------------
+`scripts/audit_bundle.sh` existe para dar evidencia reproducible a una
+auditoría independiente. Medido en WI-99, la producía llamando a un script
+que corría `pytest` a pelo, es decir, con el instrumento que **no ve el CLI
+ejecutado por subproceso**. Un documento que dijera «delega en la receta
+canónica» no habría cambiado nada la próxima vez que alguien añadiera una
+línea a un script; un contrato que mira los ficheros, sí.
 
 Diseno: puro por encima, efecto por debajo
 ------------------------------------------
@@ -57,7 +68,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
@@ -65,6 +76,7 @@ CODIGO_RECETA_PROPIA: Final = "sg_ci_receta_propia"
 CODIGO_RUTA_ABSOLUTA: Final = "sg_ci_ruta_absoluta"
 CODIGO_ETAPA_DESCONOCIDA: Final = "sg_ci_etapa_desconocida"
 CODIGO_RUNNER_INEXISTENTE: Final = "sg_ci_runner_inexistente"
+CODIGO_RECETA_SUYA: Final = "sg_ci_receta_suya"
 
 #: La receta local, por nombre. Es el unico nombre que significa «la canonica».
 RECETA_CANONICA: Final = ".pipeline.kts"
@@ -82,6 +94,20 @@ PATRONES_RUNNER: Final[tuple[str, ...]] = ("*.yml", "*.yaml")
 #: raíz). MEDIDO en WI-98: el motor v0.39.0 sí propaga el entorno a los
 #: `sh()`, así que esto no es un truco sino una línea.
 _RESUELVE_RAIZ: Final = re.compile(r'System\.getenv\(|System\.getProperty\(\s*"user\.dir"\s*\)')
+
+#: Directorios de `scripts/` cuyos ficheros **no** son recetas de verificación.
+#:
+#: MEDIDO en WI-99: `scripts/hooks/pre-push` ejecuta la suite completa de
+#: `pytest` a pelo y emite un veredicto sobre el árbol antes de dejar pushear.
+#: Con el mismo instrumento, ese veredicto no ve el CLI ejecutado por
+#: subproceso (`cli/commands/runs.py`: 39 % frente al 87,96 % de la
+#: instrumentada). Queda como **deuda medida y no resuelta**, no como
+#: conformidad: un hook de git tiene un presupuesto de tiempo fijo y corto
+#: (el `pre-commit` es un smoke de ~10 s) y su salida es un filtro de evento,
+#: no el veredicto que `AGENTS.md` («CI Local Obligatorio») declara como
+#: fuente de verdad. Convergerlo con la receta canónica es un workitem
+#: propio, no una excepción disguise de este guard.
+DIRECTORIOS_NO_RECETA: Final[tuple[str, ...]] = ("scripts/hooks",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +127,13 @@ class InformeRunners:
     raiz_repo: str
     runners: dict[str, str]
     etapas_canonicas: tuple[str, ...]
+    #: Scripts de `scripts/` que una persona ejecutaría esperando un
+    #: veredicto, como `ruta -> contenido`.
+    scripts: dict[str, str] = field(default_factory=dict)
+    #: Scripts que `.pipeline.kts` invoca. Se leen del script, no de una
+    #: lista: un guard que lleva su propia lista de fragmentos solo vigila
+    #: los fragmentos que ya conocía.
+    fragmentos: frozenset[str] = frozenset()
     hubo_error: bool = False
     error: str = ""
 
@@ -108,6 +141,90 @@ class InformeRunners:
 # =====================================================================
 # CAPA PURA — de aqui abajo no se lee disco.
 # =====================================================================
+
+
+def sin_comentarios_linea(linea: str, marca: str) -> str:
+    """Una línea de shell o de Kotlin sin su comentario.
+
+    Un comentario empieza por la marca **al inicio de la línea o tras un
+    espacio**, nunca en cualquier posición: partir por el primer `#` rompe
+    `echo "## CI Summary"` y partir por el primer `//` rompe
+    `https://mise.jdx.dev`. La misma regla sirve para los dos lenguajes
+    porque los dos la tienen, y por eso es una función y no dos.
+    """
+    pos = linea.find(marca)
+    if pos == 0 or (pos > 0 and linea[pos - 1].isspace()):
+        return linea[:pos]
+    return linea
+
+
+def logicas_de(contenido: str, marca: str) -> tuple[str, ...]:
+    """Las órdenes que un script ejecuta: sin comentarios y sin cortar en dos.
+
+    Las continuaciones con barra invertida se unen ANTES de devolver. Sin
+    eso, la invocación canónica de este repo
+
+        mise exec -- pipelinek run --rerun \\
+            --db .pipelinek/db.sqlite ... .pipeline.kts
+
+    se leería como dos órdenes, ninguna de las cuales contiene a la vez
+    `pipelinek` y `.pipeline.kts`, y el invariante concluiría que el
+    script no delega cuando sí delega.
+    """
+    unidas: list[str] = []
+    buffer = ""
+    for cruda in contenido.splitlines():
+        limpia = sin_comentarios_linea(cruda, marca).rstrip()
+        if not limpia.strip():
+            continue
+        buffer = f"{buffer} {limpia}".strip() if buffer else limpia
+        if limpia.endswith("\\"):
+            buffer = buffer[:-1].rstrip()
+            continue
+        unidas.append(buffer)
+        buffer = ""
+    if buffer:
+        unidas.append(buffer)
+    return tuple(unidas)
+
+
+#: `pytest` como palabra suelta precedida de inicio, espacio o barra.
+#: `pytest-cov` también cuenta, y debe: es la misma corrida.
+_INVOCA_PYTEST: Final = re.compile(r"(?:^|[\s/])pytest(?:\s|$)")
+
+#: Un `scripts/<algo>.sh` dentro de una orden, sea invocado con `bash`, sea
+#: con su ruta relativa. No matchea `scripts/check_x.py`: un contrato en
+#: Python invocado directamente por la receta no es un script de shell.
+_RUTA_SCRIPT: Final = re.compile(r"[\w./-]*scripts/[\w.-]+\.sh")
+
+
+def ejecuta_pytest(contenido: str) -> bool:
+    """¿El script lanza pytest en algún momento?"""
+    return any(_INVOCA_PYTEST.search(orden) for orden in logicas_de(contenido, "#"))
+
+
+def delega_en_canonica(contenido: str) -> bool:
+    """¿El script entrega su veredicto a la receta canónica?
+
+    Se exige que `pipelinek` y el nombre de la receta estén en la **misma
+    orden**: `pipelinek` sin `.pipeline.kts` sería un pipeline distinto, y
+    `.pipeline.kts` sin `pipelinek` sería un fichero que se pasa como
+    argumento de otra cosa.
+    """
+    return any(
+        "pipelinek" in orden and RECETA_CANONICA in orden for orden in logicas_de(contenido, "#")
+    )
+
+
+def scripts_invocados_por(canonica: str) -> frozenset[str]:
+    """Qué scripts de shell invoca la receta canónica.
+
+    Se lee del script y no de una constante: los fragmentos de la receta
+    cambian con ella, y una lista aparte sólo sabría de los que ya había.
+    """
+    return frozenset(
+        ruta for orden in logicas_de(canonica, "//") for ruta in _RUTA_SCRIPT.findall(orden)
+    )
 
 
 def evaluar_recetas(informe: InformeRunners) -> tuple[Problema, ...]:
@@ -209,14 +326,63 @@ def evaluar_etapas(informe: InformeRunners) -> tuple[Problema, ...]:
     return ()
 
 
+def evaluar_una_receta(informe: InformeRunners) -> tuple[Problema, ...]:
+    """C4. Quien ejecuta pytest está conectado a la receta canónica.
+
+    La propiedad es **disyuntiva**, y por eso no necesita una lista de
+    excepciones:
+
+        ejecuta pytest  ⟹  lo invoca la receta canónica
+                          o delega en la receta canónica
+
+    MEDIDO en WI-99. `scripts/ci.sh` era la contraejemplo: ejecutaba
+    `ruff`, `ruff format --check` y `pytest` a pelo, y por eso
+    `scripts/audit_bundle.sh` —que existe para dar evidencia reproducible a
+    una auditoría independiente— producía esa evidencia con un instrumento
+    que no ve el CLI ejecutado por subproceso (`cli/commands/runs.py`: 39 %
+    frente al 87,96 % de la instrumentada) y sin ejecutar ninguno de los
+    cuatro contratos exigibles.
+
+    Las dos ramas son distinguibles sin instrumentar nada:
+    `scripts/coverage.sh` ejecuta pytest y es un **fragmento** (la receta
+    canónica lo invoca); `scripts/ci.sh` lo ejecuta y **delega** (invoca
+    pipelinek con la receta). Un `verify.sh` futuro con pytest a pelo no
+    cumple ninguna de las dos, y eso es exactamente lo que se quiere cazar.
+
+    Lo que este invariante NO distingue, y conviene no vender de más: un
+    script que sí delega podría ejecutar pytest *además* en su camino
+    certificante y seguir cumpliendo. Para verlo haría falta un parser de
+    flujo de bash, que es un instrumento mucho mayor que el problema que
+    se está cerrando.
+    """
+    problemas: list[Problema] = []
+    for ruta in sorted(informe.scripts):
+        contenido = informe.scripts[ruta]
+        if not ejecuta_pytest(contenido):
+            continue
+        if delega_en_canonica(contenido) or ruta in informe.fragmentos:
+            continue
+        problemas.append(
+            Problema(
+                CODIGO_RECETA_SUYA,
+                f"{ruta} ejecuta pytest por su cuenta y no esta conectado a "
+                f"{informe.receta_canonica}: ni lo invoca la receta canonica ni "
+                f"delega en ella. Su veredicto se mide con otro instrumento, "
+                f"y es el que produce la evidencia de auditoria",
+            )
+        )
+    return tuple(problemas)
+
+
 def evaluar(informe: InformeRunners) -> tuple[Problema, ...]:
-    """C1..C3. Si la medición falló, no dice nada más."""
+    """C1..C4. Si la medición falló, no dice nada más."""
     if informe.hubo_error:
         return (Problema(CODIGO_RUNNER_INEXISTENTE, f"no se pudo medir: {informe.error}"),)
     return (
         *evaluar_recetas(informe),
         *evaluar_portabilidad(informe),
         *evaluar_etapas(informe),
+        *evaluar_una_receta(informe),
     )
 
 
@@ -252,14 +418,8 @@ def pasos_ejecutables(contenido: str) -> list[str]:
     """
     pasos: list[str] = []
     sangria_bloque: int | None = None
-    for linea in contenido.splitlines():
-        # Un comentario YAML empieza por `#` al inicio de la línea o tras un
-        # espacio. Partir por cualquier `#` rompía `## CI Summary` y las URLs
-        # con fragmento.
-        sin_comentario = linea
-        pos = sin_comentario.find("#")
-        if pos == 0 or (pos > 0 and sin_comentario[pos - 1].isspace()):
-            sin_comentario = sin_comentario[:pos]
+    for cruda in contenido.splitlines():
+        sin_comentario = sin_comentarios_linea(cruda, "#")
         if not sin_comentario.strip():
             continue
         sangria = len(sin_comentario) - len(sin_comentario.lstrip())
@@ -301,6 +461,29 @@ def runners_de(raiz: Path) -> dict[str, str]:
     return encontrados
 
 
+def scripts_de(raiz: Path) -> dict[str, str]:
+    """Los scripts de shell de `scripts/`, como `ruta -> contenido`.
+
+    Se descubren por su extensión, no por una lista de nombres: un
+    `verify.sh` nuevo tiene que entrar en el contrato el día que se escribe,
+    no el día que alguien se acuerde de añadirlo a la lista.
+
+    Se recorre el directorio `scripts/` y no el árbol entero a propósito:
+    es donde vive la caja de herramientas local, y donde un fichero escrito
+    para ser la verificación llega a ser la receta que alguien ejecuta.
+    """
+    base = raiz / "scripts"
+    if not base.is_dir():
+        return {}
+    encontrados: dict[str, str] = {}
+    for fichero in sorted(base.rglob("*.sh")):
+        relativa = fichero.relative_to(raiz).as_posix()
+        if any(relativa.startswith(f"{d}/") for d in DIRECTORIOS_NO_RECETA):
+            continue
+        encontrados[relativa] = fichero.read_text(encoding="utf-8")
+    return encontrados
+
+
 def medir(raiz: Path) -> InformeRunners:
     """Lee los ficheros reales y devuelve lo medido."""
     try:
@@ -314,6 +497,8 @@ def medir(raiz: Path) -> InformeRunners:
             raiz_repo=str(raiz),
             runners=runners_de(raiz),
             etapas_canonicas=etapas_de(texto),
+            scripts=scripts_de(raiz),
+            fragmentos=scripts_invocados_por(texto),
         )
     except (OSError, UnicodeDecodeError) as exc:
         return _informe_de_error(str(exc))
@@ -340,7 +525,8 @@ def formatear(problemas: tuple[Problema, ...]) -> str:
     if not problemas:
         return (
             "OK: todo runner remoto invoca la receta canónica, "
-            "y la receta canónica se puede ejecutar fuera de esta máquina."
+            "la receta canónica se puede ejecutar fuera de esta máquina, "
+            "y ninguna otra receta ejecuta pytest por su cuenta."
         )
     lineas = [f"FALLO: {len(problemas)} incumplimiento(s) del contrato de CI"]
     lineas.extend(f"  [{p.codigo}] {p.mensaje}" for p in problemas)
@@ -367,6 +553,8 @@ def main(argv: list[str] | None = None) -> int:
                         "receta_canonica": informe.receta_canonica,
                         "runners": sorted(informe.runners),
                         "etapas_canonicas": list(informe.etapas_canonicas),
+                        "scripts": sorted(informe.scripts),
+                        "fragmentos": sorted(informe.fragmentos),
                     },
                 },
                 indent=2,

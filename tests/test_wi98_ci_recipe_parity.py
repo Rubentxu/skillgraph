@@ -36,6 +36,12 @@ Qué fijan estos tests
 El invariante es **una propiedad**: *todo runner remoto declarado invoca la
 receta canónica*. No es «el fichero menciona pytest», que es lo que había.
 
+WI-99 añadió C4 al mismo guard, con la misma forma: *quien ejecuta pytest
+está conectado a la receta canónica* —o es un fragmento que ella invoca, o
+delega en ella. Sin ese invariante, `scripts/audit_bundle.sh` seguía
+produciendo la evidencia de auditoría con un instrumento que mide la mitad,
+y el repo entero podía dar verde con esa evidencia dentro.
+
 Los tests de arriba comprueban la propiedad con informes sintéticos; los de
 abajo la comprueban contra los ficheros reales del repo.
 """
@@ -357,3 +363,168 @@ class TestFicherosReales:
     def test_el_script_canonico_existe_y_declara_etapas(self) -> None:
         etapas = par.etapas_de(PIPELINE.read_text(encoding="utf-8"))
         assert etapas, "no se ha podido leer ninguna etapa de .pipeline.kts"
+
+
+# --- C4: quien ejecuta pytest esta conectado a la receta canonica ---------
+#
+# Invariante anadido en WI-99, al mismo modulo y en el mismo fichero de tests
+# a proposito: el guard es `check_ci_recipe_parity.py`, y duplicar su helper
+# `_informe()` en un segundo fichero seria la forma de que los dos midieran
+# cosas distintas sin que nada lo note. C1, C2, C3 y C4 son cuatro caras del
+# mismo contrato: «la verificacion se hace una vez, con un solo instrumento».
+
+#: El `scripts/ci.sh` de ANTES de WI-99: su propia receta. Es el contraejemplo
+#: real, no uno inventado para el test.
+SCRIPT_RECETA_SUYA = """#!/usr/bin/env bash
+set -uo pipefail
+uv run ruff format --check src tests
+uv run ruff check src tests
+uv run pytest --tb=short
+"""
+
+#: El `scripts/ci.sh` de DESPUES: delega, y solo ejecuta pytest en `--quick`,
+#: que esta escrito como no certificante.
+SCRIPT_DELEGA = """#!/usr/bin/env bash
+set -uo pipefail
+if [ "${1:-}" = "--quick" ]; then
+    uv run pytest --tb=short
+    exit 0
+fi
+mise exec -- pipelinek run --rerun \\
+    --db .pipelinek/db.sqlite \\
+    --control-root .pipelinek/control \\
+    .pipeline.kts
+exit $?
+"""
+
+#: Un fragmento de la receta: ejecuta pytest y la receta canónica lo invoca.
+SCRIPT_FRAGMENTO = """#!/usr/bin/env bash
+set -uo pipefail
+uv run pytest -q --cov=skillgraph --cov-config="$RC"
+"""
+
+
+class TestC4UnaSolaReceta:
+    def test_una_receta_que_se_hace_la_suya_se_detecta(self) -> None:
+        """El fallo real de WI-99, con el fichero real como contraejemplo.
+
+        No era imprecisión: `scripts/audit_bundle.sh` —que existe para dar
+        evidencia reproducible a una auditoría independiente— llamaba a este
+        script, así que la evidencia versionada se producía con un
+        instrumento que no ve el CLI ejecutado por subproceso
+        (`cli/commands/runs.py`: 39 % frente al 87,96 % de la instrumentada)
+        y sin ejecutar ninguno de los cuatro contratos exigibles.
+        """
+        informe = _informe(scripts={"scripts/ci.sh": SCRIPT_RECETA_SUYA})
+        problemas = par.evaluar(informe)
+        assert par.CODIGO_RECETA_SUYA in par.codigos_de(problemas)
+        assert "scripts/ci.sh" in " ".join(p.mensaje for p in problemas)
+
+    def test_un_fragmento_de_la_receta_no_problema(self) -> None:
+        """`scripts/coverage.sh` ejecuta pytest y NO delega: es correcto.
+
+        La property es disyuntiva a proposito. Si exigieramos «nadie ejecuta
+        pytest salvo `.pipeline.kts`», el propio archivo que produce la
+        medición de cobertura seria una infraccion, y la unica salida seria
+        una lista de excepciones que el guard mantiene — la trampa que este
+        bloque ya cerro dos veces.
+        """
+        informe = _informe(
+            scripts={"scripts/coverage.sh": SCRIPT_FRAGMENTO},
+            fragmentos=frozenset({"scripts/coverage.sh"}),
+        )
+        assert par.CODIGO_RECETA_SUYA not in par.codigos_de(par.evaluar(informe))
+
+    def test_un_script_que_delega_no_problema(self) -> None:
+        """Delegar es la otra mitad de la property, y es la que se corrigio."""
+        informe = _informe(scripts={"scripts/ci.sh": SCRIPT_DELEGA})
+        assert par.CODIGO_RECETA_SUYA not in par.codigos_de(par.evaluar(informe))
+
+    def test_pytest_solo_en_un_comentario_no_problema(self) -> None:
+        """Un guard que busca una cadena no comprueba la propiedad.
+
+        Es la misma trampa que C1 evita buscando pasos en vez de ficheros
+        entero, aplicada al shell. Sin esto, un script que documenta «esto no
+        es pytest, es documentación» pasaria por conforme.
+        """
+        script = "#!/usr/bin/env bash\n# no usamos pytest aqui, mire V-1\ntrue\n"
+        informe = _informe(scripts={"scripts/verify.sh": script})
+        assert par.CODIGO_RECETA_SUYA not in par.codigos_de(par.evaluar(informe))
+
+    def test_una_delegacion_partida_en_varias_lineas_se_reconoce(self) -> None:
+        """La invocación real está partida con barras invertidas.
+
+        Es la forma que usa el propio `scripts/ci.sh`. Un invariante que
+        buscara `pipelinek` y `.pipeline.kts` en la MISMA línea concluiría
+        que ese script no delega, que es justo lo contrario de lo que hace:
+        el defecto estaría en el invariante, no en el repo.
+        """
+        assert par.delega_en_canonica(SCRIPT_DELEGA)
+        assert ".pipeline.kts" in " ".join(par.logicas_de(SCRIPT_DELEGA, "#"))
+
+    def test_una_url_no_es_un_comentario(self) -> None:
+        """`https://` lleva `//` dentro de una cadena.
+
+        Si el parser partiera por el primer `//`, la linea de la receta
+        canonica que documenta la instalación de mise se truncaría por la
+        mitad y el invariante leería media orden. Y a la inversa: `#` en
+        shell sí es comentario aunque la orden tenga una URL delante.
+        """
+        linea = "curl -sSf https://mise.run | sh # instalar"
+        # Marca de Kotlin: el `//` de la URL no abre comentario, el `#` tampoco.
+        assert par.logicas_de(linea, "//") == (linea,)
+        # Marca de shell: el `#` abre comentario, la URL sigue intacta.
+        assert par.logicas_de(linea, "#") == ("curl -sSf https://mise.run | sh",)
+
+    def test_los_fragmentos_se_leen_de_la_receta_y_no_de_una_lista(self) -> None:
+        """Si el guard llevara su propia lista, un fragmento nuevo sería invisible.
+
+        Es la lección de C3 un nivel más abajo, y por eso `fragmentos` se
+        rellena con `scripts_invocados_por(canonica)`.
+        """
+        assert par.scripts_invocados_por(CANONICA_PORTABLE) == frozenset({"scripts/coverage.sh"})
+        canonica_real = PIPELINE.read_text(encoding="utf-8")
+        assert "scripts/coverage.sh" in par.scripts_invocados_por(canonica_real)
+
+    def test_un_contrato_python_no_es_un_fragmento_de_shell(self) -> None:
+        """`scripts/check_coverage_floors.py` no es un script de shell.
+
+        Contarlo como tal haría que un `checker.py` que algún día lanzara
+        pytest pareciera un fragmento de la receta, cuando en realidad es
+        una recipe propia disfrazada de contrato.
+        """
+        canonica = (
+            'val repo = System.getProperty("user.dir")\n'
+            'pipeline { stages { stage("x") { sh("cd " + repo + '
+            '" && uv run python scripts/check_coverage_floors.py") } } }\n'
+        )
+        assert par.scripts_invocados_por(canonica) == frozenset()
+
+    def test_un_script_nuevo_entra_en_el_contrato_sin_tocar_el_guard(self) -> None:
+        """Se descubre por extensión, no por una lista de nombres."""
+        informe = par.medir(ROOT)
+        assert informe.hubo_error is False, informe.error
+        assert "scripts/coverage.sh" in informe.scripts
+        assert "scripts/ci.sh" in informe.scripts
+
+    def test_la_exclusion_de_los_hooks_es_explicita_y_real(self) -> None:
+        """`scripts/hooks/pre-push` ejecuta pytest a pelo y no entra en C4.
+
+        Se comprueba que la exclusión EXISTE y que lo que excluye es
+        exactamente lo que dice: si algún día `DIRECTORIOS_NO_RECETA`
+        creciera para tapar `scripts/ci.sh`, este test seguiría verde y el
+        guard no miraría nada. Fijar la exclusión es la forma de que dejar
+        de ser un acuerdo.
+        """
+        informe = par.medir(ROOT)
+        assert "scripts/hooks/pre-push" not in informe.scripts
+        assert not any(s.startswith("scripts/hooks/") for s in informe.scripts)
+        pre_push = ROOT / "scripts" / "hooks" / "pre-push"
+        assert par.ejecuta_pytest(pre_push.read_text(encoding="utf-8"))
+        assert par.DIRECTORIOS_NO_RECETA == ("scripts/hooks",)
+
+    def test_el_contrato_real_no_tiene_problemas(self) -> None:
+        """La prueba que importa: contra los ficheros de verdad."""
+        informe = par.medir(ROOT)
+        problemas = par.evaluar(informe)
+        assert problemas == (), [p.mensaje for p in problemas]
