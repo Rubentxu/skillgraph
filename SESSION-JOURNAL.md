@@ -9387,3 +9387,99 @@ entradas de `__all__`. Sin cambios de comportamiento. Commit `cf6539b`.
   queda sin medir.
 - Revision periodica del informe de exploracion de los ciclos abiertos:
   un informe de exploracion envejece aunque sea bueno.
+
+---
+
+## 2026-10-02 — Sesion WI-80: el rechazo ilegible deja de ser PROPOSED
+
+### Objetivo
+
+Cerrar el punto (h) de `next_workitem`, que **dos bloques dieron por
+cerrado sin ejecutar**: estaba medido, con red, y con la correccion
+candidata ya escrita y probada. Se dejo sin hacer con el criterio de que
+tocar la salida de `expansion list` es contrato externo.
+
+### Por que ese criterio estaba mal aplicado
+
+Confundia **cambiar un contrato** con **corregir una afirmacion falsa**.
+
+- El contrato de `--stage REJECTED` nunca fue «oculta las rechazadas cuyo
+  fichero esta roto». Eso no lo fue nunca.
+- Ningun consumidor razonable depende de que se imprima `stage=PROPOSED`
+  para algo que si fue rechazado.
+- La correccion hace el contrato MAS honesto.
+
+El criterio sigue en pie para lo que de verdad es contrato; lo que se
+retira es su aplicacion indiscriminada.
+
+### El fix no adivina
+
+La pieza que faltaba medir era **como se nombra un fichero de rechazo**:
+`record_rejection` (`graph_expansion.py:618`) escribe siempre
+`<proposal_id>.json`. El stem ES el `proposal_id` por construccion, luego
+recuperarlo de ahi no es heuristica sino la convencion de escritura leida
+al reves.
+
+Ademas del id, se reporta en `RejectionScan.unreadable` y `list`/`show`
+avisan en stderr. Sin el aviso, la correccion habria sustituido una
+mentira silenciosa por otra mas pequena: decir REJECTED como si la
+evidencia estuviera sana. Y el aviso es **por lectura fallida**, no por
+presencia de rechazos: si `list` gritara en cada rechazo, dejaria de
+informar. Hay un test que fija eso.
+
+Alcance, medido: NO era un falso exito de escritura. `cmd_expansion_apply`
+no consulta el registro de rechazos; `apply` es idempotente por
+re-validacion. El alcance era de **visualizacion**.
+
+### La red: 6 -> 8, con inversiones
+
+Los 4 tests que consignaban el defecto **se invierten, no se borran**:
+describian el comportamiento real y ahora describen el correcto. Un test
+cuyo objeto desaparece se borra (AGENTS 6.2); uno cuyo *contrato* cambia
+deliberadamente se actualiza. Se anaden 2: JSON valido sin
+`proposal_id` (mismo nombre, misma regla) y evidencia sana NO avisa.
+
+3/3 mutaciones cazadas, incluida la que importa: recuperar el id **sin**
+avisar, que es la misma mentira en version mas pequena.
+
+### Una perdida recuperada
+
+Al reconstruir `next_workitem` por este bloque, un reemplazo de linea
+**habia borrado la lista de decisiones (a)-(i)** del comentario: se
+conservo solo la correccion de WI-86. Detectado al buscar el punto (h)
+para marcarlo y no encontrarlo. Recuperado de `git show` y reconstruido
+con el estado medido de cada punto. El bug tecnico fue que el texto de
+reemplazo no llevo `\\n` final, asi que se fusiono con la linea
+siguiente y rompio el YAML — el parser lo dijo, y por eso se restauro
+antes de seguir.
+
+### Evidencia
+
+- `evidence/sddk-wi80-verify-2026-10-02.md`
+- `.pipelinek/wi80b_mutate.sh` (3/3 + control final)
+
+### Tests ejecutados
+
+- `test_wi80_expansion_rejection_visibility.py`: 8 passed
+- afectados (`-k 'expansion or h4 or cli'`): 352 passed
+- suite completa: **2416 passed in 107.09s**
+- 3/3 mutaciones; ruff y format limpios
+
+### Conocimiento negativo
+
+- Una red puede **consignar un defecto a proposito** y seguir verde
+  durante bloques. Util para caracterizar, pero envejece: cuando el
+  defecto se corrige hay que **invertir** esos tests, no borrarlos.
+- Antes de inventar una heuristica para recuperar un dato de un
+  fichero ilegible, mirar **como se escribio el fichero**. Si el nombre
+  lo determina, el nombre es un canal de recuperacion legitimo.
+
+### Informacion aun necesaria
+
+- **(d) PROPIEDAD DE DOMINIO** de `PROMOTION_STATUSES` y
+  `NON_TERMINAL_RUN_STATES`: definidos en `storage.py` y consumidos por
+  los componentes. Unica deuda de arquitectura sin medir; merece ADR.
+- **(a)** `list_file_signatures_for_source` (cc 10, 58 LoC), el punto
+  ciego del audit.
+- **(f)** exit code de argparse (2) vs `EXIT_USAGE` (1).
+- **(push)** 21 commits sin publicar.

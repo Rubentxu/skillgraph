@@ -1,5 +1,31 @@
 # CURRENT — puntero operativo
 
+> **WI-80 cerrado — un rechazo ilegible ya no se presenta como `PROPOSED`
+> sin avisar** (2026-10-02, commit `eb19942`): cierra el punto (h) de
+> `next_workitem`, que **dos bloques dieron por cerrado sin ejecutar**.
+> `_collect_rejection_ids` se saltaba con `continue` un
+> `expansion_rejections/*.json` ilegible; el `proposal_id` se perdía,
+> `_infer_proposal_stage` caía a `PROPOSED`, y `expansion list` imprimía
+> `stage=PROPOSED` con **exit 0 y sin aviso** para una propuesta que sí
+> fue rechazada. Consecuencia medida: `--stage REJECTED` la hacía
+> desaparecer. No era un falso éxito de escritura —`cmd_expansion_apply`
+> no consulta el registro de rechazos, `apply` es idempotente por
+> re-validación—; el alcance era de **visualización**. **El fix no
+> adivina**: `record_rejection` escribe siempre `<proposal_id>.json`
+> (`graph_expansion.py:618`), luego el stem **es** el `proposal_id` por
+> construcción. Además se reporta en `RejectionScan.unreadable` y
+> `list`/`show` avisan en stderr: sin el aviso, la corrección habría
+> sustituido una mentira silenciosa por otra más pequeña. Listing sigue
+> con exit 0 y el fichero roto **no se borra**. Red 6→8: los 4 tests que
+> consignaban el defecto **se invierten, no se borran**, y se añaden 2
+> que cierran el contrato por los dos lados —evidencia sana **no**
+> avisa, porque el ruido es lo que hace que nadie lea los avisos—. 3/3
+> mutaciones. 2416 passed. **Una lección**: «no tocar el contrato
+> externo» es un criterio correcto en general y aquí estaba mal
+> aplicado, porque confundía **cambiar un contrato** con **corregir una
+> afirmación falsa**: el contrato de `--stage REJECTED` nunca fue «oculta
+> las rechazadas cuyo fichero está roto». Evidencia:
+> `evidence/sddk-wi80-verify-2026-10-02.md`.
 > **WI-86 cerrado — los 5 consumidores de mappers dejan de pasar por el
 > facade `Storage`** (2026-10-02, commit `cf6539b`): el punto (a) de
 > `next_workitem`, abierto dos bloques con «requiere ADR NUEVO», resuelto
@@ -45,8 +71,9 @@
 > exploración puede ser excelente y aun así estar vencido; la calidad del
 > análisis no dice nada sobre si su premisa sigue en pie.
 > Evidencia: `evidence/sddk-wi86-verify-2026-10-02.md`.
-> **Estado post-release**: `__version__ = 0.16.12.dev0`, etiqueta
-> `v0.16.12` (bloque WI-82..WI-84, higiene del árbol y estado SDDK).
+> **Estado post-release**: `__version__ = 0.16.13`, etiqueta `v0.16.13`
+> (bloque WI-86 + WI-80: la capa de re-export de `platform.storage` y el
+> rechazo ilegible presentado como `PROPOSED`).
 > El tag se crea sobre el commit que lleva el SemVer puro, que es lo que
 > exige `tests/test_release_governance.py::test_version_matches_git_tag`:
 > HEAD en etiqueta ⟺ `__version__` sin sufijo `.devN`; HEAD posterior a

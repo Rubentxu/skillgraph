@@ -12,6 +12,39 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.13] - 2026-10-02 — WI-86 y WI-80: la capa de re-export y el rechazo ilegible
+**Resumen**: 2 commits de trabajo desde `v0.16.12` (`cf6539b`, `eb19942`). SemVer derivado del
+historial: **0 `feat`, 1 `fix`, 1 `refactor`, 1 `docs`, 1 `chore`** → **PATCH**. Sin capacidad
+observable nueva ni cambio de API pública. **2416 passed** (2394 en `v0.16.12`), ruff y format
+limpios, CI canónica `Pipeline finished with SUCCESS`.
+ un rechazo ilegible ya no se presenta como `PROPOSED` sin avisar
+
+
+### Fixed
+
+- `fix(cli)` `eb19942`: **`expansion list` afirmaba `stage=PROPOSED`, con
+  exit 0 y sin aviso, para una propuesta que SÍ había sido rechazada**.
+  `_collect_rejection_ids` se saltaba con `continue` un
+  `expansion_rejections/*.json` ilegible; el `proposal_id` se perdía y
+  `_infer_proposal_stage` caía a `PROPOSED`. Consecuencia medida:
+  `--stage REJECTED` hacía desaparecer la propuesta. No era un falso éxito
+  de escritura —`apply` es idempotente por re-validación—; el alcance era
+  de visualización. **El fix no adivina**: `record_rejection` escribe
+  siempre `<proposal_id>.json`, luego el stem *es* el `proposal_id` por
+  construcción. Además avisa en stderr, porque sin el aviso la corrección
+  habría sustituido una mentira silenciosa por otra más pequeña. Listing
+  sigue con exit 0 y el fichero corrupto **no se borra**.
+
+### Contradicciones
+
+- El bloque anterior decidió **no** corregirlo, con el criterio de que
+  cambiar la salida de `expansion list` es contrato externo (AGENTS §6.4).
+  El criterio era correcto en general y **estaba mal aplicado aquí**:
+  confundía **cambiar un contrato** con **corregir una afirmación falsa**.
+  El contrato de `--stage REJECTED` nunca fue «oculta las rechazadas cuyo
+  fichero está roto», y ningún consumidor razonable depende de que se
+  imprima `stage=PROPOSED` para algo que sí fue rechazado.
+
 ## [Unreleased] — WI-86: los mappers se importan de la hoja, no a través del facade
 
 **Sin bump**: `refactor` + `test`, que según la regla de este CHANGELOG
