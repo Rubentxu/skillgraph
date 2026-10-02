@@ -11090,8 +11090,25 @@ no está verificado.**
 `2401fe95-d673-4a4e-b6c3-ac3e43501210`, **2636 passed in 239.26s**,
 cobertura 95,22 %, `PASS=16 FAIL=0 BLOCKED=0` en UAT.
 
-**Divergencia final: 0.** El mismo commit da 2636 en el árbol y 2636 en el
-clon. Antes: 2625 y 2623+2 failed.
+**Divergencia 0 en el commit `984289d`.** El mismo commit da 2636 en el
+árbol y 2636 en el clon. Antes: 2625 y 2623+2 failed.
+
+### El fallo que esta medición no cubrió, y que la CI sí
+
+`984289d` es **anterior a la trazabilidad**. La primera CI canónica sobre el
+estado final dio **`2 failed, 2634 passed`**: el tag `v0.20.0` no estaba
+registrado en `STATE.yaml release.releases`, y el bloque vivo de
+`CURRENT.md` no citaba ninguna línea verificable.
+
+Los dos los atraparon guards que ya existían
+(`test_state_release_integrity` y `test_wi92_measured_claims`). La
+afirmación «divergencia 0» era cierta para el commit medido y falsa
+como propiedad del estado final, porque el estado final se escribió
+después de medir.
+
+**La reproducibilidad hay que certificarla después de escribir la
+certificación, no antes.** Es el mismo error que el primer guard del
+proyecto cometió al revés: medir antes de terminar de escribir.
 
 Evidencia completa: `evidence/sddk-wi99-verify-2026-10-02.md`.
 
@@ -11125,8 +11142,9 @@ Evidencia completa: `evidence/sddk-wi99-verify-2026-10-02.md`.
 
 ### Errores propios de esta sesión, para no repetirlos
 
-1. Garbage en mensajes de commit **dos veces** (`执行`, `seugnieron`,
-   `reasoning`, `seresolvede`, `mediciónhuso`). Barrido con regex CJK antes
+1. Garbage en mensajes de commit **varias veces** (un ideograma CJK colado
+   en una palabra, `seugnieron`, `reasoning`, `seresolvede`,
+   `mediciónhuso`). Barrido con regex CJK antes
    de dar por bueno cualquier texto que vaya a git.
 2. `python3 - <<'PY'` con `\\\"` dentro: Python ** consume el escape y
    escribe `"` sin escapar, y el YAML de `STATE.yaml` se rompe después. En

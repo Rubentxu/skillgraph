@@ -97,9 +97,26 @@ Arreglo: `.pipelinek/.gitkeep` versionado y `ci.sh` resuelve ambas.
 
 `bash scripts/audit_bundle.sh 984289d` sobre un **clon limpio**:
 `Pipeline finished with SUCCESS`, **8/8 stages**, **2636 passed in 239.26s**,
-cobertura 95,22 %, `PASS=16 FAIL=0 BLOCKED=0` en UAT. **Divergencia final: 0**
-— el mismo commit da 2636 en el árbol y 2636 en el clon. Antes: 2625 y
+cobertura 95,22 %, `PASS=16 FAIL=0 BLOCKED=0` en UAT. **Divergencia 0 en
+ese commit** — 2636 en el árbol, 2636 en el clon. Antes: 2625 y
 2623+2 failed.
+
+### Y una corrección que esa medición no cubría
+
+La primera CI canónica **sobre el estado final** dio `2 failed, 2634
+passed`. Los dos fallos eran de la trazabilidad escrita **después** de
+medir: el tag `v0.20.0` no estaba registrado en `STATE.yaml`, y el bloque
+vivo de `CURRENT.md` no citaba ninguna línea verificable. Dos guards que
+ya existían —`test_state_release_integrity` y
+`test_wi92_measured_claims`— los atraparon sin ayuda.
+
+La divergencia 0 estaba medida **para `984289d`**, que es anterior a la
+trazabilidad. Escribirla como propiedad del estado final era una
+afirmación que nadie había medido, y el documento que la hacía falsa era
+precisamente el que la afirmaba. Corregido y re-medido.
+
+**La reproducibilidad hay que certificarla después de escribir la
+certificación, no antes.**
 
 Evidencia completa: `evidence/sddk-wi99-verify-2026-10-02.md`.
 

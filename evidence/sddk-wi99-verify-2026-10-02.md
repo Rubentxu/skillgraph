@@ -206,8 +206,28 @@ Los 8 stages: `discover-repo`, `sync-deps`, `unit-tests`, `coverage-floors`,
 | `lint` | All checks passed |
 | `uat_audit` | **PASS=16 FAIL=0 BLOCKED=0** |
 
-**Divergencia final: 0.** El mismo commit da 2636 en el árbol de trabajo y
-2636 en el clon. Antes de WI-99 eran 2625 y 2623+2 failed.
+**Divergencia 0 en el commit `984289d`.** El mismo commit da 2636 en el
+árbol de trabajo y 2636 en el clon. Antes de WI-99 eran 2625 y 2623+2
+failed.
+
+> ### Lo que esta medición NO cubrió
+>
+> `984289d` es **anterior a la trazabilidad de este bloque**. La primera CI
+> canónica sobre el estado final dio `2 failed, 2634 passed`:
+>
+> | test | por qué |
+> |---|---|
+> | `test_every_semver_tag_is_listed_exactly_once` | el tag `v0.20.0` no estaba en `STATE.yaml release.releases` |
+> | `test_el_bloque_vivo_tiene_al_una_cita_que_verificar` | el bloque vivo de `CURRENT.md` no citaba ninguna línea verificable |
+>
+> Los dos los atraparon guards que ya existían. Es decir: la afirmación
+> «divergencia 0» era cierta **para el commit medido** y falsa **como
+> propiedad del estado final**, porque el estado final se había escrito
+> después de medir. Un guard que vigila el mismo commit que uno acaba de
+> certificar no puede ver lo que uno escribe después.
+>
+> **La reproducibilidad hay que certificarla después de escribir la
+> certificación.** Corregido y re-medido sobre el estado final.
 
 ### Una observación del entorno, no del repo
 

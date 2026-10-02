@@ -33,10 +33,18 @@
 >    regla que no se puede cumplir fuera de esta máquina es una costumbre.
 >
 > **C4, el invariante que impide la recaída:** un script de `scripts/` que
-> ejecuta `pytest` tiene que ser un **fragmento** de la receta canónica o
-> **delegar** en ella. Disyuntiva a propósito: la versión restrictiva hace
-> del propio fichero de cobertura una infracción y sólo admite una lista de
-> excepciones que el guard mantiene.
+> ejecuta `pytest` tiene que estar conectado a la receta canónica: o es un
+> **fragmento** que ella invoca (`scripts_invocados_por`,
+> `check_ci_recipe_parity.py:219` — se **leen** de `.pipeline.kts`, no de una
+> lista aparte), o **delega** en ella (`evaluar_una_receta`,
+> `check_ci_recipe_parity.py:329`). El veredicto se emite en
+> `CODIGO_RECETA_SUYA`, `check_ci_recipe_parity.py:79`.
+>
+> Disyuntiva a propósito: la versión restrictiva hace del propio fichero de
+> cobertura una infracción y sólo admite una lista de excepciones que el
+> guard mantiene. `scripts/hooks/` queda excluido por
+> `DIRECTORIOS_NO_RECETA`, `check_ci_recipe_parity.py:110`, y un test fija
+> esa exclusión para que ampliarla no sea una puerta trasera.
 >
 > **Mutaciones 6/6**, y M1 restaura el `ci.sh` **real** de antes de WI-99,
 > sacado de git: un contraejemplo inventado demuestra que el test está bien,
@@ -44,10 +52,18 @@
 > `scripts/`— no pone rojo el checker sino **el test que fija la
 > exclusión**: un guard que se puede silenciar a sí mismo no está verificado.
 >
-> **Cierre: divergencia 0.** Bundle sobre `984289d` en clon limpio —
-> `Pipeline finished with SUCCESS`, **8/8 stages**, **2636 passed**,
-> cobertura 95,22 %, `PASS=16 FAIL=0`. El mismo commit da 2636 en el árbol y
-> 2636 en el clon. Antes: 2625 y 2623+2 failed.
+> **Cierre: divergencia 0 en el commit `984289d`.** Bundle sobre ese commit
+> en clon limpio — `Pipeline finished with SUCCESS`, **8/8 stages**,
+> **2636 passed**, cobertura 95,22 %, `PASS=16 FAIL=0`. El mismo commit da
+> 2636 en el árbol y 2636 en el clon. Antes: 2625 y 2623+2 failed.
+>
+> **Y una corrección que esa medición no cubría.** Al escribir esta
+> trazabilidad, la CI local dio `2 failed, 2634 passed`: el tag `v0.20.0` no
+> estaba registrado en `STATE.yaml` y este bloque no citaba ninguna línea
+> verificable. Dos guards existentes los atraparon. La divergencia 0 estaba
+> medida **para `984289d`**, que es anterior a la trazabilidad; escribir
+> «divergencia 0» como propiedad del estado final era una afirmación que
+> nadie había medido. Corregido y re-medido.
 >
 > Evidencia: `evidence/sddk-wi99-verify-2026-10-02.md`.
 
