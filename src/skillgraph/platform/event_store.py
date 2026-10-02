@@ -21,7 +21,8 @@ from datetime import UTC
 from typing import Any
 
 from skillgraph.platform.ports import StoredEvent
-from skillgraph.platform.storage import _SCHEMA_SQL, Storage, _row_to_stored_event
+from skillgraph.platform.row_mappers import _row_to_stored_event
+from skillgraph.platform.storage import _SCHEMA_SQL, Storage
 
 
 class SqliteEventStore:

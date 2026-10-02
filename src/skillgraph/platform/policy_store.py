@@ -15,7 +15,8 @@ from __future__ import annotations
 import sqlite3
 
 from skillgraph.platform.ports import StoredBudget
-from skillgraph.platform.storage import Storage, _row_to_stored_budget
+from skillgraph.platform.row_mappers import _row_to_stored_budget
+from skillgraph.platform.storage import Storage
 
 __all__ = ["SqlitePolicyStore"]
 

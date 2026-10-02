@@ -70,16 +70,28 @@ class TestMappersMoved:
             assert hasattr(row_mappers, name), f"{name} no esta en row_mappers"
 
     def test_storage_does_not_redefine_mappers(self) -> None:
-        """Se re-exportan, no se redefinen: identidad de funcion."""
+        """WI-86: `storage` ya no los reexporta, y no los define.
+
+        Antes este test afirmaba `getattr(storage, name) is
+        getattr(row_mappers, name)`: correcto cuando `storage` reexportaba.
+        WI-86 midio que los 7 simbolos aparecian **dos veces** en
+        `storage.py` —el import y `__all__`— y **cero** en codigo, y que
+        los 5 consumidores podian ir a la hoja directamente. El
+        contrato nuevo es mas fuerte que el viejo: no basta con que sean
+        el mismo objeto, es que el facade no los anuncie en absoluto.
+        """
         from skillgraph.platform import row_mappers
 
         for name in MAPPERS_ON_STORAGE:
-            assert name not in vars(storage.Storage), (
-                f"Storage vuelve a definir {name}: debe heredarlo/re-exportarlo"
+            assert not hasattr(storage, name), (
+                f"storage vuelve a exponer {name}: el re-export que WI-86 "
+                f"retiro ha vuelto, y con el la superficie que storage no "
+                f"sostiene"
             )
-            assert getattr(storage, name) is getattr(row_mappers, name), (
-                f"storage.{name} no es el mismo objeto que row_mappers.{name}"
+            assert not hasattr(storage.Storage, name), (
+                f"Storage vuelve a definir {name}: debe tomarlo de row_mappers"
             )
+            assert hasattr(row_mappers, name), f"{name} desaparecio de row_mappers"
 
     def test_mappers_are_pure(self) -> None:
         """Ningun mapper toca self, conexion ni reloj."""
@@ -92,10 +104,20 @@ class TestMappersMoved:
                 assert "self." not in src, f"{node.name} usa self."
                 assert "_conn" not in src, f"{node.name} toca la conexion"
 
-    def test_uid_is_re_exported(self) -> None:
-        from skillgraph.platform import row_mappers
+    def test_uid_is_not_reexported(self) -> None:
+        """WI-86: `_uid` ya no pasa por el facade.
 
-        assert storage._uid is row_mappers._uid
+        Antes: `storage._uid is row_mappers._uid`. Ahora el unico sitio
+        donde vive `_uid` es `row_mappers`, y su unico consumidor real
+        (`knowledge_repository`) lo importa de ahi. Lo que se vigila es
+        que no vuelva a colarse una copia en el facade.
+        """
+        from skillgraph.platform import knowledge_repository, row_mappers
+
+        assert not hasattr(storage, "_uid"), "storage vuelve a reexportar _uid"
+        assert knowledge_repository._uid is row_mappers._uid, (
+            "knowledge_repository debe resolver al MISMO _uid de row_mappers, no a una copia"
+        )
 
 
 class TestSchemaMoved:
@@ -166,9 +188,20 @@ class TestShimPreserved:
         assert event_store._SCHEMA_SQL is SCHEMA_SQL
 
     def test_event_store_still_sees_event_mapper(self) -> None:
-        from skillgraph.platform import event_store
+        """WI-86: `event_store` lo ve, pero ya no a traves del facade.
 
-        assert event_store._row_to_stored_event is storage._row_to_stored_event
+        La intencion original —que `event_store` vea el mapper de verdad y
+        no una copia— sigue viva; lo que cambia es de donde lo saca. Si
+        el import se moviera a la hoja, esto seguiria pasado, y por eso
+        la comprobacion de que la hoja es una hoja esta en
+        `tests/test_wi86_no_facade_hop.py`.
+        """
+        from skillgraph.platform import event_store, row_mappers
+
+        assert event_store._row_to_stored_event is row_mappers._row_to_stored_event
+        assert not hasattr(storage, "_row_to_stored_event"), (
+            "storage vuelve a exponer el mapper: event_store debe tomarlo de row_mappers"
+        )
 
     def test_five_mappers_moved(self) -> None:
         """Guarda el recuento: un mapper olvidado no se nota solo.

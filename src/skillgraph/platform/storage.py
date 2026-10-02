@@ -49,23 +49,24 @@ from skillgraph.platform.ports import (
     StoredRun,
 )
 
-# Re-exports de la fase 2 (WI-65). Los usa internamente y los exporta
-# porque `event_store` y `policy_store` los importan desde ahi. Declarados
-# en __all__ para que ruff no los borre por F401 en cuanto el facade deje
-# de referenciarlos.
+# WI-86: este bloque reexportaba los 7 simbolos de `row_mappers` (6
+# mappers + `_uid` + `MAPPER_NAMES`) para que sus hermanos los importaran
+# desde el facade. Medido: cada uno aparecia **exactamente dos veces** en
+# este fichero —una aqui y otra en `__all__`— y **ninguno se usaba en una
+# sola linea de codigo dentro de `storage.py`**. Los 5 consumidores reales
+# (`event_store`, `knowledge_repository`, `policy_store`,
+# `promotion_repository`, `run_repository`) ahora los importan de
+# `row_mappers`, que es una hoja: no depende de nada que dependa de ellos,
+# asi que el rodeo por el facade no evitaba ningun ciclo.
 #
-# WI-81: antes re-exportaba tambien los 7 alias de WI-56 (corte 3). El
-# corte 5 reubico sus callers y se comprobo en runtime que nadie los
-# invocaba, asi que se retiraron. Ver `tests/test_wi81_dead_aliases.py`.
-from skillgraph.platform.row_mappers import (
-    MAPPER_NAMES,
-    _row_to_node_execution,
-    _row_to_run,
-    _row_to_stored_budget,
-    _row_to_stored_event,
-    _row_to_stored_promotion,
-    _uid,
-)
+# El comentario anterior decia que se exportaban «porque `event_store` y
+# `policy_store` los importan desde ahi». Era cierto para esos dos y
+# falso como justificacion: eran cinco, y ninguno tenia una razon para no
+# ir a la hoja.
+#
+# WI-81 ya habia retirado los 7 alias de WI-56 (corte 3) de este mismo
+# bloque; este los retira por completo. Ver `tests/test_wi81_dead_aliases.py`
+# y `tests/test_wi86_no_facade_hop.py`.
 from skillgraph.platform.schema import SCHEMA_SQL as _SCHEMA_SQL
 from skillgraph.platform.schema import SCHEMA_VERSION
 from skillgraph.platform.storage_delegations import (
@@ -87,7 +88,6 @@ if TYPE_CHECKING:
     from skillgraph.runtime.engine import RuntimeEvent
 
 __all__ = [
-    "MAPPER_NAMES",
     "SCHEMA_VERSION",
     "_SCHEMA_SQL",
     "Brick",
@@ -108,12 +108,6 @@ __all__ = [
     "StoredRelation",
     "StoredResource",
     "StoredRun",
-    "_row_to_node_execution",
-    "_row_to_run",
-    "_row_to_stored_budget",
-    "_row_to_stored_event",
-    "_row_to_stored_promotion",
-    "_uid",
 ]
 
 

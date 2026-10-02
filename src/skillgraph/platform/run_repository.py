@@ -29,13 +29,12 @@ from skillgraph.platform.ports import (
     StoredNodeExecution,
     StoredRun,
 )
-from skillgraph.platform.storage import (
-    NON_TERMINAL_RUN_STATES,
-    Storage,
+from skillgraph.platform.row_mappers import (
     _row_to_node_execution,
     _row_to_run,
     _row_to_stored_event,
 )
+from skillgraph.platform.storage import NON_TERMINAL_RUN_STATES, Storage
 
 __all__ = ["SqliteRunRepository"]
 

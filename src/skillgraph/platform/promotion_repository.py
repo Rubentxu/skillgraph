@@ -15,11 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 from skillgraph.core.errors import IdentityConflictError, ValidationError
 from skillgraph.platform.ports import StoredPromotion
-from skillgraph.platform.storage import (
-    PROMOTION_STATUSES,
-    Storage,
-    _row_to_stored_promotion,
-)
+from skillgraph.platform.row_mappers import _row_to_stored_promotion
+from skillgraph.platform.storage import PROMOTION_STATUSES, Storage
 
 if TYPE_CHECKING:
     pass

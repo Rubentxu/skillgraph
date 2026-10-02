@@ -46,7 +46,8 @@ from skillgraph.platform.ports import (
     StoredRelation,
     StoredResource,
 )
-from skillgraph.platform.storage import Storage, _uid
+from skillgraph.platform.row_mappers import _uid
+from skillgraph.platform.storage import Storage
 from skillgraph.resources.bricks import Brick
 
 

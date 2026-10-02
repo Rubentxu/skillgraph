@@ -210,14 +210,31 @@ class TestLiveMappersAreUntouched:
     def test_live_mapper_still_exists(self, name: str) -> None:
         assert hasattr(row_mappers, name), f"{name} es un mapper real y no debe desaparecer"
 
-    def test_live_mapper_is_in_storage(self) -> None:
+    def test_live_mapper_is_not_in_storage(self) -> None:
+        """WI-86: el facade ya no los anuncia, y no por descuido.
+
+        Este test bornia la samurai por el otro lado: que el borrado de
+        WI-81 no tocara los 5 mappers reales. La garantia sigue, pero en
+        WI-86 cambio de forma: los 5 viven en `row_mappers` y los 5
+        consumidores los toman de ahi. `storage` deja de exponerlos, y
+        que no vuelvan es parte del contrato.
+        """
         from skillgraph.platform import storage
 
         for name in sorted(LIVE_MAPPERS):
-            assert hasattr(storage, name), f"storage.{name} debe seguir reexportado"
+            assert not hasattr(storage, name), (
+                f"storage.{name} vuelve a estar reexportado: el facade no usa "
+                f"ninguno de ellos y anunciarlos es superficie que no sostiene"
+            )
 
-    def test_uid_still_exported(self) -> None:
-        """`_uid` no es un mapper de fila pero lo consume `storage`."""
-        from skillgraph.platform import storage
+    def test_uid_not_exported_by_storage(self) -> None:
+        """`_uid` no es un mapper de fila, pero WI-86 lo movio con los demas.
 
-        assert storage._uid is row_mappers._uid
+        Antes lo consumia `storage`; ahora lo consume `knowledge_repository`
+        directamente desde `row_mappers`. Lo que se vigila es que no
+        aparezca una segunda copia.
+        """
+        from skillgraph.platform import knowledge_repository, storage
+
+        assert not hasattr(storage, "_uid"), "storage vuelve a reexportar _uid"
+        assert knowledge_repository._uid is row_mappers._uid
