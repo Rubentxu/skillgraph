@@ -540,7 +540,7 @@ deliverables:
 tests:
   total: 2451   # re-medido 2026-10-02 (bloque WI-88): 2451 passed, suite completa. Desglose medido con un worktree en d47b7af (2430) y `pytest --collect-only` en los dos arboles: 26 tests nuevos, 5 "borrados" que son en realidad los 5 RENOMBRADOS (3 en test_cli_branches.py, 1 en TestCliExitUsage, 1 en test_wi79), luego neto +21. De los 26: 18 en test_wi88_usage_exit_code.py, 4 reapariciones por el renombre, 1 renombre de wi79, y +3 en test_wi47_broad_except_guard.py porque ese guard enumera modulos con rglob y genera un caso por modulo: aparecen por el modulo nuevo exit_codes.py y por el segundo ambito que introduce la clase _UsageParser en parser.py. O sea: la cobertura arquitectural se aplico sola al codigo nuevo.
   passed: 2451
-  duration_s: 104.26   # re-medido 2026-10-02: 2451 passed in 104.26s.
+  duration_s: 103.12   # re-medido por la CI canonica (stage unit-tests): 2451 passed in 103.12s.
   package_version: "0.16.14.dev0"   # trabajo post-release v0.16.14 (AGENTS 12). El tag v0.16.14 esta en 3cfce09; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -847,8 +847,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  ultima_ejecucion_local: 2026-09-24 22:14
-  resultado: "754 passed in 161s (pytest -q). 0 regresiones. ruff check: All checks passed!"
+  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, release v0.16.14). 5/5 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 (el que fija mise.toml) con --rerun. El journal contiene StepStarted y EchoOutputCaptured con la linea 2451 passed in 103.12s, que es lo que distingue una ejecucion real de un veredicto cacheado: sin --rerun el run termina en SUCCESS sin ejecutar un solo step. stages unit-tests, lint y evidence en success."
+  ultima_ejecucion_local: 2026-10-02 18:16
+  resultado: "2451 passed in 103.12s (stage unit-tests de la CI canonica). 0 regresiones. ruff check: All checks passed!"
   working_tree: "(3e6b1d7 + 0 ficheros del operador sin commitear: AGENTS.md +72 LoC secc pipelinek fue commiteado en el refactor v0.7.0; los demas CI local del operador no aparecen en este checkout)"
 
 open_questions: []
