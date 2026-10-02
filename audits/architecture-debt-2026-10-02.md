@@ -5,8 +5,8 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **68** modulos Python, **20368** LoC, **762** funciones.
-- **3** archivos >800 LoC (god modules).
+- **71** modulos Python, **20494** LoC, **762** funciones.
+- **2** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **0** funciones privadas con cc>=20 (refactor opcional).
 - **8** funciones >80 LoC (legibilidad mejorable).
@@ -18,7 +18,6 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 
 | LoC | Path |
 |----:|------|
-| 1421 | `src/skillgraph/runtime/runcontroller.py` |
 | 927 | `src/skillgraph/platform/ports/__init__.py` |
 | 915 | `src/skillgraph/platform/storage_delegations.py` |
 
@@ -59,7 +58,6 @@ P0 sin que nadie tenga que acordarse de borrarla.
 
 **P1 - God modules** (>800 LoC, deuda estructural):
 
-- `src/skillgraph/runtime/runcontroller.py` (1421 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/platform/ports/__init__.py` (927 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/platform/storage_delegations.py` (915 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 
