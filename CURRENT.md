@@ -3,6 +3,24 @@
 > **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
 > `v0.16.10` en `2ee6d77`. Los workitems posteriores a la release se
 > acumulan sobre ese HEAD; la siguiente release se decide con el operador.
+> **WI-75 cerrado — la cobertura del CLI deja de estar ciega** (2026-10-02,
+> ciclo SDDK `wi-75-subprocess-coverage-instrument`): `pytest --cov` mide solo
+> el proceso principal, y la suite ejercita la frontera CLI por **subproceso**.
+> El CLI marcaba **65,86 %** contra el contrato de AGENTS §6.3 (≥70 %) — un
+> incumplimiento aparente que era **ceguera del instrumento, no deuda de
+> tests**. Con `bash scripts/coverage.sh` el TOTAL sube a **94 %** y todos los
+> módulos CLI superan el 70 % (parser 100, knowledge 95, run 96, runs 86,
+> promotion 85, support 85, expansion 82, pack 78, runner 77). Efecto
+> secundario: `cmd_expansion_apply`, la función que **WI-72 partió**, sale con
+> cobertura real en vez de 0 %. Receta (4 ingredientes): hook `.pth` que llama
+> a `coverage.process_startup()` **auto-instalado** (estaba colado a mano en
+> el venv y sin declarar en `pyproject.toml`/`uv.lock`), `parallel = true`,
+> `data_file` **absoluto** (los tests usan `cwd=tmp_path` y pytest borra su
+> tmp), y pytest-cov para el principal + el hook para los subprocesos
+> **compartiendo `data_file`**. `.pipeline.kts` **no** se toca: la
+> instrumentación multiplica el tiempo de suite, y la CI canónica sigue
+> corriendo pytest sin coverage. Evidencia:
+> `evidence/sddk-wi75-verify-2026-10-02.md`.
 > **WI-73 cerrado — P3 5 → 4** (2026-10-02, ciclo SDDK
 > `wi-73-p3-aggregate-file-signatures`): `aggregate_file_signatures` 86 →
 > **72 LoC** y cc 8 → **3**. El corte no fue "partir una función larga"

@@ -8304,3 +8304,88 @@ borrar la constancia del pasado.
 
 Ciclo SDDK wi-74-state-release-drift. Sin codigo de producto: solo
 estado y tests, asi que **sin ADR** y commit tipo `fix(state)` + `test`.
+
+---
+
+## 2026-10-02 — WI-75: la cobertura del CLI deja de estar ciega
+
+**Por que:** contraste pendiente contra el contrato de AGENTS.md §6.3
+("CLI: >=70 %"), que nadie habia medido desde que WI-63 lo dejo anotado
+como deuda. La medicion con la configuracion canonica daba **65.86 %**
+del CLI: `expansion.py` 40 %, `runs.py` 37 %, `pack.py` 46 %. Prima
+ facie, incumplimiento del contrato.
+
+**Era ceguera del instrumento, no deuda de tests.** La suite ejercita la
+frontera CLI por subproceso (`python -m skillgraph`, `cwd=tmp_path`) y
+`pytest-cov` solo mide el proceso principal. Todo el codigo de esos
+modulos le era invisible. La deuda ya estaba documentada en el propio
+`pyproject.toml` desde WI-63.
+
+**Cuatro ingredientes, no uno** (los tres primeros ya los sospechaba
+WI-57; el cuarto no):
+
+1. Hook `.pth` con `coverage.process_startup()`. **Estaba colado a mano**
+   en el venv (`a1_coverage.pth`, 2026-09-23) y no estaba declarado en
+   `pyproject.toml` ni en `uv.lock`: en una maquina nueva `uv sync` no lo
+   instalaba y la receta reproducia el 0 % en silencio.
+2. `parallel = true`. Sin el, todos los procesos pisan el mismo fichero:
+   es el "last-writer-wins" que WI-57 midio como "knowledge 95 % vs runs
+   9 %" en un mismo run.
+3. `data_file` **absoluto**. Con `cwd=tmp_path` un path relativo resuelve
+   dentro del tmp de pytest y pytest lo borra: se recuperaban 4 ficheros
+   (solo el principal) y `expansion.py` daba 0 % pese a 15+ invocaciones
+   reales. Con absoluto: 26 ficheros, 45 %.
+4. **pytest-cov para el principal, hook para los subprocesos, mismo
+   `data_file`**. Este costo mas: correr `pytest` a pelo (solo el hook)
+   perdia el perfil del proceso principal y la suite completa daba
+   **60 %** — `expansion.py` 82 % pero `runtime/locks.py` 35 %. Aislado
+   midiendo tamanos: en la suite completa el perfil de `pytest` no
+   estaba (ningun fichero >=300 KB; el mayor pesaba 274.432 B y habia 8
+   iguales, todos de subproceso). `--no-cov` quedaba descartado: A/B daba
+   `locks.py` 91 % con y sin el flag.
+
+**Resultado (suite completa, 2225 tests): TOTAL 94 %.** CLI por modulo:
+parser 100, knowledge 95, run 96, runs 86, promotion 85, support 85,
+expansion 82, pack 78, runner 77. **El contrato de §6.3 se cumple.**
+
+**Efecto secundario:** `cmd_expansion_apply` (266-339), la funcion que
+WI-72 partio de 92 a 73 LoC, marcaba `268-338` — su rango entero — como
+no cubierto. Con el instrumento correcto sale cubierta y solo le quedan
+ramas de error. El refactor de WI-72 si tenia red end-to-end; la medicion
+no la veia.
+
+**Reproducibilidad verificada** ocultando el hook colado a mano: el script
+lo crea el solo, y con el hook GENERADO `test_h4_expansion_cli.py` da el
+mismo 45 % que con el colado. Original restaurado despues.
+
+**Red:** `tests/test_wi75_subprocess_coverage.py`, 2 tests, end-to-end
+sin mocks. Cinco mutaciones, todas cazadas (hook ausente, `parallel =
+false`, `data_file` relativo, sin comprobacion previa del hook, sin
+`--cov`). La segunda asienta sobre el CODIGO del script, no sobre el
+cuerpo entero: el primer intento se satisfacia con la cabecera comentada
+mientras la config decia `parallel = false` — mutacion no cazada.
+
+**Descartado por medicion, no por teoria:** `combine` deduplica por
+SHA-256 (`classify()` en `coverage/data.py`), asi que "skipped 270"
+cuenta ficheros identicos: perdida nula, no un fallo.
+
+**Decisiones que NO son mias:**
+- `.pipeline.kts` NO se toca. La instrumentacion multiplica el tiempo de
+  suite (172 s vs ~116 s); la CI canonica sigue sin coverage, que es lo
+  correcto para un gate. El script es medicion, no gate.
+- La config del script NO aplica el `omit` de `pyproject.toml`, a
+  proposito: asi `cli/runner.py` queda visible. El 94 % cubre 5823
+  sentencias frente a las 5601 de la medicion canonica; **las dos cifras
+  no son comparables** sin tener esto en cuenta.
+
+**Deuda lateral vista, NO resuelta:** la suite reescribe
+`tests/uat-evidence/UAT-08.json` y `UAT-09.json` con el SHA de HEAD, asi
+que `git status` queda sucio tras cualquier corrida y el campo
+`revision` queda siempre un commit por detras. Ciclo auto-referencial.
+Es una decision de producto sobre que significa la evidencia, no un bug
+de instrumentacion: se reporta, no se toca aqui.
+
+Ciclo SDDK `wi-75-subprocess-coverage-instrument`. Sin cambios de
+comportamiento en `src/skillgraph/`: instrumentacion y evidencia, asi
+que **sin ADR**. Commit tipo `fix(coverage)` + `test` + `docs`.
+Evidencia: `evidence/sddk-wi75-verify-2026-10-02.md`.

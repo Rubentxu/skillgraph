@@ -83,13 +83,19 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["skillgraph"]
-# NOTA (WI-63): la cobertura de los tests CLI por SUBPROCESO no se
-# instrumenta de forma fiable: sin parallel, los subprocesos se pisan
-# .coverage (last-writer-wins); con parallel=true pytest-cov NO combina
-# los ficheros (experimento 02-oct: sesion mixta solo cuenta el proceso
-# principal; scoped subprocess-only = 0%). Queda deuda de setup
-# dedicado (COVERAGE_PROCESS_START + combine explicito) o tests
-# in-proceso para la frontera. Ver SESSION-JOURNAL 2026-10-02 (X)/(XI).
+# NOTA (WI-75, cierra la deuda que WI-63 dejo abierta):
+# esta config mide el PROCESO PRINCIPAL. `pytest --cov=skillgraph` NO ve
+# el CLI ejecutado por subproceso (`python -m skillgraph ...`), que es
+# como la suite ejercita la frontera CLI. Con esta config el CLI total
+# daba 65.86 % — por debajo del contrato de AGENTS.md §6.3 (>=70 %) — y
+# era CEGUERA DEL INSTRUMENTO, no deuda de tests: con la instrumentacion
+# correcta el mismo codigo mide 94 %.
+#
+# Para medirlo bien usa `bash scripts/coverage.sh`, que arregla las tres
+# piezas (hook .pth que llama a coverage.process_startup(), parallel=true
+# para que los procesos no se pisen, y data_file ABSOLUTO porque los
+# tests lanzan la CLI con cwd=tmp_path). Ver SESSION-JOURNAL 2026-10-02
+# y evidence/sddk-wi75-verify-2026-10-02.md.
 omit = [
     "src/skillgraph/__init__.py",
     "src/skillgraph/__main__.py",
