@@ -870,6 +870,73 @@ Una única fuente de verdad para la SemVer publicada:
   cualquier etiqueta publicada. La provenance es histórica y no
   se reescribe.
 
+### Derivar la versión
+
+La versión de una release **no se decide a mano**: se deduce de los commits
+que hay entre la etiqueta anterior y la nueva.
+
+| Tipo de commit | Bump |
+|---|---|
+| `feat` | MINOR |
+| `fix` | PATCH |
+| `feat!` / `fix!` / footer `BREAKING CHANGE` | MAJOR |
+| `refactor`, `test`, `docs`, `spec`, `chore`, `style`, `build`, `ci` | **sin bump** (no hay release) |
+
+Escribir `feat!` o añadir el footer `BREAKING CHANGE` en el **cuerpo** cuenta
+igual que el `!` en el asunto. Si la regla dice «sin bump», **no se emite
+etiqueta**: el trabajo se acumula hasta que haya un `feat` o un `fix`.
+
+Se calcula con `scripts/derive_semver.py`, que imprime para cada etiqueta el
+bump real frente al que dicta la regla. Vive en `scripts/` y no en
+`.pipelinek/`, porque es una regla del repo y no un paso de esta pipeline.
+
+> Esta tabla estaba antes **solo** en la cabecera de `CHANGELOG.md`, que no
+> es el dueño de la gobernanza de releases. Medido el 2026-10-02 (WI-96), con
+> 47 etiquetas y 6 bloques de trabajo: la regla no la aplicaba ni la comprobaba
+> nadie, y su sitio natural —esta sección, que se titula «Regla de release»—
+> no la contenía.
+
+### Salvedad 0.x: un breaking change no obliga a 1.0.0
+
+El proyecto está en **0.x**, donde SemVer no garantiza estabilidad del API
+público. Mientras la versión mayor siga siendo `0`, un `BREAKING CHANGE`
+**no** obliga a saltar a `1.0.0`: la etiqueta sigue avanzando por MINOR o
+PATCH según el resto de commits del tramo.
+
+Se aplicó **tres veces**, cada una con la decisión escrita en el commit de
+release y en ningún otro sitio:
+
+| Etiqueta | Qué cambió | Dónde está escrito |
+|---|---|---|
+| `v0.7.0` | eliminación de 20 shims de retro-compatibilidad y de rutas de import antiguas | «Esto es BREAKING CHANGE para importadores externos que usaban…» |
+| `v0.15.0` | R1+R2 de la frontera de persistencia | «MINOR por 1 BREAKING + 3 feat + 1 fix» |
+| `v0.16.2` | — | «BREAKING CHANGE, luego MINOR y MAJOR quedan fuera y corresponde PATCH» |
+
+Se nombran para que el precedente sea **citable**. Sin nombre, cada
+breaking change obliga a volver a medirlo desde cero, y el salto a `1.0.0` es
+una decisión de una sola oportunidad: tomarla por sorpresa es peor que
+tomarla por criterio.
+
+**Salir de 0.x es una decisión explícita**, no un efecto secundario de tener
+ya muchas versiones. Cuando se decida, se escribe aquí antes que en el
+mensaje de un commit.
+
+### Divergencias medidas que NO se corrigen
+
+`tests/test_wi96_semver_rule.py` deriva el bump de las 47 etiquetas y
+compara. Trece no coinciden con la regla, y **ninguna se arregla**: son
+etiquetas publicadas y su número es provenance. Se registran como hechos
+medidos para que nadie las vuelva a descubrir ni las tome por un olvido.
+
+| Tipo | Etiquetas |
+|---|---|
+| la regla pide MINOR y se publicó PATCH | `v0.3.0`, `v0.7.1`, `v0.7.2`, `v0.7.3`, `v0.14.1`, `v0.14.7` |
+| la regla no pide release y se etiquetó | `v0.8.1`, `v0.14.2`–`v0.14.6`, `v0.14.8`, `v0.16.5`, `v0.16.8` |
+
+Todas son anteriores a `v0.16.3`. Desde `v0.16.3` hasta `v0.16.20` el bump
+**se deduce de la regla sin excepción de tipo**, y eso es lo que el guard
+exige.
+
 ### Release gate
 
 El test `tests/test_release_governance.py` es el **admission

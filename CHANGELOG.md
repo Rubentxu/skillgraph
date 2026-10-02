@@ -6,11 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 derived from the commit history via Conventional Commits.
 
-Tipos:
-- `feat` → MINOR (nueva capacidad observable).
-- `fix` → PATCH (corrección).
-- `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
-- `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
+Tipos: la regla de derivación **vive en `AGENTS.md §12` («Derivar la
+versión»)**, que es su dueño. Hasta WI-96 (2026-10-02) este fichero era el
+*único* enunciado de la regla, en un fichero que no es el dueño de la
+gobernanza de releases, y nadie la comprobaba: con 47 etiquetas y seis bloques
+de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** que
+el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
+`scripts/derive_semver.py`.
 
 ## [0.16.20] - 2026-10-02 — el CHANGELOG deja de anunciar como pendiente lo ya publicado
 
