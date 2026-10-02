@@ -49,7 +49,12 @@ CURRENT_MD: Final = REPO_ROOT / "CURRENT.md"
 
 def _indice() -> dict[str, list[Path]]:
     indice: dict[str, list[Path]] = defaultdict(list)
-    for base in ("src", "tests"):
+    # `scripts` entra en WI-93: es el primer bloque vivo que cita un modulo de
+    # ahi (`check_coverage_floors.py`, el checker de suelos de AGENTS 6.3). Un
+    # resolver que no conoce el directorio donde vive el codigo que el propio
+    # bloque declara daria por rota una cita verdadera, que es peor que no
+    # resolver: obliga a borrarla en vez de a corregirla.
+    for base in ("src", "tests", "scripts"):
         for p in (REPO_ROOT / base).rglob("*.py"):
             indice[p.name].append(p)
     return indice

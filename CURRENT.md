@@ -26,32 +26,35 @@
 > multiplica: cuesta un minuto y medio más.** El párrafo queda retirado y
 > marcado SUPERSEDIDO, conservado como historia.
 >
-> **El hueco real que encontró el checker**: `runtime/http_adapter.py` medía
-> **88,04 %**, por debajo del 90 % que le corresponde por ser módulo del core.
-> Sus 19 sentencias sin cubrir no eran código inalcanzable — eran guardas de
-> entrada y de respuesta malformada, alcanzables. El módulo ya traía
-> failpoints y un `client` inyectable **precisamente** para probarlas sin red;
-> los tests de red existentes usan `respx` con cliente inyectado, y por eso la
-> rama de **producción** que construye su propio `httpx.Timeout` no la tocaba
-> nadie. Medido después: **88,04 % → 99 %** (sólo queda la línea 424, que el
-> propio código marca como defensiva e inalcanzable), `runtime/` agregado
-> 95,11 % → **97,98 %**, global 94,75 % → **95,22 %**. 30 tests nuevos.
+> **El hueco real que encontró el checker**: `runtime/http_adapter.py:330`
+> (`HttpAgentAdapter`) medía **88,04 %**, por debajo del 90 % que le corresponde
+> por ser módulo del core. Sus 19 sentencias sin cubrir no eran código
+> inalcanzable — eran guardas de entrada y de respuesta malformada, alcanzables.
+> El módulo ya traía failpoints y un `client` inyectable **precisamente** para
+> probarlas sin red; los tests de red existentes usan `respx` con cliente
+> inyectado, y por eso la rama de **producción** que construye su propio
+> `httpx.Timeout` no la tocaba nadie. Medido después: **88,04 % → 99 %** (sólo
+> queda `http_adapter.py:424`, un `raise NotFoundError` que el propio código
+> marca como defensivo e inalcanzable), `runtime/` agregado 95,11 % →
+> **97,98 %**, global 94,75 % → **95,22 %**. 30 tests nuevos.
 >
 > **Lectura estricta, escrita como decisión y no como cita**: `AGENTS.md §6.3`
 > nombra `runtime` entre los módulos del core pero no enumera cada fichero. Se
 > eligió que **todo módulo de `runtime/` con código herede el 90 %**, porque es
 > la lectura que hace útil el contrato y la que encuentra el hueco. Consecuencia
 > asumida: el checker **exige suelo declarado para todo módulo de `runtime/`
-> con código**, para que añadir uno nuevo no pase inadvertido. Un guard que sólo
-> vigila la lista que él mismo mantiene no vigila nada.
+> con código** (`check_coverage_floors.py:55` mantiene el mapa; un módulo nuevo
+> sin suelo pasa por él o aborta), para que añadir uno no pase inadvertido. Un
+> guard que sólo vigila la lista que él mismo mantiene no vigila nada.
 >
-> **Dos decisiones de diseño del checker** (`scripts/check_coverage_floors.py`):
-> agrega **recuentos, no porcentajes** (con `branch=true` una rama parcial cuenta
-> como media, y promediar porcentajes da más de lo que hay: un paquete al 95 %
-> de media puede esconder un módulo al 60 %); y un **suelo sobre un módulo
-> fantasma es un fallo**, no un silencio. Los módulos vacíos (los `__init__.py`
-> de reexport, 0 sentencias) quedan excluidos: exigirles suelo es medir un
-> fichero vacío y revienta con división por cero.
+> **Dos decisiones de diseño del checker** (`scripts/check_coverage_floors.py`,
+> suelos en `check_coverage_floors.py:55`, global en
+> `check_coverage_floors.py:90`): agrega **recuentos, no porcentajes** (con
+> `branch=true` una rama parcial cuenta como media, y promediar porcentajes da
+> más de lo que hay: un paquete al 95 % de media puede esconder un módulo al
+> 60 %); y un **suelo sobre un módulo fantasma es un fallo**, no un silencio. Los
+> módulos vacíos (los `__init__.py` de reexport, 0 sentencias) quedan excluidos:
+> exigirles suelo es medir un fichero vacío y revienta con división por cero.
 >
 > **CI**: `unit-tests` corre la **receta** en vez de pytest a pelo — **una sola
 > pasada** para tests y cobertura, porque correr pytest dos veces costaría
