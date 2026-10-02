@@ -102,15 +102,20 @@ class TestRunnerNoStoragePrivateAccess:
     """
 
     @pytest.mark.parametrize(
-        "helper_name",
-        ["_find_active_run_id", "_source_to_payload", "_entity_to_payload"],
+        ("module_name", "helper_name"),
+        (
+            ("skillgraph.cli.commands.run", "_find_active_run_id"),
+            ("skillgraph.cli.commands.promotion", "_source_to_payload"),
+            ("skillgraph.cli.commands.promotion", "_entity_to_payload"),
+        ),
     )
-    def test_helper_no_longer_touches_storage_private(self, helper_name: str) -> None:
+    def test_helper_no_longer_touches_storage_private(
+        self, module_name: str, helper_name: str
+    ) -> None:
+        import importlib
         import inspect
 
-        from skillgraph.cli import runner
-
-        fn = getattr(runner, helper_name)
+        fn = getattr(importlib.import_module(module_name), helper_name)
         src = inspect.getsource(fn)
         assert "storage._conn" not in src, (
             f"{helper_name} no debe acceder a storage._conn; "

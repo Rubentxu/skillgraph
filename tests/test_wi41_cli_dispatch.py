@@ -155,19 +155,31 @@ class TestDispatchTableCompleteness:
 
 
 class TestProjectOpenHelpers:
+    """WI-57: los tres helpers viven en sus ubicaciones canonicas
+    post-estrangulamiento (ADR-0018): knowledge (uno) y support (dos)."""
+
     def test_los_tres_helpers_existen(self) -> None:
-        for name in ("_open_known_project", "_open_project_storage", "_open_project_or_error"):
-            assert callable(getattr(runner, name)), name
+        from skillgraph.cli.commands.knowledge import _open_known_project
+        from skillgraph.cli.support import (
+            _open_project_or_error,
+            _open_project_storage,
+        )
+
+        for fn in (_open_known_project, _open_project_storage, _open_project_or_error):
+            assert callable(fn)
 
     def test_open_known_project_gestiona_ciclo_de_vida(self) -> None:
         """Debe gestionar el ciclo de vida del Storage (contextmanager)."""
-        fn = runner._open_known_project
-        assert callable(fn)
+        from skillgraph.cli.commands.knowledge import _open_known_project
+
+        assert callable(_open_known_project)
 
     def test_open_project_or_error_no_lanza_para_proyecto_ausente(self, tmp_path: Path) -> None:
         """Un proyecto inexistente devuelve (None, exit_code), no excepcion."""
+        from skillgraph.cli.support import _open_project_or_error
+
         args = argparse.Namespace(data_root=tmp_path / "data")
-        result, code = runner._open_project_or_error(args, "no-existe-xyz")
+        result, code = _open_project_or_error(args, "no-existe-xyz")
         assert result is None
         assert code != 0, "proyecto ausente debe producir exit code de error"
 

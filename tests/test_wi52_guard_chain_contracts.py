@@ -239,15 +239,19 @@ class TestReceiptCounters:
         with pytest.raises(ValidationError, match="tests_run negativo"):
             _receipt(tests_run=-1, tests_passed=5)
 
-    def test_bool_como_contador_aceptado_por_comparacion(self) -> None:
-        """`bool` es subclase de `int`: True cuenta como 1.
+    def test_bool_como_contador_rechazado(self) -> None:
+        """`bool` se rechaza como contador desde WI-49 (release v0.16.9).
 
-        Documenta el comportamiento actual. No es un cambio de
-        contrato, es el estado observado que un refactor debe
-        preservar.
+        Este test fijaba ANTES la coercion `True` -> 1 "preservada por
+        comparacion"; WI-49 convirtio esa preservacion en rechazo
+        explicito porque el cross-check solo la detectaba en una
+        direccion (`tests_run=True` con `tests_passed<=1` pasaba en
+        silencio). Red de regresion del cambio de contrato.
         """
-        receipt = _receipt(tests_run=True, tests_passed=True)
-        assert receipt.tests_run == 1
+        with pytest.raises(ValidationError, match="tests_run debe ser int, no bool"):
+            _receipt(tests_run=True, tests_passed=0)
+        with pytest.raises(ValidationError, match="tests_passed debe ser int, no bool"):
+            _receipt(tests_run=0, tests_passed=True)
 
 
 class TestReceiptFieldOrder:

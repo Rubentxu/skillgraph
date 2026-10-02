@@ -30,7 +30,13 @@ from pathlib import Path
 
 import pytest
 
-from skillgraph.cli import runner
+from skillgraph.cli import runner  # resto de la superficie CLI
+from skillgraph.cli.commands.knowledge import _open_known_project
+from skillgraph.cli.support import (
+    _open_project_or_error,
+    _open_project_storage,
+    resolve_project,
+)
 
 # ---------------------------------------------------------------------------
 # D1  La construccion del resolver deja de estar repetida
@@ -59,11 +65,12 @@ class TestResolverNotDuplicated:
         )
 
     def test_resolve_project_esta_disponible(self) -> None:
-        """El helper extraido existe y es una funcion, no un alias."""
-        fn = getattr(runner, "resolve_project", None)
-        assert fn is not None, "resolve_project debe existir tras WI-44"
-        assert callable(fn)
-        assert fn.__module__ == "skillgraph.cli.runner"
+        """El helper extraido existe y es una funcion, no un alias.
+
+        WI-55 lo reubico en `cli.support` (estrangulamiento ADR-0018).
+        """
+        assert callable(resolve_project)
+        assert resolve_project.__module__ == "skillgraph.cli.support"
 
     def test_resolve_project_es_pura_hasta_la_llamada_al_registro(self) -> None:
         """resolve_project no lee disco por su cuenta: recibe el resolver.
@@ -71,7 +78,7 @@ class TestResolverNotDuplicated:
         La construccion del ProjectResolver se queda dentro de
         resolve_project; sus consumidores solo deben usar el resultado.
         """
-        source = inspect.getsource(runner.resolve_project)
+        source = inspect.getsource(resolve_project)
         assert _RESOLVER_LINE in source, (
             "resolve_project debe ser quien construye el ProjectResolver"
         )
@@ -94,10 +101,12 @@ def _is_contextmanager(fn: object) -> bool:
 
 class TestHelperContractsUnchanged:
     @pytest.mark.parametrize(
-        "name", ("_open_known_project", "_open_project_storage", "_open_project_or_error")
+        "fn",
+        (_open_known_project, _open_project_storage, _open_project_or_error),
+        ids=("_open_known_project", "_open_project_storage", "_open_project_or_error"),
     )
-    def test_los_tres_siguen_existiendo(self, name: str) -> None:
-        assert callable(getattr(runner, name)), name
+    def test_los_tres_siguen_existiendo(self, fn: object) -> None:
+        assert callable(fn)
 
     def test_dos_siguen_siendo_contextmanager(self) -> None:
         """D2a/D2b: exactamente dos de los tres gestionan el ciclo de vida.
@@ -106,13 +115,9 @@ class TestHelperContractsUnchanged:
         distincion que justifica no unificarlos.
         """
         managed = [
-            name
-            for name in (
-                "_open_known_project",
-                "_open_project_storage",
-                "_open_project_or_error",
-            )
-            if _is_contextmanager(getattr(runner, name))
+            fn.__name__
+            for fn in (_open_known_project, _open_project_storage, _open_project_or_error)
+            if _is_contextmanager(fn)
         ]
         assert set(managed) == {"_open_known_project", "_open_project_storage"}, (
             f"contextmanagers inesperados: {managed}"
@@ -124,21 +129,21 @@ class TestHelperContractsUnchanged:
         El resto de sus pasos (lookup + validacion) cambian de sitio al
         usar resolve_project; el contrato observable no.
         """
-        source = inspect.getsource(runner._open_known_project)
+        source = inspect.getsource(_open_known_project)
         assert "FileNotFoundError" in source, (
             "_open_known_project debe seguir levantando FileNotFoundError"
         )
 
     def test_open_project_or_error_sigue_devolviendo_tupla(self) -> None:
         """D2c: contrato (dict|None, int), no contextmanager."""
-        assert not _is_contextmanager(runner._open_project_or_error)
-        annotation = str(inspect.signature(runner._open_project_or_error).return_annotation)
+        assert not _is_contextmanager(_open_project_or_error)
+        annotation = str(inspect.signature(_open_project_or_error).return_annotation)
         assert "tuple" in annotation, annotation
 
     def test_open_project_or_error_no_lanza_para_proyecto_ausente(self, tmp_path: Path) -> None:
         """Un proyecto inexistente devuelve (None, exit_code), no excepcion."""
         args = argparse.Namespace(data_root=tmp_path / "data")
-        result, code = runner._open_project_or_error(args, "no-existe-xyz")
+        result, code = _open_project_or_error(args, "no-existe-xyz")
         assert result is None
         assert code != 0
 
