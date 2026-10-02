@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from skillgraph.runtime.engine import RuntimeEvent
 
 from skillgraph.core.errors import IdempotencyError, NotFoundError
+from skillgraph.core.runtime_types import NON_TERMINAL_RUN_STATES
 from skillgraph.platform.ports import (
     StoredEvent,
     StoredNodeExecution,
@@ -34,7 +35,7 @@ from skillgraph.platform.row_mappers import (
     _row_to_run,
     _row_to_stored_event,
 )
-from skillgraph.platform.storage import NON_TERMINAL_RUN_STATES, Storage
+from skillgraph.platform.storage import Storage
 
 __all__ = ["SqliteRunRepository"]
 

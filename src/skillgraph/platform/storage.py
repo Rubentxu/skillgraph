@@ -111,18 +111,12 @@ __all__ = [
 ]
 
 
-# Estados validos del outbox de promocion (CHECK constraint de la tabla).
-# Exportado como frozenset para que Storage.list_promotions() valide
-# inputs sin acoplarse a la implementacion del schema.
-PROMOTION_STATUSES: frozenset[str] = frozenset({"PENDING", "IN_PROGRESS", "PUBLISHED", "FAILED"})
-
-# Estados no terminales de workflow_runs (CREATED/ACTIVE/WAITING).
-# Un run en cualquiera de estos estados se considera "vivo": si el proceso
-# muere, un nuevo `sg run` debe reanudar el mismo run_id en lugar de
-# crear uno nuevo (cumple UAT-06).
-NON_TERMINAL_RUN_STATES: frozenset[str] = frozenset({"CREATED", "ACTIVE", "WAITING"})
-
-
+# ADR-0015: `PROMOTION_STATUSES` y `NON_TERMINAL_RUN_STATES` ya no viven
+# aqui. Son vocabulario de dominio, no de persistencia: los define
+# `core.runtime_types` derivandolos de sus ADT (`PromotionStatus` y
+# `RunState - TERMINAL_RUN_STATES`). Este modulo declaraba copias escritas
+# a mano que nadie ligaba con el `CHECK` de SQLite ni con el Literal, y
+# los repositorios las importaban de la fachada en vez de la hoja.
 class Storage(
     RunDelegations,
     KnowledgeDelegations,

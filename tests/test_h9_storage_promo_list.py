@@ -15,7 +15,8 @@ from __future__ import annotations
 import pytest
 
 from skillgraph.core.errors import ValidationError
-from skillgraph.platform.storage import PROMOTION_STATUSES, Storage
+from skillgraph.core.runtime_types import PROMOTION_STATUSES
+from skillgraph.platform.storage import Storage
 
 
 @pytest.fixture
@@ -112,8 +113,23 @@ class TestListPromotionsValidation:
         assert "PENDING" in str(exc_info.value)
 
     def test_valid_statuses_constant_matches_schema(self) -> None:
-        """PROMOTION_STATUSES cubre exactamente el CHECK constraint del schema."""
-        assert frozenset({"PENDING", "IN_PROGRESS", "PUBLISHED", "FAILED"}) == PROMOTION_STATUSES
+        """PROMOTION_STATUSES cubre exactamente el CHECK constraint del schema.
+
+        WI-87 (ADR-0015): esta version comparaba el frozenset contra un
+        literal repetido aqui mismo, sin leer ``schema.py``. Seguia en
+        verde si el CHECK cambiaba, que es justo lo que declaraba
+        proteger. Ahora lee el DDL real. La comprobacion de que el DDL no
+        vuelve a escribirse a mano vive en
+        ``tests/test_wi87_state_vocabulary_single_source.py``.
+        """
+        import re
+
+        from skillgraph.platform.schema import SCHEMA_SQL
+
+        match = re.search(r"CHECK\s*\(\s*status\s+IN\s*\(([^)]*)\)", SCHEMA_SQL, re.I)
+        assert match is not None, "no hay CHECK (status IN (...)) en SCHEMA_SQL"
+        ddl_statuses = frozenset(re.findall(r"'([^']+)'", match.group(1)))
+        assert ddl_statuses == PROMOTION_STATUSES
 
 
 class TestListPendingPromotionsCompat:

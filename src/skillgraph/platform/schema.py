@@ -8,19 +8,33 @@ umbral de 800 LoC del audit.
 `storage.py` lo re-exporta como `_SCHEMA_SQL` porque `event_store.py` lo importa desde ahi
 (ADR-0016 corte 4). NO mover sin migrar ese import.
 
-El DDL **no** se toca: no hay cambio de schema en esta fase. Lo que
-ADR-0016 exige que se quede en `Storage` son los atomicos
-(`_tx`, `_atomic`, `_insert_event_in_tx`, `_atomic_state_and_event`),
-que no viven aqui.
+El DDL no cambia de forma: ADR-0016 exige que se queden en `Storage` los
+atomicos (`_tx`, `_atomic`, `_insert_event_in_tx`,
+`_atomic_state_and_event`), que no viven aqui.
+
+ADR-0015: el unico punto del DDL que **expresa vocabulario de dominio** es
+el `CHECK` de `promotion_outbox.status`, y se genera desde
+`core.runtime_types.PROMOTION_STATUSES` en vez de escribirse a mano. El
+conjunto de valores aceptados es identico, asi que `SCHEMA_VERSION` sigue
+en 1 y no hay migracion. Consecuencia practica: la base de datos y el
+validador de entrada no pueden divergir porque salen de la misma
+expresion.
 """
 
 from __future__ import annotations
+
+from skillgraph.core.runtime_types import PROMOTION_STATUSES
 
 __all__ = ["SCHEMA_SQL", "SCHEMA_VERSION"]
 
 SCHEMA_VERSION = 1
 
-SCHEMA_SQL = """
+#: El `CHECK` de promocion, generado desde la ADT de dominio. `sorted`
+#: porque un frozenset no tiene orden estable entre procesos y el DDL debe
+#: ser reproducible byte a byte.
+_PROMOTION_STATUS_SQL = ", ".join(f"'{status}'" for status in sorted(PROMOTION_STATUSES))
+
+SCHEMA_SQL = f"""
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
 );
@@ -36,7 +50,7 @@ CREATE TABLE IF NOT EXISTS resources (
     resource_version INTEGER NOT NULL DEFAULT 1,
     generation INTEGER NOT NULL DEFAULT 1,
     spec_json TEXT NOT NULL,
-    status_json TEXT NOT NULL DEFAULT '{}',
+    status_json TEXT NOT NULL DEFAULT '{{}}',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (tenant_id, project_id, api_version, kind, namespace, name)
 );
@@ -53,7 +67,7 @@ CREATE TABLE IF NOT EXISTS relations (
     source_uid TEXT NOT NULL,
     target_uid TEXT NOT NULL,
     kind TEXT NOT NULL,
-    properties_json TEXT NOT NULL DEFAULT '{}',
+    properties_json TEXT NOT NULL DEFAULT '{{}}',
     FOREIGN KEY (source_uid) REFERENCES resources(uid) ON DELETE CASCADE,
     FOREIGN KEY (target_uid) REFERENCES resources(uid) ON DELETE CASCADE,
     UNIQUE (source_uid, target_uid, kind)
@@ -259,7 +273,7 @@ CREATE TABLE IF NOT EXISTS promotion_outbox (
     knowledge_ref   TEXT NOT NULL,
     payload_json    TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'PENDING'
-                    CHECK (status IN ('PENDING', 'IN_PROGRESS', 'PUBLISHED', 'FAILED')),
+                    CHECK (status IN ({_PROMOTION_STATUS_SQL})),
     attempts        INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),

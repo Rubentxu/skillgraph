@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from skillgraph.platform.storage import NON_TERMINAL_RUN_STATES, Storage
+from skillgraph.core.runtime_types import NON_TERMINAL_RUN_STATES
+from skillgraph.platform.storage import Storage
 
 
 @pytest.fixture

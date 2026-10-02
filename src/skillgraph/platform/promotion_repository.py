@@ -14,9 +14,10 @@ import sqlite3
 from typing import TYPE_CHECKING, Any
 
 from skillgraph.core.errors import IdentityConflictError, ValidationError
+from skillgraph.core.runtime_types import PROMOTION_STATUSES
 from skillgraph.platform.ports import StoredPromotion
 from skillgraph.platform.row_mappers import _row_to_stored_promotion
-from skillgraph.platform.storage import PROMOTION_STATUSES, Storage
+from skillgraph.platform.storage import Storage
 
 if TYPE_CHECKING:
     pass

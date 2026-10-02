@@ -14,6 +14,15 @@ hay una sola fuente: ``EventType`` Literal. ``EVENT_KINDS`` se deriva
 de el via ``typing.get_args()``. El antiguo modulo ``runtime.engine``
 define ``EVENT_KINDS`` por compat historica pero importa ``EventType``
 de aqui; cualquier valor nuevo debe declararse en ``EventType``.
+
+ADR-0015 (WI-87, 2026-10-02): ese mismo patron se aplicaba ya a
+``SOURCE_KINDS`` (QW-E) pero se le habia escapado a dos vocabularios
+mas, que vivian duplicados en la fachada de persistencia. Ahora
+``NON_TERMINAL_RUN_STATES`` se deriva por complemento de
+``TERMINAL_RUN_STATES``, y ``PROMOTION_STATUSES`` se deriva de
+``PromotionStatus`` y genera el ``CHECK`` de SQLite en
+``platform/schema.py``. Regla general: **ningun frozenset de
+vocabulario se escribe a mano; se deriva de su Literal**.
 """
 
 from __future__ import annotations
@@ -30,6 +39,14 @@ RunState = Literal["CREATED", "ACTIVE", "WAITING", "COMPLETED", "FAILED", "CANCE
 
 NodeState = Literal["READY", "RUNNING", "WAITING", "SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"]
 """Ciclo de vida de una instancia de nodo (blueprint §2)."""
+
+PromotionStatus = Literal["PENDING", "IN_PROGRESS", "PUBLISHED", "FAILED"]
+"""Ciclo de vida de una propuesta del outbox de promoción (UAT-13).
+
+ADR-0015. Antes este vocabulario vivia duplicado: el ``CHECK`` de
+``schema.py`` lo escribia a mano y ``platform/storage.py`` declaraba su
+propio ``PROMOTION_STATUSES`` sin relacion verificada entre si.
+"""
 
 # --- H3 Slice 1: tipos de conocimiento -------------------------------------
 
@@ -141,6 +158,25 @@ NODE_KINDS: Final[frozenset[str]] = frozenset({"DecisionNode", "ActionNode"})
 #: Estados terminales de un Run (no avanzan mas).
 TERMINAL_RUN_STATES: Final[frozenset[str]] = frozenset({"COMPLETED", "FAILED", "CANCELLED"})
 
+#: Estados no terminales de un Run (el proceso puede reanudarlos).
+#:
+#: ADR-0015: se declara lo *terminal* y esto se deriva por complemento,
+#: de modo que ``NON_TERMINAL | TERMINAL == get_args(RunState)`` es cierto
+#: por construccion. Antes ``platform/storage.py`` escribia a mano los
+#: tres no terminales: anadir un estado a ``RunState`` sin tocar ese
+#: fichero lo hacia TERMINAL, y UAT-06 (reanudar tras crash) fallaba
+#: duplicando el run en silencio.
+NON_TERMINAL_RUN_STATES: Final[frozenset[str]] = frozenset(get_args(RunState)) - TERMINAL_RUN_STATES
+
+#: Conjunto canonico de estados de una propuesta de promocion.
+PROMOTION_STATUSES: Final[frozenset[str]] = frozenset(get_args(PromotionStatus))
+"""Conjunto derivado: ``frozenset(get_args(PromotionStatus))`` (ADR-0015).
+
+``platform/schema.py`` genera el ``CHECK`` de SQLite a partir de este
+conjunto, de modo que la base de datos y el validador de entrada no
+pueden divergir: salen de la misma expresion.
+"""
+
 #: Estados terminales de una NodeExecution.
 TERMINAL_NODE_STATES: Final[frozenset[str]] = frozenset(
     {"SUCCEEDED", "FAILED", "STOPPED", "CANCELLED"}
@@ -189,6 +225,8 @@ __all__ = [
     "CLAIM_PREDICATES",
     "FINDING_RESULTS",
     "NODE_KINDS",
+    "NON_TERMINAL_RUN_STATES",
+    "PROMOTION_STATUSES",
     "SOURCE_KINDS",
     "TERMINAL_NODE_STATES",
     "TERMINAL_RUN_STATES",
@@ -200,6 +238,7 @@ __all__ = [
     "NodeName",
     "NodeState",
     "OutcomeLabel",
+    "PromotionStatus",
     "RevisionNumber",
     "RuleRef",
     "RunState",

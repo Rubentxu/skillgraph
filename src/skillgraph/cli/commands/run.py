@@ -270,8 +270,9 @@ def _find_active_run_id(storage: Storage, *, tenant_id: str, project_id: str) ->
     para (tenant, project), o None si no hay ninguno.
 
     No terminal = CREATED, ACTIVE o WAITING (ver
-    ``Storage.NON_TERMINAL_RUN_STATES``). COMPLETED/FAILED/CANCELLED
-    se consideran terminales y el siguiente `run` debe crear uno nuevo.
+    ``core.runtime_types.NON_TERMINAL_RUN_STATES``, derivado de
+    ``RunState``). COMPLETED/FAILED/CANCELLED se consideran terminales y el
+    siguiente `run` debe crear uno nuevo.
     Cumple UAT-06: tras un crash con un run ACTIVE, el CLI lo encuentra
     y lo reanuda en lugar de crear uno nuevo.
 
