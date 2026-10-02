@@ -10350,3 +10350,120 @@ gate que no puede fallar es una decoracion.
   SemVer derivado del historial, no decidido a mano: `git log v0.16.17..HEAD` =
   0 feat, 0 breaking, 1 fix, 2 test, 3 docs, 1 chore → **PATCH**.
 - **SIN PUSH.** Sin autorizacion del operador.
+
+---
+
+## 2026-10-02 — WI-94: el contrato de cobertura que escribí en WI-93 sólo se cumplía donde yo miré
+
+- **Commits**: `11294ec` (`test(governance)`, rojo primero), `569f318`
+  (`refactor(ci)`), mas trazabilidad y release.
+- **Suite**: 2552 passed (2529 antes; +23).
+- **SemVer derivado del historial**: `git log v0.16.18..HEAD` = 0 feat,
+  0 breaking, **2 fix**, 1 refactor, 1 test, 1 chore, 1 docs → **PATCH →
+  v0.16.19**. Ver más abajo por qué el SemVer NO lo decide este bloque.
+
+### La pregunta que WI-93 no se hizo
+
+WI-93 hizo exigible el contrato de AGENTS §6.3. Este bloque arranca
+preguntando si **ese contrato cubre lo que §6.3 declara**. Medido sobre el
+informe real: no, por dos vías.
+
+1. **Siete de los ocho paquetes no tenían ninguna regla.** La de «todo módulo
+   tiene suelo» —que WI-93 construyó para que un módulo nuevo no pasara
+   inadvertido— se aplicaba **sólo a `runtime/`**. Un módulo nuevo al 40 % en
+   `governance/` no lo habría visto nadie.
+2. **`cli/` se medía sólo en agregado**, con **16,91 puntos de holgura**
+   (86,91 % contra suelo del 70 %). Un módulo de `cli/` podía caer al 0 % y el
+   contrato seguía verde.
+
+El segundo hueco lo advertía **la propia evidencia de WI-93**: «la cobertura
+agregada puede tapar un módulo débil». Se aplicó a `runtime/` y se pasó por
+alto en la otra mitad del contrato.
+
+### Que no era un problema del codigo
+
+Ningún módulo de los ocho paquetes está hoy por debajo de su suelo. Mínimos
+medidos: `runtime/locks.py` 90,62 % (suelo 90), `knowledge/context_controller.py`
+92,40 %, `platform/paths.py` 80,85 % (**suelo propio 60**), `governance/backups.py`
+94,72 %, `cli/commands/pack.py` 78,16 % (suelo 70). El defecto era del guard.
+
+### La decision: heredar, no listar
+
+De 21 entradas escritas a mano a 8 prefijos (`SUELOS_POR_PAQUETE`) + una
+excepcion declarada (`EXCEPCIONES`: `paths.py` al 60 %, que es lo que §6.3 le
+da explicitamente). Un modulo nuevo en cualquier paquete cubierto queda
+vigilado al aparecer. `evaluar()` pasa a ser PURA (informe → lineas, fallos),
+lo que permite probar el contrato con informes sinteticos sin disco ni
+subprocess.
+
+Los agregados se conservan como comprobacion **adicional**, nunca en lugar de
+la por modulo. Y con la lista fuera, la deteccion de «modulo fantasma» que
+hacia la lista se sustituye por una mejor: un paquete declarado que no aporta
+ningun modulo es un fallo, porque o se borro o se renombro.
+
+### Mutaciones: 4/4, y el reparto ES el hallazgo
+
+| # | Mutacion | Gate | Resultado |
+|---|---|---|---|
+| M1 | Suelo de `runtime/` 90 → 99,9 | checker | **cazada** |
+| M2 | Borrar la excepcion de `paths.py` | checker | **cazada** |
+| M3 | `suelo_de` solo reconoce `runtime/` (el bug de WI-93) | **test** | **cazada** |
+| M4 | `suelo_de` nunca devuelve `None` | **test** | **cazada** |
+| M5 | Control final byte-identico | — | **OK** |
+
+`cazadas=4  no-cazadas=0  no-aplicadas=0`
+
+**M3 es la que importa.** Reintroducir la asimetria exacta de WI-93 **no
+produce ningun fallo en el script**: el codigo cumple, luego todo verde. El
+defecto era invisible para el propio guard que lo dejaba pasar. Solo un test
+que construye el contraejemplo con informes **sinteticos** lo detecta.
+Mutacion «cazada por el test y no por el script» es un resultado valido, y
+decirlo es parte de la conclusion.
+
+### Por que el SemVer no lo decide este bloque
+
+Sus dos commits son `refactor(ci)` + `test(governance)`, y ninguno bumpea. La
+etiqueta sale por otra razon, y esa es la leccion: **`git log v0.16.18..HEAD`
+incluye los dos `fix` de la cola de WI-93** (`81d07ed` y `430b2b8`), emitidos
+**despues** del tag `v0.16.18` y por tanto en ninguna release. El SemVer hay
+que derivarlo siempre sobre el ultimo **tag**, no sobre «lo que hizo este
+bloque»; si no, una etiqueta emitida a mitad del trabajo deja commits
+fuera y el calculo siguiente los ignora.
+
+### Conocimiento negativo
+
+- **Un guard que vigila el arbol real solo detecta lo que ya esta roto.** Por
+  property propia hay que construir el contraejemplo a mano.
+- **Aplicar un principio a media mitad de su propio contrato es la forma mas
+  dificil de detectar el defecto**, porque la mitad donde si se aplica
+  funciona y da credibilidad al conjunto.
+- **Una lista de modulos escrita a mano es una promesa de sincronia.** Al
+  escribirla es correcta; cuando alguien anade un modulo deja de serlo sin
+  avisar. Los prefijos no tienen esa deuda: no hay nada que sincronizar.
+- **Un fixture que dispara ruido propio esconde el fallo que apunta.** Los
+  primeros informes sinteticos de este bloque tenian un solo modulo, asi que
+  los otros siete paquetes declarados aparecian como «sin ningun modulo» y
+  tres tests fallaban **por el motivo equivocado**. Se corrigio con `_base()`:
+  un modulo sano por paquete declarado.
+- **`assert fallos` a secas puede pasar por un ruido ajeno.** El helper
+  `_fallos_de(informe, ruta)` exige que el fallo **nombre** al modulo bajo
+  prueba.
+
+### Sigue abierto (sin workitem)
+
+- **Credenciales de proveedor real (Anthropic/OpenAI)**: ausentes. Es la razon
+  por la que el criterio de salida de **H9 sigue declarado incumplido**.
+- **Colision de numeracion de ADR**: `ADR-0015` designa dos documentos distintos.
+  Medida, NO ejecutada: renombrar es decision del mantenedor.
+- **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`.
+- **`sddk lint`: 4 errores** por opt-ins de pack no adoptados (`schemas/`,
+  `docs/generated/workflow.md`, `docs/generated/inventory.md`,
+  `manifest.toml`). Registrado, **fuera de alcance** de este bloque.
+- **Push**: sin autorizacion del operador. No ejecutado.
+
+### Evidencia
+
+- `evidence/sddk-wi94-verify-2026-10-02.md`
+- `tests/test_wi94_coverage_contract_symmetry.py` (23 tests)
+- `scripts/check_coverage_floors.py` (suelos por paquete + excepciones)
+- `.pipelinek/wi94_mutate.py` (4/4 + baseline + autocontrol de aplicacion)

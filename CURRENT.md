@@ -93,6 +93,53 @@
 >    prueba había quedado fuera del recorte**, que es peor que no tenerla: invita a
 >    dar por verificado algo que nadie ha leído.
 >
+> **Bloque 2026-10-02 (séptima tanda) cerrado — WI-94, release `v0.16.19`.**
+> Versión activa `0.16.19.dev0`; último tag `v0.16.19`. 2552 passed.
+>
+> **WI-94 — el contrato de cobertura que escribí en WI-93 sólo se cumplía donde
+> yo miré** (`11294ec`, `569f318`). La pregunta que WI-93 no se hizo: *¿el
+> contrato que escribí cubre lo que §6.3 declara?* Medido sobre el informe
+> real, la respuesta era no, por dos vías:
+>
+> - **Siete de los ocho paquetes no tenían ninguna regla.** La regla de «todo
+>   módulo de un paquete cubierto tiene suelo» —que WI-93 construyó
+>   precisamente para que un módulo nuevo no pasara inadvertido— se aplicaba
+>   **sólo a `runtime/`**. Un módulo nuevo al 40 % en `governance/` no lo
+>   habría visto nadie. Es el mismo fallo que WI-93 cerraba, sin cerrar en el
+>   resto.
+> - **`cli/` se medía sólo en agregado**, con **16,91 puntos de holgura**
+>   (86,91 % contra un suelo del 70 %). Un módulo de `cli/` podía caer al 0 %
+>   y el contrato seguía verde. Y esto lo decía **la propia evidencia de
+>   WI-93**: «la cobertura agregada puede tapar un módulo débil». Se aplicó a
+>   `runtime/` y se pasó por alto en la otra mitad del contrato.
+>
+> **El defecto era del guard, no del código**: ninguno de los ocho paquetes
+> tenía hoy un módulo por debajo de su suelo. Margen más estrecho,
+> `runtime/locks.py` al 90,62 % sobre 90.
+>
+> **La decisión: heredar, no listar.** El contrato pasa de 21 entradas
+> escritas a mano a 8 prefijos (`SUELOS_POR_PAQUETE`) más una excepción
+> declarada (`EXCEPCIONES`: `paths.py` al 60 %, que es el suelo que §6.3 le da
+> explícitamente; aplicarle el 90 % de `platform/` haría fallar al único módulo
+> que el propio contrato exonera). Un módulo nuevo en cualquier paquete
+> cubierto queda vigilado al aparecer, y eso ya no depende de que alguien
+> recuerde añadirlo a una lista. `evaluar()` pasa a ser **pura**, lo que
+> permite probar el contrato con informes sintéticos sin disco ni subprocess.
+>
+> **Mutaciones 4/4, y el reparto es el hallazgo**: M1 y M2 las caza el script,
+> pero **M3 y M4 sólo el test**. M3 reintroduce la asimetría exacta de WI-93 y
+> **no produce ningún fallo en el script**, porque el código cumple y luego
+> todo verde: el defecto era invisible para el propio guard que lo dejaba
+> pasar. *Un guard que vigila el árbol real sólo detecta lo que ya está roto;
+> por property propia hay que construir el contraejemplo a mano.*
+>
+> **El SemVer no lo decide este bloque**: `git log v0.16.18..HEAD` = 0 feat,
+> 0 breaking, **2 fix**, 1 refactor, 1 test, 1 chore, 1 docs → **PATCH**. Los
+> dos `fix` son de la **cola de WI-93** (`81d07ed` y `430b2b8`), que se
+> emitieron **después** del tag `v0.16.18` y quedaban en ninguna release. El
+> SemVer hay que derivarlo siempre sobre el último **tag**, no sobre «lo que
+> hizo este bloque».
+>
 > **Queda abierto**: las **credenciales de proveedor real** (Anthropic/OpenAI)
 > no están en este entorno, así que el criterio de salida de **H9 sigue
 > declarado incumplido** — con la mitad local del contrato probada (el

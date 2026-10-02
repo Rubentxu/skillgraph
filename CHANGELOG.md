@@ -12,6 +12,90 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.19] - 2026-10-02 — los dos `fix` de la cola de WI-93 salen en release
+
+PATCH: `git log v0.16.18..HEAD` = 0 feat, 0 breaking, **2 fix**, 1 refactor,
+1 test, 1 chore, 1 docs. 2552 passed (2529 antes; +23).
+
+Lo que dispara esta etiqueta **no es WI-94**: es que los dos `fix` de la cola
+de WI-93 se emitieron **después** del tag `v0.16.18` y quedaban sin publicar
+en ninguna release. Un tag que se emite en medio del trabajo deja commits
+fuera, y el SemVer derivado hay que leerlo sobre `v0.16.18..HEAD`, no sobre
+«lo que hizo este bloque».
+
+### Fixed
+
+- `fix(ci)`: **la línea de resumen de pytest no llegaba al journal de la
+  pipeline.** `EchoOutputCaptured` conserva sólo los últimos ~1,2 KB de la
+  salida de cada step, y con `pytest -q` la línea `N passed in Xs` cae a
+  media stream y se truncaba. AGENTS.md la exige porque es lo que separa una
+  ejecución real de un veredicto cacheado: sin ella, la run era real y su
+  prueba había quedado fuera del recorte. `scripts/coverage.sh` hace `tee` a
+  `.pipelinek/unit-tests.log` y reimprime el resumen al final, y toma el exit
+  code de pytest con `${PIPESTATUS[0]}` y no del pipeline.
+
+- `fix(state)`: **`v0.16.18` estaba etiquetada en git pero no en el registro.**
+  `release.releases` no la listaba y `release.tag` se había quedado en
+  `v0.16.17`, dos versiones atrás. Lo detectaron los dos tests de
+  `test_state_release_integrity`, que existen justo para eso. El defecto fue
+  de **secuencia**: el commit de trazabilidad se cerró antes de emitir el tag.
+
+## [0.16.19] (cont.) — WI-94: el contrato de cobertura que escribí en WI-93 sólo se cumplía donde yo miré
+
+Sin bump propio: el bloque entrega 1 `refactor` + 1 `test`, y ninguno bumpea
+SemVer. Viaja dentro de v0.16.19 por los `fix` de arriba, como WI-92 viajaba
+en v0.16.18.
+
+### Changed
+
+- `refactor(ci)`: **el contrato de AGENTS §6.3 se mide por paquete, no por una
+  lista de módulos escrita a mano.** WI-93 lo implementó con 21 entradas y
+  aplicó la regla de «todo módulo tiene suelo» **sólo a `runtime/`**. Medido:
+
+  - Siete de los ocho paquetes que gobierna §6.3 no tenían ninguna regla. Un
+    módulo nuevo al 40 % en `governance/` no lo habría visto nadie: **el mismo
+    fallo que WI-93 cerraba, sin cerrar en el resto.**
+  - `cli/` se medía **sólo en agregado** (70 % sobre un paquete que mide
+    86,91 %): 16,91 puntos de holgura, y un módulo de `cli/` podía caer al
+    0 % sin romper el contrato. La evidencia de WI-93 ya advertía de que «la
+    cobertura agregada puede tapar un módulo débil» — se aplicó a `runtime/`
+    y se pasó por alto en la otra mitad del contrato.
+
+  `SUELOS_POR_PAQUETE` (8 prefijos) + `EXCEPCIONES` (`paths.py` al 60 %, que es
+  el suelo que §6.3 le da explícitamente). Un módulo nuevo en cualquier paquete
+  cubierto queda vigilado al aparecer. Los agregados se conservan como
+  comprobación **adicional**, nunca en lugar de la por módulo.
+
+  `evaluar()` pasa a ser **pura** (informe → líneas, fallos), separada de
+  `main()`: es lo que permite probar el contrato con informes sintéticos sin
+  disco ni subprocess.
+
+  Con la lista fuera desaparece la detección de «módulo fantasma» que hacía la
+  lista, y la sustituye una aserción mejor: un paquete declarado que no aporta
+  ningún módulo es un fallo, porque o se borró o se renombró.
+
+- `test(governance)`: 23 tests que fijan la **propiedad** del contrato sobre
+  informes sintéticos, no el número de hoy. Mutaciones **4/4** con baseline y
+  control final byte-idéntico.
+
+### Conocimiento negativo
+
+- **Un guard que vigila el árbol real sólo detecta lo que ya está roto.**
+  La mutación M3 —reintroducir la asimetría exacta de WI-93— no produce ningún
+  fallo en el script, porque el código cumple y luego todo verde. El defecto
+  era invisible para el propio guard que lo dejaba pasar: sólo un test que
+  construye el contraejemplo a mano lo detecta.
+- **Aplicar un principio a media mitad de su propio contrato es la forma más
+  difícil de detectar el defecto**, porque la mitad donde sí se aplica
+  funciona y da credibilidad al conjunto.
+- **Un `assert fallos` a secas puede pasar por un ruido ajeno.** El helper
+  exige que el fallo **nombre** al módulo bajo prueba.
+- **Ninguno de los ocho paquetes tenía hoy un módulo por debajo de su suelo.**
+  El defecto era del guard, no del código: el margen más estrecho es
+  `runtime/locks.py` al 90,62 % sobre un suelo del 90 %.
+
+- Evidencia: `evidence/sddk-wi94-verify-2026-10-02.md`.
+
 ## [0.16.18] - 2026-10-02 — WI-93: el contrato de cobertura que el repo declaraba y no exigía
 
 PATCH: `git log v0.16.17..HEAD` = 0 feat, 0 breaking, 1 fix, 2 test, 3 docs, 1 chore. 2529 passed
