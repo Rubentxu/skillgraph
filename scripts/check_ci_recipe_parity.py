@@ -389,7 +389,19 @@ def scripts_invocados_por(canonica: str) -> frozenset[str]:
 #: Ruta a un contrato exigible dentro de una orden. Deliberadamente `*.py` y
 #: deliberadamente `check_`: es la convención que declara C5, y lo que el
 #: guard vigila es lo que la convención dice, no lo que el guard quisiera.
-_RUTA_CHECKER: Final = re.compile(r"[\w./-]*scripts/check_[\w.-]+\.py")
+#:
+#: El tramo ENTRE `scripts/` y `check_` admite carpetas a proposito.
+#: `checkers_de` descubre con `rglob`, o sea tambien en subdirectorios, asi
+#: que un lector que no los aceptara daria un **falso positivo**: el checker
+#: `scripts/sub/check_x.py` apareceria en el conjunto de contratos y no
+#: apareceria nunca en el de invocados, porque su ruta no matchea. Se
+#: reportaria como huerfano un contrato que la receta ejecuta.
+#:
+#: MEDIDO en WI-102, al implementar C5: asi estaba la primera version, y lo
+#: encontro la mutacion M3 del bloque, no un test. Es la tercera vez que un
+#: guard descubre por una sintaxis y lee por otra — WI-99 con los hooks sin
+#: extension, WI-100 con el descubrimiento por shebang, WI-102 aqui.
+_RUTA_CHECKER: Final = re.compile(r"[\w./-]*scripts/(?:[\w.-]+/)*check_[\w.-]+\.py")
 
 
 def checkers_invocados_por(canonica: str) -> frozenset[str]:

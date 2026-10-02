@@ -758,6 +758,59 @@ class TestC5ElLectorDeInvocaciones:
         )
         assert "scripts/check_coverage_floors.py" in par.checkers_invocados_por(texto)
 
+    def test_un_checker_en_un_subdirectorio_se_reconoce(self) -> None:
+        """El descubrimiento y el lector tienen que ver lo MISMO.
+
+        `checkers_de` usa `rglob`, asi que un checker en
+        `scripts/sub/check_x.py` entra en el conjunto de contratos. Un lector
+        que no aceptara carpetas entre `scripts/` y `check_` lo dejaria
+        huerfano para siempre, siendo un contrato que la receta ejecuta: un
+        falso positivo que se propaga como si fuera verdad.
+
+        MEDIDO en WI-102. La primera version de la regex no admitia el
+        subdirectorio, y lo destapo una lectura, no un test.
+        """
+        texto = (
+            "pipeline {\n  stages {\n"
+            '    stage("contratos") {\n'
+            '      sh("cd " + repo + " && uv run python scripts/sub/check_nuevo.py")\n'
+            "    }\n  }\n}\n"
+        )
+        assert "scripts/sub/check_nuevo.py" in par.checkers_invocados_por(texto)
+
+    def test_descubrimiento_y_lector_coinciden_en_un_repo_real(self, tmp_path: Path) -> None:
+        """Compone las dos mitades —un checker de verdad, invocado de verdad—
+        y exige que el evaluador no diga nada.
+
+        Es la forma de que un cambio en cualquiera de las dos se note aqui y
+        no cuando alguien meta un checker en un subdirectorio.
+        """
+        scripts = tmp_path / "scripts"
+        (scripts / "sub").mkdir(parents=True)
+        (scripts / "check_raiz.py").write_text("x", encoding="utf-8")
+        (scripts / "sub" / "check_anidado.py").write_text("x", encoding="utf-8")
+        texto = (
+            "pipeline {\n  stages {\n"
+            '    stage("c") {\n'
+            '      sh("cd " + repo + " && uv run python scripts/check_raiz.py")\n'
+            '      sh("cd " + repo + " && uv run python scripts/sub/check_anidado.py")\n'
+            "    }\n  }\n}\n"
+        )
+        informe = par.InformeRunners(
+            receta_canonica=".pipeline.kts",
+            canonica=texto,
+            raiz_repo=str(tmp_path),
+            runners={},
+            etapas_canonicas=par.etapas_de(texto),
+            checkers=par.checkers_de(tmp_path),
+            checkers_invocados=par.checkers_invocados_por(texto),
+        )
+        assert informe.checkers == (
+            "scripts/check_raiz.py",
+            "scripts/sub/check_anidado.py",
+        )
+        assert par.evaluar_contratos_de_la_receta(informe) == ()
+
 
 class TestC5ElDescubrimiento:
     def test_un_checker_nuevo_entra_sin_tocar_el_guard(self, tmp_path: Path) -> None:
