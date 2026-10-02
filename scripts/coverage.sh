@@ -137,9 +137,18 @@ export COVERAGE_PROCESS_START="$RC"
 # dos van al mismo sitio y la medicion es estable.
 uv run coverage erase --rcfile="$RC"
 
+# El log va a `.pipelinek/` porque AGENTS.md exige que los stages solo
+# produzcan efectos secundarios en `.pipelinek/` y `evidence/`.
+LOG="$REPO_ROOT/.pipelinek/unit-tests.log"
+mkdir -p "$(dirname "$LOG")"
+
 echo "=== coverage: pytest (principal via pytest-cov, subprocesos via hook) ==="
-uv run pytest -q -p no:cacheprovider --cov=skillgraph --cov-config="$RC" "$@"
-PYTEST_RC=$?
+# `tee` es para poder releer la linea de resumen al final. El exit code NO se
+# saca de `$?` del pipeline: con `pipefail` ese seria el de `tee` o el del
+# propio pipeline, y hay que el de pytest. `${PIPESTATUS[0]}` es el unico
+# que lo dice (leccion de WI-93: `if pipeline | tail; then` mide el `tail`).
+uv run pytest -q -p no:cacheprovider --cov=skillgraph --cov-config="$RC" "$@" 2>&1 | tee "$LOG"
+PYTEST_RC=${PIPESTATUS[0]}
 
 echo "=== coverage: combine ==="
 uv run coverage combine --rcfile="$RC"
@@ -147,6 +156,17 @@ uv run coverage combine --rcfile="$RC"
 echo "=== coverage: report ==="
 uv run coverage report --rcfile="$RC"
 REPORT_RC=$?
+
+# La linea de resumen se imprime AL FINAL, y no por decoracion. Medido: el
+# `EchoOutputCaptured` de pipelinek conserva solo los ultimos ~1,2 KB de la
+# salida de cada step, y con `pytest -q` la linea de resumen cae en el medio
+# y se truncaba. AGENTS.md exige que el journal contenga `N passed in Xs`
+# porque es lo que separa una ejecucion real de un veredicto cacheado; sin
+# esto el criterio no se puede cumplir, no porque la run fuera falsa, sino
+# porque su prueba habia quedado fuera del recorte.
+echo "=== coverage: resumen de pytest ==="
+RESUMEN="$(grep -Eo '[0-9]+ (passed|failed|error)[^=]*' "$LOG" | tail -1)"
+echo "pytest: ${RESUMEN:-SIN RESUMEN}"
 
 # El exit code es el de pytest: un fallo de tests no debe quedar tapado
 # por un informe que se imprimiria igual.
