@@ -71,7 +71,7 @@
 > exploración puede ser excelente y aun así estar vencido; la calidad del
 > análisis no dice nada sobre si su premisa sigue en pie.
 > Evidencia: `evidence/sddk-wi86-verify-2026-10-02.md`.
-> **Estado post-release**: `__version__ = 0.16.13`, etiqueta `v0.16.13`
+> **Estado post-release**: `__version__ = 0.16.13.dev0`, etiqueta `v0.16.13` en `6e97513`
 > (bloque WI-86 + WI-80: la capa de re-export de `platform.storage` y el
 > rechazo ilegible presentado como `PROPOSED`).
 > El tag se crea sobre el commit que lleva el SemVer puro, que es lo que

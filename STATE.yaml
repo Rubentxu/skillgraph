@@ -541,7 +541,7 @@ tests:
   total: 2416   # re-medido 2026-10-02 (bloque WI-80): 2416 passed con la suite completa (`pytest -q`): 2388 passed. El 1431 que estaba aqui era de 2026-09-28 y ADEMAS era invisible: la clave `total` la pisaba un `total: 85%` de un snapshot de cobertura anidado por error en `tests:` (WI-85). La cifra anterior solo se leia a ojo.
   passed: 2416
   duration_s: 107.09   # re-medido 2026-10-02: 2416 passed in 107.09s SIN cobertura. El 644 era de un run con `--cov`, que multiplica el tiempo.
-  package_version: "0.16.13"   # release v0.16.13: bloque WI-86 + WI-80. El tag se crea sobre ESTE commit; HEAD posterior lleva .dev0 (AGENTS 12). Bloque en local y SIN PUSH.
+  package_version: "0.16.13.dev0"   # trabajo post-release v0.16.13 (AGENTS 12). El tag v0.16.13 esta en 6e97513; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1267,6 +1267,10 @@ release:
       fecha: 2026-10-02
       sha: "4272ade5bbe176832cf1e4c27b6b6dc42c6e9ac2"
       nota: "Bloque WI-72..WI-81: investigacion retrospectiva bajo la consigna de buscar falsos exitos. 0 feat, 1 fix (b3b2ef7, cobertura del CLI 65,86% -> 94%), 1 refactor (90d2e46, siete alias de WI-56 sin callers), 6 test, 1 docs -> PATCH. 2368 -> 2376 tests. Falsos exitos confirmados: cobertura ciega al CLI, alias muertos contados como mappers, una rama de main sin oraculo (runner.py:250-254), el contrato de exit code sin una sola asercion, y un rechazo ilegible presentado como PROPOSED. Conocimiento negativo: ninguna hipotesis sobrevive sin mutacion. Siete decisiones de producto abiertas en next_workitem. PUSH NO EJECUTADO."
+    - tag: v0.16.13
+      fecha: 2026-10-02
+      sha: "6e9751356d5dc4d4466bd4948b410c0de3a6a011"
+      nota: "Bloque WI-86 + WI-80: la capa de re-export de platform.storage y el rechazo ilegible que se degradaba a PROPOSED sin avisar. 0 feat, 1 fix, 1 refactor => PATCH. 2416 tests. Sin push."
     - tag: v0.16.12
       fecha: 2026-10-02
       sha: "10d16734cc236c5845a4c37c88fa6a7a2d4faf57"

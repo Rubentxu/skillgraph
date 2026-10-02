@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.13"  # release v0.16.13: bloque WI-86 (refactor) + WI-80 (fix) => PATCH, SemVer derivado del historial
+__version__ = "0.16.13.dev0"  # trabajo post-release v0.16.13 (regla AGENTS §12): bump .dev0 inmediato tras el tag para no reproducir el drift
 
 from skillgraph.core.errors import (
     IdentityConflictError,
