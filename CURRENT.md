@@ -22,6 +22,17 @@
 > failed. 2225 → **2239 passed**. Borrar los shims queda como decisión del
 > operador: es cambio de contrato (`storage.__all__`) y AGENTS §10 pide
 > ADR. Evidencia: `evidence/sddk-wi76-verify-2026-10-02.md`.
+> **Auditoría de extensión de WI-76: resultado NEGATIVO.** Se auditó si el
+> patrón se repetía: 40 tests en 29 ficheros combinan `getsource`/AST con un
+> `assert`. ~37 son contratos estructurales legítimos (sin SQL aquí, bajo 800
+> LoC) que no se pueden verificar por comportamiento. Los 2 que afirmaban
+> runtime (`_fail_node_with`, `_open_known_project`) son **falso positivo**:
+> sus contratos sí están verificados conductualmente en otros tests. **El
+> patrón no es sistémico y la hipótesis se retira.** Solo se corrigió el
+> residuo: el guard de `_fail_node_with` ahora invoca la función (antes solo
+> leía que la última línea fuese `return False`, con lo que un `return None`
+> temprano pasaba) y su docstring deja de prometer que los callers usen el
+> retorno — ninguno lo hace. Detalle en la evidencia §7.
 > **WI-75 cerrado — la cobertura del CLI deja de estar ciega** (2026-10-02,
 > ciclo SDDK `wi-75-subprocess-coverage-instrument`): `pytest --cov` mide solo
 > el proceso principal, y la suite ejercita la frontera CLI por **subproceso**.
