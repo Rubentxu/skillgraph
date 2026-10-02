@@ -10153,3 +10153,19 @@ aplicacion** lo reporto como `MUTACION NO APLICO`, no como «no cazada».
 - `evidence/sddk-wi92-verify-2026-10-02.md`
 - `.pipelinek/wi92_mutate.sh` (6/6 + baseline + autocontrol de aplicacion)
 - `.pipelinek/wi92_measure_refs.py` (la medicion de citas, con el resolver corregido)
+
+### Cierre del bloque WI-92
+
+- **SIN release, a proposito.** `git log v0.16.17..HEAD` = 0 feat, 0 fix, 0 breaking,
+  1 test, 2 docs, 1 chore. Por la regla del CHANGELOG (`refactor`/`test`/`docs`/
+  `chore` no bumpean SemVer) no hay etiqueta que emitir. Forzar una release por un
+  `test` inflaria el historial. `__version__` sigue en `0.16.17.dev0` y el ultimo
+  tag es `v0.16.17` en `321fa10`. No es dejar trabajo verificado a medias: el
+  trabajo esta completo, verificado y commiteado; lo que no se hace es crear una
+  etiqueta para un cambio que no cambia el contrato.
+- **CI canonica**: `Pipeline finished with SUCCESS`, 5/5 stages,
+  `run_id 84dd0239-e7de-4cf4-8061-76ecd26307cb`, **2499 passed in 107.70s**.
+  8 `StepStarted`, 8 `EchoOutputCaptured`, 0 `StepFailed`, control root completo,
+  SHA-256 de `.pipeline.kts` sin drift.
+- **Ciclo SDDK WI-92 CLOSED**. **33 ciclos CLOSED, 0 pendientes.**
+- **SIN PUSH.** 48 commits sin publicar.

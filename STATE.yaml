@@ -867,10 +867,10 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, release v0.16.17). 5/5 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 (el que fija mise.toml) con --rerun. El journal contiene 8 StepStarted y 8 EchoOutputCaptured con la linea 2493 passed in 111.38s (0:01:51), que es lo que distingue una ejecucion real de un veredicto cacheado. run_id 5903e980-4238-4d9b-8d76-8444fbe30a40. SHA-256 de .pipeline.kts = 0665345fda259a4d07eafd07e904874595f90fbad744d6553a7fb2a19d07eca4 (sin drift: ultimo cambio en 8ec0645)."
+  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, tras v0.16.17, bloque WI-92 SIN release). 5/5 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. El journal contiene 8 StepStarted y 8 EchoOutputCaptured con la linea 2499 passed in 107.70s, que es lo que distingue una ejecucion real de un veredicto cacheado. run_id 84dd0239-e7de-4cf4-8061-76ecd26307cb. SHA-256 de .pipeline.kts = 0665345fda259a4d07eafd07e904874595f90fbad744d6553a7fb2a19d07eca4 (sin drift)."
   ultima_ejecucion_local: 2026-10-02 19:14
-  resultado: "2493 passed in 111.38s (stage unit-tests de la CI canonica de v0.16.17). 0 regresiones. ruff check: All checks passed!"
-  working_tree: "arbol limpio en 05b29db; los 44 commits del bloque siguen SIN PUSH (no autorizado)"
+  resultado: "2499 passed in 107.70s (stage unit-tests de la CI canonica del bloque WI-92). 0 regresiones. ruff check: All checks passed!"
+  working_tree: "arbol limpio en f307302; los commits del bloque siguen SIN PUSH (no autorizado)"
 
 open_questions: []
 nota_honesta_revision: >
@@ -1363,5 +1363,5 @@ release:
     footgun_cerrado: "verificado desde v0.4.1; uat_audit --write sigue opt-in (read-only default)"
     e2e_real_h6: "pack_loader declara Character/StoryArc desde narrative-core.md; valida instancias; shadowing de tipos core y namespaces reservados rechazados"
     e2e_real_h7: "reconcile_after_interruption_completes_pending: IN_PROGRESS dejado por crash -> reconcile_pending aplica apply_fn exactamente 1 vez por propuesta, sin duplicar"
-  push: false   # RE-MEDIDO 2026-10-02 tras el bloque WI-91: `git rev-list --count origin/main..HEAD` = 44 commits sin publicar, origin/main = 0ebbd58, HEAD = 05b29db. NO se ha publicado nada: el push NO esta autorizado y `sddk release apply --route local` haria push de trunk y tag, luego no es opcion. La cifra de 39 del bloque anterior (WI-90) queda RETIRADA por caducidad, no por correccion. 32 ciclos SDDK CLOSED, 0 pendientes. Ledger verificado en PASS.
+  push: false   # RE-MEDIDO 2026-10-02 tras el bloque WI-92: sin autorizacion del operador y `sddk release apply --route local` haria push de trunk y tag, luego no es opcion. El bloque WI-92 NO lleva release (1 test + 1 docs no bumpean SemVer), asi que el contador solo cambia por los commits del propio bloque. 33 ciclos SDDK CLOSED, 0 pendientes.
 
