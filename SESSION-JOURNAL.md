@@ -10012,3 +10012,46 @@ medido. El hueco queda escrito y
 - `evidence/sddk-wi91-verify-2026-10-02.md`
 - `.pipelinek/wi91_mutate.sh` (6/6 + control de baseline)
 - `.pipelinek/wi91_fix_h9.py` (correccion por marcadores, no por numero de linea)
+
+### Cierre del bloque WI-91
+
+- **Release `v0.16.17`** (tag anotado, commit `321fa10`). SemVer derivado de
+  `git log v0.16.16..HEAD` = 0 feat, 0 breaking, 2 fix, 2 docs, 1 chore => PATCH.
+  Bump post-release a `0.16.17.dev0` en `05b29db`.
+- **CI canonica**: `Pipeline finished with SUCCESS`, 5/5 stages,
+  `run_id 5903e980-4238-4d9b-8d76-8444fbe30a40`, **2493 passed in 111.38s**.
+  Los 6 criterios de AGENTS verificados: SUCCESS terminal; 8 `StepStarted` y
+  8 `EchoOutputCaptured` con la linea de pytest; journal SQLite; control root
+  completo; 0 `StepFailed` y `RunFinished/success`; SHA-256 de `.pipeline.kts`
+  sin drift.
+- **Ciclo SDDK WI-91 CLOSED**. **32 ciclos CLOSED, 0 pendientes.**
+- **SIN PUSH.** 44 commits sin publicar.
+
+### Tercera corrupcion de STATE.yaml del bloque, y la misma de WI-90
+
+La cadena de `release.rationale` volvio a perder la comilla de cierre: el
+ultimo fragmento de la concatenacion de Python dejo su delimitador como
+delimitador en vez de contenido. Rompio el parseo YAML. **Segunda vez en dos
+bloques, mismo error exacto.**
+
+La diferencia esta vez es que el fallo llego ANTES de romper el arbol: el
+script ahora valida el YAML **antes de escribir**, no despues. La primera
+version de `.pipelinek/wi91_bump.py` escribia y luego validaba, y cuando la
+validacion fallo el fichero ya estaba roto en disco. Detectar tarde un error
+que ya destruyo el estado bueno no es autocontrol: es un aviso tardio.
+
+### Conocimiento negativo (anadido)
+
+- **`wc -c` cuenta bytes, no caracteres.** Al comprobar que los subjects de
+  este bloque respetaban el limite de 72 de AGENTS §7, `wc -c` dio 74 para un
+  subject que en caracteres son 71: la raya em ocupa 3 bytes en UTF-8. Sin
+  corregirlo, la conclusion habria sido "el subject es demasiado largo" y el
+  commit siguiente se habia acortado por un motivo que no existia. Es la
+  misma familia que la medicion de WI-88 sobre `/usr/bin/sg`: **medir la
+  cosa equivocada produce un numero que parece confirmar cualquier
+  premisa.**
+- **Un guard de una sola direccion deja pasar la mitad de los fallos**, que es
+  justo la mitad que se cuela en un documento. Por eso el de WI-91 mira el
+  registro Y el disco, y por eso se verifica con registros sinteticos que se
+  saben incorrectos, incluido uno CONFORME: un guard que siempre falla no
+  puede pasar por guard.
