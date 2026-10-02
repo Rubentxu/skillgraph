@@ -7860,3 +7860,16 @@ autorizacion de config)
 2. Los handlers de runs/expansion/pack carecen de tests in-proceso:
    unica red real via subprocess (que la instrumentacion pisotea).
 
+### Experimento de instrumentacion (mismo dia, post-registro) — RECHAZADO con evidencia
+
+- `parallel = true` en [tool.coverage.run]: run scoped solo-subproceso
+  reporta **0%** (pytest-cov no combina los .coverage.* de subproceso);
+  sesion mixta (in-process + subprocess) solo cuenta el proceso
+  principal (runs.py sigue 9%). REVERTIDO a la config anterior.
+- Configuracion minima real para medir subprocess: COVERAGE_PROCESS_
+  START + combine explicito al final (setup dedicado) — deuda
+  documentada en pyproject.toml [tool.coverage.run] NOTA y backlog
+  de esta sesion.
+- Estado de la config: revertida; comentario NOTA deja constancia del
+  experimento y del enlace al journal.
+

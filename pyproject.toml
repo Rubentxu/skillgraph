@@ -83,6 +83,13 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["skillgraph"]
+# NOTA (WI-63): la cobertura de los tests CLI por SUBPROCESO no se
+# instrumenta de forma fiable: sin parallel, los subprocesos se pisan
+# .coverage (last-writer-wins); con parallel=true pytest-cov NO combina
+# los ficheros (experimento 02-oct: sesion mixta solo cuenta el proceso
+# principal; scoped subprocess-only = 0%). Queda deuda de setup
+# dedicado (COVERAGE_PROCESS_START + combine explicito) o tests
+# in-proceso para la frontera. Ver SESSION-JOURNAL 2026-10-02 (X)/(XI).
 omit = [
     "src/skillgraph/__init__.py",
     "src/skillgraph/__main__.py",
