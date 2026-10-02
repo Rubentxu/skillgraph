@@ -126,7 +126,7 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: WI-63   # red in-proceso para handlers runs/expansion/pack (cierra el hueco de instrumentacion por via pragmatica): 6 tests inproc contra el binario de handlers, cobertura deterministica (runs 37%, pack 40%, expansion 20% en scoped inproc vs 9/24/46% via subprocess pisoteado)
+  current_workitem: WI-64   # P3 legibilidad: _resolve_run_inputs 89 -> 25 LoC en 3 fases nombradas (orden de errores y contrato 6-tupla preservados; docstring mentiroso corregido; exit code anotado int|None). Audit: 9 funciones >80 (antes 10)
   next_workitem: WI-56   # siguiente estrangulamiento P1 segun audit vigente: runcontroller.py (1445 LoC) o knowledge_repository.py (986); requiere ADR propia (patron ADR-0018 replicable)
   evolution_v2:
     DT_PRE_PUSH_HOOK_cerrado:
