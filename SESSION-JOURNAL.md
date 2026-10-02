@@ -7713,6 +7713,44 @@ ADR-0016. Umbral <800 requiere fase 2.
   mapper (delega con import diferido); las redes de identidad deben
   leer getsource cuando haya wrappers, no asumir mismo objeto.
 
+## 2026-10-02 (VII-bis) — WI-63: red in-proceso handlers runs/expansion/pack
+
+### Resumen
+
+Implementacion pragmatica de la deuda de instrumentacion (WI-57/63):
+6 tests in-proceso (`tests/test_wi63_cli_handlers_inproc.py`) que
+llaman los handlers directamente con Namespace (setup de proyecto por
+subprocess, deliberadamente no medido). Cobertura deterministica
+verificada: runs.py 37%, pack.py 40%, expansion.py 20% en scoped
+inproc (vs 9/24/46% via subprocess pisoteado). Suite completa 1874
+passed + verificacion de cobertura global 89.45%.
+
+Contratos as-built fijados: `runs list` exige limit numerico (parser
+default 20); `runs cancel` PROPAGA NotFoundError (main la traduce a
+EXIT_DOMAIN — la red subprocess WI-58 fija ese otro lado); `propose`
+exige >=1 operacion y manual_signed con granted_by/granted_at.
+
+### Hallazgos de instrumentacion (corrigen WI-57)
+
+- La cobertura de subprocess SI se mide, pero NO determinista:
+  knowledge 95% vs runs 9% en el mismo run — patron last-writer-wins
+  sin parallel mode. Experimento parallel=true RECHAZADO con
+  evidencia (scoped subprocess-only = 0%; mixto no combina): setup
+  dedicado (COVERAGE_PROCESS_START + combine) queda como deuda.
+- NOTA en pyproject [tool.coverage.run] con el enlace al journal.
+
+### Bug de framework #3 (backlog)
+
+El ciclo SDDK `wi-63-cli-handlers-inproc` DESAPARECIO del ledger tras
+el primer supersede con admission fallida (duplicate_event_id
+fail-soft): solo quedan los approval events, la proyeccion cycles no
+tiene la fila y ni lock/rebuild la recuperan. Re-abierto como
+`wi-63b-cli-handlers-inproc-net` y CLOSED con evidencia.
+
+### Estado de salida
+
+- Arbol limpio; SIN push (acumulado pendiente del operador).
+
 ## 2026-10-02 (VII) — WI-61: fase 2a de knowledge_repository — fuera de god files
 
 ### Resumen
