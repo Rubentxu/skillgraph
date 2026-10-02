@@ -365,9 +365,18 @@ def test_uats_can_be_loaded_as_documentation(tmp_path: Path) -> None:
     pueden citar como documentacion viva desde el repo."""
     # QW-I: leer del snapshot versionado ``docs/blueprint/plan/UAT.md``
     # (no del origen ``external/blueprint-v1/`` que esta gitignored).
+    #
+    # WI-97: esto era un `pytest.skip`. El snapshot esta versionado, asi que
+    # la rama no se tomaba nunca — un skip perpetuo es indistinguishable de
+    # un test que no vigila. Y si el fichero faltara de verdad, saltarse seria
+    # justo lo contrario de avisar: el UAT pasaria a no comprobar nada sin que
+    # nadie se entere. Fallar es lo que corresponde a un fichero versionado
+    # que no esta: o el checkout esta incompleto o alguien lo borro.
     uat_doc = Path(__file__).resolve().parent.parent / "docs" / "blueprint" / "plan" / "UAT.md"
-    if not uat_doc.exists():  # pragma: no cover
-        pytest.skip("snapshot del blueprint no versionado en docs/blueprint/")
+    assert uat_doc.exists(), (
+        f"snapshot versionado del blueprint ausente: {uat_doc}. "
+        f"El checkout esta incompleto o el fichero se borro del arbol"
+    )
     text = uat_doc.read_text(encoding="utf-8")
     for tag in ("UAT-01", "UAT-02", "UAT-03"):
         assert tag in text, f"falta {tag} en el blueprint"
