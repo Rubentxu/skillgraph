@@ -1,5 +1,41 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-02 (decimotercera tanda) cerrado — WI-101, release `v0.20.2`.**
+> Versión activa `0.20.2.dev0`; último tag `v0.20.2`. 2661 passed.
+>
+> **WI-101 — el bundle de auditoría certificaba UATs que no ejecutaba.**
+> WI-99 cerró el bloque de la evidencia «reproducible». Lo que hizo fue hacer
+> el bundle *reproducible*, no *verificador*: `scripts/audit_bundle.sh` invoca
+> `python -m tests.uat_audit` sin flags, y ese es el modo lectura — no ejecuta
+> un solo UAT, relee los 26 JSON de `tests/uat-evidence/`. El `PASS=16` del
+> bundle de WI-99 se escribió mirando ficheros del commit `0ebbd58`, 111
+> commits por detrás.
+>
+> **Encima de eso, el exit code no significaba nada.** El modo lectura hacía
+> `return 0` incondicional, y la guarda del bundle compara contra ese código:
+>
+> | evidencia en disco | salida | exit code |
+> |---|---|---|
+> | `UAT-01.json` inyectada en `FAIL` | `PASS=15 FAIL=1` | **0** |
+> | `tests/uat-evidence/` ausente | `PASS=0 FAIL=0` | **0** |
+>
+> Un bundle con un `FAIL` a la vista y otro sin una sola evidencia eran
+> indistinguibles de uno sano.
+>
+> **Lo que se arregla** (tres cosas, una propiedad): el exit code sale de
+> `_verdict`, compartido por los tres modos; `--verify` ejecuta, no persiste
+> y **confronta** cada veredicto con la evidencia persistida; y el resumen
+> cuenta los veredictos fuera de dominio en vez de tragárselos — antes
+> imprimía `PASS=15 FAIL=0` sobre 16 filas leídas.
+>
+> **Verificado después del arreglo, no antes:** los 16 UAT se ejecutan y
+> **convergen** con la evidencia versionada. La evidencia era cierta; lo que
+> faltaba era comprobarlo. Mutaciones 9/9, run `e5d046af`, 0 `StepFailed`.
+>
+> **Sin push**: 112 commits sin publicar, `origin/main` en `0ebbd58`.
+
+---
+
 > **Bloque 2026-10-02 (duodécima tanda) cerrado — WI-100, release `v0.20.1`.**
 > Versión activa `0.20.1.dev0`; último tag `v0.20.1`. 2647 passed.
 >

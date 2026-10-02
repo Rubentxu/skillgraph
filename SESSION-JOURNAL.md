@@ -11282,3 +11282,160 @@ with SUCCESS`, 8/8 stages, **2647 passed in 233.06s**, cobertura 95,22 %, 0
 5. `python3 - <<'PY'` con `\\.sh` dentro de un escalar YAML de una línea:
    Python deja `\.` y **YAML no acepta ese escape**. Se rompe al parsear,
    muy lejos del sitio donde se escribió. Evitar escapes en esos campos.
+
+---
+
+## 2026-10-02 — WI-101: el bundle de auditoría certificaba UATs que no ejecutaba
+
+Ciclo `p-b7740b96d79ec013/wi101-uat-audit-false-verdict`. Release `v0.20.2`
+(PATCH). Run de certificación `e5d046af-07e6-4cdf-910c-8bbd7c8f36b1`.
+
+### Lo que se decía y lo que se hacía
+
+WI-99 cerró el bloque de la evidencia reproducible. Lo que hizo fue hacer el
+bundle **reproducible**, no **verificador**.
+
+`scripts/audit_bundle.sh` —el instrumento que existe *para* dar evidencia
+reproducible a una auditoría independiente— invocaba:
+
+```bash
+uv run python -m tests.uat_audit
+```
+
+Sin flags: el **modo lectura**. No ejecuta un solo UAT; relee los 26 JSON de
+`tests/uat-evidence/` y los repite. El `PASS=16` del bundle de WI-99 se
+escribió mirando ficheros del commit `0ebbd58` (= `origin/main`), 111
+commits por detrás.
+
+### Debajo: el exit code no significaba nada
+
+`tests/uat_audit.py` hacía `return 0` **incondicional** en el modo lectura
+(línea 1949 del árbol previo). El exit code estaba estructuralmente
+desacoplado del veredicto, y la guarda del bundle compara contra él:
+
+```bash
+if [ "$UAT_RC" -ne 0 ]; then ... exit "$UAT_RC"; fi
+```
+
+No podía dispararse jamás por el estado de la evidencia. Medido con el
+comando exacto del bundle, autocontrolado (backup byte a byte, `trap`,
+`sha256` verificado al salir):
+
+| evidencia en disco | salida | exit code |
+|---|---|---|
+| baseline, intacta | `PASS=16 FAIL=0` | 0 |
+| `UAT-01.json` inyectada en `FAIL` | `PASS=15 FAIL=1` | **0** |
+| `tests/uat-evidence/` ausente | `PASS=0 FAIL=0` | **0** |
+
+Un bundle con un `FAIL` a la vista y un bundle sin una sola evidencia eran
+indistinguibles de uno sano.
+
+### Un total que no suma las filas no es un total
+
+Lo encontró el primer test del bloque, no una revisión. Con `status:
+"passed"` (typo deliberado) el resumen imprimía:
+
+```
+  FAIL UAT-07: passed
+PASS=15  FAIL=0  BLOCKED=0
+```
+
+`15+0+0 = 15` sobre **16 filas leídas**. El número era cierto letra a letra y
+estaba mal, y la diferencia no aparecía en ninguna parte de la salida: el
+recuento solo miraba las tres etiquetas conocidas.
+
+De ahí la **lista blanca** (`PASS`, `BLOCKED`) en vez de negra. Una lista
+negra tiene que enumerar cada cosa mala, y ese conjunto no tiene fin; con
+negra, un `status: "passed"` pasaba el guard en silencio.
+
+### Cambios
+
+- `_verdict()` decide el exit code de los **tres** modos, para que no puedan
+  divergir entre sí. Lista blanca.
+- `--verify`: ejecuta, no persiste, y **confronta** cada veredicto con la
+  evidencia persistida. Sin ese contraste la evidencia era la única fuente
+  del veredicto y no se contrastaba con nada.
+- `_summary` cuenta `FUERA DE DOMINIO=n` en vez de tragarse lo que no conoce.
+- `scripts/audit_bundle.sh` pasa a invocar `--verify`.
+- `AGENTS.md`: se retira una afirmación que WI-100 dejó obsoleta (decía que
+  `pre-push` ejecutaba la suite a pelo; desde WI-100 delega) y se añade la
+  sección que este bloque necesita.
+
+### Mutaciones 9/9
+
+`.pipelinek/wi101_mutate.sh`. M8 es el contraejemplo de la serie: quita
+`--verify` de la orden real y lo deja **solo en un comentario**; el guard
+tiene que seguir viendo el modo lectura. Un guard que se dejara engañar por
+una mención pasaría en verde — es lo que confirmó M7 de WI-100.
+
+**M4 encontró un test confundido.** Apuntaba al caso espejo (evidencia
+`PASS` / ejecución `FAIL`) y se quedaba **verde**: con la ejecución en
+`FAIL` el veredicto ya es 1, así que el `rc != 0` podía venir del veredicto
+y no de la divergencia. Un test que no puede fallar por la razón que dice no
+es un guard. Añadido el caso no confundido (evidencia `FAIL` / ejecución
+`PASS`), que es el que sale de la medición real.
+
+### Un fallo de autocontrol, registrado
+
+La primera versión del script de mutaciones tenía `rm -rf "$BAK"` **dentro**
+de `restaurar()`. La primera restauración se llevó el backup y las seis
+siguientes no restauraron nada: las mutaciones se acumularon sobre el árbol y
+hubo que revertirlas a mano (6 en `tests/uat_audit.py`, 2 en
+`scripts/audit_bundle.sh`; el fichero de tests quedó intacto).
+
+El script anunciaba `RESTAURADO OK` mientras seis restauraciones no hacían
+nada. **Autocontrol que se degrada en silencio no es autocontrol**: hay que
+poder distinguir "no restauré porque no hacía falta" de "no restauré porque
+ya no puedo". Arreglado: `restaurar()` nunca borra; borrar es del `trap`, y
+solo al final.
+
+También falló el intento de partir el cambio en dos commits cortando el
+fichero de tests por número de línea: la cadena de anclaje estaba también
+dentro de un *docstring*, el corte dejó un docstring colgando y el fichero no
+parseaba. Restaurado reinsertando el bloque. El cambio quedó en **un** commit,
+que además es lo correcto: el exit code y el bundle son la misma propiedad, y
+separarlos deja un estado intermedio inerte.
+
+### Cierre
+
+- `2661 passed in 227.23 s` en la CI canónica, run `e5d046af`, 8/8 stages,
+  **0 `StepFailed`**, cobertura 95,22 %.
+- SHA-256 de `.pipeline.kts` = `d8658968…3ddcc`, idéntico a WI-98 y WI-100.
+- Verificado **después** del arreglo: los 16 UAT se ejecutan y convergen con
+  la evidencia versionada. La evidencia era cierta; lo que faltaba era
+  comprobarlo.
+
+### Lo que NO se resolvió
+
+- **No se regenera la evidencia persistida.** Los 26 JSON siguen con
+  `revision: cb7e348…` y `timestamp: 2026-09-23`. Son *provenance*: registran
+  lo que pasó entonces. Lo que faltaba era contrastarlos, y `--verify` los
+  contrasta sin reescribirlos. Regenerarlos convertiría un registro en una
+  copia del presente, que es otra cosa.
+- **Hooks sin instalar.** El `pre-commit` de `.git/hooks/` sigue siendo la
+  copia anterior a WI-100 y pagó los **120,27 s** de la suite entera en este
+  commit: la medición de WI-100 reproducida sin instalar el hook nuevo.
+  `bash scripts/install-hooks.sh` es decisión del operador.
+- 112 commits sin publicar; `origin/main` en `0ebbd58`. Push no autorizado.
+- Credenciales Anthropic/OpenAI: siguen bloqueando el criterio de salida de
+  H9, incumplido desde WI-91.
+- `release.complete` inalcanzable (exige `Cargo.toml`) → `cycle supersede`.
+- 4 errores de `sddk lint`: perfil autor de pack; este repo es consumidor.
+
+### Errores propios de esta sesión, para no repetirlos
+
+1. **Un autocontrol que borra su propio respaldo dentro del paso que
+   restaura.** Restaurar y limpiar son dos operaciones distintas, y la
+   limpieza tiene que vivir en el `trap`, no en el restaurador.
+2. **Anclar un corte por una cadena que también aparece en un *docstring*.**
+   Un ancla textual no es un ancla si la frase está repetida; el fichero
+   queda sin parsear y el error aparece lejos. Anclar por la **primera**
+   ocurrencia o por un marcador inequívoco.
+3. **Un test que solo puede pasar por una de las dos razones que dice
+   vigilar.** Se mide preguntándose: «¿puedo hacer que falle por la razón
+   que me importa?». Si no, está confundido.
+4. **Una lista negra de cosas malas** en un dominio que se puede enumerar
+   cerrado. Enumerar lo bueno no tiene fin; enumerar lo malo sí.
+5. Recapitular en un docstring una medición que ya no es la actual
+   (`pytest a pelo son ~130 s` cuando son ~120). El número que acompaña a
+   una explicación caduca con la explicación.

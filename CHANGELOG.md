@@ -14,6 +14,55 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.20.2] - 2026-10-02 — el bundle de auditoría certificaba UATs que no ejecutaba
+
+**PATCH**: `git log v0.20.1..HEAD` = 0 `feat`, 1 `fix`, 1 `docs`, 0 breaking.
+**2661 passed** (2647 antes; +14).
+
+Delegar en la receta canónica no basta si el paso que viene después no mide
+nada. `scripts/audit_bundle.sh` es el instrumento que existe *para* dar
+evidencia reproducible a una auditoría independiente, e invocaba
+`python -m tests.uat_audit` sin flags: el modo lectura, que no ejecuta un
+solo UAT y relee los 26 JSON de `tests/uat-evidence/`. El `PASS=16` del
+bundle de WI-99 se escribió mirando ficheros del commit `0ebbd58`, 111
+commits por detrás.
+
+### El exit code no significaba nada
+
+El modo lectura hacía `return 0` **incondicional**. La guarda del bundle
+(`if [ "$UAT_RC" -ne 0 ]`) compara contra ese código, así que no podía
+dispararse jamás por el estado de la evidencia. Medido con el comando
+exacto del bundle:
+
+| evidencia en disco | salida | exit code |
+|---|---|---|
+| `UAT-01.json` inyectada en `FAIL` | `PASS=15 FAIL=1` | **0** |
+| `tests/uat-evidence/` ausente | `PASS=0 FAIL=0` | **0** |
+
+Un bundle con un `FAIL` a la vista y otro sin una sola evidencia eran
+indistinguibles de uno sano.
+
+### Un total que no suma las filas no es un total
+
+El primer test del bloque puso `status: "passed"` y falló por lo que menos
+se esperaba: el resumen imprimía `PASS=15 FAIL=0 BLOCKED=0` sobre **16 filas
+leídas**, porque el recuento solo miraba las tres etiquetas conocidas. El
+número era cierto letra a letra y estaba mal. De ahí la lista **blanca**
+(`PASS`, `BLOCKED`) en vez de negra: el conjunto de cosas malas no tiene fin.
+
+### Lo que se arregla
+
+- El exit code sale de `_verdict`, compartido por los tres modos, para que no
+  puedan divergir entre sí.
+- `--verify` (nuevo) ejecuta los UATs, no persiste, y **confronta** cada
+  veredicto con la evidencia persistida. Sin ese contraste la evidencia era
+  la única fuente del veredicto y no se contrastaba con nada.
+- El resumen cuenta los veredictos fuera de dominio en vez de tragárselos.
+
+Verificado después del arreglo, no antes: los 16 UAT se ejecutan de verdad y
+**convergen** con la evidencia versionada. La evidencia era cierta; lo que
+faltaba era comprobarlo. Mutaciones 9/9 en rojo.
+
 ## [0.20.1] - 2026-10-02 — los hooks de git decían una cosa y hacían otra
 
 **PATCH**: `git log v0.20.0..HEAD` = 0 `feat`, 3 `fix`, 3 `test`/`docs`, 0 breaking.
