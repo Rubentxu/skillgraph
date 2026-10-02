@@ -8173,3 +8173,70 @@ Comandos que costaron tiempo y quedan anotados para la proxima sesion:
   (`external-obsolete`, no `external_obsolete`).
 - El evidence de `evaluate-gate` exige `argv`, `exit_code` y
   `output_digest` en el NIVEL SUPERIOR del JSON, no anidados.
+
+### WI-73 — `aggregate_file_signatures`: el invariante UAT-EVO-08 tiene nombre
+
+Segundo workitem con ciclo SDDK propio. `aggregate_file_signatures` 86 ->
+**72 LoC**, cc 8 -> **3**. **P3: 5 -> 4.** God modules 0. Fichero 627 ->
+648.
+
+El corte no fue "partir una funcion larga": fue **darle nombre a un
+invariante que no lo tenia**. El bucle de 18 lineas mezclaba comprobar
+pertenencia al scope y clasificar el fallo, y UAT-EVO-08 ("un proyecto
+no ve las firmas de otro") solo existia en el docstring de la clase y en
+el nombre de un test. Ahora es `_sources_in_scope`, con los TRES casos
+documentados, incluido el tercero que es el que no se ve: un source
+inexistente se OMITE en silencio, y esa distincion respecto al rechazo
+es deliberada (filtrar en silencio el cruce seria una fuga; omitir un
+typo perderia feedback). De paso, el `for` que solo acumulaba en un
+dict paso a comprehension (AGENTS §11.8).
+
+**Punto ciego del audit, medido y reportado SIN actuar.** Su vecino
+`list_file_signatures_for_source` mide **cc 10** (la mayor del modulo) con
+58 LoC. El audit mide longitud con umbral 80 y cc con umbral 20: una
+funcion de 58 LoC y cc 10 cae en el hueco y **ningun instrumental la
+captura**. No se corta en este workitem: el frente lo define el audit, y
+abrir un frente nuevo a mitad de otro es justo "inventar deuda". Queda
+con su medicion para que la decision sea del operador.
+
+**Un CRUDO contra AGENTS §1.2 que NO se toca.** El `raise TypeError` del
+guard de tipo es un `TypeError` en codigo de dominio, y §1.2 prohibe
+errores no tipados. Pero no es una anomalia: `file_handoff.
+_validate_inputs` tiene **cuatro** `raise TypeError` identicos. La
+convencion de la casa es `TypeError` para validar TIPOS y
+`ValidationError` para validar VALORES. Cambiar una instancia dejando
+cuatro hermanas crearia inconsistencia, no la quitaria. Se reporta como
+convencion no escrita (que §1.2 no menciona) y se deja como esta.
+
+**La mutacion que mas importa.** Tres mutaciones, y la primera es la
+que justifica la red entera: **filtrar en silencio el cruce de proyecto
+en vez de rechazarlo**. Es la fuga de contenido que UAT-EVO-08 prohibe.
+La cazan 3 tests nuevos Y el test preexistente de H12. Las otras dos: un
+mensaje que revela el `source_id` (3 tests) y la comprehension movida
+antes del aislamiento (1 test de orden).
+
+**Dos fallos mios en los tests, otra vez antes de produccion:**
+
+1. Monkeypatch de `list_file_signatures_for_source` para espiar:
+   `KnowledgeController` es un **dataclass frozen** y lanza
+   `FrozenInstanceError`. La red ahora usa una subclase que sobrescribe
+   el metodo, que ademas demuestra que el punto de observacion es el
+   metodo y no un detalle del storage.
+2. El test de fuga nunca registro el source en p1, asi que era el caso
+   3 (no existe) y no el caso 2 (esta en otro proyecto): el helper lo
+   omitia en silencio y el test fallaba por el motivo equivocado. Un
+   test que falla por el motivo equivocado no es un test rojo util.
+
+**Aprendizaje de la sesion sobre SDDK** (tres correcciones al script de
+gates, en orden):
+
+- La salida de `evaluate-gate` es **YAML** (`receipt_id: ...`), no JSON,
+  y puede traer avisos antes: se extrae por regex, no parseando la linea.
+- Cada transicion **libera el lease**: hay que readquirirlo entre pasos o
+  el siguiente falla con "has no lease; fencing arguments are not
+  applicable".
+- Un script de gates reejecutado tropieza con pasos ya aplicados: se
+  salta lo que la fase actual ya supero.
+
+Verificacion: 2215 passed (2197 + 18), ruff y format limpios, los tests
+de knowledge (H12/H13/H9) pasan sin modificarlos.

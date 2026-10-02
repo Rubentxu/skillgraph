@@ -343,6 +343,41 @@ class KnowledgeController:
 
     # ----- Scopes H12 (evolution-v2) -----
 
+    def _sources_in_scope(self, *, member_source_ids: tuple[str, ...]) -> tuple[str, ...]:
+        """Filtra `member_source_ids` a los que pertenecen a este scope.
+
+        UAT-EVO-08. Tres casos, y el tercero es el que no se ve:
+
+        1. el source pertenece al (tenant_id, project_id) de este
+           controller: se incluye;
+        2. existe en OTRO proyecto: se rechaza con `UnknownSourceError` y
+           un mensaje que NO revela el `source_id`, porque filtrar en
+           silencio el contenido de otro proyecto seria una fuga;
+        3. no existe en ninguna parte: se omite en silencio, porque es un
+           typo del caller y rejected le quitaria feedback.
+
+        El caso 2 se distingue del 3 a proposito. Se rechazan, no se
+        filtran.
+        """
+        sources_in_scope: list[str] = []
+        for source_id in member_source_ids:
+            try:
+                self.get_source(source_id=source_id)
+                sources_in_scope.append(source_id)
+            except UnknownSourceError:
+                # Distinguir: source-en-otro-proyecto vs no-existe.
+                cross = self.knowledge.source_exists_anywhere(source_id=source_id)
+                if cross:
+                    # Existe en OTRO tenant/project: rechazo explicito.
+                    # El mensaje NO revela el source_id (regla E2E-08:
+                    # no filtrar contenido de otro proyecto).
+                    raise UnknownSourceError(
+                        "Uno o mas sources pertenecen a otro proyecto; "
+                        "rechazado sin filtrar contenido (UAT-EVO-08)"
+                    ) from None
+                # No existe en ningun proyecto: omitir silenciosamente.
+        return tuple(sources_in_scope)
+
     def aggregate_file_signatures(
         self,
         *,
@@ -395,35 +430,21 @@ class KnowledgeController:
                 cobertura_global=0,
             )
 
-        # Aislamiento E2E-08: distinguir source-en-otro-proyecto de
-        # source-inexistente. Si el source existe en OTRO proyecto, se
-        # rechaza explicitamente (no se filtra contenido). Si NO existe
-        # en ningun proyecto, se omite silenciosamente (typo del caller).
-        sources_in_scope: list[str] = []
-        for source_id in member_source_ids:
-            try:
-                self.get_source(source_id=source_id)
-                sources_in_scope.append(source_id)
-            except UnknownSourceError:
-                # Distinguir: source-en-otro-proyecto vs no-existe.
-                cross = self.knowledge.source_exists_anywhere(source_id=source_id)
-                if cross:
-                    # Existe en OTRO tenant/project: rechazo explicito.
-                    # El mensaje NO revela el source_id (regla E2E-08:
-                    # no filtrar contenido de otro proyecto).
-                    raise UnknownSourceError(
-                        "Uno o mas sources pertenecen a otro proyecto; "
-                        "rechazado sin filtrar contenido (UAT-EVO-08)"
-                    ) from None
-                # No existe en ningun proyecto: omitir silenciosamente.
+        # Aislamiento E2E-08: la decision de pertenencia vive en
+        # _sources_in_scope, y ocurre ANTES de leer ninguna firma: leer
+        # primero ya habria tocado el contenido del otro proyecto.
+        sources_in_scope = self._sources_in_scope(member_source_ids=member_source_ids)
 
         # Recolectar FileSignatures de cada source existente en el scope.
-        signatures_per_source: dict[str, tuple[FileSignature, ...]] = {}
-        for source_id in sources_in_scope:
-            signatures_per_source[source_id] = self.list_file_signatures_for_source(
+        # El orden de insercion del comprehension es el de iteracion,
+        # igual que el del bucle que sustituye.
+        signatures_per_source = {
+            source_id: self.list_file_signatures_for_source(
                 source_id=source_id,
                 only_stale=False,
             )
+            for source_id in sources_in_scope
+        }
 
         return aggregate_signatures(
             signatures_per_source=signatures_per_source,

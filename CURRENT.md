@@ -1,5 +1,37 @@
 # CURRENT — puntero operativo
 
+> **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
+> `v0.16.10` en `2ee6d77`. Los workitems posteriores a la release se
+> acumulan sobre ese HEAD; la siguiente release se decide con el operador.
+> **WI-73 cerrado — P3 5 → 4** (2026-10-02, ciclo SDDK
+> `wi-73-p3-aggregate-file-signatures`): `aggregate_file_signatures` 86 →
+> **72 LoC** y cc 8 → **3**. El corte no fue "partir una función larga"
+> sino **darle nombre a un invariante que no lo tenía**: el bucle de 18
+> líneas mezclaba comprobar pertenencia al scope y clasificar el fallo,
+> y UAT-EVO-08 ("un proyecto no ve las firmas de otro") solo existía en
+> el docstring de la clase y en el nombre de un test. Ahora es
+> `_sources_in_scope`, con sus tres casos documentados —incluido el
+> tercero, el que no se ve: un source inexistente se **omite** en
+> silencio, y esa distinción respecto al rechazo es deliberada—.
+> De paso, el `for` que solo acumulaba en un dict pasa a comprehension
+> (AGENTS §11.8).
+> **Punto ciego del audit, medido y reportado sin actuar**: su vecino
+> `list_file_signatures_for_source` tiene **cc 10**, la mayor del módulo,
+> con 58 LoC. Cae entre los dos umbrales del audit (80 LoC y cc 20) y
+> **ninguno lo captura**. No se corta aquí: abrir un frente nuevo a
+> mitad de otro es inventar deuda. Queda con su medición para que la
+> decisión sea del operador.
+> **Un CRUDO contra AGENTS §1.2 que NO se toca**: el `raise TypeError`
+> del guard de tipo parece una violación, pero `file_handoff.
+> _validate_inputs` tiene **cuatro** iguales. La convención de la casa es
+> `TypeError` para tipos y `ValidationError` para valores; cambiar una
+> instancia dejando cuatro hermanas crearía inconsistencia, no la quitaría.
+> Verificación: **2215 passed** (2197 + 18), ruff y format limpios, los
+> tests de knowledge (H12/H13/H9) pasan sin modificarlos, y la red se
+> verificó en ambos sentidos con tres mutaciones. La importante es la
+> primera: **filtrar en silencio el cruce de proyecto** en vez de
+> rechazarlo — que es la fuga que UAT-EVO-08 prohíbe. La cazan tres
+> tests nuestros y también la red preexistente.
 > **WI-72 cerrado — P3 6 → 5** (2026-10-02, ciclo SDDK
 > `wi-72-p3-expansion-apply`, el primero con ciclo propio desde WI-65):
 > `cmd_expansion_apply` 92 → **73 LoC**, cc 7 → 6, y por debajo del
