@@ -14,6 +14,89 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.18.0] - 2026-10-02 — el paquete se construye, y alguien lo comprueba
+
+**MINOR**: `git log v0.17.0..HEAD` = 1 `feat`, 3 `fix`, 4 `test`/`docs`, 0 breaking.
+**2605 passed** (2567 antes; +38).
+
+La cadena de release `git → __version__ → pyproject → wheel` se detenía
+antes de su último eslabón. Medido: **el build no estaba roto**. `uv build`
+termina en 1,7 s, produce un wheel de 248 KB con los 80 módulos, instala en un
+venv limpio y `skillgraph --help` responde. El hueco no era que nada
+funcionara: es que **nadie lo miraba nunca**. Cero tests referenciaban
+`hatchling`, `uv build` o `entry_points`, y ningún stage de `.pipeline.kts`
+construía el paquete.
+
+### Added
+
+- `feat(build)`: **`scripts/check_package_build.py`** construye wheel y sdist
+  reales y verifica siete invariantes. Stage propio `package-build`: **siete
+  stages**. Coste medido, 1,7 s — el más barato de los que miden algo.
+
+  La capa pura (`evaluar_*` sobre un `InformeBuild`) está separada de la de
+  efecto. Esa separación es lo que permite construir los contraejemplos con
+  informes sintéticos: sin ella, probar que el checker detecta un módulo
+  ausente exigiría mutar el árbol de trabajo.
+
+- `test(build)`: 38 tests. Cinco construyen el paquete de verdad; el resto
+  comprueban las invariantes con los informes sintéticos. **Mutaciones 7/7.**
+
+- `docs(agents)`: `AGENTS.md §12` documenta el tramo que faltaba —que el
+  número tiene que llegar al artefacto— con la tabla de invariantes, y §9 ata
+  el contrato al cambio concreto que puede romperlo. Va en §12 porque ése es
+  el dueño de la regla de release: dos enunciados son dos fuentes que se
+  desincronizan, el error que WI-96 ya corrigió con la regla de SemVer.
+
+### Fixed
+
+- `fix(build)`: **el sdist declaraba nueve rutas y llevaba catorce.** El
+  `include` de hatchling es un filtro, no una lista blanca: lo que no nombra
+  entra si el `.gitignore` no lo detiene. `bench/` y `docs/` viajaban sin
+  estar declaradas, y cambiando un solo patrón se colaba también `audits/`.
+  Ahora es `only-include`, que sí es lista blanca. El conjunto que viaja no
+  cambia; lo que cambia es que el artefacto queda determinado por la lista y
+  no por lo que el backend decida colar.
+
+- `fix(build)`: **dos invariantes que las mutaciones destaparon.** La primera
+  pasada cazó 5 de 7:
+
+  - Comparar «lo declarado» con «lo publicado» es tautología a medias,
+    porque lo publicado **se deriva** de lo declarado. Un target equivocado
+    sale idéntico en los dos lados mientras el comando no existe. La
+    invariante nueva importa el módulo.
+  - Una lista más corta no contradice a nada: no es una promesa rota, es una
+    promesa **retirada**. Quitar `tests` del `only-include` reducía el sdist y
+    ningún check de git lo notaba. `src/skillgraph`, `tests` y
+    `docs/blueprint` se exigen ahora **en el artefacto**, no en la
+    declaración.
+
+- `fix(uat)`: el skip del snapshot del blueprint era una rama que nunca se
+  tomaba — el fichero está versionado — y llevaba `pragma: no cover`, que lo
+  hacía invisible al informe de cobertura. `AGENTS.md §6.2` prohíbe
+  `pytest.skip` para esconder fallos. Verificado con un contraejemplo real:
+  moviendo el fichero, el test pasa de saltarse a **fallar**.
+
+### La invariante que más importa
+
+`sg_build_sdist_no_versionado`: **el artefacto no puede llevar nada que git
+no versione**. Un sdist que hereda del árbol de trabajo hace que dos árboles
+con el mismo commit produzcan dos artefactos distintos, y a partir de ahí
+`git` deja de poder decir qué se publicó. Es lo que convierte el build en un
+eslabón verificable en vez de en un ritual.
+
+### Deuda registrada, no abierta
+
+- `tests/test_wi41_cli_dispatch.py` tiene un `pytest.skip("auditoria del dia
+  no generada todavia")`: el gate D1 lee
+  `audits/architecture-debt-<hoy>.md`, y el último informe versionado es del
+  `2026-10-01`. El gate sólo se ejecuta el día exacto en que se genera el
+  informe; el resto del tiempo es un skip perpetuo, indistinguible de un test
+  que no vigila. **Mismo patrón que el skip que este bloque arregla**, pero
+  fuera de la superficie: se registra, no se abre.
+- `src/skillgraph.egg-info/` (rescoldo de un `setup.py` del 2026-09-23) sigue
+  en el árbol de trabajo. No está versionado, `.gitignore` lo tapa, y el
+  contrato nuevo lo excluiría si colara en un artefacto. No es deuda.
+
 ## [0.17.0] - 2026-10-02 — la versión se deriva, no se recuerda
 
 **MINOR**: `git log v0.16.20..HEAD` = 1 `feat`, 1 `fix`, 0 breaking.

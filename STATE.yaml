@@ -558,10 +558,10 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 2567   # re-medido 2026-10-02 (bloque WI-96): 2567 passed. +8 sobre 2559 = tests/test_wi96_semver_rule.py.
-  passed: 2567
-  duration_s: 218.73   # MEDIDO en la CI canonica del bloque WI-95 con la receta de cobertura (stage unit-tests). pytest a pelo son ~111 s: el delta de ~94 s es el coste de instrumentar, coherente con los +93 s de WI-93 y +95 s de WI-94.
-  package_version: "0.17.0.dev0"   # trabajo post-release v0.16.19 (AGENTS 12). El tag v0.16.19 esta en 9ea721a; este bloque sigue en local y SIN PUSH.
+  total: 2605   # re-medido 2026-10-02 (bloque WI-97): 2605 passed. +38 sobre 2567 = tests/test_wi97_package_build_contract.py.
+  passed: 2605
+  duration_s: 236.22   # MEDIDO en la CI canonica del bloque WI-97 con la receta de cobertura (stage unit-tests). pytest a pelo son ~111 s: el delta de ~94 s es el coste de instrumentar, coherente con los +93 s de WI-93 y +95 s de WI-94. Los +17 s sobre WI-96 son los 5 tests que construyen el paquete de verdad.
+  package_version: "0.18.0.dev0"   # trabajo post-release v0.18.0 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -867,9 +867,10 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, v0.17.0, bloque WI-96). 6/6 stages, 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. run_id de050072-689b-4919-9a61-5f9b1eca1eb4. 9 StepStarted y 9 EchoOutputCaptured, con la linea de resumen de pytest '2567 passed in 218.73s' en el journal. Control root completo. SHA-256 de .pipeline.kts = c05e97f510ce157345f75918e532266212275d14612439ed243a932348b4d83b (sin drift). Verde a la primera, como WI-95."
-  ultima_ejecucion_local: 2026-10-02 20:23
-  resultado: "2567 passed in 218.73s en el stage unit-tests de la CI canonica (receta de cobertura). 2559 antes; +8 = tests/test_wi96_semver_rule.py. El stage coverage-floors dio 'VEREDICTO: todos los suelos declarados se cumplen'. ruff check y format limpios."
+  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, v0.18.0, bloque WI-97). 7/7 stages (stage nuevo package-build), 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. run_id c7c5790a-e532-46f9-a712-9b8996a81b54. 10 StepStarted y 10 EchoOutputCaptured, con la linea de resumen de pytest '2605 passed in 236.22s' en el journal. Control root completo. SHA-256 de .pipeline.kts = 224643595e637cb70bef837a4e083987581c15278ddad54bd7451c7a2bd6b3f9 (sin drift respecto al commit 7e43585)."
+  ultima_ejecucion_local: 2026-10-02 22:15
+  resultado: "2605 passed in 236.22s en el stage unit-tests de la CI canonica (receta de cobertura). 2567 antes; +38 = tests/test_wi97_package_build_contract.py. Los tres contratos exigibles dieron verde: coverage-floors ('VEREDICTO: todos los suelos declarados se cumplen'), package-build ('OK: el paquete construye y cumple su contrato declarado', 1.7 s) y ruff check/format limpios."
+  nota_honesta_wi97: "Una corrida de cobertura intermedia dio 2 failed en test_wi89_audit_writes_outside_repo.py::TestTheTestHelpersThemselvesWriteOutside. NO se ha reproducido: la suite completa sin instrumentar y la CI canonica (misma receta, con instrumentacion) pasaron las dos. Los dos tests comparan 'git status --porcelain' antes y despues de un subproceso de ~1-2 s, y la causa mas probable es edicion concurrente del propio agente sobre AGENTS.md durante la corrida. Se registra como corrida contaminada, no como flakiness del repo: no se ha abierto ningun frente por ello."
   working_tree: "arbol limpio; los commits del bloque siguen SIN PUSH (no autorizado)"
 
 open_questions: []

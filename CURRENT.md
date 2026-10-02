@@ -1,42 +1,49 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-02 (sexta tanda) cerrado — WI-93, release `v0.16.18`.**
-> Versión activa `0.16.18.dev0`; último tag `v0.16.18`. 2529 passed.
+> **Bloque 2026-10-02 (novena tanda) cerrado — WI-97, release `v0.18.0`.**
+> Versión activa `0.18.0.dev0`; último tag `v0.18.0`. 2605 passed.
 >
-> **WI-93 — el contrato de cobertura que el repo declara en dos sitios, y no
-> exigía ninguno** (`3866454`, `66be602`). El repositorio tenía **dos**
-> contratos sobre cobertura y la CI canónica no comprobaba **ninguno**:
+> **WI-97 — el último eslabón de la cadena de release, que nadie ejecutaba.**
+> `pyproject.toml` declara cinco cosas sobre cómo se construye el paquete
+> (`[build-system]`, `[tool.hatch.version] path`, `[project.scripts]`,
+> contenido del wheel, contenido del sdist) y **ninguna la comprobaba
+> ninguna herramienta**: cero tests referenciaban `hatchling`, `uv build` o
+> `entry_points`, y los seis stages de `.pipeline.kts` no construían nada.
 >
-> - `pyproject.toml [tool.coverage.report] fail_under = 80` lo comprueba
->   `coverage report`, pero **sólo si alguien invoca `scripts/coverage.sh` a
->   mano**. La pipeline no tenía stage de cobertura.
-> - `AGENTS.md §6.3` pone suelos **por módulo** (core ≥90 %, CLI ≥70 %,
->   `paths.py` ≥60 %) que `coverage report` **no puede expresar**: sólo admite
->   un umbral global. Ninguna herramienta del repo lo comprobaba.
+> **La premisa del bloque era falsa, y eso es el hallazgo.** No es que el
+> paquete no construyera: es que **nadie lo había mirado nunca**. Medido
+> antes de decidir nada — `uv build` termina en **1,7 s**, produce un wheel
+> de 248 KB con los 80 módulos, instala en un venv limpio y
+> `skillgraph --help` responde. Toda la machinery de SemVer de WI-96 medía
+> un número sobre un artefacto que nadie había visto nacer.
 >
-> Una cifra que se declara y que ninguna herramienta puede verificar no es un
-> contrato: es un deseo con tipografía de ley.
+> **Lo que el checker encontró al ejecutarse:**
 >
-> **La premisa heredada, medida.** `scripts/coverage.sh` excluía la cobertura
-> de la CI *a propósito*, con un motivo escrito en su cabecera: «la
-> instrumentación de subproceso **multiplica** el tiempo de suite». Era una
-> decisión documentada, no un descuido — pero su motivo era una afirmación sin
-> medir. Medida dos veces en el mismo árbol: `pytest` a pelo **~110 s** frente
-> a la receta completa **203 s**. Delta **+93 s**, ~1,85× el stage. **No
-> multiplica: cuesta un minuto y medio más.** El párrafo queda retirado y
-> marcado SUPERSEDIDO, conservado como historia.
+> - El sdist **declaraba nueve rutas y llevaba catorce**. El `include` de
+>   hatchling es un filtro, no una lista blanca: `bench/` y `docs/` viajaban
+>   sin declararse, y cambiando un solo patrón se colaba también `audits/`.
+>   Corregido a `only-include`, que sí es lista blanca. El conjunto que
+>   viaja no cambia; lo que cambia es que el artefacto queda determinado por
+>   la lista.
+> - La invariante que más importa es `sg_build_sdist_no_versionado`: **el
+>   artefacto no puede llevar nada que git no versiona**. Un sdist que
+>   hereda del árbol de trabajo hace que dos árboles con el mismo commit
+>   produzcan dos artefactos distintos, y `git` deja de poder decir qué se
+>   publicó.
+> - Un `pytest.skip` en `test_cli_uat.py` era una **rama que nunca se
+>   tomaba** (el snapshot está versionado) y llevaba `pragma: no cover`.
+>   Verificado con un contraejemplo real, no leyendo el código.
 >
-> **El hueco real que encontró el checker**: `runtime/http_adapter.py:330`
-> (`HttpAgentAdapter`) medía **88,04 %**, por debajo del 90 % que le corresponde
-> por ser módulo del core. Sus 19 sentencias sin cubrir no eran código
-> inalcanzable — eran guardas de entrada y de respuesta malformada, alcanzables.
-> El módulo ya traía failpoints y un `client` inyectable **precisamente** para
-> probarlas sin red; los tests de red existentes usan `respx` con cliente
-> inyectado, y por eso la rama de **producción** que construye su propio
-> `httpx.Timeout` no la tocaba nadie. Medido después: **88,04 % → 99 %** (sólo
-> queda `http_adapter.py:424`, un `raise NotFoundError` que el propio código
-> marca como defensivo e inalcanzable), `runtime/` agregado 95,11 % →
-> **97,98 %**, global 94,75 % → **95,22 %**. 30 tests nuevos.
+> **Dos invariantes nacieron de las mutaciones, no al revés.** La primera
+> pasada cazó 5 de 7 y abrió dos agujeros: comparar «lo declarado» con «lo
+> publicado» es tautología a medias (lo publicado **se deriva** de lo
+> declarado, así que un target equivocado sale idéntico en los dos lados), y
+> una lista más corta no contradice a nada (no es una promesa rota: es una
+> promesa **retirada**). Las otras dos mutaciones no cazadas eran mutaciones
+> **inválidas**, no fallos del contrato.
+>
+> 38 tests, mutaciones **7/7**, stage propio `package-build` (**siete
+> stages**, coste 1,7 s — el más barato de los que miden algo).
 >
 > **Lectura estricta, escrita como decisión y no como cita**: `AGENTS.md §6.3`
 > nombra `runtime` entre los módulos del core pero no enumera cada fichero. Se
