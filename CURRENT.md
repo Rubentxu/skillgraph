@@ -1,13 +1,88 @@
 # CURRENT — puntero operativo
 
-> **Estado post-release**: `__version__ = 0.16.11.dev0`, etiqueta
-> `v0.16.11` en `4272ade` (bloque WI-72..WI-81, investigacion
-> retrospectiva). El tag se crea sobre el commit que lleva el SemVer
-> puro, que es lo que exige
-> `tests/test_release_governance.py::test_version_matches_git_tag`:
+> **Estado post-release**: `__version__ = 0.16.12.dev0`, etiqueta
+> `v0.16.12` (bloque WI-82..WI-84, higiene del árbol y estado SDDK).
+> El tag se crea sobre el commit que lleva el SemVer puro, que es lo que
+> exige `tests/test_release_governance.py::test_version_matches_git_tag`:
 > HEAD en etiqueta ⟺ `__version__` sin sufijo `.devN`; HEAD posterior a
 > la etiqueta ⟺ `.devN`. El bloque esta publicado **en local y sin
 > push**. La siguiente release se decide con el operador.
+> **WI-84 cerrado — el estado SDDK decía una cosa y el ledger otra**
+> (2026-10-02, ciclo transversal): `STATE.yaml.next_workitem` afirmaba
+> «6 ciclos en `RELEASE_PENDING`». Medido contra
+> `projects/p-b7740b96d79ec013/ledger.sqlite`, son **10** (`wi-72`..
+> `wi-81`). El texto estaba caducado por dos razones a la vez: `wi-81`
+> se creó después de escribirlo, y `wi-72/73/74` nunca se contaron.
+> **Por qué no se podían cerrar: `release.complete` es
+> estructuralmente inalcanzable aquí**, y no por un gate pendiente.
+> Exige `release-receipt`, que solo emite `sddk release apply`, y ese
+> comando falla con `VERSION LOCKSTEP ERROR: could not read
+> …/Cargo.toml` — el plano de release de SDDK deriva la versión de un
+> `Cargo.toml`. SkillGraph es un paquete Python. Los **gates** sí se
+> pueden pasar, y se pasaron (`release-uat-approved` y
+> `no-pending-effects` con evidencia real: exigen `argv`, `exit_code` y
+> `output_digest`). Lo que falta no es un gate: es el paso de release.
+> Los 10 cerrados por `cycle supersede`, con la evidencia como
+> `--evidence-refs`. El enum ofrece tres razones y **ninguna describe el
+> caso real**; se eligió la más cercana y la evidencia deja constancia
+> de que la clasificación es aproximada — la razón es una etiqueta, el
+> fichero es el registro.
+> **Decisión asimétrica sobre los 2 ciclos `OPEN`**, que es el punto de
+> este bloque: `wi-65-subprocess-coverage-file` se cerró
+> (`goal-replaced`) porque es una cáscara de 1 evento y 0 artefactos, y
+> WI-75 ya entregó su asunto (`scripts/coverage.sh`); **la premisa es
+> una inferencia por nombre, y así queda anotada**.
+> `wi65-storage-facade-decomposition` **no se cerró, a propósito**:
+> contiene un informe de exploración real, medido y no ejecutado —759
+> de 1807 LoC de `storage.py` son delegación pura, agrupable en 5 mixins
+> disyuntos con cero ediciones en callers—. Cerrarlo sería tirar trabajo
+> válido para dejar el tablero limpio. **Es el siguiente bloque.**
+> Conocimiento negativo del plano de release: `sddk release apply
+> --route local` **pushea** trunk y tag, fuera de lo pre-aprobado.
+> Evidencia: `evidence/sddk-wi84-sddk-state-resolution-2026-10-02.md`.
+> **WI-83 cerrado — `scripts/audit_bundle.sh` podía emitir un bundle no
+> certificable pareciendo certificado** (2026-10-02, commit `2bd64da`):
+> dos fallos encadenados. Ejecutaba el audit UAT como
+> `uv run python tests/uat_audit.py`, forma en la que `sys.path[0]` es
+> `tests/` y el `from tests._evidence_lock import` de nivel de módulo
+> falla con `ModuleNotFoundError` (exit 1); la forma correcta es
+> `python -m tests.uat_audit` (exit 0, `PASS=16 FAIL=0 BLOCKED=0`).
+> Y el comando estaba en un pipe a `tee`, que se come el exit code: el
+> script seguía, empaquetaba y salía con **0**, con un
+> `uat-audit-cleanroom.txt` que contenía un traceback. La herramienta
+> cuya razón de ser es producir evidencia reproducible para una
+> auditoría externa podía producir un bundle sin certificar con
+> apariencia de certificado. Se captura `PIPESTATUS[0]` y se aborta con
+> el código real.
+> **WI-82 cerrado — la suite ensuciaba `git status` en cada ejecución**
+> (2026-10-02, ciclo SDDK `wi-82-evidence-write-idempotence`, commit
+> `6db1000`): el diagnóstico registrado antes («evidencia UAT
+> autorreferencial») era cierto y **no era el defecto** — es una
+> propiedad del dato, no un bug. El defecto era otro:
+> `save_with_lock` (`tests/_evidence_lock.py`) escribe
+> incondicionalmente, así que la suite reescribía dos ficheros
+> versionados aunque su contenido fuera semánticamente idéntico. El
+> único campo que cambiaba era `revision` (`git rev-parse HEAD`), y
+> **no puede converger por construcción**: un fichero versionado nunca
+> puede contener el SHA del commit que lo versiona. `revision` resultó
+> ser un sello informativo: **ningún test comprueba `revision == HEAD`**,
+> y `tests/test_uat_audit.py:143` afirma lo contrario de lo que hacía el
+> producto (`assert survived["revision"] == "must-survive"`). Fix:
+> `save_with_lock` acepta `volatile_keys` y no reescribe si el fichero
+> ya coincide en todas las demás claves; comparación sobre el JSON
+> parseado (el orden de un dict no es información, el de una lista sí) y
+> *fail-open* explícito si el fichero previo no se puede leer.
+> `history_keep=True` intacto: ahí el registro de cada corrida **es** el
+> propósito. **Verificado sobre la suite completa, no solo sobre el
+> fichero afectado**: 2388 passed (2376 antes) y `git status --porcelain`
+> **vacío**. 12 tests nuevos con las dos contrapartes (si el contenido
+> cambia de verdad se escribe; si no cambia ni la mtime se toca) y 3/3
+> mutaciones cazadas, incluida la de una guarda presente pero decorativa.
+> Un error propio en el rojo, corregido antes de tocar `src/`: el test
+> e2e con fixtures sintéticos pasaba **por el motivo equivocado**, y el
+> caso «cambió de verdad» no comprobaba nada para UAT-08 (su payload usa
+> `apply.stderr`, no `returncode`). Evidencia:
+> `evidence/sddk-wi82-verify-2026-10-02.md`.
 > **WI-81 cerrado — segunda tanda de ADR-0014: 7 alias de función sin
 > callers** (2026-10-02, ciclo SDDK
 > `wi-81-drop-dead-row-mapper-shims`): antes de aceptar deuda técnica

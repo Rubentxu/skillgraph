@@ -9155,3 +9155,131 @@ Decisiones de producto abiertas en `STATE.yaml` `next_workitem`:
 (d)-(g) contradicciones reportadas sin corregir; (h) el arreglo de
 WI-80, con la correccion candidata ya medida y en la red; y la nueva
 (i), la triple alerta de deuda falsa verificada y NO ejecutada.
+
+---
+
+## 2026-10-02 — Sesion WI-82..WI-84: higiene del arbol de git y estado SDDK
+
+### Objetivo
+
+Dejar el repositorio en estado coherente: que la suite no ensucie el
+arbol, y que el estado SDDK refleje la realidad en vez de un recuento
+caducado. Emitido `SDDK PRE-FLIGHT 14` con `Readiness: READY` antes de
+tocar codigo.
+
+### Recuperacion de estado (sin asumir)
+
+- `sddk status --cycle` exige `--cycle`, y los ids reales estan
+  **namespaced** (`p-b7740b96d79ec013/wi-81-…`); sin el prefijo dan
+  `STORAGE_NOT_FOUND` aunque el ciclo exista. El proyecto se resuelve
+  con `sddk knowledge path` → `~/.sddk-knowledge/p-b7740b96d79ec013`.
+- Recuento real contra `projects/p-b7740b96d79ec013/ledger.sqlite`:
+  **24 CLOSED, 10 RELEASE_PENDING, 2 OPEN** al abrir el bloque.
+
+### WI-82 — la suite no puede ensuciar `git status`
+
+**Medido, no supuesto.** `pytest tests/test_h4_expansion_cli.py` (6
+tests verdes) dejaba `M UAT-08.json` y `M UAT-09.json`. El unico campo
+que cambiaba era `revision`.
+
+**El diagnostico previo era cierto y no era el defecto.** «Evidencia UAT
+autorreferencial» describe una propiedad del dato: un fichero versionado
+nunca puede contener el SHA del commit que lo versiona, asi que
+`revision` no converge. Irresoluble, y no habia que tocarlo. El defecto
+era que `save_with_lock` escribe incondicionalmente.
+
+**`revision` no es un contrato, medido**: ningun test comprueba
+`revision == HEAD`; y `tests/test_uat_audit.py:143` afirma lo contrario
+de lo que hacia el producto —`assert survived["revision"] ==
+"must-survive"`, la evidencia persistida debe sobrevivir a una
+re-emision sin cambio semantico.
+
+Fix: `volatile_keys` en `save_with_lock`; comparacion sobre el JSON
+parseado; fail-open explicito; `history_keep` intacto. 12 tests, 3/3
+mutaciones. **2388 passed y `git status --porcelain` vacio tras la suite
+completa** (no solo sobre el fichero afectado).
+
+**Error propio, corregido antes de tocar `src/`**: el test e2e con
+fixtures sinteticos pasaba por el motivo equivocado (el payload real
+depende de datos del scratch de pytest, asi que differ de verdad y
+escribir es lo correcto), y el caso «cambio de verdad» no comprobaba
+nada para UAT-08, cuyo payload usa `apply.stderr` y no `returncode`.
+Las dos correcciones estan en el fichero de evidencia.
+
+### WI-83 — audit_bundle podia certificar sin certificar
+
+`uv run python tests/uat_audit.py` → `ModuleNotFoundError`, exit 1
+(`sys.path[0]` es `tests/`). Encima, en un pipe a `tee`, el exit code se
+perdia y el script salia con 0 empaquetando un informe UAT con
+traceback. Commit `2bd64da`.
+
+### WI-84 — el estado SDDK decia una cosa y el ledger otra
+
+- `STATE.yaml` decia **6** ciclos en `RELEASE_PENDING`; hay **10**.
+  Caducado por dos razones a la vez: wi-81 creado despues del texto, y
+  wi-72/73/74 nunca contados.
+- **`release.complete` es inalcanzable aqui, y no por un gate.**
+  Exige `release-receipt`, que solo emite `sddk release apply`, que
+  falla con `VERSION LOCKSTEP ERROR` al no haber `Cargo.toml`. Los
+  *gates* si se pasan (y se pasaron, con evidencia real: `argv`,
+  `exit_code`, `output_digest`). Ademas `sddk release apply --route
+  local` **pushea**, fuera de lo pre-aprobado.
+- Los 10 cerrados por `cycle supersede`. Procedimiento de 3 pasos que
+  el `--help` no documenta: el intento fallido **registra** la peticion
+  de aprobacion (es el paso 1, no un rodeo), luego `approval grant`,
+  luego `cycle lock acquire` explicito para el `fencing_token` real.
+- Decision asimetrica sobre los 2 `OPEN`:
+  `wi-65-subprocess-coverage-file` se cerro (`goal-replaced`) —cascara
+  de 1 evento y 0 artefactos, y WI-75 ya produjo `scripts/coverage.sh`—
+  **con la premisa de inferencia anotada como tal**;
+  `wi65-storage-facade-decomposition` **no se cerro a proposito**: tiene
+  un informe de exploracion real, medido y no ejecutado. Pasa a ser el
+  siguiente bloque.
+
+### Conocimiento negativo
+
+- `sddk cycle supersede --help` documenta mal el enum: texto con
+  guiones bajos, valores con guiones.
+- `sddk permission check` responde «not declared in the permission
+  registry» para cualquier `--agent agent`; los eventos los emite
+  `{"kind":"system","id":"rubentxu"}`. El registry no es puerta real
+  para este flujo.
+- `sddk status` y `sddk project resolve` exigen argumentos que el
+  `--help` de su subcomando no lista.
+
+### Evidencia
+
+- `evidence/sddk-wi82-verify-2026-10-02.md`
+- `evidence/sddk-wi84-sddk-state-resolution-2026-10-02.md`
+- `.pipelinek/wi82_mutate.sh` (3/3), `.pipelinek/wi84_supersede.sh`
+
+### Tests ejecutados
+
+- quirurgico: `test_wi82_evidence_write_idempotence.py` +
+  `test_evidence_lock.py` + `test_uat_audit.py` + `test_h4_expansion_cli.py`
+  = 44 passed
+- suite completa: **2388 passed in 100.25s**, arbol limpio
+- `test_state_release_integrity.py` + `test_release_governance.py`: 10 passed
+- 3/3 mutaciones cazadas
+
+### Informacion aun necesaria
+
+- **(a)** Si los 5 mappers reexportados por `platform.storage` siguen
+  necesarios. Requiere ADR NUEVO.
+- **(b)** Autorizacion de push. 15 commits sin publicar.
+- **(c)** Decision sobre WI-80: dos salidas no equivalentes, la
+  correccion candidata ya medida y en la red.
+- **(d)** Exit code de argparse (2) vs `EXIT_USAGE` (1): toca el
+  contrato externo de los tests de subproceso.
+- **(e)** La premisa del cierre de `wi-65-subprocess-coverage-file` es
+  una inferencia por nombre. Si aparece su especificacion original y es
+  de otro asunto, la decision es revisable.
+
+### Trabajo restante
+
+- **WI-65 fase 1**: extraer los 65 metodos de delegacion de
+  `platform/storage.py` a 5 mixins disyuntos. Red previa obligatoria de
+  identidad de API publica. Cero ediciones en callers. No cruza el
+  umbral de 800 LoC, asi que la fase 2 (modulo, DDL, dataclasses,
+  `_tx`/`_atomic`) requiere ADR previa.
+- Decisiones de producto abiertas en `STATE.yaml` `next_workitem`.

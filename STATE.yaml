@@ -541,7 +541,7 @@ tests:
   total: 2388   # re-medido 2026-10-02 con la suite completa (`pytest -q`): 2388 passed. El 1431 que estaba aqui era de 2026-09-28 y ADEMAS era invisible: la clave `total` la pisaba un `total: 85%` de un snapshot de cobertura anidado por error en `tests:` (WI-85). La cifra anterior solo se leia a ojo.
   passed: 2388
   duration_s: 100.25   # re-medido 2026-10-02: 2388 passed in 100.25s SIN cobertura. El 644 era de un run con `--cov`, que multiplica el tiempo.
-  package_version: "0.16.12"   # release v0.16.12: bloque WI-82..WI-84 (2 fix => PATCH). El tag se crea sobre ESTE commit; HEAD posterior a la etiqueta lleva .dev0 (regla AGENTS §12). Bloque publicado en local y SIN PUSH.
+  package_version: "0.16.12.dev0"   # trabajo post-release v0.16.12 (regla AGENTS §12). El tag v0.16.12 esta en 10d1673; este bloque sigue publicado en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1267,6 +1267,10 @@ release:
       fecha: 2026-10-02
       sha: "4272ade5bbe176832cf1e4c27b6b6dc42c6e9ac2"
       nota: "Bloque WI-72..WI-81: investigacion retrospectiva bajo la consigna de buscar falsos exitos. 0 feat, 1 fix (b3b2ef7, cobertura del CLI 65,86% -> 94%), 1 refactor (90d2e46, siete alias de WI-56 sin callers), 6 test, 1 docs -> PATCH. 2368 -> 2376 tests. Falsos exitos confirmados: cobertura ciega al CLI, alias muertos contados como mappers, una rama de main sin oraculo (runner.py:250-254), el contrato de exit code sin una sola asercion, y un rechazo ilegible presentado como PROPOSED. Conocimiento negativo: ninguna hipotesis sobrevive sin mutacion. Siete decisiones de producto abiertas en next_workitem. PUSH NO EJECUTADO."
+    - tag: v0.16.12
+      fecha: 2026-10-02
+      sha: "10d16734cc236c5845a4c37c88fa6a7a2d4faf57"
+      nota: "Bloque WI-82..WI-85: higiene del arbol de git y verdad del estado SDDK. 0 feat, 3 fix => PATCH. La evidencia UAT deja de reescribir ficheros versionados cuando su contenido no cambia; audit_bundle no puede emitir un bundle no certificable pareciendolo (ModNotFoundError enmascarado por un pipe a tee); STATE.yaml dejaba de descartar 7 claves duplicadas y tests.total parseaba como 85%. Los 10 ciclos RELEASE_PENDING se cerraron: release.complete es estructuralmente inalcanzable porque sddk release exige Cargo.toml. 2394 tests. Sin push."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
