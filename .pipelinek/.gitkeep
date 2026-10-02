@@ -1,0 +1,18 @@
+# Este fichero existe para que el DIRECTORIO exista en un clon nuevo.
+#
+# MEDIDO en WI-99: el comando canonico de AGENTS.md apunta a
+# `.pipelinek/db.sqlite`, y `pipelinek` abre ese fichero SQLite sin crear el
+# directorio que lo contiene. En un clon recien hecho la receta documentada
+# moria antes de ejecutar un solo step:
+#
+#   java.sql.SQLException: path to '.pipelinek/db.sqlite':
+#   '/ruta/al/clon/.pipelinek' does not exist
+#
+# Es el mismo patron que WI-98 elimino de `.pipeline.kts` (diez rutas
+# absolutas a un arbol de trabajo concreto): una regla que no se puede
+# cumplir fuera de esta maquina no es un contrato, es una costumbre. Y el
+# fix es el mismo en los dos casos — versionar lo que hace falta para que
+# la regla se cumpla sola.
+#
+# Lo que vive aqui (journal SQLite, control root, logs) NO se versiona:
+# son artefactos de ejecucion y cambiarian en cada run.

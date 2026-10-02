@@ -66,7 +66,20 @@ audits/*-audit-bundle.tar.gz
 # AGENTS.md exige que .pipeline.kts este VERSIONADO en la raiz: es el
 # gate de CI local canonico. Ignorarlo dejaba la verificacion fuera del
 # control de versiones. Solo se ignoran sus artefactos de ejecucion.
-.pipelinek/
+#
+# MEDIDO en WI-99: se ignora el CONTENIDO, no el directorio. El comando
+# canonico documentado apunta a `.pipelinek/db.sqlite`, y `pipelinek` abre
+# ese fichero sin crear el directorio que lo contiene: en un clon nuevo
+# moria con `java.sql.SQLException: path to '.pipelinek/db.sqlite' ... does
+# not exist`. Es decir, la receta documentada no era ejecutable tal cual
+# fuera de este arbol de trabajo. Versionar el `.gitkeep` la hace
+# ejecutable sin anadirle una precondicion que nadie iba a leer.
+#
+# No se usa `!.pipelinek/` porque git no re-incluye un fichero cuyo
+# directorio padre esta excluido: habria que dejar de excluir el
+# directorio entero.
+.pipelinek/*
+!.pipelinek/.gitkeep
 
 # Scratch del agente: journals y artefactos temporales de verificacion
 # (pipelinek con journal fresco, receipts en curso). No son deliverable
