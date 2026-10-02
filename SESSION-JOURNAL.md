@@ -10055,3 +10055,101 @@ que ya destruyo el estado bueno no es autocontrol: es un aviso tardio.
   registro Y el disco, y por eso se verifica con registros sinteticos que se
   saben incorrectos, incluido uno CONFORME: un guard que siempre falla no
   puede pasar por guard.
+
+## 2026-10-02 — WI-92: lo que WI-90 registro como deuda, medido: era falso
+
+### Resumen
+
+- WI-90 cerro el round-trip de `FileSignature` y dejo anotados **sin medir** dos
+  sitios con «el mismo patron de inverso manual». Es la consigna del proyecto
+  escrita de forma implicita: *alerta «deuda» sin verificar, si sus criterios
+  iniciales no siguen vigentes, no es deuda real*.
+- **Medidos, los dos son falsos como se enunciaron.** El resultado del bloque no
+  es un arreglo: es una **retractacion**, y retractar es lo correcto cuando la
+  medicion dice que no hay nada que arreglar.
+
+### La medicion
+
+- **`runtime/agent.py:51` `from_fixture`**: NO es un inverso de un `to_dict`. Su
+  primera instruccion valida que el payload es un `dict`; las siguientes
+  comprueban `outcome` (str), `result` (dict) y `evidence_ref`; los errores son
+  **tipados** (`ValidationError`, `OutcomeInvalidError`). Es un cargador de
+  fixtures.
+- **`governance/receipts.py`**: SI hay un par asimetrico real —el escritor
+  `to_payload()` (linea 165) es publico y el lector `_payload_to_receipt`
+  (linea 466) es privado y esta escrito a mano— pero las tres listas **cuadran**:
+  11 campos del dataclass, 11 claves de `to_payload`, 11 leidas por el lector. Y
+  el caller captura `(KeyError, ValueError, TypeError)` y hace `continue`, que es
+  lo que promete el docstring. `_declared_counter` (WI-49) ya cerro el bool.
+
+### Lo que si queda, y que se cierra
+
+- **Riesgo latente, no defecto**: nada verificaba que las tres listas siguieran
+  siendo la misma. Con una clave de mas el campo se pierde en silencio; con una
+  de menos el lector lanza `KeyError`, el caller descarta la fila, y **el
+  receipt que deberia aplicarse no aplica sin dejar rastro**.
+- Guard: `tests/test_wi92_measured_claims.py` lee las tres listas del AST y exige
+  que coincidan.
+- **Segundo guard**: las citas `fichero.py:NNN` del **bloque vivo** de
+  `CURRENT.md` tienen que resolver. Ese bloque es el puntero que lee primero la
+  proxima sesion.
+
+### Lo que NO se corrige, a proposito
+
+- **Las 3 citas rotas de la fuente de verdad se dejan rotas.** De 57 citas, 52
+  resuelven; las 3 que no estan en registros historicos que describen codigo ya
+  refactorizado (`platform/storage.py` paso de 1807 a 600 lineas en WI-65/68).
+  Corregirlas seria **falsificar la historia**: afirmar que una auditoria del
+  2026-09-25 encontro problemas en lineas que no existian entonces.
+  **Corregir una referencia historica no es restaurarla: es reescribirla.**
+
+### Contradicciones del propio trabajo
+
+- **El resolver estaba mal y el dato parecia una catastrofe.** La primera version
+  resolvia `run_repository.py` contra `src/skillgraph/run_repository.py`, que no
+  existe —el fichero esta en `platform/`— y reporto 19 referencias «sin fichero»
+  en `STATE.yaml`. Misma familia que medir `/usr/bin/sg` en WI-88: **medir la
+  cosa equivocada produce un numero que parece confirmar cualquier premisa.**
+- **Un assert sobre una subcadena no comprueba una propiedad.** El primer guard de
+  `from_fixture` pedia «`isinstance` aparece en el cuerpo» y la mutacion M4 lo
+  esquivo: la funcion tiene **cuatro** comprobaciones `isinstance`, borrar una
+  deja tres y la palabra sigue ahi. Reescrito sobre el AST para exigir que la
+  PRIMERA instruccion valide el dict.
+- **Una condicion con `||` entre dos `[ ... ]` disparo un `variable sin asignar`
+  en bash pese a que `declare -p` mostraba la variable asignada a 0.** Se
+  esquivo reescribiendola como una suma antes de comparar. No se ha investigado la causa exacta porque no afectaba al veredicto (rc=0, 6/6); queda
+  anotado en vez de archivado, porque «no lo he perseguido» y «no pasa» no son lo
+  mismo.
+
+### Mutaciones
+
+6/6 cazadas. M6 no se aplico en la primera pasada porque el patron omitia el
+rango (`473` en vez de `473-480`) y las comillas invertidas; el **autocontrol de
+aplicacion** lo reporto como `MUTACION NO APLICO`, no como «no cazada».
+**Quinta vez en tres bloques que una medicion necesita autocontrol.**
+
+### Conocimiento negativo
+
+- **Medir una hipotesis antes de construirle un guard la habria convertido en
+  deuda que nunca existio.** El trabajo real no era arreglarla, era saber que no
+  habia nada que arreglar.
+- **La asimetria privado/publico no es el defecto.** Hay escritor publico y lector
+  privado a mano, y aun asi el modulo es correcto: el lector es interno, el caller
+  lo protege y las claves cuadran. Lo que faltaba era la **verificacion**, no la
+  simetria.
+- **Un guard que protege una afirmacion tiene que probarse invirtiendo la
+  afirmacion.** Estos dos no arreglan un fallo: mantienen cierta una afirmacion
+  que hoy lo es. Sin mutacion que la invierta, serian decorativos.
+
+### Sigue abierto (sin workitem)
+
+- **Colision de numeracion de ADR**: `ADR-0015` designa dos documentos distintos.
+  Medida en WI-91, NO ejecutada: renombrar es decision del mantenedor.
+- **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`.
+- **Push**: sin autorizacion del operador. No ejecutado.
+
+### Evidencia
+
+- `evidence/sddk-wi92-verify-2026-10-02.md`
+- `.pipelinek/wi92_mutate.sh` (6/6 + baseline + autocontrol de aplicacion)
+- `.pipelinek/wi92_measure_refs.py` (la medicion de citas, con el resolver corregido)

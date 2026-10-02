@@ -1,5 +1,46 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-02 (quinta tanda) cerrado — WI-92, release `v0.16.18`.**
+> Versión activa `0.16.18.dev0`; tag `v0.16.18`. 2499 passed.
+>
+> **WI-92 — lo que WI-90 registró como deuda, medido: era falso** (`5b591c2`).
+> WI-90 cerró el round-trip de `FileSignature` y dejó anotados **sin medir**
+> dos sitios con «el mismo patrón de inverso manual». Medidos, los dos son
+> falsos como se enunciaron:
+>
+> - `runtime/agent.py:51` `from_fixture` **no** es un inverso de un `to_dict`:
+>   es un cargador de fixtures con `isinstance` explícito y errores **tipados**
+>   (`ValidationError`, `OutcomeInvalidError`).
+> - `governance/receipts.py:466` sí tiene un par asimétrico real —el escritor
+>   usa `to_payload()` público y el lector es `_payload_to_receipt`, privado y
+>   a mano— pero **las claves cuadran**: 11 del dataclass, 11 de `to_payload`,
+>   11 del lector. Y el caller captura `(KeyError, ValueError, TypeError)` y
+>   hace `continue`, que es justo lo que promete el docstring.
+>
+> **Lo que queda no es un defecto sino un riesgo latente**, y eso sí se cierra:
+> nada verificaba que las tres listas siguieran siendo la misma. Con una clave
+> de más el campo se pierde en silencio; con una de menos el lector levanta
+> `KeyError` y el caller descarta la fila **sin dejar rastro** — un receipt que
+> debería aplicarse no aplica y nadie se entera.
+>
+> **Segundo guard**: el bloque vivo de este fichero es el puntero que lee
+> primero la próxima sesión, así que sus citas `fichero.py:NNN` tienen que
+> resolver. Las de bloques anteriores **no** se comprueban: son la foto de un
+> código que ya no existe, y corregirlas sería **falsificar la historia**. De
+> 57 citas de la fuente de verdad, **52 resuelven**; las 3 rotas están todas en
+> registros históricos que describen código ya refactorizado.
+>
+> **Medición de la medición**: la primera versión del script resolvió
+> `run_repository.py` contra `src/skillgraph/run_repository.py`, que no existe
+> —el fichero está en `platform/`— y reportó 19 referencias «sin fichero» en
+> `STATE.yaml`. El resultado parecía alarmantemente malo porque el resolver
+> estaba mal, no los datos.
+>
+> **Queda abierto**: `ADR-0015` designa dos documentos distintos (colisión
+> medida, no ejecutada: renombrar es decisión del mantenedor); 63 informes
+> fechados en `audits/` (deuda de **datos**); y los commits siguen **sin
+> push**, que no está autorizado.
+
 > **Bloque 2026-10-02 (cuarta tanda) cerrado — WI-91, release `v0.16.17`.**
 > Versión activa `0.16.17.dev0`; tag `v0.16.17` en `321fa10`. 2493 passed.
 >

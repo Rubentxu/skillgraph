@@ -12,6 +12,70 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [Unreleased] — WI-92: lo que WI-90 registró como deuda, medido: era falso
+
+**Sin bump todavía**: el `test(governance)` de este bloque no bumpea por sí solo; el
+`docs` tampoco. Si no hay ningún `fix`/`feat` al cerrar, la release no procede. 2499
+passed (2493 antes).
+
+### Measured
+
+- **La hipótesis que WI-90 dejó abierta era FALSA en los dos sitios.** No es un
+  `fix`: es una **retractación**, y retractar es el resultado correcto cuando la
+  medición dice que no hay nada que arreglar.
+
+  - `runtime/agent.py` `AgentResult.from_fixture` **no** es un inverso de un
+    `to_dict`. Su primera instrucción valida que el payload es un `dict`, las
+    siguientes comprueban `outcome`, `result` y `evidence_ref`, y los errores son
+    **tipados** (`ValidationError`, `OutcomeInvalidError`).
+  - `governance/receipts.py` sí tiene un par asimétrico —el escritor
+    `to_payload()` es público y el lector `_payload_to_receipt` es privado y
+    escrito a mano— pero **las tres listas cuadran**: 11 campos del dataclass, 11
+    claves emitidas, 11 leídas. Y el caller captura
+    `(KeyError, ValueError, TypeError)` y hace `continue`, que es lo que promete
+    el docstring.
+
+### Added
+
+- `tests/test_wi92_measured_claims.py` cierra el **riesgo latente** que sí
+  quedaba: nada verificaba que esas tres listas siguieran siendo la misma. Con
+  una clave de más el campo se pierde en silencio; con una de menos el lector
+  lanza `KeyError`, el caller descarta la fila, y **el receipt que debería
+  aplicarse no aplica sin dejar rastro**. El guard lee las tres listas del AST y
+  exige que coincidan.
+- Segundo guard: las citas `fichero.py:NNN` **del bloque vivo** de `CURRENT.md`
+  tienen que resolver. Ese bloque es el puntero que lee primero la próxima
+  sesión.
+
+### Contradicciones
+
+- **Las 3 citas rotas de la fuente de verdad no se corrigen, y esa es la
+  decisión.** De 57 citas, 52 resuelven; las 3 rotas están en registros
+  históricos que describen código ya refactorizado (`platform/storage.py` pasó
+  de 1807 a 600 líneas en WI-65/68). Corregirlas habría sido **falsificar la
+  historia**: afirmar que una auditoría de 2026-09-25 encontró problemas en
+  líneas que no existían entonces. El guard cubre el bloque vivo y deja los
+  anteriores como la foto que son.
+- **El resolver estaba mal y el dato parecía una catástrofe.** La primera
+  versión del script resolvió `run_repository.py` contra
+  `src/skillgraph/run_repository.py` —el fichero está en `platform/`— y reportó
+  19 referencias «sin fichero» en `STATE.yaml`. El resultado era alarmantemente
+  malo por un resolver roto, no por los datos.
+- **Un assert sobre una subcadena no comprueba una propiedad.** El primer guard
+  de `from_fixture` pedía «`isinstance` aparece en el cuerpo» y la mutación M4 lo
+  esquivó: hay **cuatro** comprobaciones `isinstance` en esa función, borrar una
+  deja tres y la palabra sigue ahí. Reescrito sobre el AST para exigir que la
+  **primera instrucción** valide el `dict`.
+
+### Verificación
+
+- **2499 passed** (2493 antes; +6).
+- Mutaciones **6/6**. M6 no se aplicó en la primera pasada (el patrón omitía el
+  rango `473-480`) y el autocontrol lo reportó como `MUTACION NO APLICO`, no
+  como «no cazada». **Quinta vez en tres bloques que una medición necesita
+  autocontrol.**
+- Evidencia: `evidence/sddk-wi92-verify-2026-10-02.md`.
+
 ## [0.16.17] - 2026-10-02 — WI-91: el registro de conformidad H9 afirmaba cuatro cosas falsas
 
 PATCH: `git log v0.16.16..HEAD` = 0 feat, 0 breaking, 2 fix, 2 docs, 1 chore. 2493 passed
