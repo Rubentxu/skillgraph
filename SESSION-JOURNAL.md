@@ -8389,3 +8389,91 @@ Ciclo SDDK `wi-75-subprocess-coverage-instrument`. Sin cambios de
 comportamiento en `src/skillgraph/`: instrumentacion y evidencia, asi
 que **sin ADR**. Commit tipo `fix(coverage)` + `test` + `docs`.
 Evidencia: `evidence/sddk-wi75-verify-2026-10-02.md`.
+
+---
+
+## 2026-10-02 — WI-76: siete shims "preservados" por tests que nunca los ejecutan
+
+**Investigacion retrospectiva** del ciclo WI-72..WI-75 (y del estado
+heredado que ese ciclo no toco). Objetivo declarado del goal: buscar
+falsos exitos, es decir, operaciones que devuelven OK sin cumplir su
+objetivo.
+
+**El hallazgo.** `platform/row_mappers.py` declara siete funciones
+`_row_to_source`, `_row_to_evidence`, `_row_to_stored_evidence`,
+`_row_to_claim`, `_row_to_stored_claim`, `_row_to_resource`,
+`_row_to_relation`, todas con el mismo docstring: "Alias de
+compatibilidad (WI-56 corte 3) … El corte 5 reubicara los callers".
+Estan en `storage.__all__` y en `MAPPER_NAMES`.
+
+Dos clases de test "garantizan" que siguen vivas:
+
+1. `test_wi60::test_storage_shim_import_keeps_working` hace
+   `inspect.getsource()` y comprueba que la linea de import esta en el
+   TEXTO. Su docstring dice "el shim es un wrapper, no el mapper
+   mismo": lee la prueba, no la ejecuta.
+2. `test_wi65::TestShimPreserved::test_runtime_constructed_dtos_are_importable`
+   trabaja POR AST sobre los `ast.Call`. Tampoco ejecuta.
+
+**La prueba.** Inverti los argumentos del `return` de los 7 shims
+(`row_to_source(json, row)` en vez de `row_to_source(row, json)`, que
+reventaria con TypeError si alguien los llamara):
+
+- `test_wi60` + `test_wi65`: **37 passed**
+- suite completa: **2225 passed**
+
+Siete funciones publicas pueden estar rotas y nada se entera. Eso no es
+cobertura debil: es una garantia que no existe.
+
+**Dos mutaciones descartadas antes de presentar la prueba**, porque
+habrian sido artefactos y no evidencia: sustituir el `return` por
+`return None` (la caza `test_wi60`, pero porque mi regex borro la linea
+del import: es asercion de texto) y anadir `raise RuntimeError(...)`
+(la caza `test_wi65`, pero introduce un `ast.Call` que su chequeo
+estatico no resuelve: falso positivo de la propia asercion). Invertir
+argumentos no introduce llamadas ni altera el texto del import: es la
+mutacion honesta.
+
+**Causa raiz.** Resolviendo cada nombre con AST: los callers ya
+resuelven al mapper de verdad mediante aliases locales
+(`knowledge_repository.py:696-702`, `_row_to_X = row_to_X`) o
+importando la funcion real (`knowledge_claims.py:16,19`). El shim toma
+1 argumento y el mapper real 2 o 3: no hay ni un call-site que lo
+alcanze. Lo unico que los toca es el re-export de `storage.py:56`.
+
+O sea: WI-56 anuncio que "el corte 5 reubicara los callers". Ese corte
+SI ocurrio (ADR-0020 movio los mappers a `knowledge_mappers.py` y creo
+los aliases), pero los alias de compatibilidad no se borraron y
+`MAPPER_NAMES` siguio listandolos. Corte completado a medias.
+
+Pista de que nunca hizo falta: el docstring del propio `test_wi65`
+justifica el re-export de `storage` SOLO para tres simbolos
+(`_SCHEMA_SQL`, `_row_to_stored_event`, `_row_to_stored_budget`,
+`_uid`). Los otros siete no tienen justificacion documentada.
+
+**Corregido.** `tests/test_wi76_shim_execution.py`, 14 tests, sin tocar
+`src/`. Oraculo diferencial: `shim(fila) == mapper_real(fila)` mas
+coincidencia de tipo, y un anti-test-degenerado que exige valor real
+para que la igualdad no se cumpla comparando vacios.
+
+Verificado en ambos sentidos con la MISMA mutacion: los 37 tests
+antigos siguen ciegos, los nuevos dan **10 failed**. Los 4 que pasan son
+los 2 shims de un solo argumento, donde invertir la lista no cambia
+nada (mutacion inocua, no fallo no detectado).
+
+Suite: 2225 -> **2239 passed**.
+
+**No corregido, y es decision del operador.** Borrar los 7 shims es lo
+correcto a largo plazo, pero estan en `storage.__all__` y en
+`MAPPER_NAMES`: es cambio de contrato y AGENTS §10 pide ADR. Lo que si
+era defecto, y no opinion, es que nadie los ejecutaba.
+
+**Nota de cobertura.** `row_mappers.py` estaba en 68 % y los 14
+statements sin cubrir eran exactamente los 7 shims x 2. Con el test
+nuevo se ejecutan y el deficit desaparece. Eso no significa que el
+codigo nuevo este mejor: significa que la cifra por fin mide lo que
+dice medir. Instrumento fiable: el de WI-75; antes era ciego al CLI.
+
+Ciclo SDDK `wi-76-shim-false-success`. Sin cambios en `src/`: solo red,
+asi que **sin ADR**. Commit tipo `test(platform)`.
+Evidencia: `evidence/sddk-wi76-verify-2026-10-02.md`.

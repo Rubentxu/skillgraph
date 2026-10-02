@@ -3,6 +3,25 @@
 > **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
 > `v0.16.10` en `2ee6d77`. Los workitems posteriores a la release se
 > acumulan sobre ese HEAD; la siguiente release se decide con el operador.
+> **WI-76 cerrado — falso éxito en los shims de compatibilidad**
+> (2026-10-02, ciclo SDDK `wi-76-shim-false-success`): siete funciones de
+> `platform/row_mappers.py` (`_row_to_source`, `_row_to_evidence`,
+> `_row_to_stored_evidence`, `_row_to_claim`, `_row_to_stored_claim`,
+> `_row_to_resource`, `_row_to_relation`) están en `storage.__all__` y en
+> `MAPPER_NAMES`, y dos clases de test garantizaban que seguían vivas
+> **sin ejecutarlas nunca**: `test_wi60` hace `inspect.getsource()` y
+> comprueba el texto; `test_wi65` trabaja por AST sobre `ast.Call`.
+> Probado invirtiendo los argumentos del `return` —que reventaría con
+> `TypeError` si alguien los llamara—: **37 passed** en los tests que los
+> preservan y **2225 passed** en la suite completa. Causa raíz: WI-56
+> anunció que "el corte 5 reubicará los callers", ese corte sí ocurrió
+> (los callers ya resuelven al mapper real), pero los alias no se
+> borraron y `MAPPER_NAMES` siguió listándolos. Corregido con
+> `tests/test_wi76_shim_execution.py` (14 tests, oráculo diferencial
+> shim vs mapper real, **sin tocar `src/`**): la misma mutación da 10
+> failed. 2225 → **2239 passed**. Borrar los shims queda como decisión del
+> operador: es cambio de contrato (`storage.__all__`) y AGENTS §10 pide
+> ADR. Evidencia: `evidence/sddk-wi76-verify-2026-10-02.md`.
 > **WI-75 cerrado — la cobertura del CLI deja de estar ciega** (2026-10-02,
 > ciclo SDDK `wi-75-subprocess-coverage-instrument`): `pytest --cov` mide solo
 > el proceso principal, y la suite ejercita la frontera CLI por **subproceso**.
