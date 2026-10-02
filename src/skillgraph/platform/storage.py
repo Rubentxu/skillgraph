@@ -15,7 +15,6 @@ Auditoría de duplicación:
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
@@ -49,6 +48,29 @@ from skillgraph.platform.ports import (
     StoredResource,
     StoredRun,
 )
+
+# Re-exports de la fase 2 (WI-65). Los usa internamente y los exporta
+# porque los componentes de WI-56 (ADR-0016 cortes 4 y 5) los importan
+# desde aqui. Declarados en __all__ para que ruff no los borre por F401
+# en cuanto el facade deje de referenciarlos.
+from skillgraph.platform.row_mappers import (
+    MAPPER_NAMES,
+    _row_to_claim,
+    _row_to_evidence,
+    _row_to_node_execution,
+    _row_to_relation,
+    _row_to_resource,
+    _row_to_run,
+    _row_to_source,
+    _row_to_stored_budget,
+    _row_to_stored_claim,
+    _row_to_stored_event,
+    _row_to_stored_evidence,
+    _row_to_stored_promotion,
+    _uid,
+)
+from skillgraph.platform.schema import SCHEMA_SQL as _SCHEMA_SQL
+from skillgraph.platform.schema import SCHEMA_VERSION
 from skillgraph.platform.storage_delegations import (
     EventStoreDelegations,
     KnowledgeDelegations,
@@ -68,6 +90,9 @@ if TYPE_CHECKING:
     from skillgraph.runtime.engine import RuntimeEvent
 
 __all__ = [
+    "MAPPER_NAMES",
+    "SCHEMA_VERSION",
+    "_SCHEMA_SQL",
     "Brick",
     "Claim",
     "Entity",
@@ -86,9 +111,20 @@ __all__ = [
     "StoredRelation",
     "StoredResource",
     "StoredRun",
+    "_row_to_claim",
+    "_row_to_evidence",
+    "_row_to_node_execution",
+    "_row_to_relation",
+    "_row_to_resource",
+    "_row_to_run",
+    "_row_to_source",
+    "_row_to_stored_budget",
+    "_row_to_stored_claim",
+    "_row_to_stored_event",
+    "_row_to_stored_evidence",
+    "_row_to_stored_promotion",
+    "_uid",
 ]
-
-SCHEMA_VERSION = 1
 
 
 # Estados validos del outbox de promocion (CHECK constraint de la tabla).
@@ -101,336 +137,6 @@ PROMOTION_STATUSES: frozenset[str] = frozenset({"PENDING", "IN_PROGRESS", "PUBLI
 # muere, un nuevo `sg run` debe reanudar el mismo run_id en lugar de
 # crear uno nuevo (cumple UAT-06).
 NON_TERMINAL_RUN_STATES: frozenset[str] = frozenset({"CREATED", "ACTIVE", "WAITING"})
-
-
-_SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS schema_version (
-    version INTEGER PRIMARY KEY
-);
-
-CREATE TABLE IF NOT EXISTS resources (
-    uid TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    api_version TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    namespace TEXT NOT NULL,
-    name TEXT NOT NULL,
-    resource_version INTEGER NOT NULL DEFAULT 1,
-    generation INTEGER NOT NULL DEFAULT 1,
-    spec_json TEXT NOT NULL,
-    status_json TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE (tenant_id, project_id, api_version, kind, namespace, name)
-);
-
-CREATE INDEX IF NOT EXISTS resources_by_kind
-    ON resources(tenant_id, project_id, api_version, kind);
-CREATE INDEX IF NOT EXISTS resources_by_name
-    ON resources(tenant_id, project_id, namespace, name);
-
-CREATE TABLE IF NOT EXISTS relations (
-    uid TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    source_uid TEXT NOT NULL,
-    target_uid TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    properties_json TEXT NOT NULL DEFAULT '{}',
-    FOREIGN KEY (source_uid) REFERENCES resources(uid) ON DELETE CASCADE,
-    FOREIGN KEY (target_uid) REFERENCES resources(uid) ON DELETE CASCADE,
-    UNIQUE (source_uid, target_uid, kind)
-);
-
-CREATE INDEX IF NOT EXISTS relations_by_source
-    ON relations(tenant_id, project_id, source_uid, kind);
-CREATE INDEX IF NOT EXISTS relations_by_target
-    ON relations(tenant_id, project_id, target_uid, kind);
-
-CREATE TABLE IF NOT EXISTS operations (
-    operation_id TEXT PRIMARY KEY,
-    idempotency_key TEXT NOT NULL UNIQUE,
-    resource_uid TEXT NOT NULL,
-    phase TEXT NOT NULL,
-    result_ref TEXT
-);
-
-CREATE TABLE IF NOT EXISTS workflow_runs (
-    run_id TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    state TEXT NOT NULL,
-    plan_json TEXT NOT NULL,
-    current_node TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS workflow_runs_by_state
-    ON workflow_runs(tenant_id, project_id, state);
-
-CREATE TABLE IF NOT EXISTS run_budgets (
-    run_id TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    max_visits INTEGER,
-    max_runtime_seconds INTEGER,
-    max_events INTEGER,
-    inserted_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS tenant_policies (
-    tenant_id TEXT PRIMARY KEY,
-    redaction_policy TEXT NOT NULL DEFAULT 'metadata',
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS node_executions (
-    node_execution_id TEXT PRIMARY KEY,
-    run_id TEXT NOT NULL,
-    tenant_id TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    node_name TEXT NOT NULL,
-    attempt INTEGER NOT NULL DEFAULT 1,
-    state TEXT NOT NULL,
-    outcome TEXT,
-    context_hash TEXT,
-    handoff_json TEXT,
-    result_json TEXT,
-    error TEXT,
-    started_at TEXT,
-    finished_at TEXT,
-    FOREIGN KEY (run_id) REFERENCES workflow_runs(run_id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS node_executions_by_run
-    ON node_executions(tenant_id, project_id, run_id, node_name);
-CREATE INDEX IF NOT EXISTS node_executions_by_state
-    ON node_executions(tenant_id, project_id, state);
-
-CREATE TABLE IF NOT EXISTS runtime_events (
-    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id TEXT NOT NULL UNIQUE,
-    tenant_id TEXT NOT NULL,
-    project_id TEXT NOT NULL,
-    event_kind TEXT NOT NULL,
-    run_id TEXT,
-    resource_ref TEXT NOT NULL,
-    causation_id TEXT,
-    correlation_id TEXT,
-    payload_json TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    schema_version INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS events_by_run
-    ON runtime_events(tenant_id, project_id, run_id);
-CREATE INDEX IF NOT EXISTS events_by_resource
-    ON runtime_events(tenant_id, project_id, resource_ref);
-
--- ============================================================
--- H3 Slice 1: tablas del subsistema de conocimiento
--- ============================================================
--- 7 tablas nuevas (sources, entities, evidences, claims,
--- claim_evidence, findings, outcome_traces, outcome_trace_links).
--- NO se modifican tablas existentes: el bloque CREATE TABLE
--- IF NOT EXISTS es idempotente y los ALTER no son necesarios.
-
-CREATE TABLE IF NOT EXISTS sources (
-    source_id        TEXT PRIMARY KEY,
-    tenant_id        TEXT NOT NULL,
-    project_id       TEXT NOT NULL,
-    kind             TEXT NOT NULL,
-    content_hash     TEXT NOT NULL,
-    locator_json     TEXT NOT NULL,
-    git_commit_sha   TEXT,
-    git_tree_sha     TEXT,
-    working_tree_status_json TEXT,
-    checked_at       TEXT NOT NULL,
-    freshness        TEXT NOT NULL DEFAULT 'fresh'
-);
-CREATE INDEX IF NOT EXISTS idx_sources_project
-    ON sources(tenant_id, project_id);
-
-CREATE TABLE IF NOT EXISTS entities (
-    entity_id        TEXT PRIMARY KEY,
-    tenant_id        TEXT NOT NULL,
-    project_id       TEXT NOT NULL,
-    kind             TEXT NOT NULL,
-    stable_key       TEXT NOT NULL,
-    UNIQUE (tenant_id, project_id, kind, stable_key)
-);
-
-CREATE TABLE IF NOT EXISTS evidences (
-    evidence_id      TEXT PRIMARY KEY,
-    tenant_id        TEXT NOT NULL,
-    project_id       TEXT NOT NULL,
-    kind             TEXT NOT NULL,
-    content_json     TEXT NOT NULL,
-    source_id        TEXT NOT NULL REFERENCES sources(source_id),
-    observed_at      TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS claims (
-    claim_id              TEXT PRIMARY KEY,
-    tenant_id             TEXT NOT NULL,
-    project_id            TEXT NOT NULL,
-    subject_entity_id     TEXT NOT NULL REFERENCES entities(entity_id),
-    predicate             TEXT NOT NULL,
-    object_literal_json   TEXT NOT NULL,
-    source_id             TEXT NOT NULL REFERENCES sources(source_id),
-    extraction_method     TEXT NOT NULL,
-    extractor_version     TEXT NOT NULL,
-    checked_at_revision   TEXT NOT NULL,
-    stale                 INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (subject_entity_id, predicate, source_id, checked_at_revision)
-);
-CREATE INDEX IF NOT EXISTS idx_claims_subject
-    ON claims(subject_entity_id, predicate);
-CREATE INDEX IF NOT EXISTS idx_claims_stale
-    ON claims(stale) WHERE stale = 1;
-
-CREATE TABLE IF NOT EXISTS claim_evidence (
-    claim_id      TEXT NOT NULL REFERENCES claims(claim_id),
-    evidence_id   TEXT NOT NULL REFERENCES evidences(evidence_id),
-    PRIMARY KEY (claim_id, evidence_id)
-);
-
-CREATE TABLE IF NOT EXISTS findings (
-    finding_id          TEXT PRIMARY KEY,
-    tenant_id           TEXT NOT NULL,
-    project_id          TEXT NOT NULL,
-    entity_id           TEXT NOT NULL REFERENCES entities(entity_id),
-    observation         TEXT NOT NULL,
-    rule_ref            TEXT NOT NULL,
-    rule_version        TEXT NOT NULL,
-    evidence_ids_json   TEXT NOT NULL,
-    result              TEXT NOT NULL,
-    valid_until_revision TEXT
-);
-
-CREATE TABLE IF NOT EXISTS outcome_traces (
-    trace_id      TEXT PRIMARY KEY,
-    tenant_id     TEXT NOT NULL,
-    project_id    TEXT NOT NULL,
-    kind          TEXT NOT NULL,
-    name          TEXT NOT NULL,
-    created_at    TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS outcome_trace_links (
-    trace_id      TEXT NOT NULL REFERENCES outcome_traces(trace_id),
-    link_kind     TEXT NOT NULL CHECK (link_kind IN ('claim','evidence','relation')),
-    link_id       TEXT NOT NULL,
-    position      INTEGER NOT NULL,
-    PRIMARY KEY (trace_id, link_kind, link_id)
-);
-
--- ============================================================
--- H7 release candidate (UAT-13): outbox de promocion entre bases.
--- Tabla nueva; no se modifica ninguna tabla existente.
--- ============================================================
--- Una propuesta de promocion es un mensaje de outbox persistente
--- que se aplica idempotentemente del lado destino. Si el proceso
--- se interrumpe entre el INSERT origen y el apply destino, la
--- reconciliacion (status=PENDING) lo completa sin duplicar
--- (idempotency_key = source_project + knowledge_ref).
-
-CREATE TABLE IF NOT EXISTS promotion_outbox (
-    proposal_id     TEXT PRIMARY KEY,
-    idempotency_key TEXT NOT NULL UNIQUE,
-    tenant_id       TEXT NOT NULL,
-    source_project  TEXT NOT NULL,
-    target_catalog  TEXT NOT NULL,
-    knowledge_ref   TEXT NOT NULL,
-    payload_json    TEXT NOT NULL,
-    status          TEXT NOT NULL DEFAULT 'PENDING'
-                    CHECK (status IN ('PENDING', 'IN_PROGRESS', 'PUBLISHED', 'FAILED')),
-    attempts        INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    published_at    TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_promotion_outbox_status
-    ON promotion_outbox(status);
-"""
-
-
-def _uid(brick: Brick) -> str:
-    """UID determinista por (tenant, project, apiVersion, kind, namespace, name).
-
-    El blueprint (doc 03 §3) deja la elección al núcleo. Aquí usamos un
-    UID estable pero NO un hash criptográfico: las revisiones usan un
-    contador (resource_version) y la identidad de los `Brick` ya viene
-    garantizada por la UNIQUE constraint de la tabla.
-    """
-    i = brick.identity
-    return f"{i.tenant_id}/{i.project_id}/{brick.api_version}/{brick.kind}/{i.namespace}/{i.name}"
-
-
-def _row_to_stored_event(row: sqlite3.Row) -> StoredEvent:
-    """Mapea ``sqlite3.Row`` de ``runtime_events`` al DTO ``StoredEvent``.
-
-    WI-32.2 (R1 strict, audit 2026-09-27): este helper es la frontera
-    entre ``platform/`` y el resto del runtime. El consumidor (EventLog,
-    RunController) solo ve ``StoredEvent``; nunca importa ``sqlite3``.
-
-    El campo ``payload`` se deserializa desde ``payload_json`` aqui;
-    ``runtime/engine.py`` ya no maneja ``json.loads`` sobre filas.
-    """
-    import json  # local import por consistencia con resto del modulo
-
-    return StoredEvent(
-        sequence=row["sequence"],
-        event_id=row["event_id"],
-        tenant_id=row["tenant_id"],
-        project_id=row["project_id"],
-        event_kind=row["event_kind"],
-        run_id=row["run_id"],
-        resource_ref=row["resource_ref"],
-        causation_id=row["causation_id"],
-        correlation_id=row["correlation_id"],
-        payload=json.loads(row["payload_json"]),
-        timestamp=row["timestamp"],
-        schema_version=row["schema_version"],
-    )
-
-
-def _row_to_stored_promotion(row: sqlite3.Row) -> StoredPromotion:
-    """Mapea ``sqlite3.Row`` de ``promotion_outbox`` al DTO ``StoredPromotion``.
-
-    WI-38 (R1 strict): cierra la fuga de ``dict[str, Any]`` en los
-    3 metodos de promotion (``get_promotion``, ``list_pending_promotions``,
-    ``list_promotions``). El campo ``payload`` se deserializa aqui.
-    """
-    import json  # local import por consistencia con resto del modulo
-
-    return StoredPromotion(
-        proposal_id=row["proposal_id"],
-        idempotency_key=row["idempotency_key"],
-        tenant_id=row["tenant_id"],
-        source_project=row["source_project"],
-        target_catalog=row["target_catalog"],
-        knowledge_ref=row["knowledge_ref"],
-        payload=json.loads(row["payload_json"]),
-        status=row["status"],
-        attempts=row["attempts"],
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-        published_at=row["published_at"],
-    )
-
-
-def _row_to_stored_budget(row: sqlite3.Row) -> StoredBudget:
-    """Mapea ``sqlite3.Row`` de ``run_budgets`` al DTO ``StoredBudget``.
-
-    WI-38 (R1 strict): sustituye ``dict(row)`` en ``get_budget``.
-    """
-    return StoredBudget(
-        tenant_id=row["tenant_id"],
-        project_id=row["project_id"],
-        run_id=row["run_id"],
-        max_visits=row["max_visits"],
-        max_runtime_seconds=row["max_runtime_seconds"],
-        max_events=row["max_events"],
-    )
 
 
 class Storage(
@@ -904,113 +610,6 @@ class Storage(
 
 
 # --- Helpers de conversion row -> ADT -------------------------------------
-
-
-def _row_to_source(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_source``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_source
-
-    return row_to_source(row, json)
-
-
-def _row_to_evidence(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_evidence``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_evidence
-
-    return row_to_evidence(row, json)
-
-
-def _row_to_stored_evidence(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_stored_evidence``. El corte 5
-    reubicara los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_stored_evidence
-
-    return row_to_stored_evidence(row, json)
-
-
-def _row_to_claim(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_claim``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_claim
-
-    return row_to_claim(row, [], json)
-
-
-def _row_to_stored_claim(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_stored_claim``. El corte 5
-    reubicara los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_stored_claim
-
-    return row_to_stored_claim(row, json)
-
-
-def _row_to_run(row: sqlite3.Row) -> StoredRun:
-    """Convierte una fila de ``workflow_runs`` al DTO ``StoredRun``.
-
-    WI-32.4: sustituye ``dict(row)`` por una traduccion tipada.
-    El adapter expone ``StoredRun`` (frozen + slots) en vez de dict
-    mutable, evitando que ``sqlite3.Row`` escape del modulo
-    ``platform/``.
-    """
-    return StoredRun(
-        run_id=row["run_id"],
-        tenant_id=row["tenant_id"],
-        project_id=row["project_id"],
-        state=row["state"],
-        plan_json=row["plan_json"],
-        current_node=row["current_node"],
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-    )
-
-
-def _row_to_node_execution(row: sqlite3.Row) -> StoredNodeExecution:
-    """Convierte una fila de ``node_executions`` al DTO ``StoredNodeExecution``.
-
-    WI-32.4: sustituye ``dict(row)`` por una traduccion tipada.
-    ``StoredNodeExecution`` es frozen + slots y refleja 1:1 la tabla.
-    """
-    return StoredNodeExecution(
-        node_execution_id=row["node_execution_id"],
-        run_id=row["run_id"],
-        tenant_id=row["tenant_id"],
-        project_id=row["project_id"],
-        node_name=row["node_name"],
-        attempt=row["attempt"],
-        state=row["state"],
-        outcome=row["outcome"],
-        context_hash=row["context_hash"],
-        handoff_json=row["handoff_json"],
-        result_json=row["result_json"],
-        error=row["error"],
-        started_at=row["started_at"],
-        finished_at=row["finished_at"],
-    )
-
-
-def _row_to_resource(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_resource``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_resource
-
-    return row_to_resource(row)
-
-
-def _row_to_relation(row: sqlite3.Row) -> Any:
-    """Alias de compatibilidad (WI-56 corte 3): mapper viviendo en
-    ``SqliteKnowledgeRepository.row_to_relation``. El corte 5 reubicara
-    los callers."""
-    from skillgraph.platform.knowledge_repository import row_to_relation
-
-    return row_to_relation(row)
 
 
 def open_project_storage(path: str | Path) -> Storage:
