@@ -541,7 +541,7 @@ tests:
   total: 1431   # post-fix(audit) + refactor(backups): 1422 -> 1431 (+9 tests: 4 de exactitud de auditoria, 5 de politica de recoleccion; +2 preexistentes contados aparte)
   passed: 1431
   duration_s: 644   # re-medido el 2026-09-28 con `uv run pytest -q` con cobertura (1431 passed in 644.38s; la anterior de 1215s era de un run con fallos de gobernanza)
-  package_version: "0.16.10.dev0"   # trabajo post-release v0.16.10 (regla AGENTS §12): bump .dev0 inmediato tras el tag para no reproducir el drift
+  package_version: "0.16.11"   # release v0.16.11: bloque WI-72..WI-81 (investigacion retrospectiva, falsos exitos y alias muertos). PATCH derivado del historial: 0 feat, 1 fix, 1 refactor, 6 test, 1 docs
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1095,10 +1095,10 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.16.10
-  fecha: 2026-09-29
+  tag: v0.16.11
+  fecha: 2026-10-02
   semver_bump: PATCH
-  rationale: "Ciclo SDDK WI-56 (path A-lite), commit 8eda4ea. Descomposicion del god-module platform/storage.py (2837 -> 1807 LoC, -36%) en 5 repositorios SQLite reales mediante patron strangler (ADR-0016): SqliteRunRepository, SqlitePolicyStore, SqliteKnowledgeRepository, SqliteEventStore y SqlitePromotionRepository. Cada corte tiene su red de contrato escrita ANTES (RED honesto: solo fallaba la identidad del facade) y cero ediciones en callers (REQ-WI56-1/I1). Incluye 8eda4ea chore(repo): .jcode-scratch/ ignorado, auditoria de deuda del dia y evidencia UAT de UAT-08/09 alineada con HEAD. SemVer derivado del historial v0.16.7..8eda4ea: 5 refactor, 2 test, 5 chore, 1 docs, 0 feat, 0 fix, 0 breaking => PATCH (unica forma valida). 1754/1754 tests no-UAT PASS, ruff check+format limpios, release governance gate 2 passed. Detalle del sprint R1+R2 que abrio la linea 0.16.x en v0.16.0 (WI-32/33, DTOs inmutables + SqliteUnitOfWork) conservado en la entrada v0.16.0 del historial de releases."
+  rationale: "Bloque WI-72..WI-81 (9 commits, 2ee6d77..HEAD): investigacion retrospectiva del ciclo de desarrollo anterior bajo la consigna de buscar falsos exitos (operaciones que devuelven OK sin cumplir su objetivo). SemVer derivado del historial: 0 feat, 1 fix (b3b2ef7, instrumentacion de cobertura del CLI), 1 refactor (90d2e46, siete alias de WI-56 sin callers), 6 test, 1 docs => PATCH, la unica forma valida. No hay capacidad observable nueva ni cambio de API publica. 2376 passed (2368 antes del bloque), ruff y format limpios, CI canonica con Pipeline finished with SUCCESS (run 6d5e68a5). Falsos exitos confirmados: cobertura ciega al CLI (65,86% -> 94%), 7 shims preservados sin ejecutar, una rama de main sin oraculo (runner.py:250-254), el contrato de exit code de la CLI sin un solo test, y un rechazo ilegible presentado como PROPOSED. Hipotesis refutadas con instrumento validado por mutacion: ningun handler de _DISPATCH puede devolver None; _load_registry incompleto es fail-closed; el patron getsource/AST no es sistematico. 7 decisiones de producto quedan abiertas en next_workitem. El tag se crea sobre el commit que lleva el SemVer puro, que es lo que exige tests/test_release_governance.py::test_version_matches_git_tag (HEAD en etiqueta <=> __version__ sin .devN)."
   # Reconciliado con git el 2026-10-02 (WI-74): cada `sha` es el de su
   # etiqueta y resuelve a un commit real. Donde el valor anterior no
   # resolvia, queda en `superseded_sha` con la razon. La red que lo

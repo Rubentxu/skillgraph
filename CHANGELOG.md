@@ -12,6 +12,108 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.11] - 2026-10-02 — WI-72..WI-81: investigación retrospectiva, falsos éxitos y alias muertos
+
+**Resumen**: publica el bloque de 9 commits acumulado desde `2ee6d77` (WI-72
+a WI-81): una investigación retrospectiva del ciclo de desarrollo anterior,
+con la consigna de buscar **falsos éxitos** —operaciones que devuelven OK
+sin cumplir su objetivo—. El número sale de la regla del propio CHANGELOG
+aplicada al historial: **0 `feat`, 1 `fix`, 1 `refactor`, 6 `test`, 1
+`docs`** → **PATCH**. No hay capacidad observable nueva ni cambio de API
+pública. **2376 passed** (2368 antes del bloque), ruff y format limpios, CI
+canónica con `Pipeline finished with SUCCESS` (run `6d5e68a5`).
+
+La mayor parte del bloque son redes de contrato, no cambios de
+comportamiento: el código ya cumplía lo que se ahora verifica. Cuatro
+falsos éxitos confirmados y uno refutado con instrumentación.
+
+### Fixed
+
+- `fix(coverage)` `b3b2ef7`: **`pytest --cov` era ciego al CLI entero**.
+  Mide solo el proceso principal, y la suite ejercita la frontera CLI por
+  subproceso. El CLI marcaba **65,86 %** contra el contrato de AGENTS §6.3
+  (≥70 %) — un incumplimiento aparente que era **ceguera del
+  instrumento, no deuda de tests**. `scripts/coverage.sh` arregla las tres
+  piezas (hook `.pth` que llama a `coverage.process_startup()`,
+  `parallel = true` y `data_file` absoluto) y el mismo código mide **94 %**;
+  `cmd_expansion_apply` pasa de 0 % a cobertura real. Sin tocar `.pipeline.kts`
+  porque la instrumentación duplica el tiempo de suite.
+- `test(platform)` `073d52d` + `refactor(platform)` `90d2e46`: **siete alias
+  de WI-56 (corte 3) en `row_mappers.py` sin callers**, que `MAPPER_NAMES` y
+  `storage.__all__` seguían contando como mappers. Sus docstrings decían
+  «el corte 5 reubicará los callers»; el corte 5 ocurrió (ADR-0020) y los
+  alias se quedaron. Inercia medida **en runtime**: los símbolos que usa
+  `knowledge_repository` son aliases *locales* suyos
+  (`knowledge_repository.py:696-702`) que apuntan a `knowledge_mappers`, no
+  a estos — un barrido textual habría dado un falso positivo. `MAPPER_NAMES`
+  pasa de 12 a 5; segunda tanda de ADR-0014, cuyo addendum queda en disco
+  porque `external/` está en `.gitignore`.
+- `test(runtime)` `2a1a737`: el guard de `_fail_node_with` leía que la última
+  línea fuese `return False` con `getsource`, con lo que un `return None`
+  temprano pasaba. Ahora invoca la función.
+
+### Regresiones evitadas por la red (contexto)
+
+- `test(cli)` `d69879f`: la rama `except FileNotFoundError` de `main`
+  (`runner.py:250-254`) **no la ejercitaba nadie**. Con su
+  `return EXIT_PROJECT_NOT_FOUND` cambiado por `return EXIT_OK`, los 2260
+  tests de la suite se quedaban verdes. El oráculo conductual no la
+  alcanzaba porque `runs budget` resuelve el proyecto antes. La cobertura
+  de líneas no lo habría dicho: la línea se ejecuta, lo que faltaba era la
+  **aserción** sobre su valor.
+- `test(cli)` `2b68bfd`: un `expansion_rejections/*.json` ilegible degrada a
+  `stage=PROPOSED` con exit 0 y sin aviso, y desaparece del filtro
+  `--stage REJECTED`. **No** es un falso éxito de escritura —`apply` es
+  idempotente por re-validación— sino de visualización. Fijado con test; la
+  corrección es decisión de producto porque cambia la salida de un comando
+  publicado.
+- `test(runtime)` `3ce7b2e`: el límite `max_events` del Run, un control de
+  gobernanza cuyo evento `BudgetExceeded(kind="events")` es lo que el
+  operador lee para saber **por qué** se abortó un run, no tenía un solo
+  test. `run_budget_delegations.py` de 83 % a 100 %.
+- `test(platform)` `40d78ae`: la serialización legacy de 4 de 9 DTO
+  (`StoredClaim`, `StoredEvidence`, `StoredPromotion`, `StoredBudget`) sin
+  test. `dto.py` de 89 % a 97 %.
+
+### Conocimiento negativo (lo que se buscó y NO se encontró)
+
+Registrado porque absence de evidencia no es evidencia de ausencia, y
+porque confirmar que algo está bien es un resultado:
+
+- **No hay handler de excepción vacío ni `pass`** en `src/`: de 66
+  handlers, 59 tienen cuerpo efectivo y 7 son `continue` de tolerancia a
+  dato corrupto, todos documentados. Los 4 `except Exception` anchos están
+  justificados en el código y los 3 `except BaseException` relanzan con
+  `raise`.
+- **Ningún handler de `_DISPATCH` (31) puede devolver `None`**, o sea que
+  `sys.exit(main())` no puede dar exit 0 por silencio. Hipótesis refutada
+  con un escáner validado por mutación en ambas direcciones.
+- **La pérdida de la causa de una promoción FAILED** (`promotion.py:116`)
+  es deuda declarada en el propio código y fijada por test, no un hallazgo.
+- **`_load_registry` con registro incompleto es fail-closed**: el registry
+  es un allowlist de existencia (I3/I4), no un detector de colisiones.
+- **El patrón `getsource`/AST con `assert` no es sistémico**: de 40 tests
+  que lo combinan, ~37 son contratos estructurales legítimos.
+- **No hay deuda registrada para este proyecto**: `sddk debt incs`
+  devuelve 50 INCs que pertenecen a `sddk-framework/` y a otro proyecto
+  (`p-733fb505b5a6bd2d`); el vault de `p-b7740b96d79ec013` tiene 0 entradas.
+- **`sddk lint` falla con 4 errores que son opt-ins no adoptados**
+  (`schemas/`, `docs/generated/`, `manifest.toml` nunca existieron en el
+  historial de git), no contratos violados ni drift.
+
+### Contradicciones reportadas, no corregidas
+
+Decisiones de producto, con el comportamiento real fijado por test para
+que no se resuelvan en silencio:
+
+- `StoredBudget.to_dict` promete en su docstring "preservando todas las
+  columnas" y devuelve 3 de 6: omite `tenant_id`, `project_id`, `run_id`.
+  Ningún consumidor determina cuál de las dos cosas es correcta.
+- `argparse` sale con código **2** mientras el `EXIT_USAGE` canónico es
+  **1** (`support.py:47`): un operador que clasifique por `EXIT_USAGE` no ve
+  los errores de invocación.
+- Un rechazo ilegible se presenta como `PROPOSED` (§ Regresiones).
+
 ## [0.16.10] - 2026-10-02 — WI-65..WI-71: cierre de H-01 y god modules 3 → 0
 
 **Resumen**: publica el bloque de 57 commits acumulado desde `e680b72`. El

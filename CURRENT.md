@@ -1,8 +1,11 @@
 # CURRENT — puntero operativo
 
-> **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
-> `v0.16.10` en `2ee6d77`. Los workitems posteriores a la release se
-> acumulan sobre ese HEAD; la siguiente release se decide con el operador.
+> **Estado post-release**: `__version__ = 0.16.11`, etiqueta `v0.16.11`
+> sobre el commit de release del bloque WI-72..WI-81. El tag se crea
+> DESPUES del commit que lleva el SemVer puro, que es lo que
+> `tests/test_release_governance.py::test_version_matches_git_tag`
+> exige: HEAD en etiqueta ⟺ `__version__` sin sufijo `.devN`. La
+> siguiente release se decide con el operador.
 > **WI-81 cerrado — segunda tanda de ADR-0014: 7 alias de función sin
 > callers** (2026-10-02, ciclo SDDK
 > `wi-81-drop-dead-row-mapper-shims`): antes de aceptar deuda técnica
