@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.16.11"  # release 0.16.11: bloque WI-72..WI-81 (investigacion retrospectiva). Regla AGENTS §12.
+__version__ = "0.16.11.dev0"  # trabajo post-release v0.16.11 (regla AGENTS §12): bump .dev0 inmediato tras el tag para no reproducir el drift
 
 from skillgraph.core.errors import (
     IdentityConflictError,

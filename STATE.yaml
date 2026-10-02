@@ -541,7 +541,7 @@ tests:
   total: 1431   # post-fix(audit) + refactor(backups): 1422 -> 1431 (+9 tests: 4 de exactitud de auditoria, 5 de politica de recoleccion; +2 preexistentes contados aparte)
   passed: 1431
   duration_s: 644   # re-medido el 2026-09-28 con `uv run pytest -q` con cobertura (1431 passed in 644.38s; la anterior de 1215s era de un run con fallos de gobernanza)
-  package_version: "0.16.11"   # release v0.16.11: bloque WI-72..WI-81 (investigacion retrospectiva, falsos exitos y alias muertos). PATCH derivado del historial: 0 feat, 1 fix, 1 refactor, 6 test, 1 docs
+  package_version: "0.16.11.dev0"   # trabajo post-release v0.16.11 (regla AGENTS §12). El tag v0.16.11 esta en 4272ade; el bloque WI-72..WI-81 esta publicado en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"
@@ -1263,6 +1263,10 @@ release:
       fecha: 2026-10-02
       sha: "2ee6d7765e8c9d958abef649c39774cf923d27e7"
       nota: "Bloque WI-65..WI-71: cierre de H-01 (Storage 1807 -> 623 LoC, ADR-0022), RunController por dominios (1421 -> 665, ADR-0023/0024), ports en dto + repositories. God modules 3 -> 0. 0 feat, 6 fix, 13 refactor, 3 test, 23 docs, 12 chore -> PATCH por la regla del CHANGELOG. 2154 -> 2181 tests. Tres correcciones reales de gobernanza de CI: el SUCCESS cacheado que declaraba verde un run sin ejecutar un step, la ambiguedad de PATH entre asdf y mise, y el hook pre-commit que se comia el exit de pytest."
+    - tag: v0.16.11
+      fecha: 2026-10-02
+      sha: "4272ade5bbe176832cf1e4c27b6b6dc42c6e9ac2"
+      nota: "Bloque WI-72..WI-81: investigacion retrospectiva bajo la consigna de buscar falsos exitos. 0 feat, 1 fix (b3b2ef7, cobertura del CLI 65,86% -> 94%), 1 refactor (90d2e46, siete alias de WI-56 sin callers), 6 test, 1 docs -> PATCH. 2368 -> 2376 tests. Falsos exitos confirmados: cobertura ciega al CLI, alias muertos contados como mappers, una rama de main sin oraculo (runner.py:250-254), el contrato de exit code sin una sola asercion, y un rechazo ilegible presentado como PROPOSED. Conocimiento negativo: ninguna hipotesis sobrevive sin mutacion. Siete decisiones de producto abiertas en next_workitem. PUSH NO EJECUTADO."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes
