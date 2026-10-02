@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -230,6 +231,7 @@ def _write_plan_to_storage(project_dir: Path, plan: WorkflowPlan) -> None:
     path.write_text(_json.dumps(payload, indent=2, sort_keys=True))
 
 
+@contextmanager
 def _open_project_storage(
     args: argparse.Namespace,
 ) -> Iterator[tuple[Storage | None, int]]:
