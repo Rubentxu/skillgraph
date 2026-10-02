@@ -1,5 +1,23 @@
 # CURRENT — puntero operativo
 
+> **WI-67 cerrado — god modules 3 → 2** (2026-10-02, commit `57121ed`,
+> ADR-0024, completa ADR-0019 fase 2): `runcontroller.py` 1421 → **665
+> LoC** con 14 métodos. La medición AST no dio un bloque sino seis
+> clusters disjuntos; se movieron los tres más cohesivos a un mixin
+> cada uno, en **módulos separados** (un único módulo habría salido en
+> 845 LoC: reubicar el problema, no resolverlo) —
+> `node_execution_delegations.py` (487), `run_observability_delegations.py`
+> (255) y `run_budget_delegations.py` (138). Quedan dos god modules:
+> `ports/__init__.py` (927) y `storage_delegations.py` (915, cinco
+> clases cohesivas con métodos ≤27 LoC: estalla por tamaño de fichero,
+> no por concentración de responsabilidad). **Tercera aparición del bug
+> F401 de re-exports** (tras WI-65 con 61 tests y WI-66 con 133), esta
+> vez detectada por la red dirigida. Dos aprendizajes escritos en la
+> red: un grep de `from ... import` no ve los accesos por atributo
+> (`runcontroller.BudgetViolationKind`), y `vars(cls)` no ve lo
+> heredado, así que la superficie pública se afirma con
+> `inspect.getmembers`. Verificación: **2019 passed** (1966 + 53),
+> incluidos los 483 de runtime/H9/H10.
 > **WI-66 cerrado** (2026-10-02, commit `e07413b`, ADR-0023):
 > `RunController._execute_one` 143 → **74 LoC**, en cuatro fases
 > nombradas cuyo nombre dice qué invariante protegen: `_node_guard`
