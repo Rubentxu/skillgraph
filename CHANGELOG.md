@@ -12,6 +12,84 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [Unreleased] — WI-88: los errores de uso devuelven EXIT_USAGE y el 2 queda libre
+
+**Sin bump todavía**: el `fix(cli)` de este bloque dispara el PATCH; la release que lo
+contiene es `v0.16.14`. 2451 passed (2430 antes).
+
+### Fixed
+
+- `fix(cli)` `1a0c38b`: **`argparse` abortaba los errores de uso con 2, y 2 ya
+  significaba `EXIT_BAD_NAME`**. `runner.py:131` lo devuelve vivo, así que tres fallos
+  sin relación —un nombre de proyecto inválido, un comando inexistente y un
+  subcomando sin argumentos— devolvían el mismo número. Un script que comprobara
+  `rc == 2` para detectar un nombre inválido recibía un falso positivo ante cualquier
+  error de uso, y `EXIT_USAGE` (1), que el contrato declaraba, no se producía nunca.
+  La taxonomía de errores era inservible para scripting.
+
+  `parser.py` usa ahora `_UsageParser`, que sobrescribe `error()` para salir con
+  `EXIT_USAGE`. No se envuelve `main` en un `except SystemExit` a propósito: no
+  distinguiría el 2 de `argparse` del 2 de un handler, que es la ambigüedad que se
+  quiere eliminar, y no se puede eliminar *después* del hecho.
+
+  La tabla de exit codes se mueve a `cli/exit_codes.py`, un módulo hoja sin imports.
+  `support.py` la reexporta con la forma `X as X`, que es la que ruff respeta como
+  reexport intencional: sin ella, F401 borró ocho de los doce nombres — medido,
+  `EXIT_DOMAIN` dejó de exportarse y `cli/commands/expansion.py` dejó de importar.
+
+### Changed
+
+- `style(lint)` `0a3fd1a`: `combine-as-imports = true`. Sin ella, ruff parte un bloque
+  `X as X` en una sentencia por nombre, y la señal de «esto es un reexport
+  intencional» desaparece entre doce líneas. Va en commit aparte porque toca tres
+  módulos sin relación con WI-88.
+
+### Contradicciones
+
+- **La medición de la premisa (f) fue errónea y pasó inadvertida.** La primera
+  ejecución dio exit 1 en los tres casos, lo que habría permitido cerrar (f) como
+  «la premisa estaba caducada». Era falso: `shutil.which('sg')` devuelve `/usr/bin/sg`,
+  la herramienta Unix de grupos, no la CLI de SkillGraph, cuyo console script es
+  `skillgraph` (`pyproject.toml:39`). Los tres `1` medidos eran de otro programa, y sus
+  mensajes de stderr lo decían (`sg: el grupo «no-existe-comando» no existe`).
+- **Dos docstrings llamaban «dead code» a `EXIT_USAGE`.** No era código muerto: era
+  **código secuestrado**. Un número que nunca se produce no se parece a código muerto,
+  se parece a código inalcanzable, y la diferencia importa porque el primero es inocuo
+  y el segundo esconde un defecto.
+- **La consignación de WI-79 era correcta sobre la contradicción e incompleta sobre
+  el diagnóstico.** Fijar el 2 a propósito era inocuo mientras 2 no significara nada
+  para nadie; dejó de serlo cuando `EXIT_BAD_NAME` empezó a devolverlo. El propio test
+  que consagra el comportamiento fue el que dejó pasar la colisión.
+- **Ocho tests cambian de 2 a 1, a propósito.** Dos de ellos tenían el nombre diciendo
+  una cosa y el cuerpo la otra: `test_wi41_cli_dispatch.py` se llamaba
+  `test_comando_desconocido_devuelve_usage` y `test_wi57_dispatch_coverage.py`
+  `..._is_argparse_usage`. Los dos nombres eran correctos y los dos cuerpos mentían. De
+  los que se quedan, `test_cli_uat.py::test_main_returns_2_for_invalid_name` pasa a
+  ser el guardián del 2, y `test_uat_audit.py` es otra herramienta con sus propios
+  códigos, fuera de alcance.
+- **La primera red afirmaba que `--version` lanzaba `SystemExit`.** Es
+  `action="store_true"` (`parser.py:37-39`) y no aborta; lo atiende el runner. El test
+  describía mal el programa.
+- **Una mutación contaminó el staging.** La primera versión de M5 editaba
+  `support.py` buscando un `return` que vive en `runner.py`; el `replace` no aplicó y
+  el `# noqa` que dejó no se restauró, porque el script respaldaba dos ficheros y esa
+  mutación tocaba un tercero. El commit se paró en el hook. `support.py` entró en el
+  conjunto de respaldo.
+- **Un recuento sobre una salida truncada es una suposición con formato de dato.** La
+  primera lista de tests afectados decía «medidos uno a uno, no contados» y contaba 6;
+  eran 10, porque el `grep` que los localizó estaba limitado a 20 resultados y se leyó
+  como lista completa. Cuatro de los ocho reales están en un solo fichero.
+
+### Verificación
+
+- **2451 passed** (2430 antes; neto +21, desglose medido con un worktree en `d47b7af`:
+  26 nuevos y 5 renombrados). `ruff check` y `ruff format --check` limpios.
+- Mutaciones **5/5**: volver a `argparse.ArgumentParser`, salir con 2, tragarse el
+  diagnóstico, no propagar la clase a los subparsers, y mover `EXIT_BAD_NAME` de número.
+  M4 es la importante: una corrección aplicada sólo a la raíz deja los niveles internos
+  devolviendo 2 sin que nada lo note.
+- 18 tests nuevos. ADR-0016. Evidencia: `evidence/sddk-wi88-verify-2026-10-02.md`.
+
 ## [Unreleased] — WI-87: el vocabulario de estados pasa a derivarse de su ADT
 
 **Sin bump**: `refactor` + `docs`, que según la regla de este CHANGELOG no mueven

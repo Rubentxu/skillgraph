@@ -9598,3 +9598,126 @@ lee el AST de `schema.py` y falla si el DDL vuelve a escribirse a mano.
 - **(f)** exit code de argparse (2) vs `EXIT_USAGE` (1): cambiarlo altera el
   contrato externo de los tests de subproceso. Sin workitem.
 - **(push)** 23 commits sin publicar. No autorizado.
+
+---
+
+## 2026-10-02 — WI-88: EXIT_USAGE observable y el 2 inequivoco (ADR-0016)
+
+Ciclo `p-b7740b96d79ec013/wi-88-unify-usage-exit-code`, path `A-full`.
+Commits `0a3fd1a` (config de lint, atomico aparte) y `1a0c38b` (el contrato).
+Cierra la decision **(f)** de `next_workitem`.
+
+### El error de medicion que casi cierra el item por el motivo equivocado
+
+La primera medicion de (f) dio **exit 1 en los tres casos de uso**. Eso habria
+permitido cerrar la decision como "la premisa estaba caducada, ya corregido" —
+que es exactamente el movimiento que este bloque lleva dos items evitando.
+
+Era falso. `shutil.which('sg')` devuelve `/usr/bin/sg`, la herramienta Unix de
+grupos. El console script de SkillGraph se llama `skillgraph`
+(`pyproject.toml:39`). Los tres `1` medidos eran de otro programa, y sus stderr
+lo decia: `sg: el grupo «no-existe-comando» no existe`. La senal estaba a la vista
+y no se leyo.
+
+### Lo medido con el binario correcto
+
+    skillgraph (sin args)         -> 0
+    skillgraph no-existe-comando  -> 2   argparse
+    skillgraph runs budget        -> 2   argparse
+    skillgraph --no-existe-flag   -> 2   argparse
+    skillgraph project create "NOMBRE INVALIDO" -> 2   EXIT_BAD_NAME
+
+Y `EXIT_BAD_NAME` esta vivo en `runner.py:131`. **Colision demostrada**: tres
+fallos sin relacion devuelven el mismo numero. Un script que comprobara
+`rc == 2` para detectar un nombre invalido recibe falsos positivos, y
+`EXIT_USAGE` (1) no se produce nunca.
+
+### Lo que faltaba en el conocimiento previo
+
+La contradiccion ya estaba consignada en `test_wi79_dispatch_exit_contract.py`,
+que decia que unificarla era "una decision de producto, no un fix de test".
+Correcto sobre la contradiccion, **incompleto sobre el diagnostico**: no decia
+que 2 no era un numero libre, sino que ya tenia dueno.
+
+Y dos docstrings llamaban "dead code" a `EXIT_USAGE`:
+- `test_wi41_cli_dispatch.py:209-211` — "el EXIT_USAGE (1) de main es dead code
+  en la practica porque argparse declara choices para todos los subcomandos".
+- `test_cli_branches.py:296-301` — "Mantenemos la constante por si en el futuro
+  queremos reportar errores de uso propios".
+
+No era codigo muerto. Era **codigo secuestrado**: un numero que nunca se
+produce no se parece a codigo muerto, se parece a codigo inalcanzable. La
+diferencia importa porque el primero es inocuo y el segundo esconde un defecto.
+
+### Cambios
+
+- `cli/exit_codes.py`: modulo hoja con los doce codigos, sin imports.
+- `cli/parser.py`: `_UsageParser` sobrescribe `error()` y sale con EXIT_USAGE.
+  No se envuelve `main` en `except SystemExit` porque no distinguiria el 2 de
+  argparse del 2 de un handler: la ambiguedad no se puede eliminar despues.
+- `cli/support.py`: reexporta la tabla con la forma `X as X`.
+- 8 tests pasan de 2 a 1, a proposito. 2 se quedan.
+
+### El reexport que casi se pierde
+
+Sin `X as X`, F401 borro 8 de los 12 nombres. Medido: `EXIT_DOMAIN` dejo de
+exportarse y `cli/commands/expansion.py` dejo de importar — el commit se paró en
+`ruff check` antes de llegar a commitear. Con `X as X`, ruff pasa a partir el
+bloque en 12 sentencias, resuelto aparte en `0a3fd1a` con `combine-as-imports`
+(toca 3 modulos sin relacion, asi que commit aparte).
+
+### Evidencia
+
+- `evidence/sddk-wi88-verify-2026-10-02.md`
+- `external/blueprint-v1/adr/ADR-0016-usage-exit-code-unificado.md` (no versionada)
+- `.pipelinek/wi88_mutate.sh` (5/5 + control final)
+
+### Tests ejecutados
+
+- `test_wi88_usage_exit_code.py`: 18
+- suite afectada (8 ficheros): 202 passed
+- suite completa: **2451 passed in 104.26s**
+- Desglose medido con un worktree en `d47b7af` (2430) y `--collect-only` en
+  ambos arboles: 26 nuevos, 5 "borrados" que son los 5 RENOMBRADOS. Neto +21.
+  De los 26: 18 en el fichero nuevo, 4 reapariciones por renombre, 1 renombre
+  de wi79, y **+3 en `test_wi47_broad_except_guard.py`** porque ese guard
+  enumera modulos con `rglob` y genera un caso por modulo: aparecen por el
+  modulo nuevo y por el segundo ambito que introduce la clase en `parser.py`.
+  La cobertura arquitectural se aplico sola al codigo nuevo.
+
+### Conocimiento negativo (propio, y sirve)
+
+- **Medir el programa equivocado es la forma mas barata de cerrar un defecto
+  por error.** `sg` existe en `/usr/bin` y no es lo que parece. Tres resultados
+  aparentemente correctos, medidos sobre otra herramienta.
+- **Consignar un comportamiento real es correcto mientras sea inocuo.** La nota
+  de WI-79 era acertada al fijar el 2, y dejo de serlo cuando EXIT_BAD_NAME
+  empezo a devolver ese mismo numero. El propio test que consagra el
+  comportamiento fue el que dejo pasar la colision.
+- **Un recuento sobre una salida truncada es una suposicion con formato de
+  dato.** Escribi "medidos uno a uno, no contados" y conte 6 sobre un
+  `grep | head -20` leido como lista completa. Eran 10. Cuatro de los ocho
+  reales estan en un solo fichero, y por eso un recuento superficial da seis.
+  Y dos de los tests tenían el nombre diciendo "usage" con el cuerpo diciendo 2:
+  la contradiccion apuntaba en la direccion contraria al recuento.
+- **Una mutacion que toca un fichero que el script no respalda contamina el
+  commit.** La M5 v1 editaba `support.py`; el script respaldaba `parser.py` y
+  `runner.py`. El `replace` no aplico, el `# noqa` que dejo puesto no se
+  restauro, y el commit se paro en el hook. `support.py` entra al conjunto de
+  respaldo. Sin ese control final, ese commit habria salido.
+- **Una primera red puede afirmar algo falso sobre el programa.** La version
+  inicial esperaba que `--version` lanzara `SystemExit`; es
+  `action="store_true"` (`parser.py:37-39`) y no aborta.
+- **Mutar el codigo con un `replace` que no aplica produce un "verde" que no
+  significa nada.** Las dos primeras mutaciones de WI-88 se reportaron "no
+  cazadas" porque editaban ficheros equivocados. Un verde que no se ha
+  verificado no es evidencia, es ausencia de informacion.
+
+### Sigue abierto
+
+- **(a)** `list_file_signatures_for_source`: MEDIDO que no esta muerto (4
+  consumidores reales). Falta medir si su cc 10 es necesario o delata
+  responsabilidades mezcladas.
+- **`audits/architecture-debt-*.md` sigue ensuciando `git status`**: medido con
+  md5, 9 tests verdes cambian el fichero. Registrado como seguimiento en WI-87.
+- **(push)** commits sin publicar. No autorizado.
