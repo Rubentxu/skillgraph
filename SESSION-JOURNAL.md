@@ -8525,3 +8525,49 @@ redundante, no peligroso. La hipotesis del recibo se retira: no es
 sistematico.
 
 Evidencia ampliada: `evidence/sddk-wi76-verify-2026-10-02.md` §7.
+
+---
+
+## 2026-10-02 — WI-77: el tercer eje del presupuesto estaba sin test
+
+Pendiente que quedaba de la retrospectiva y que **si** es mio: cerrar el
+contrato de AGENTS §6.3 (core >=90 %) para los modulos del core que
+estan por debajo. Con el instrumento fiable de WI-75 por primera vez se
+puede medir de verdad:
+
+- `platform/ports/dto.py` 89 %
+- `runtime/http_adapter.py` 88 %
+- `runtime/run_budget_delegations.py` **83 %** — lineas 91-105 sin cubrir
+
+**Esas lineas son el chequeo 2b: el limite `max_events` del Run.** No es
+un detalle interno. Su docstring promete emitir un `BudgetExceeded` con
+`kind="events"` para que "el timeline del Run (v0.11.0) muestre al
+operador POR QUE se abortion". Es un control de gobernanza con CERO tests:
+si el limite de eventos estuviera invertido, mal escrito o ausente,
+nada lo detectaria. Los otros dos ejes (max_visits por nodo con
+self-loop, y max_visits global del Run) si estan cubiertos.
+
+**Un casi-falso-exito que resulto NO ser tal.** Al escribir el test, el
+payload de asercion salia `[REDACTED]`: `kind`, `limit` y `observed` los
+tres. Parecia que el evento se emitia y no decia nada, es decir, el
+operador nunca sabria por que se aborto el run. Antes de reportarlo
+como defecto, revise los tests existentes: `test_runcontroller.py:1053`
+afirma ESO MISMO bajo la etiqueta "QW-B", y `engine.py:150-155` explica
+que la redaccion se aplica ANTES de persistir y que la politica por
+defecto es `metadata` (`schema.py:100`, `DEFAULT 'metadata'`).
+**Es una decision deliberada, documentada y fijada por test.** No es un
+defecto. Casi lo reporto como el hallazgo mas grave de la sesion.
+
+Lo que si queda de verdad: el camino 2b no estaba probado. Anadido
+`tests/test_wi77_budget_max_events.py` (8 tests) que fija el contrato
+real — bajo la politica por defecto se emite el evento y se conservan las
+claves con valores redactados, y con `policy=none` se ve el eje
+violado (`kind="events"`, `limit`, `observed`), que es el dato que
+distingue `max_events` de `max_visits`.
+
+Tres mutaciones, cada una cazada por su test:
+- eliminar el chequeo 2b (`if False`) -> 5 failed
+- `>` en vez de `>=` (borde) -> 2 failed, incluido `test_limit_is_inclusive`
+- `kind="visits"` en vez de `"events"` -> 1 failed, en el test de `policy=none`
+
+Sin cambios en `src/`. Ciclo SDDK `wi-77-budget-max-events`.
