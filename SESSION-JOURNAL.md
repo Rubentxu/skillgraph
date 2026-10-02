@@ -9923,3 +9923,92 @@ destino, no el origen.
 - **Un script que edita un fichero de configuracion sin parsearlo después no es un
   script que edita, es un script que escribe texto**. El fallo no aparece hasta que
   otro consumidor lo lee, y entonces el sintoma aparece en el consumidor.
+
+## 2026-10-02 — WI-91: el registro de conformidad H9 afirmaba cuatro cosas falsas
+
+### Resumen
+
+- `STATE.yaml.goal.h9_addendum_2026_09_25` es el documento que decide si el hito
+  **H9 (Release candidate)** del blueprint esta cumplido, y su `conformance_score`
+  es la cifra que se cita al decidir si la iniciativa se puede cerrar. No es una
+  nota: es un veredicto de conformidad.
+- Se escribio el **2026-09-25**. El **2026-09-26**, `v0.14.7` entrego los cuatro
+  entregables que el registro daba por incompletos (WI-12 a WI-17). El registro no
+  se revalido. **Cuatro de sus cinco afirmaciones eran falsas y nada lo detectaba.**
+
+### La medicion
+
+| E | Afirmaba | Medido |
+|---|---|---|
+| E1 | `PENDIENTE`; «solo `FakeAgentAdapter`»; `--adapter=fake` unico valor | `http_adapter.py:330` `HttpAgentAdapter` (Anthropic+OpenAI); CLI acepta `--adapter=http` (`run.py:265`) |
+| E2 | «Threat model T3 NO ejecutado» | `ADR-0015-threat-model-stride.md` + test de atestación |
+| E3 | «grieta `workflow_runs <-> runtime_events` abierta, 300-800 LoC» | `create_run_atomically` (`run_repository.py:641`), una sola transaccion, viva via `RunController.create_run` |
+| E4 | «No hay runbook formal (T6)» | `docs/observability-runbook.md`, 10.900 bytes |
+| E5 | 16/16 UAT | **CIERTO**: `PASS=16 FAIL=0 BLOCKED=0` |
+
+Los 23 tests que respaldan E1/E2/E3 estaban verdes durante todo el tiempo que el
+registro afirmaba lo contrario.
+
+### Cambios aplicados
+
+- `h9_addendum` corregido a 5/5 con `evidencia_paths` por entregable.
+- `tests/test_wi91_h9_conformance_record.py`: 14 tests. El guard exige que
+  **estado y evidencia sean verdad A LA VEZ**, en las dos direcciones, y se
+  verifica con registros sinteticos que se saben incorrectos —incluido uno
+  **conforme**, para comprobar que un guard que siempre falla no pasa por guard.
+- `accion_requerida` del backlog: medida y corregida. A y D cerradas desde
+  2026-09-25; **B quedo inutil** porque sus tres componentes duros (T1, T3, T6) se
+  entregaron en v0.14.7.
+- `next_action` marcado como foto del 2026-09-25, no como instruccion.
+- `Opcion A.implementacion` conservado como historia y marcado `SUPERSEDIDO por
+  WI-91`: **reescribir un registro historico no es corregirlo, es borrarlo**.
+
+### Lo que NO se hizo, a proposito
+
+**H9 no se declara cerrada.** Los cinco entregables estan entregados, pero el
+criterio de salida exige ejecutar contra un proveedor real y eso necesita
+credenciales que este entorno no tiene. Declararla cerrada seria el mismo defecto
+en la direccion contraria: sustituir una afirmacion falsa por otra que nadie ha
+medido. El hueco queda escrito y
+`TestElCriterioDeSalidaNoSeDeclaraCumplidoSinEjecutarlo` lo vigila.
+
+### Contradicciones del propio trabajo
+
+- **El fallo de una funcion de restauracion no es ruido: es el que puede medir
+  mal.** La primera version de `.pipelinek/wi91_mutate.sh` hacia `rm -rf "$BAK"`
+  dentro de `restore()`. La segunda llamada no encontro con que restaurar y la
+  corrida termino con `STATE.yaml` en el estado de la quinta mutacion. El
+  **control de baseline** —«el guard debe estar verde antes de mutar»— lo detecto
+  y se nego a medir. Sin el, el script habria reportado 6/6 sobre un arbol que ya
+  no era el que se queria medir. **Cuarta vez en tres bloques que una medicion
+  necesita autocontrol.**
+
+### Conocimiento negativo
+
+- **Un veredicto de conformidad sin testigo es una opinion con formato de dato.**
+  Se lee como una medicion y no lo es.
+- **El patron ya habia aparecido tres veces** en esta misma linea (WI-85 claves
+  duplicadas, WI-86 registro falso sobre WI-65, y aqui). No es un descuido
+  puntual: es la consecuencia de que un documento de estado se escriba una vez y el
+  codigo avance por debajo sin que nadie lo relea.
+- **Un guard de una sola direccion deja pasar la mitad de los fallos**, que es
+  justo la mitad que se cuela en un documento. El guard tiene que mirar el
+  registro Y el disco.
+
+### Sigue abierto (sin workitem)
+
+- **Colision de numeracion de ADR**, medida y NO ejecutada: `ADR-0015` designa dos
+  documentos distintos (`external/blueprint-v1/adr/ADR-0015-vocabulario-de-estados`
+  y `docs/architecture/ADR-0015-threat-model-stride.md`). Ya existia una colision
+  previa con `ADR-0013`. Renombrar exige actualizar ~8 referencias cruzadas en
+  `docs/observability-runbook.md`: es decision del mantenedor.
+- **Deuda de datos, no de codigo**: 63 informes fechados en `audits/`.
+- **Hipotesis sin medir**: `governance/receipts.py:473-480` y
+  `runtime/agent.py:57-64` replican el patron de inverso manual.
+- **Push**: sin autorizacion del operador. No ejecutado.
+
+### Evidencia
+
+- `evidence/sddk-wi91-verify-2026-10-02.md`
+- `.pipelinek/wi91_mutate.sh` (6/6 + control de baseline)
+- `.pipelinek/wi91_fix_h9.py` (correccion por marcadores, no por numero de linea)

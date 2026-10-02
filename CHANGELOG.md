@@ -12,6 +12,77 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [Unreleased] — WI-91: el registro de conformidad H9 afirmaba cuatro cosas falsas
+
+**Sin bump todavía**: el `fix(state)` de este bloque dispara el PATCH. 2493 passed
+(2479 antes).
+
+### Fixed
+
+- `fix(state)`: **`goal.h9_addendum_2026_09_25` decidía si el hito H9 del blueprint
+  estaba cumplido, y cuatro de sus cinco afirmaciones sobre el código eran falsas.**
+  Se escribió el 2026-09-25; el 2026-09-26, `v0.14.7` entregó los cuatro
+  entregables que daba por incompletos (WI-12 a WI-17) y el registro no se
+  revalidó. Nada lo comprobaba.
+
+  | E | Afirmaba | Realidad medida |
+  |---|---|---|
+  | E1 | `PENDIENTE`; «no hay adapter HTTP/LLM/anthropic/openai» | `runtime/http_adapter.py:330` `HttpAgentAdapter` (Anthropic + OpenAI); CLI acepta `--adapter=http` (`run.py:265`) |
+  | E2 | «Threat model (T3) NO ejecutado» | `docs/architecture/ADR-0015-threat-model-stride.md` + `tests/test_t3_threat_model_attestation.py` |
+  | E3 | «grieta `workflow_runs ↔ runtime_events` abierta, 300-800 LoC» | `create_run_atomically` (`run_repository.py:641`) hace ambas escrituras en **una** transacción, viva vía `RunController.create_run` |
+  | E4 | «No hay runbook formal (T6)» | `docs/observability-runbook.md` |
+  | E5 | 16/16 UAT | **Cierto** — `PASS=16 FAIL=0 BLOCKED=0` |
+
+  Los 23 tests que respaldan E1/E2/E3 estaban verdes todo el tiempo que el
+  registro afirmaba lo contrario.
+
+  Cada entregable lleva ahora `evidencia_paths` y el guard exige que **estado y
+  evidencia sean verdad A LA VEZ, en las dos direcciones**: sin eso, un guard de
+  una sola vía deja pasar justo la mitad de los fallos, que es la mitad que se
+  cuela en un documento.
+
+### Lo que NO se corrige
+
+**H9 no se declara cerrada.** Los cinco entregables están entregados y verificados,
+pero el criterio de salida exige «escenarios reales con trazabilidad, aislamiento y
+recuperación», y eso sólo se demuestra ejecutando contra un proveedor real, que
+necesita credenciales. Declararla cerrada sería **el mismo defecto en la dirección
+contraria**: sustituir una afirmación falsa por otra que nadie ha medido. El hueco
+queda escrito y un test lo vigila.
+
+### Contradicciones
+
+- **Reescribir un registro histórico no es corregirlo, es borrarlo.**
+  `stewardship_backlog…Opcion A.implementacion` describe lo que el addendum
+  afirmaba el 2026-09-25, y eso fue cierto. Se conserva y se marca
+  `SUPERSEDIDO por WI-91`.
+- **Un fallo en la función de restauración no es ruido: es el que puede medir
+  mal.** La primera versión del script de mutaciones borraba su propio directorio
+  de respaldo dentro de `restore()`; la segunda llamada no encontró con qué
+  restaurar y la corrida terminó con `STATE.yaml` en el estado de la quinta
+  mutación. **El control de baseline —«el guard debe estar verde antes de
+  mutar»— lo detectó y se negó a medir.** Sin él, el script habría reportado
+  6/6 sobre un árbol que ya no era el que se quería medir.
+- `accion_requerida` decía «operador elige entre A/B/C/D». Medido: A y D cerradas
+  desde 2026-09-25 y **B quedó inútil**, porque sus tres componentes duros
+  (T1 adapter, T3 threat model, T6 observabilidad) se entregaron en `v0.14.7`.
+
+### Verificación
+
+- **2493 passed** (2479 antes; +14). `ruff check` y `ruff format --check` limpios.
+- Mutaciones **6/6**, incluidas dos que borran el **código** (`http_adapter.py`,
+  `docs/observability-runbook.md`) y no sólo el registro: el guard vigila la
+  realidad, no una copia de sí mismo.
+- Evidencia: `evidence/sddk-wi91-verify-2026-10-02.md`.
+
+### Deuda tangencial registrada, no medida
+
+Colisión de numeración de ADR: `ADR-0015` designa dos documentos distintos
+(`external/blueprint-v1/adr/ADR-0015-vocabulario-de-estados-como-fuente-unica.md`
+y `docs/architecture/ADR-0015-threat-model-stride.md`). Ya existía una colisión
+previa en la serie del blueprint con `ADR-0013`. Renombrar exige actualizar ~8
+referencias cruzadas; es una decisión del mantenedor, no del agente.
+
 ## [0.16.16] - 2026-10-02 — WI-90: `FileSignature` tiene round-trip y el lector deja de deserializar a mano
 
 PATCH: `git log v0.16.15..HEAD` = 0 feat, 0 breaking, 1 fix, 1 docs, 1 chore. 2479 passed
