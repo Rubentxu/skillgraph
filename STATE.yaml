@@ -558,9 +558,9 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 2552   # re-medido 2026-10-02 (bloque WI-94): 2552 passed. +23 sobre 2529 = tests/test_wi94_coverage_contract_symmetry.py.
-  passed: 2552
-  duration_s: 119.48   # re-medido 2026-10-02 en el bloque WI-94, pytest a pelo (sin cobertura). Con la receta de cobertura son ~206 s; el delta de +93 s es el coste medido de instrumentar.
+  total: 2551   # re-medido 2026-10-02 (bloque WI-94): 2551 passed en la CI canonica. +23 sobre 2529 por tests/test_wi94_coverage_contract_symmetry.py, -1 por el test del informe real eliminado por dependencia circular (f0e9a33).
+  passed: 2551
+  duration_s: 214.07   # MEDIDO en la CI canonica del bloque WI-94 con la receta de cobertura (stage unit-tests). pytest a pelo son ~119 s: el delta de ~95 s es el coste medido de instrumentar, coherente con el +93 s medido en WI-93.
   package_version: "0.16.19.dev0"   # trabajo post-release v0.16.19 (AGENTS 12). El tag v0.16.19 esta en 9ea721a; este bloque sigue en local y SIN PUSH.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -867,9 +867,9 @@ uat:
 
 ci:
   scripts/ci.sh: OK   # format + lint + pytest, replicable por cualquier runner externo
-  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, v0.16.18, bloque WI-93). 6/6 stages (discover-repo, sync-deps, unit-tests, coverage-floors, lint, evidence), 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. run_id 3fdabce5-b4f1-47b5-ae0a-fddf38769662. 9 StepStarted y 9 EchoOutputCaptured, y el journal CONTIENE la linea de resumen de pytest '2529 passed in 206.28s', que es lo que distingue una ejecucion real de un veredicto cacheado. Control root completo (last-run, retry-control, wait-until-control, workspace). SHA-256 de .pipeline.kts = c05e97f510ce157345f75918e532266212275d14612439ed243a932348b4d83b (sin drift; ultimo commit que lo toca: 3866454). NOTA DE HISTORIA: hubo DOS runs ROJAS antes de esta, y las dos eran defectos reales, no ruido. La primera (2167b8f3) murio porque v0.16.18 se etiqueto sin registrarse en release.releases: lo cazaron los dos tests de test_state_release_integrity, que es exactamente para lo que existen. La segunda (51b80685) dio SUCCESS pero NO cumplia el criterio 2 de AGENTS.md: EchoOutputCaptured conserva solo los ultimos ~1,2 KB de cada step y la linea de resumen de pytest caia truncada. Corregido en 81d07ed (tee a .pipelinek/unit-tests.log + grep del resumen al final)."
+  pipelinek: "Pipeline finished with SUCCESS (2026-10-02, v0.16.19, bloque WI-94). 6/6 stages (discover-repo, sync-deps, unit-tests, coverage-floors, lint, evidence), 0 StepFailed, RunFinished/success, pipelinek 0.39.0 con --rerun. run_id 90464dee-038d-44da-bb4f-c97c759438ea. 9 StepStarted y 9 EchoOutputCaptured, y el journal CONTIENE la linea de resumen de pytest '2551 passed in 214.07s'. Control root completo. SHA-256 de .pipeline.kts = c05e97f510ce157345f75918e532266212275d14612439ed243a932348b4d83b (sin drift). HISTORIA DE ESTE BLOQUE: dos runs ROJAS antes de esta, y las dos eran defectos reales. (1) run 78fafc73 FAILURE con 9 tests rojos, todos de WI-94: leian el informe de cobertura combinado, que scripts/coverage.sh solo produce DESPUES de pytest. Dependencia circular introducida al escribir los tests. (2) El numero que yo habia reportado antes, 2552 passed con pytest a pelo, ERA CIERTO Y LAS CONDICIONES EN LAS QUE ERA CIERTO NO ERAN LAS DE LA CI: en local ya habia una medicion anterior que habia combinado los datos. Corregido en f0e9a33: que un paquete tenga modulos se pregunta al ARBOL, no al informe; y el test del informe real se elimino por circular y redundante (esa garantia la da el stage coverage-floors, que corre despues de la medicion)."
   ultima_ejecucion_local: 2026-10-02 20:23
-  resultado: "2529 passed in 206.28s en el stage unit-tests de la CI canonica (receta de cobertura). 2499 passed antes; +30 = tests/test_wi93_http_adapter_gaps.py. 0 regresiones. El stage coverage-floors ejecuto scripts/check_coverage_floors.py y dio 'VEREDICTO: todos los suelos declarados se cumplen', con http_adapter.py en 99.34 % y locks.py en 90.62 %. ruff check: All checks passed! (252 archivos)"
+  resultado: "2551 passed in 214.07s en el stage unit-tests de la CI canonica (receta de cobertura). 2552 antes; -1 = test_el_informe_real_no_tine_infracciones eliminado por circular. El stage coverage-floors dio 'VEREDICTO: todos los suelos declarados se cumplen'. ruff check y format limpios (253 archivos)."
   working_tree: "arbol limpio salvo los ficheros de este commit; los commits del bloque siguen SIN PUSH (no autorizado)"
 
 open_questions: []

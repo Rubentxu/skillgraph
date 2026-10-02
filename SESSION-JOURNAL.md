@@ -10448,6 +10448,21 @@ fuera y el calculo siguiente los ignora.
 - **`assert fallos` a secas puede pasar por un ruido ajeno.** El helper
   `_fallos_de(informe, ruta)` exige que el fallo **nombre** al modulo bajo
   prueba.
+- **Un test que necesita un artefacto que pytest produce DESPUES no puede
+  vivir dentro de pytest.** La primera CI con este trabajo dio FAILURE con 9
+  rojos, y los 9 eran tests mios: `scripts/coverage.sh` corre pytest y solo
+  despues hace `coverage combine`, y mis tests leian el informe combinado.
+  Lo grave no es que fallaran en la CI: es que **`pytest -q` a pelo daba
+  2552 passed**, porque en local ya habia una medicion anterior que lo habia
+  combinado. El numero era cierto y las condiciones en las que era cierto no
+  eran las de la CI — la misma familia que medir `/usr/bin/sg` (WI-88),
+  `wc -c` sobre una linea con guion largo (WI-91) o el `rc` de un `| tail`
+  (WI-93). FIX: que un paquete tenga modulos se pregunta al **arbol** (el
+  sistema de ficheros), no al informe; y `test_el_informe_real_no_tiene_
+  infracciones` se **elimina**, porque es circular y ademas redundante: esa
+  garantia ya la da el stage `coverage-floors`, que corre despues de la
+  medicion. El sitio correcto para comprobar una propiedad de la medicion es
+  **despues** de la medicion. 22 tests, 0,09 s, sin disco ni subproceso.
 
 ### Sigue abierto (sin workitem)
 

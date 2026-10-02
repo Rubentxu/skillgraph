@@ -90,6 +90,16 @@ en v0.16.18.
   funciona y da credibilidad al conjunto.
 - **Un `assert fallos` a secas puede pasar por un ruido ajeno.** El helper
   exige que el fallo **nombre** al módulo bajo prueba.
+- **Un test que necesita un artefacto que pytest produce *después* no puede
+  vivir dentro de pytest.** Los tests de este bloque leían el informe de
+  cobertura para afirmar sobre él, y `scripts/coverage.sh` sólo lo combina
+  cuando pytest ha terminado. En la CI fallaron 9; `pytest` a pelo pasaban,
+  porque en local ya había una medición anterior. *Un número cierto medido
+  en unas condiciones no es un número válido si se aplica a otras.* Que un
+  paquete tenga módulos se pregunta al **árbol**, no al informe. La
+  comprobación «el árbol real cumple el contrato» vive en el
+  stage `coverage-floors`, que corre después de la medición: el sitio
+  correcto para comprobar una propiedad de la medición es después de medir.
 - **Ninguno de los ocho paquetes tenía hoy un módulo por debajo de su suelo.**
   El defecto era del guard, no del código: el margen más estrecho es
   `runtime/locks.py` al 90,62 % sobre un suelo del 90 %.

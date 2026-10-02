@@ -123,6 +123,45 @@ con informes **sintéticos** —donde se puede construir el módulo flojo que el
 > **Un guard que vigila el árbol real sólo detecta lo que ya está roto.**
 > Por property propia hay que construir el contraejemplo a mano.
 
+## El fallo que la CI encontró y el `pytest` a pelo no
+
+La primera run de la CI con este trabajo dio **FAILURE con 9 rojos**, y los 9
+eran tests de este bloque. La causa es una dependencia circular que
+introduje al escribirlos:
+
+`scripts/coverage.sh` corre pytest y **después** hace `coverage combine`.
+Durante la ejecución de pytest los datos siguen en `.coverage.parallel.*` sin
+combinar, y `coverage json` responde `No data to report` con rc=1. Los tests
+leían ese informe para afirmar sobre él: **necesitaban un artefacto que el
+pytest que los contiene todavía no había producido.**
+
+Lo grave no es que fallaran en la CI. Es que **`pytest -q` a pelo daba
+2552 passed**. Pasaban porque en local ya había un `scripts/coverage.sh`
+anterior que había combinado los datos, de modo que el informe estaba
+completo cuando los leían.
+
+> El «2552 passed» era cierto, y las condiciones en las que era cierto **no
+> eran las de la CI**. Es la misma familia de error que medir `/usr/bin/sg`
+> (WI-88), que `wc -c` sobre una línea con `—` (WI-91), o que leer el `rc` de
+> un `| tail` (WI-93): un número que parece confirmar cualquier premisa
+> porque se midio en unas condiciones y se administro como si fueran otras.
+
+La corrección tiene dos partes, y la segunda es una decisión:
+
+1. `test_cada_paquete_declarado_tiene_modulos_de_verdad` ahora lee el
+   **sistema de ficheros**. Que un paquete tenga módulos es una propiedad del
+   *código fuente*, no de la medición: se le estaba preguntando al informe
+   algo que el árbol ya sabe.
+2. `test_el_informe_real_no_tiene_infracciones` se **elimina**, y el borrado
+   es la decisión. Es circular por lo anterior, y además **redundante**: la
+   garantía «el árbol real cumple el contrato» ya la da el stage
+   `coverage-floors`, que corre en su propia pasada y con el informe ya
+   combinado. *El sitio correcto para comprobar una propiedad de la medición
+   es después de la medición.*
+
+Resultado: 22 tests que corren en 0,09 s, sin disco ni subproceso, y en
+cualquier orden respecto a la medición.
+
 ## Conocimiento negativo
 
 - **Aplicar un principio a media mitad de su propio contrato es la forma más
