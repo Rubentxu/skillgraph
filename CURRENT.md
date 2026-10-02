@@ -3,6 +3,51 @@
 > **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
 > `v0.16.10` en `2ee6d77`. Los workitems posteriores a la release se
 > acumulan sobre ese HEAD; la siguiente release se decide con el operador.
+> **WI-79 cerrado — el contrato de exit code de la CLI no lo fijaba
+> ningún test** (2026-10-02, ciclo SDDK `wi-79-cli-exit-contract`):
+> `main()` termina en `sys.exit(main())`, así que un handler de
+> `_DISPATCH` que devolviera `None` produciría **exit 0** sin traceback
+> ni stderr — el falso éxito más silencioso posible, y sin un solo test
+> que lo mirara. `test_wi57_dispatch_coverage.py` fija la *completitud*
+> de la tabla, no la *forma* del retorno: son invariantes distintas.
+> **Hipótesis REFUTADA con instrumento validado por mutación en ambas
+> direcciones**: 31 handlers, 31 anotados `-> int`, **0** que devuelvan
+> `None`, 0 con cuerpo que caiga por el final. La garantía se instala
+> como guardarraíl, no como corrección. Añadido
+> `tests/test_wi79_dispatch_exit_contract.py` (102 tests, **sin tocar
+> `src/`**) con **6 mutaciones cazadas**, cada una por su test.
+> **Hallazgo real dentro de esa refutación**: la rama
+> `except FileNotFoundError` de `main` (`runner.py:250-254`) no la
+> ejercitaba nadie — con su `return EXIT_PROJECT_NOT_FOUND` cambiado por
+> `return EXIT_OK`, los **2260 tests de la suite completa se quedaban
+> verdes** (medido, no supuesto). El oráculo conductual no la alcanzaba
+> porque `runs budget` resuelve el proyecto antes y devuelve su código.
+> Corregido con un test que sustituye `_resolve_handler` (la tabla es
+> `MappingProxyType`, inmutable). 2260 → **2362 passed**.
+> Nota de instrumento: el escáner AST falló **dos veces** antes de decir
+> nada cierto — filtro por anotación dio 3 falsos positivos de stubs de
+> `Protocol`; el extractor de `_DISPATCH` buscaba `Assign`/`Dict` cuando
+> es `AnnAssign`/`MappingProxyType({...})` y devolvió 0 handlers, que
+> parecía "nada sospechoso"; y era **ciego a `return None` explícito**,
+> que en AST es `Return(value=Constant(None))`, un return *con*
+> expresión. La v3 lleva guarda que aborta si la tabla no se extrae.
+> Hallazgo lateral **sin corregir**: `argparse` sale con **2** mientras
+> el `EXIT_USAGE` canónico es **1** (`support.py:47`); un operador que
+> clasifique por `EXIT_USAGE` no ve los errores de invocación. Decisión
+> de producto, fijada con un test que falla si `argparse` cambia.
+> Evidencia: `evidence/sddk-wi79-verify-2026-10-02.md`.
+> **WI-78 cerrado — serialización legacy de 4 DTO sin test** (2026-10-02,
+> ciclo SDDK `wi-78-dto-serialization`): `platform/ports/dto.py` al 89 %;
+> los misses reales eran `to_dict()` enteros en 4 de 9 DTO y las ramas
+> `KeyError`/`get(key, default)`. Hay roundtrip para 5 DTO y ninguno para
+> `StoredClaim`, `StoredEvidence`, `StoredPromotion`, `StoredBudget`.
+> Ningún código de producción llama a esos `to_dict()`: es superficie de
+> compatibilidad, no falso éxito. **Contradicción reportada, no
+> corregida**: el docstring de `StoredBudget.to_dict` promete "preservando
+> todas las columnas" y devuelve 3 de 6 (omite `tenant_id`, `project_id`,
+> `run_id`); el test fija el comportamiento real. Añadido
+> `tests/test_wi78_dto_serialization.py` (13 tests). 2247 → **2260 passed**.
+> Evidencia: `evidence/sddk-wi78-verify-2026-10-02.md`.
 > **WI-76 cerrado — falso éxito en los shims de compatibilidad**
 > (2026-10-02, ciclo SDDK `wi-76-shim-false-success`): siete funciones de
 > `platform/row_mappers.py` (`_row_to_source`, `_row_to_evidence`,

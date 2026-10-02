@@ -8623,3 +8623,175 @@ Tres mutaciones, cada una cazada por su test:
 Ciclo SDDK `wi-78-dto-serialization`. Sin cambios en `src/`: solo red,
 asi que **sin ADR**. Commit tipo `test(platform)`.
 Evidencia: `evidence/sddk-wi78-verify-2026-10-02.md`.
+
+---
+
+## WI-79 — el contrato de exit code de la CLI no lo fijaba ningun test (2026-10-02)
+
+Ciclo SDDK `p-b7740b96d79ec013/wi-79-cli-exit-contract`. Continuacion
+directa de WI-76/WI-77/WI-78, con el mismo criterio: buscar falsos
+exitos y no declarar nada sin mutacion que lo sostenga.
+
+### La hipotesis
+
+`main()` acaba en `sys.exit(main())`. Un handler de la tabla
+`_DISPATCH` que devolviera `None` —porque perdio su ultimo `return`,
+porque escribio `return None`, o porque el cuerpo cae por el final—
+produce **exit code 0**. Sin traceback, sin stderr: el operador ve que
+todo fue bien y el comando no hizo nada. Es el falso exito mas
+silencioso que puede tener esta CLI, y no lo vigilaba ningun test.
+
+Conviene separar dos invariantes que se confunden: `test_wi57_dispatch_coverage.py`
+ya camina el parser y afirma que `_DISPATCH` cubre todos los comandos
+declarados — la COMPLETITUD de la tabla. Lo que no existia era la FORMA
+de lo que devuelve cada handler.
+
+### El instrumento fallo dos veces antes de decir nada cierto
+
+Esto es la parte que mas trabajo llevo, y lo que mas conviene dejar
+escrito.
+
+**v1.** Escanear todo `src/skillgraph` buscando funciones anotadas
+`-> int` con un return que no devuelve valor. Dato: 3 candidatos, los
+tres en `platform/ports/repositories.py`. Los tres son stubs de
+`Protocol` con cuerpo `...`. Un metodo de `Protocol` nunca se invoca
+sobre la clase stub: falsos positivos. La v1 no vio ni un handler del
+CLI porque el filtro era demasiado estrecho.
+
+**v2.** Rehacerlo partiendo de la tabla real. Dato: `handlers: []`. Un
+resultado vacio ahi parece "nada sospechoso", y no lo era. La tabla se
+declara como `_DISPATCH: Final[...] = MappingProxyType({...})`, o sea un
+`AnnAssign` cuyo valor es un `Call` que envuelve un `Dict`; el
+extractor buscaba `Assign` con `Dict` directo, no encontraba nada y no
+llevaba la cuenta. **Ceguera del instrumento presentada como
+resultado** — el mismo error conceptual que WI-75, distinto objeto.
+La v2 lleva ya guarda que aborta si la tabla no se extrae.
+
+**v3.** Con la extraccion arreglada: 31 handlers, 0 sospechosos. Antes
+de aceptarlo, validacion por mutacion en las dos direcciones. **La
+mutacion no fue detectada.** En AST, `return None` es
+`Return(value=Constant(None))`, es decir un return CON expresion; la v2
+buscaba `Return.value is None`, que es el return a secas. El escaner
+era ciego exactamente al caso que buscaba. Reparado con
+`none_returns()`. Revalidado: con la mutacion, 1 sospechoso en la linea
+exacta; sin ella, 0.
+
+Tres instrumentos, dos fallos silenciosos, un resultado que solo valia
+despues de la tercera validacion. Sin esa disciplina, el "0 hallazgos"
+de la v2 habria Reportedado un contrato que nadie estaba mirando.
+
+### El resultado: hipotesis refutada
+
+31 handlers en `_DISPATCH`, los 31 anotados `-> int`, **0** que
+devuelvan `None`, 0 con cuerpo que caiga por el final. El codigo ya
+cumplia. Lo que faltaba era que nada lo comprobara, y eso es
+precisamente lo que un falso exito necesita para instalarse.
+
+### El hallazgo de verdad: una rama sin oraculo
+
+De las 6 mutaciones, **M5 no la caza nadie**:
+
+    runner.py:254   return EXIT_PROJECT_NOT_FOUND  ->  return EXIT_OK
+
+No era un fallo del test: la rama no la ejercitaba nadie. El oraculo
+conductual usa `runs budget` sobre un proyecto inexistente, y ese camino
+**no pasa por el segundo `except` de `main`** — `_open_project_storage`
+resuelve el proyecto antes y devuelve su codigo de error. M4 y M6 lo
+confirman: ambas mutan ese otro camino y las caza el mismo test.
+
+Para medir si algun test del proyecto vigilaba esa rama, M5 contra la
+suite completa **sin** el fichero nuevo:
+
+    2260 passed, 102 deselected in 92.70s
+
+Cero fallos. `runner.py:254` podia convertirse en `return EXIT_OK` y
+los 2260 tests se quedaban verdes. El falso exito mas grave del
+contrato de exit codes estaba en una rama sin vigilancia.
+
+Conviene notar por que el instrumento de cobertura no lo habria
+dicho: la linea esta en el fichero, y lo que falta no es ejecucion, es
+la AFIRMACION sobre su valor. Cobertura al 100 % de esa linea y el
+falso exito siguen vivos. Solo lo caza un test que afirme que el
+retorno es 4 y no 0.
+
+Corregido con `test_file_not_found_is_translated_to_project_not_found`,
+que sustituye `_resolve_handler` por un handler que lanza
+`FileNotFoundError`. Se sustituye el resolver y no la entrada de
+`_DISPATCH` porque la tabla es un `MappingProxyType`: inmutable, y el
+contrato que importa es el de la frontera de `main`. Con el test
+nuevo, M5 pasa a ser cazada.
+
+### Las 6 mutaciones
+
+| # | Mutacion | Cazada por |
+|---|---|---|
+| M1 | `return None` explicito en `cmd_runs_budget` | `test_handler_never_returns_none` |
+| M2 | quitar la anotacion `-> int` | `test_handler_is_annotated_int` |
+| M3 | borrar el `return` final (cae por el final) | `test_handler_body_terminates` |
+| M4 | `_open_project_storage` devuelve `EXIT_OK` | `test_failed_subcommand_does_not_report_success` |
+| M5 | `main` traduce `FileNotFoundError` a `EXIT_OK` | el test anadio en §rama sin oraculo |
+| M6 | `resolve_project` devuelve `EXIT_OK` | `test_failed_subcommand_does_not_report_success` |
+
+Una de ellas no aplico y hay que decirlo: la primera version de M4 fue
+un `sed` buscando `    return EXIT_PROJECT_NOT_FOUND` en `support.py`,
+y la linea real es `support.py:90`, con 8 espacios y forma
+`return {}, EXIT_PROJECT_NOT_FOUND`, ademas en otro helper. `git diff`
+salio vacio y el "102 passed" era el arbol intacto. **Mutar una linea
+que no existe no prueba nada.** El script comprueba con
+`git diff --quiet` que la mutacion aplico antes de correr los tests, y
+aborta con `MUTACION NO APLICO` si no.
+
+### Hallazgo lateral, sin corregir
+
+`argparse` sale con **2**. El `EXIT_USAGE` canonico de la CLI es **1**
+(`support.py:47`). Un operador o un script que clasifique por
+`EXIT_USAGE` no ve los errores de invocacion: caen en una categoria que
+el CLI no nombra.
+
+No se corrige. Los errores de `argparse` no son `SkillGraphError`, asi
+que AGENTS §1.2 no los cubre, y unificar los dos codigos cambia el
+contrato externo de todos los tests de subproceso. Se fija el
+comportamiento real, y el test falla si `argparse` empieza a devolver
+`EXIT_USAGE`, para que el cambio tenga que ser deliberado. Decision de
+producto.
+
+### Bookkeeping de la sesion
+
+Ademas de WI-79 se cerro el que quedaba a medias, **WI-78** (estaba
+en fase `specify` con 1 artefacto). La causa era un bug mio, no del
+proyecto: `.pipelinek/wi78_phases.sh` se genero con un `sed` que
+reescribio el nombre del artefacto pero NO el CYC ni el OWNER, asi
+que apuntaba al ciclo de WI-76 con `OWNER=wi75`. Los tres helpers
+previos (wi75, wi77, wi78) tenian el mismo defecto. Rehecho como
+`.pipelinek/cycle_phases.sh`, que recibe ciclo y artefacto como
+argumentos y ya no puede repetirlo.
+
+Dos cosas mas que aprendio ese receso, ambas por medir y no suponer:
+
+- `sddk cycle next` **no lista todos los gates** que exige una
+  transicion. En `phase.verify.complete` el frontier no anuncia ninguno
+  y el motor va revelando el siguiente que falta en el error
+  `ENGINE_MISSING_GATE_RECEIPT` (`tests-pass`, luego `policy-compliant`,
+  luego `debt-severity-assigned`, luego `debt-priority-assigned`). El
+  helper ahora itera hasta que deja de pedirlos.
+- `cycle transition` responde en **texto plano** (`outcome: succeeded`),
+  no en JSON como `evaluate-gate`. Un grep con comillas no encaja y
+  hacia creer que la transicion fallo cuando si se habia aplicado.
+
+**Ciclos SDDK: son 5 en RELEASE_PENDING, no 7.** El recuento anterior
+usaba los nombres de workitem (WI-72, WI-73...) en vez de los nombres
+de ciclo. Los reales son `wi-75-subprocess-coverage-instrument`,
+`wi-76-shim-false-success`, `wi-77-budget-max-events`,
+`wi-78-dto-serialization` y `wi-79-cli-exit-contract`, todos con 6
+artefactos. Los demas (15) estan CLOSED.
+
+**Y uno olvidado**: `wi65-storage-facade-decomposition` sigue en
+**OPEN**, no CLOSED. Queda anotado en `next_workitem` para que no se
+pierda.
+
+### Resultado
+
+`tests/test_wi79_dispatch_exit_contract.py`, 102 tests, **sin tocar
+`src/`**: cero cambios de comportamiento, el codigo ya cumplia. Sin
+ADR. 2260 -> **2362 passed**. ruff y format limpios.
+Evidencia: `evidence/sddk-wi79-verify-2026-10-02.md`.
