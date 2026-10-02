@@ -240,6 +240,40 @@ alguien lo lea como un fallo del motor.
 
 ---
 
+## 6-bis. Re-certificación sobre el estado final
+
+Lo de arriba mide el commit `984289d`. La trazabilidad se escribió después,
+y la primera CI sobre el estado final dio `2 failed, 2634 passed` (ver el
+recuadro de la §6). Corregido, y **re-medido por los dos lados**:
+
+| | commit | árbol de trabajo | clon limpio | divergencia |
+|---|---|---|---|---|
+| antes de WI-99 | `504b65d` | 2625 | 2623 + **2 failed** | **2** |
+| tras corregir, antes de la trazabilidad | `984289d` | 2636 | 2636 | 0 |
+| **estado final** | **`86d4a41`** | **2636** | **2636** | **0** |
+
+**Árbol de trabajo** — CI canónica, run `a6bce788-39b9-48bc-86bf-fe78e4e6e0e8`:
+`Pipeline finished with SUCCESS`, 8/8 stages, `2636 passed in 229.32s`,
+cobertura 95,22 %, 0 `StepFailed`, `PACKAGE_BUILD OK`, `ci-parity` con C4
+dentro, `lint` limpio.
+
+**Clon limpio** — `bash scripts/audit_bundle.sh 86d4a41`, run
+`548330bd-ef6a-47b6-a72d-bb283aa57545`: `Pipeline finished with SUCCESS`,
+8/8 stages, `2636 passed in 240.32s`, cobertura 95,22 %,
+`PASS=16 FAIL=0 BLOCKED=0`, `rc=0`.
+
+SHA-256 de `.pipeline.kts` =
+`d865896832f1c391344cb76a1b52b14c68915b99cefd985e976381dfe8d3ddcc`,
+**idéntico al de WI-98**: este bloque no toca la receta, y el hash lo
+demuestra en vez de afirmarlo.
+
+> **La lección que la corrección destapa.** El error no fue medir mal: la
+> medición del bundle era correcta y su número, exacto. El error fue
+> **escribir «divergencia 0» sin decir de qué commit era**, y hacerlo en el
+> mismo commit que la hacía falsa. La reproducibilidad hay que certificarla
+> **después** de escribir la certificación, porque escribir es cambiar el
+> estado que se certifica.
+
 ## 7. Lo que este bloque NO resolvió
 
 Registro, sin abrir frentes:
