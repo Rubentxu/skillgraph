@@ -5,11 +5,11 @@ Generada por `audits/audit_debt.py` (WI-28). Reproducible:
 
 ## Resumen ejecutivo
 
-- **68** modulos Python, **20236** LoC, **758** funciones.
+- **68** modulos Python, **20368** LoC, **762** funciones.
 - **3** archivos >800 LoC (god modules).
 - **0** funciones publicas con cc>=20 (refactor obligatorio).
 - **0** funciones privadas con cc>=20 (refactor opcional).
-- **9** funciones >80 LoC (legibilidad mejorable).
+- **8** funciones >80 LoC (legibilidad mejorable).
 - **0** funciones con anidamiento >=5 niveles.
 
 ## Archivos grandes (>800 LoC)
@@ -18,7 +18,7 @@ H-01 Storage god-class y H-02 CLI god-module son las entradas mas impactantes.
 
 | LoC | Path |
 |----:|------|
-| 1289 | `src/skillgraph/runtime/runcontroller.py` |
+| 1421 | `src/skillgraph/runtime/runcontroller.py` |
 | 927 | `src/skillgraph/platform/ports/__init__.py` |
 | 915 | `src/skillgraph/platform/storage_delegations.py` |
 
@@ -35,7 +35,6 @@ son problematicas si tienen baja cc y helpers atomicos con test coverage.
 | LoC | Funcion | Path |
 |----:|---------|------|
 | 409 | `build_parser` | `src/skillgraph/cli/parser.py` |
-| 143 | `_execute_one` | `src/skillgraph/runtime/runcontroller.py` |
 | 116 | `extract_file_signatures` | `src/skillgraph/knowledge/file_signature.py` |
 | 101 | `analyze_skill` | `src/skillgraph/domain/skill_importer.py` |
 | 92 | `cmd_expansion_apply` | `src/skillgraph/cli/commands/expansion.py` |
@@ -60,7 +59,7 @@ P0 sin que nadie tenga que acordarse de borrarla.
 
 **P1 - God modules** (>800 LoC, deuda estructural):
 
-- `src/skillgraph/runtime/runcontroller.py` (1289 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
+- `src/skillgraph/runtime/runcontroller.py` (1421 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/platform/ports/__init__.py` (927 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 - `src/skillgraph/platform/storage_delegations.py` (915 LoC): requiere ADR previo, porque tocarlo afecta a contratos publicos y frontera de dominio.
 
@@ -68,7 +67,7 @@ P0 sin que nadie tenga que acordarse de borrarla.
 
 - Ninguno.
 
-**P3 - Funciones largas >80 LoC**: 9 en total.
+**P3 - Funciones largas >80 LoC**: 8 en total.
 En su mayoria son orquestadores con baja cc y helpers atomicos con
 cobertura; ver la tabla de arriba. Prioridad baja.
 

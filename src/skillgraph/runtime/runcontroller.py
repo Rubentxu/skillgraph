@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -78,6 +79,36 @@ from skillgraph.runtime.handoff import (
 
 # Maximo de reintentos por nodo antes de marcar FAILED terminal.
 MAX_NODE_ATTEMPTS = 2
+
+
+@dataclass(frozen=True, slots=True)
+class _NodeGuard:
+    """Veredicto previo a abrir la NodeExecution de un nodo (WI-66).
+
+    `verdict is None` significa "sigue": no hay cortocircuito, y
+    `existing` es valido para calcular el numero de intento. Lleva
+    `existing` porque el budget se comprueba ANTES de leer las
+    ejecuciones: separarlos obligaria a reordenar pasos que hoy no lo
+    hacen.
+    """
+
+    verdict: bool | None
+    existing: tuple[StoredNodeExecution, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _NodeExecution:
+    """Identidad de la ejecucion en curso de un nodo (WI-66).
+
+    Agrupa lo que las cuatro fases comparten, para que ninguna tenga que
+    repetir cinco parametros en cada llamada.
+    """
+
+    attempt: int
+    node: WorkflowNode
+    node_name: str
+    events: EventBuilder
+    node_execution_id: str
 
 
 class RunController:
@@ -836,28 +867,23 @@ class RunController:
         plan: WorkflowPlan,
         node_name: str,
     ) -> bool:
-        """Ejecuta UN nodo. Devuelve False si FAILED terminal."""
-        # S4 Etapa 7: si el budget global del Run esta agotado ANTES
-        # de ejecutar, emitimos BudgetExceeded y devolvemos False.
-        # Asi el caller (reconcile_run) cierra el Run en FAILED.
-        prev = self._load_run(tenant_id, project_id, run_id)
-        if self._is_budget_exhausted(
-            plan,
-            tenant_id,
-            project_id,
-            run_id,
-            prev_current=prev.current_node,
-        ):
-            return False
+        """Ejecuta UN nodo. Devuelve False si FAILED terminal.
 
-        # Idempotencia: si ya hay SUCCEEDED Y el plan NO declara un
-        # self-loop en este nodo, no hacemos nada (DAG lineal).
-        # H4: en self-loop, debemos re-ejecutar para gastar el budget.
-        existing = self._node_executions_for(tenant_id, project_id, run_id, node_name)
-        if existing and existing[-1].state == "SUCCEEDED" and not has_self_loop(plan, node_name):
-            return True
+        Orquestador de 9 pasos lineales, agrupados en cuatro fases
+        nombradas (WI-66) cuyo nombre dice que invariante protege cada
+        paso. El orden ENTRE fases no es negociable: sostiene H9/H10.
+        """
+        guard = self._node_guard(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            plan=plan,
+            node_name=node_name,
+        )
+        if guard.verdict is not None:
+            return guard.verdict
 
-        attempt = len(existing) + 1
+        attempt = len(guard.existing) + 1
         # Permitimos como maximo un reintento tras fallo.
         if attempt > MAX_NODE_ATTEMPTS:
             return False
@@ -869,39 +895,122 @@ class RunController:
             node_name=node_name,
             attempt=attempt,
         )
+        running = _NodeExecution(
+            attempt=attempt,
+            node=node,
+            node_name=node_name,
+            events=events,
+            node_execution_id=node_execution_id,
+        )
 
-        # Compilar Handoff. Los errores tipados de compilación de
-        # contexto (Stale, MissingObligatory, TokenBudget) marcan el
-        # nodo FAILED sin invocar el adapter (H9-context-in-run).
-        # El NodeExecution RUNNING se inserta ANTES de compilar para
-        # que `_mark_node_failed` tenga una fila que actualizar:
-        # el UPDATE de `mark_node_failed_atomically` es afecta-0-filas
-        # silencioso si la NodeExecution no existe.
+        handoff = self._compile_node_handoff(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            plan=plan,
+            running=running,
+        )
+        if handoff is None:
+            return False
+
+        result = self._invoke_node_adapter(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            running=running,
+            handoff=handoff,
+        )
+        if result is None:
+            return False
+
+        return self._settle_node_outcome(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            plan=plan,
+            running=running,
+            result=result,
+            context_hash=handoff.context_hash,
+        )
+
+    def _node_guard(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        plan: WorkflowPlan,
+        node_name: str,
+    ) -> _NodeGuard:
+        """Fase 1: budget e idempotencia, ANTES de tocar el nodo.
+
+        S4 Etapa 7: si el budget global del Run esta agotado ANTES de
+        ejecutar, devolvemos False y el caller (`reconcile_run`) cierra
+        el Run en FAILED.
+
+        Idempotencia: si ya hay SUCCEEDED Y el plan NO declara un
+        self-loop en este nodo, no hacemos nada (DAG lineal).
+        H4: en self-loop, debemos re-ejecutar para gastar el budget.
+        """
+        prev = self._load_run(tenant_id, project_id, run_id)
+        if self._is_budget_exhausted(
+            plan,
+            tenant_id,
+            project_id,
+            run_id,
+            prev_current=prev.current_node,
+        ):
+            return _NodeGuard(verdict=False, existing=())
+
+        existing = self._node_executions_for(tenant_id, project_id, run_id, node_name)
+        if existing and existing[-1].state == "SUCCEEDED" and not has_self_loop(plan, node_name):
+            return _NodeGuard(verdict=True, existing=tuple(existing))
+        return _NodeGuard(verdict=None, existing=tuple(existing))
+
+    def _compile_node_handoff(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        plan: WorkflowPlan,
+        running: _NodeExecution,
+    ) -> Handoff | None:
+        """Fase 2: compila el Handoff y persiste su hash.
+
+        Devuelve `None` si el nodo quedo FAILED. Es la traduccion de
+        `return self._fail_node_with(...)`, que devuelve siempre False.
+
+        H9-context-in-run: los errores tipados de compilacion de
+        contexto (Stale, MissingObligatory, TokenBudget) marcan el nodo
+        FAILED sin invocar el adapter.
+        """
         try:
             handoff = self._build_handoff(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 run_id=run_id,
-                node_execution_id=node_execution_id,
-                attempt=attempt,
-                node=node,
+                node_execution_id=running.node_execution_id,
+                attempt=running.attempt,
+                node=running.node,
                 plan=plan,
             )
         except SkillGraphError as exc:
-            return self._fail_node_with(
+            self._fail_node_with(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 run_id=run_id,
-                node_execution_id=node_execution_id,
-                node_name=node_name,
+                node_execution_id=running.node_execution_id,
+                node_name=running.node_name,
                 exc=exc,
             )
+            return None
         context_hash = handoff.context_hash
 
         self._events.append(
-            events.handoff_created(
+            running.events.handoff_created(
                 run_id=run_id,
-                node_execution_id=node_execution_id,
+                node_execution_id=running.node_execution_id,
                 context_hash=context_hash,
             )
         )
@@ -915,17 +1024,28 @@ class RunController:
         # separadas y `with self._conn:` no rollbackea (LIMITACION-7)
         # -> podian quedar desincronizadas ante un fallo del proceso.
         # El INSERT real de la NodeExecution (RUNNING + NodeStarted)
-        # ya ocurrio arriba, antes de compilar el handoff: aqui solo
-        # se persisten el context_hash y el handoff_json definitivos.
+        # ya ocurrio en `_open_node_execution`, antes de compilar el
+        # handoff: aqui solo se persisten el context_hash y el
+        # handoff_json definitivos.
         self._runs.update_node_execution_handoff(
-            node_execution_id=node_execution_id,
+            node_execution_id=running.node_execution_id,
             context_hash=context_hash,
             handoff_json=json.dumps(handoff.to_dict(), sort_keys=False),
         )
+        return handoff
 
-        # Invocar Adapter
+    def _invoke_node_adapter(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        running: _NodeExecution,
+        handoff: Handoff,
+    ) -> AgentResult | None:
+        """Fase 3: frontera con el Adapter. `None` = nodo FAILED."""
         try:
-            result = self._adapter.invoke(handoff)
+            return self._adapter.invoke(handoff)
         except Exception as exc:
             # Frontera con el Adapter, que es un `Protocol` inyectado:
             # su `invoke` lo implementa codigo externo y puede fallar
@@ -934,24 +1054,36 @@ class RunController:
             # un nodo FAILED persistido con el motivo, de modo que el
             # run queda en un estado inspeccionable. La excepcion se
             # guarda en el nodo, asi que aqui no se pierde.
-            return self._fail_node_with(
+            self._fail_node_with(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 run_id=run_id,
-                node_execution_id=node_execution_id,
-                node_name=node_name,
+                node_execution_id=running.node_execution_id,
+                node_name=running.node_name,
                 exc=exc,
             )
+            return None
 
-        # Validar resultado (outcome declarado?)
-        if not is_outcome_declared(result, plan, node_name):
+    def _settle_node_outcome(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        plan: WorkflowPlan,
+        running: _NodeExecution,
+        result: AgentResult,
+        context_hash: str,
+    ) -> bool:
+        """Fase 4: valida el outcome declarado y cierra el nodo."""
+        if not is_outcome_declared(result, plan, running.node_name):
             error_msg = f"outcome {result.outcome!r} no declarado en plan"
             self._mark_node_failed(
                 tenant_id=tenant_id,
                 project_id=project_id,
                 run_id=run_id,
-                node_execution_id=node_execution_id,
-                node_name=node_name,
+                node_execution_id=running.node_execution_id,
+                node_name=running.node_name,
                 error=error_msg,
                 outcome=result.outcome,
             )
@@ -963,9 +1095,9 @@ class RunController:
         # `Storage.complete_node_execution_atomically`. Cierra el gap
         # detectado por la revision externa de v0.7.1.
         self._finalize_node_success(
-            events=events,
+            events=running.events,
             run_id=run_id,
-            node_execution_id=node_execution_id,
+            node_execution_id=running.node_execution_id,
             result=result,
             context_hash=context_hash,
         )
