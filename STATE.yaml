@@ -561,7 +561,7 @@ tests:
   total: 2529   # re-medido 2026-10-02 (bloque WI-93): 2529 passed. +30 sobre 2499 = tests/test_wi93_http_adapter_gaps.py.
   passed: 2529
   duration_s: 201.77   # re-medido 2026-10-02 con la receta de cobertura (era 108.19 s sin instrumentar; +93 s es el coste medido de medir de verdad).
-  package_version: "0.16.17.dev0"   # trabajo post-release v0.16.17 (AGENTS 12). El bump a 0.16.18 va en el commit de release de WI-93.
+  package_version: "0.16.18"   # release limpia v0.16.18 (AGENTS 12). El bump a .dev0 va en el commit siguiente, tras el tag.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
   delta_wi23: "0 tests (locks.take refactor surgical)"

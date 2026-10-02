@@ -12,12 +12,113 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
-## [Unreleased] — WI-92: lo que WI-90 registró como deuda, medido: era falso
+## [0.16.18] - 2026-10-02 — WI-93: el contrato de cobertura que el repo declaraba y no exigía
 
-**Sin bump, y es la decisión correcta**: el bloque entrega 1 `test` + 1 `docs`, y por
-la regla de este fichero (`refactor`/`test`/`docs`/`chore` no bumpean SemVer) no hay
-release que emitir. Forzar una por un `test` inflaría el historial. 2499 passed
-(2493 antes).
+PATCH: `git log v0.16.17..HEAD` = 0 feat, 0 breaking, 1 fix, 2 test, 3 docs, 1 chore. 2529 passed
+(2499 antes).
+
+Este tramo contiene también WI-92, que **no tuvo etiqueta propia** porque su SemVer
+derived fue 0 (1 `test` + 1 `docs`). Sus commits viajan dentro de v0.16.18 y su
+sección queda como `(cont.)` más abajo, igual que WI-86 hizo en v0.16.13.
+
+### Fixed
+
+- `fix(ci)`: **AGENTS §6.3 declaraba suelos de cobertura por módulo y nada los
+  comprobaba.** El repo tenía dos contratos sobre cobertura y la CI canónica no
+  ejecutaba ninguno:
+
+  | # | Dónde | Qué declara | ¿Quién lo comprueba? |
+  |---|---|---|---|
+  | 1 | `pyproject.toml` `[tool.coverage.report]` | `fail_under = 80` (global) | `coverage report`, sólo si alguien invoca el script a mano |
+  | 2 | `AGENTS.md §6.3` | suelos **por módulo**: core ≥90 %, CLI ≥70 %, `paths.py` ≥60 % | **nadie** |
+
+  El segundo contrato **no lo podía expresar ninguna herramienta del repo**:
+  `coverage report` sólo admite un umbral global. Una cifra declarada y no
+  verificable no es un contrato.
+
+  - `scripts/check_coverage_floors.py` (nuevo, versionado en `scripts/`) exige
+    suelo **por módulo** y además exige que **todo módulo de `runtime/` con código
+    tenga suelo declarado**, para que añadir uno nuevo no pase inadvertido. Un
+    guard que sólo vigila la lista que él mismo mantiene no vigila nada.
+  - `.pipeline.kts` pasa a 6 stages: `unit-tests` corre la receta de cobertura y
+    un stage nuevo `coverage-floors` corre el checker. **Una sola pasada** para
+    tests y cobertura: correr pytest dos veces costaría 110 s + 203 s.
+
+  **Agrega recuentos, no porcentajes.** Con `branch = true` una rama parcial cuenta
+  como media; promediar porcentajes da más de lo que hay — un paquete al 95 % de
+  media puede esconder un módulo al 60 %.
+
+  **Un suelo sobre un módulo fantasma es un fallo**, no un silencio: si la ruta no
+  aparece en el informe, el checker aborta. Los módulos vacíos (los `__init__.py`
+  de reexport, 0 sentencias) quedan excluidos: exigirles un suelo es exigir medir
+  un fichero vacío, y revienta con división por cero.
+
+### La premisa heredada, medida
+
+`scripts/coverage.sh` llevaba en su cabecera una decisión documentada de **no**
+usarlo como gate, con el motivo de que «la instrumentación de subproceso
+multiplica el tiempo de suite». Era una afirmación sin dato. El dato:
+
+| | Wall clock |
+|---|---|
+| `pytest` a pelo (lo que hacía la CI) | ~110 s |
+| `scripts/coverage.sh` completa | 203 s |
+| **Delta** | **+93 s (~1,85× el stage)** |
+
+No multiplica: cuesta un minuto y medio más. El párrafo queda **retirado y
+marcado como SUPERSEDIDO**, conservado como historia.
+
+### Added
+
+- `test(knowledge)`: `tests/test_wi93_http_adapter_gaps.py` (30 tests) cubre las 19
+  ramas sin cubrir de `runtime/http_adapter.py`. El módulo ya traía failpoints y un
+  `client` inyectable **precisamente** para probarlas sin red; los tests de red
+  existentes usan `respx` con cliente inyectado, y por eso la rama de producción
+  que construye su propio `httpx.Timeout` no la tocaba nadie.
+
+  | | Antes | Después |
+  |---|---|---|
+  | `http_adapter.py` | 88,04 % | **99 %** |
+  | `runtime/` agregado | 95,11 % | **97,98 %** |
+  | global | 94,75 % | **95,22 %** |
+
+  Sólo queda sin cubrir la línea 424, un `defensive: should not reach here`
+  inalcanzable por construcción.
+
+- `scripts/check_coverage_floors.py` con 4 mutaciones cazadas 3/3 (subir un suelo
+  por encima de la cobertura real, apuntar un suelo a un módulo inexistente,
+  borrar el suelo de un módulo de `runtime/` con código) y control final
+  byte-idéntico.
+
+### Conocimiento negativo
+
+- **La cobertura agregada puede tapar un módulo débil.** `runtime/` estaba al
+  95,11 % — muy por encima de 90 — y contenía un módulo al 88 %. «El paquete
+  llega al 90 %» y «cada módulo llega al 90 %» son contratos distintos, y sólo el
+  segundo encuentra el hueco.
+- **La instrumentación de subproceso no es un lujo: es lo que hace verdadera la
+  medición.** Sin el hook `.pth`, el CLI que la suite lanza por subproceso mide
+  65,86 % en vez de 94 %. No instrumentar produce un número que parece un
+  incumplimiento y es ceguera del instrumento.
+- **La cobertura es un techo, no una puerta.** Subir un módulo del 88 al 99 % no
+  demuestra que el adaptador funcione contra Anthropic: demuestra que rechaza
+  bien lo que no debería aceptar.
+
+### Lo que sigue sin probarse
+
+Este tramo **no** prueba que Anthropic ni OpenAI respondan: requiere credenciales
+que este entorno no tiene, y el registro de conformidad de H9 lo declara como
+hueco abierto. Lo que sí queda probado es la mitad local del contrato.
+
+- Evidencia: `evidence/sddk-wi93-verify-2026-10-02.md`.
+
+## [0.16.18] (cont.) — WI-92: lo que WI-90 registró como deuda, medido: era falso
+
+**Sin release propio, y es la decisión correcta**: el bloque entrega 1 `test` + 1
+`docs`, y por la regla de este fichero (`refactor`/`test`/`docs`/`chore` no bumpean
+SemVer) no había etiqueta que emitir. Forzar una por un `test` inflaría el
+historial. Sus commits viajan igualmente dentro de **v0.16.18**, etiquetada por
+WI-93. 2499 passed (2493 antes).
 
 ### Measured
 
