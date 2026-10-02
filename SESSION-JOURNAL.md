@@ -8046,3 +8046,78 @@ h9-plan-b-atomicity -> main") y el remoto a otro objeto. Es
 historico, anterior a este bloque, y AGENTS.md prohibe `tag --force`
 sobre etiqueta publicada, asi que se reporta y no se reescribe. El
 push de v0.16.10 no lo?to y el `fetch` no lo bloqueo.
+
+### WI-72 — `cmd_expansion_apply` y la duplicacion del payload de propuestas
+
+Primer workitem desde WI-65 con **ciclo SDDK propio**. El contexto
+bootstrap dijo `cycle: none`: el ciclo de WI-65 se quedo en fase
+`specify` sin cerrarse, y WI-66..WI-71 se ejecutaron por fuera del
+ciclo. Eso es exactamente el "estado paralelo" que las reglas prohiben,
+asi que esta vez se abre el ciclo (`wi-72-p3-expansion-apply`) y se
+recorre la cadena completa: explore -> specify -> design -> plan ->
+build, cada fase con su gate y su artefacto.
+
+**Medicion, no opinion.** Las 6 candidatas P3 con cc y construcciones de
+decision (nodos AST If/For/While/Try/IfExp/Match):
+
+| LoC | cc | dec | funcion |
+|----:|---:|----:|---------|
+| 409 | 1 | 0 | `build_parser` (declarativo) |
+| 92 | 7 | 6 | `cmd_expansion_apply` <- elegida |
+| 90 | 2 | 1 | `compile_handoff` (lineal) |
+| 86 | **8** | 6 | `aggregate_file_signatures` |
+| 85 | 1 | 0 | `compile_handoff_from_scopes` (lineal) |
+| 84 | 4 | 2 | `promote_candidate` |
+
+`aggregate_file_signatures` tiene mas cc, pero su corte partiria 18 lineas
+y tocaria la invariante de aislamiento UAT-EVO-08. Esta ofrece mas con
+menos riesgo. Queda anotada como siguiente candidata con su medicion, no
+descartada.
+
+**El hallazgo real no era la complejidad, era la duplicacion.** El
+payload JSON de 9 claves se construia dos veces, en `propose` y en
+`apply`, con tres divergencias: si sobrescribe, el nombre del argumento
+de `operations` (`--proposal_json` frente a `--proposal`) y el
+`encoding`. Es un contrato en disco con lectores externos y con tests
+que construyen el fichero a mano: si un escritor cambiaba y el otro no,
+la divergencia pasaba en silencio y ningun test la veia, porque el test
+solo miraba un lado.
+
+Corte: `_proposal_payload`, `_applied_payload` y `_write_json` con
+`overwrite` como parametro explicito. `apply` 92 -> 73 LoC (cc 7 -> 6)
+y por debajo del umbral P3. **P3: 6 -> 5.** `propose` 25 -> 19. Los 50
+tests de expansion pasan sin tocarlos.
+
+**Me equivoque en la exploracion y lo corrijo.** Afirme que la
+divergencia de `encoding` era un bug de locale en `propose`. Es
+**inerte**: `json.dumps` usa `ensure_ascii=True` por defecto, su salida
+es ASCII puro, y el `encoding` de `write_text` no toca un byte. Lo
+unifico igual (fija el formato en el codigo y no en el entorno), pero no
+como correccion. Los tres artefactos del ciclo (spec, design, plan)
+quedan corregidos y el test que lo demuestra
+(`test_written_payload_roundtrips_non_ascii`) lleva el hallazgo en el
+nombre. Un requisito de la especificacion se degradó de "cambio de
+comportamiento deliberado" a "higiene del formato" porque la medicion no
+lo sostenia.
+
+**Tres fallos mios en los tests, antes de tocar produccion** (patron que
+ya no es casual, es el mayor foco de error del workitem):
+
+1. Use `inspect.cleandoc` sobre el fuente de una funcion: dedenta mal
+   porque calcula el margen sin mirar la linea del `def`, y el `ast.parse`
+   reventaba con IndentationError. Ahora se parsea el modulo y se busca
+   el nodo por nombre.
+2. Escribi el oraculo literal con valores fijos (`proposal_id`,
+   `created_at`) y lo compare contra la propuesta REAL del E2E, que los
+   genera `propose()` en cada invocacion. El oraculo de valores es
+   cosa del test unitario con stub; el E2E compara los dos escritores
+   entre si y el juego de claves contra el literal.
+3. Supuse que `_write_json` creaba directorios. No: los comandos hacen
+   el `mkdir` y el escritor solo escribe. Fijado como contrato.
+
+**Verificacion en ambos sentidos, cuatro mutaciones:** quitar una clave
+del constructor compartido (3 tests la cazan), `overwrite=True` en
+`apply` (caza la no-sobrescritura), reintroducir el literal en el
+flujo (caza el test estructural) y **cambiar solo un valor** de
+`operations` (caza el oraculo de valores). Esa ultima es la que
+distingue un oraculo de verdad de un recuento de claves.

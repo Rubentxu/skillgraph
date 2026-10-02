@@ -1,5 +1,36 @@
 # CURRENT — puntero operativo
 
+> **WI-72 cerrado — P3 6 → 5** (2026-10-02, ciclo SDDK
+> `wi-72-p3-expansion-apply`, el primero con ciclo propio desde WI-65):
+> `cmd_expansion_apply` 92 → **73 LoC**, cc 7 → 6, y por debajo del
+> umbral P3. El hallazgo no era la complejidad sino una **duplicación**:
+> el payload JSON de 9 claves de una propuesta se construía DOS veces, en
+> `cmd_expansion_propose` y en `cmd_expansion_apply`, con tres
+> divergencias. Es un contrato en disco con lectores externos (`list`,
+> `show`, `_scan_proposals_dir`, `_infer_proposal_stage`) y con tests que
+> construyen el fichero a mano, así que la duplicación era un riesgo
+> silencioso. Ahora hay un constructor (`_proposal_payload`) y un escritor
+> (`_write_json`) con el parámetro `overwrite` que hace explícita la única
+> divergencia intencional: `apply` conserva el registro original,
+> `propose` lo refresca. De paso desaparece el `plan` que se enlazaba dos
+> veces con dos significados.
+> Se eligió por medición AST: `aggregate_file_signatures` tiene cc 8 (una
+> más) pero partiría 18 líneas y tocaría la invariante de aislamiento
+> UAT-EVO-08; esta ofrecía eliminar una duplicación real con el mismo
+> riesgo.
+> **Me equivoqué en la exploración y lo corrijo**: di por hecho que la
+> divergencia de `encoding` entre los dos escritores era un bug de locale
+> en `propose`. Al implementarlo se ve que es **inerte**: `json.dumps` usa
+> `ensure_ascii=True` por defecto, su salida es ASCII puro y el `encoding`
+> de `write_text` no toca un solo byte. Unificarlo se mantiene por
+> higiene del formato, no porque arregle nada. Los tres artefactos del
+> ciclo quedaron corregidos, y el test que lo demuestra lleva el nombre
+> del hallazgo.
+> Verificación: **2197 passed** (2181 + 16), ruff y format limpios, los
+> 50 tests de expansion existentes pasan sin tocarlos, y la red se
+> verificó en ambos sentidos con cuatro mutaciones (quitar una clave,
+> `overwrite=True` en apply, reintroducir el literal, y cambiar **solo un
+> valor**) — las cuatro la cazan.
 > **Estado post-release**: `__version__ = 0.16.10.dev0`, etiqueta
 > `v0.16.10` en `2ee6d77`. El bloque WI-65..WI-71 mas el commit de
 > release salen a `origin/main` en el push autorizado por el operador;

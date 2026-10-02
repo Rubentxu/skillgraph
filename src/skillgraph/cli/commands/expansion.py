@@ -180,6 +180,68 @@ def _load_proposal_json(path: Path) -> GraphExpansionProposal:
     )
 
 
+def _proposal_payload(proposal: GraphExpansionProposal, operations_ref: str) -> dict[str, object]:
+    """Construye el payload canonico de una propuesta (9 claves).
+
+    Unico constructor: lo usan `cmd_expansion_propose` y
+    `cmd_expansion_apply`. Antes cada uno construia su copia y el
+    contrato en disco podia divergir en silencio.
+
+    `operations_ref` llega ya convertido a texto porque el nombre del
+    argumento CLI es distinto en cada comando (`--proposal_json` frente
+    a `--proposal`). Asi el constructor no depende de argparse y cada
+    comando conserva su nombre sin que aqui haya que saberlo.
+
+    El esquema es version de facto: lo leen `cmd_expansion_list`,
+    `cmd_expansion_show`, `_scan_proposals_dir` e
+    `_infer_proposal_stage`, y hay tests que construyen el fichero a
+    mano. No se anaden ni se quitan claves.
+    """
+    return {
+        "proposal_id": proposal.proposal_id,
+        "author": proposal.author,
+        "created_at": proposal.created_at,
+        "problem_observed": proposal.problem_observed,
+        "operations": operations_ref,
+        "capabilities_needed": list(proposal.capabilities_needed),
+        "new_dependencies": list(proposal.new_dependencies),
+        "attachment_point": proposal.attachment_point,
+        "authorization_mode": proposal.authorization.mode,
+    }
+
+
+def _applied_payload(proposal: GraphExpansionProposal) -> dict[str, object]:
+    """Construye el payload del marker `<proposal_id>.json.applied`.
+
+    Vive en un marker adyacente, no dentro del registro: es lo que
+    permite a `_infer_proposal_stage` marcar APPLIED sin reescribir el
+    JSON de la propuesta.
+    """
+    return {
+        "proposal_id": proposal.proposal_id,
+        "applied_at": _utcnow_iso(),
+        "applied_by": "expansion-apply-cli",
+    }
+
+
+def _write_json(path: Path, payload: dict[str, object], *, overwrite: bool) -> bool:
+    """Escribe `payload` como JSON y devuelve si ha escrito.
+
+    `overwrite=False` no toca un destino existente. Esa es la
+    divergencia INTENCIONAL entre los dos comandos: `apply` conserva la
+    propuesta original (REQ de UAT), `propose` la refresh. El nombre del
+    parametro la hace explicita en la llamada, en vez de un `if` en el
+    flujo.
+
+    El `encoding` es explicito y no el del locale: en `apply` ya lo era,
+    y aqui evita que la evidencia en disco dependa del entorno.
+    """
+    if not overwrite and path.is_file():
+        return False
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return True
+
+
 def cmd_expansion_propose(args: argparse.Namespace) -> int:
     """``sg expansion propose <project> <proposal.json>``: imprime el proposal_id."""
     project, rc = _open_project_or_error(args, args.project)
@@ -194,19 +256,9 @@ def cmd_expansion_propose(args: argparse.Namespace) -> int:
     project_dir = Path(project["db_path"]).parent
     proposals_dir = project_dir.parent.parent / "expansion_proposals"
     proposals_dir.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "proposal_id": proposal.proposal_id,
-        "author": proposal.author,
-        "created_at": proposal.created_at,
-        "problem_observed": proposal.problem_observed,
-        "operations": str(args.proposal_json),
-        "capabilities_needed": list(proposal.capabilities_needed),
-        "new_dependencies": list(proposal.new_dependencies),
-        "attachment_point": proposal.attachment_point,
-        "authorization_mode": proposal.authorization.mode,
-    }
     out = proposals_dir / f"{proposal.proposal_id}.json"
-    out.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    # `propose` SI refresca un registro existente: es el comando que lo crea.
+    _write_json(out, _proposal_payload(proposal, str(args.proposal_json)), overwrite=True)
     print(f"Propuesta {proposal.proposal_id} registrada en {out}")
     return EXIT_OK
 
@@ -226,11 +278,11 @@ def cmd_expansion_apply(args: argparse.Namespace) -> int:
 
     if args.plan_file is not None:
         # Carga desde Markdown+YAML o JSON interno (segun formato del archivo).
-        plan = _load_plan_from_path(args.plan_file)
-        # Persiste la version "canonica" del plan en project_dir/plan.json
-        # para que ``apply`` pueda usarla como base y la propuesta modifique
-        # ese archivo al aplicar.
-        _write_plan_to_storage(project_dir, plan)
+        # El plan recien leido no se reutiliza: se persiste para que `apply`
+        # lo tome despues como base desde el storage. Enlazarlo a `plan`
+        # aqui seria mentir, porque la linea siguiente reenlaza ese nombre
+        # al plan del storage.
+        _write_plan_to_storage(project_dir, _load_plan_from_path(args.plan_file))
     try:
         plan = _load_plan_from_storage(project_dir)
     except SystemExit:
@@ -263,42 +315,23 @@ def cmd_expansion_apply(args: argparse.Namespace) -> int:
     _write_plan_to_storage(project_dir, new_plan)
     # Persiste la propuesta aplicada en ``expansion_proposals/`` (mismo
     # patron que ``cmd_expansion_propose``) para que ``list``/``show`` la
-    # puedan descubrir tras el apply. Tambien crea el marker APPLIED,
-    # analogo al marker ARCHIVED de ``cmd_expansion_archive``.
+    # puedan descubrir tras el apply. Aqui NO se sobrescribe el registro
+    # existente: la propuesta original se conserva. Tambien crea el
+    # marker APPLIED, analogo al marker ARCHIVED de
+    # ``cmd_expansion_archive``.
     proposals_dir = project_dir.parent.parent / "expansion_proposals"
     proposals_dir.mkdir(parents=True, exist_ok=True)
-    proposal_json = proposals_dir / f"{proposal.proposal_id}.json"
-    if not proposal_json.is_file():
-        proposal_json.write_text(
-            json.dumps(
-                {
-                    "proposal_id": proposal.proposal_id,
-                    "author": proposal.author,
-                    "created_at": proposal.created_at,
-                    "problem_observed": proposal.problem_observed,
-                    "operations": str(args.proposal),
-                    "capabilities_needed": list(proposal.capabilities_needed),
-                    "new_dependencies": list(proposal.new_dependencies),
-                    "attachment_point": proposal.attachment_point,
-                    "authorization_mode": proposal.authorization.mode,
-                },
-                indent=2,
-                sort_keys=True,
-            ),
-            encoding="utf-8",
-        )
-    applied_marker = proposals_dir / f"{proposal.proposal_id}.json.applied"
-    applied_marker.write_text(
-        json.dumps(
-            {
-                "proposal_id": proposal.proposal_id,
-                "applied_at": _utcnow_iso(),
-                "applied_by": "expansion-apply-cli",
-            },
-            indent=2,
-            sort_keys=True,
-        ),
-        encoding="utf-8",
+    _write_json(
+        proposals_dir / f"{proposal.proposal_id}.json",
+        _proposal_payload(proposal, str(args.proposal)),
+        overwrite=False,
+    )
+    # El marker se escribe siempre, exista o no el registro: el apply
+    # ocurrio en ambos casos y el stage APPLIED debe reflejarse.
+    _write_json(
+        proposals_dir / f"{proposal.proposal_id}.json.applied",
+        _applied_payload(proposal),
+        overwrite=True,
     )
     print(f"OK: {proposal.proposal_id} aplicado. Nuevo plan en {_plan_path(project_dir)}")
     print(f"Nodos antes: {len(plan.nodes)} -> despues: {len(new_plan.nodes)}")
