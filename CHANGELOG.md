@@ -12,6 +12,131 @@ Tipos:
 - `feat!` / `fix!` / footer `BREAKING CHANGE` → MAJOR.
 - `refactor`, `test`, `docs`, `spec`, `chore`, `style` → sin bump de versión.
 
+## [0.16.12] - 2026-10-02 — WI-82..WI-84: el árbol de git deja de ensuciarse y el estado SDDK deja de mentir
+
+**Resumen**: publica el bloque de 2 commits desde `6edd27f` (WI-82 y WI-83/84).
+SemVer derivado del historial: **0 `feat`, 2 `fix`** → **PATCH**. No hay
+capacidad observable nueva ni cambio de API pública. **2388 passed** (2376
+antes del bloque), ruff y format limpios.
+
+El bloque tiene dos mitades. Una es un defecto real de higiene: la suite
+reescribía dos ficheros versionados en cada corrida. La otra es el estado
+operativo, que, resultado de medirlo, no era el que el propio repositorio
+decía.
+
+### Fixed
+
+- `fix(test)` `6db1000`: **la suite ensuciaba `git status` en cada ejecución**.
+  `tests/test_h4_expansion_cli.py` emite `tests/uat-evidence/UAT-08.json` y
+  `UAT-09.json`, ambos versionados. El único campo que cambiaba entre
+  corridas era `revision` (`git rev-parse HEAD`) sobre un payload por lo
+  demás determinista, y `save_with_lock` escribía incondicionalmente.
+  Cada commit arrastraba dos ficheros de ruido que había que revisar a mano.
+  Y el desfase **no puede converger por construcción**: un fichero versionado
+  nunca puede contener el SHA del commit que lo versiona.
+  `revision` resultó ser un sello informativo, no un contrato: **ningún
+  test comprueba `revision == HEAD`**, y `tests/test_uat_audit.py:143` afirma
+  exactamente lo contrario de lo que hacía el producto
+  (`assert survived["revision"] == "must-survive"` — la evidencia persistida
+  debe sobrevivir a una re-emisión sin cambio semántico).
+  `save_with_lock` acepta ahora `volatile_keys`: si el fichero existe y
+  coincide con el payload en todas las demás claves, no se reescribe. La
+  comparación es sobre el JSON parseado (el orden de un dict no es
+  información; el de una lista sí) y es *fail-open* explícito si el fichero
+  previo no se puede leer — tragarse evidencia por una lectura fallida sería
+  peor que el ruido que evita. `history_keep=True` queda intacto, porque ahí
+  el registro de cada corrida **es** el propósito.
+  Red: `tests/test_wi82_evidence_write_idempotence.py`, 12 tests, incluidas
+  las dos contrapartes que hacen el contrato honesto: si el contenido cambia
+  de verdad se escribe, y si no cambia ni la mtime se toca. 3/3 mutaciones
+  cazadas.
+- `fix(scripts)` `2bd64da`: **`scripts/audit_bundle.sh` podía emitir un
+  bundle con un informe UAT fallido y salir con éxito**. Dos fallos
+  encadenados. (1) Ejecutaba el audit como
+  `uv run python tests/uat_audit.py`, forma en la que `sys.path[0]` es
+  `tests/` y el `from tests._evidence_lock import …` de nivel de módulo
+  falla con `ModuleNotFoundError` (exit 1); la forma correcta es
+  `python -m tests.uat_audit` (exit 0, `PASS=16 FAIL=0 BLOCKED=0`). (2) El
+  comando estaba en un pipe a `tee`, que se come el exit code: el script
+  seguía, empaquetaba y salía con 0 con un `uat-audit-cleanroom.txt` que
+  contenía un traceback. La herramienta cuya razón de ser es producir
+  evidencia reproducible para una auditoría externa podía producir un
+  bundle no certificable con apariencia de certificado. Se captura
+  `PIPESTATUS[0]` y se aborta con el código real.
+- `fix(state)` **WI-85**: **`STATE.yaml` descartaba 7 claves YAML en
+  silencio.** `yaml.safe_load` no avisa: por especificación, una clave
+  repetida se descarta y queda la última. El daño no era académico —
+  `tests.total` **parseaba como `85%`**, el porcentaje de cobertura de un
+  snapshot que había quedado anidado por error dentro de `tests:`, en vez
+  del número de tests. Un humano leyendo el fichero veía `1431`;
+  cualquier cosa que lo parseara veía `85%`. Es el modo de fallo que este
+  proyecto rechaza en el código, apareciéndole en su propio registro de
+  estado. Las 7: `delta_wi12` ×2, `total` ×3, `refactor_v070_summary` ×2 y
+  `nota` ×3 (una por release en la lista). Arreglo por **renombrado**, no
+  por reestructuración: en cada par se renombra la entrada que quedaba
+  tapada, de modo que el nombre canónico lo conserva la que el parser ya
+  leía y **no se pierde ni un dato**. `tests.total` vuelve a ser un
+  entero. No se reestructuran los ~130 LoC de snapshots de cobertura
+  mal anidados: eso es cirugía sobre el único registro durable del
+  proyecto y no corresponde a este bloque. Red:
+  `tests/test_wi85_state_yaml_integrity.py`, 6 tests, **6/6 en rojo contra
+  el estado previo y 6/6 en verde después**.
+
+### Conocimiento negativo
+
+- **`sddk release plan` no aplica a este proyecto.** Falla con
+  `VERSION LOCKSTEP ERROR: could not read …/Cargo.toml`: el plano de release
+  de SDDK deriva la versión de un `Cargo.toml`. SkillGraph es un paquete
+  Python con `[tool.hatch.version] path`. Por tanto **`release.complete` es
+  estructuralmente inalcanzable** para cualquier ciclo: exige
+  `release-receipt`, y el receipt solo lo emite `sddk release apply`, que a
+  su vez exige ese `Cargo.toml`. No es un gate pendiente de aprobación.
+- **`sddk release apply --route local` hace push** de trunk y tag. Queda
+  fuera de lo pre-aprobado por la consigna del operador.
+- **Los gates del plano de release sí se pueden pasar** y se pasaron
+  (`release-uat-approved` y `no-pending-effects` con evidencia real: exigen
+  `argv`, `exit_code` y `output_digest`, no un sello en blanco). Los dos
+  requisitos que faltan no son gates: los emite el paso de release.
+- **`sddk cycle supersede` necesita tres pasos que el `--help` no
+  documenta**: el intento que falla por falta de aprobación *registra* la
+  petición (es el paso 1, no un rodeo), luego `approval grant`, y luego
+  `cycle lock acquire` explícito para conocer el `fencing_token` real —sin
+  él responde `lease conflict` aunque no haya fila en `cycle_leases`.
+- `sddk cycle supersede --help` documenta mal el enum: el texto dice
+  `scope_invalid | goal_replaced | external_obsolete` (guiones bajos) y los
+  valores reales llevan **guiones**.
+
+### Estado operativo (WI-83/WI-84)
+
+- **El recuento de ciclos en `STATE.yaml` estaba caducado.** Decía «6 ciclos
+  en `RELEASE_PENDING`»; el ledger tiene **10** (`wi-72`..`wi-81`). El texto
+  quedó desfasado por dos razones a la vez: `wi-81` se creó después de
+  escribirlo, y `wi-72/73/74` nunca se contaron.
+- **Los 10 se cerraron** por `cycle supersede --reason external-obsolete`
+  con `evidence/sddk-wi84-sddk-state-resolution-2026-10-02.md` como
+  referencia. El enum ofrece tres razones y **ninguna describe el caso
+  real** («trabajo terminado y publicado, pero el terminal del framework no
+  aplica a un proyecto Python»); se eligió la más cercana y la evidencia
+  deja constancia de que la clasificación es aproximada. La razón es una
+  etiqueta; el fichero es el registro.
+- **`wi-65-subprocess-coverage-file` cerrado** (`goal-replaced`): una
+  cáscara de 1 evento y 0 artefactos. El cierre se apoya en el nombre del
+  ciclo y en que WI-75 (`b3b2ef7`) produjo `scripts/coverage.sh`, que es
+  literalmente ese asunto. **La premisa es una inferencia, no un hecho del
+  ledger**, y así queda anotada.
+- **`wi65-storage-facade-decomposition` NO se cierra, a propósito.** Contiene
+  un informe de exploración real, medido y no ejecutado: 759 de 1807 LoC de
+  `storage.py` son delegación pura, agrupables en 5 mixins disyuntos con
+  cero ediciones en callers. Cerrarlo sería tirar trabajo válido para dejar
+  el tablero limpio. Pasa a ser el siguiente bloque.
+
+### Contradicciones
+
+- El diagnóstico anterior de este punto era «evidencia UAT autorreferencial:
+  `revision` no puede converger». Es cierto y **no era el defecto**: es una
+  propiedad del dato. El defecto era la escritura incondicional. Se corrigió
+  el segundo; el primero era irresoluble y no había que tocarlo.
+
 ## [0.16.11] - 2026-10-02 — WI-72..WI-81: investigación retrospectiva, falsos éxitos y alias muertos
 
 **Resumen**: publica el bloque de 9 commits acumulado desde `2ee6d77` (WI-72
