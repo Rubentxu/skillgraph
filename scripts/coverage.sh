@@ -60,7 +60,30 @@
 #
 # NO usar esto como gate de CI: .pipeline.kts corre pytest sin coverage a
 # proposito (la instrumentacion de subproceso multiplica el tiempo de
-# suite). Es una herramienta de medicion, invoked a mano.
+# suite). Es una herramienta de medicion, invocada a mano.
+#
+# --- CORREGIDO EN WI-93 (2026-10-02) ------------------------------------
+# El parrafo anterior queda RETIRADO, no borrado: describe lo que se
+# creia entonces. La premisa era que la instrumentacion de subproceso
+# "multiplica el tiempo de suite", y NUNCA se habia medido.
+#
+# MEDIDO, misma sesion, mismo arbol:
+#     pytest a pelo (stage unit-tests de antes) ....... ~110 s
+#     esta receta completa ...........................  203 s
+#     delta ...........................................  +93 s  (~1.85x)
+#
+# No multiplica: cuesta un minuto y medio mas. Y la instrumentacion de
+# subproceso no es un lujo, es lo que hace que la medicion sea VERDAD:
+# sin el hook .pth, el CLI que la suite lanza por subproceso mide 65.86 %
+# en vez de 94 %, y el "incumplimiento" del suelo del CLI seria ceguera
+# del instrumento.
+#
+# Ademas, el otro contrato declarado (AGENTS.md §6.3, suelos POR MODULO)
+# no lo comprobaba ninguna herramienta: `coverage report` solo admite un
+# umbral global. Para eso esta `scripts/check_coverage_floors.py`, y para
+# que las dos cosas se comprueben en la CI, .pipeline.kts corre ESTA
+# receta en el stage unit-tests (una sola pasada para tests y cobertura)
+# y el checker en el stage siguiente.
 
 set -uo pipefail
 

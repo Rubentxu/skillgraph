@@ -31,8 +31,37 @@ pipeline {
         }
 
         stage("unit-tests") {
-            // pytest en todos los tests. Tiempo medido: ~131s en frío, ~750s en suite completa.
-            sh("cd /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph && uv run pytest --no-header -q 2>&1 | tail -10; test \${PIPESTATUS[0]} -eq 0")
+            // UNA sola corrida hace los dos trabajos: tests Y cobertura.
+            //
+            // Antes (WI-93): `uv run pytest` a pelo, ~110s. La cobertura
+            // se media a mano con `scripts/coverage.sh` porque su autor
+            // escribio que "la instrumentacion de subproceso multiplica
+            // el tiempo de suite". Esa premisa NUNCA se habia medido.
+            //
+            // MEDIDO 2026-10-02 (WI-93): `scripts/coverage.sh` tarda
+            // 203s de wall clock frente a los ~110s de pytest a pelo.
+            // No multiplica: cuesta +93s (~1.85x el stage). La premisa
+            // era una hipotesis sin dato y el dato la desmiente.
+            //
+            // Por que UNA corrida y no dos: correr pytest dos veces
+            // (una para tests, otra para cobertura) costaria 110+203s.
+            // La receta ya ejecuta pytest con `--cov`, asi que su
+            // salida sirve para las dos cosas.
+            //
+            // La instrumentacion de subproceso NO es opcional: sin el
+            // hook .pth, el CLI que la suite lanza por subproceso
+            // mide 65.86 % en vez de 94 % (ver cabecera de
+            // scripts/coverage.sh). Con el hook, la medicion es real.
+            sh("cd /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph && bash scripts/coverage.sh 2>&1 | tail -12; test \${PIPESTATUS[0]} -eq 0")
+        }
+
+        stage("coverage-floors") {
+            // El segundo contrato declarado: AGENTS.md §6.3 pone suelos
+            // POR MODULO (core >=90 %, CLI >=70 %, paths.py >=60 %).
+            // `coverage report` solo admite un umbral global, asi que
+            // ese contrato no lo comprobaba NINGUNA herramienta.
+            // Este stage lo hace exigible en cada commit.
+            sh("cd /var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph && uv run python scripts/check_coverage_floors.py 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
         }
 
         stage("lint") {
