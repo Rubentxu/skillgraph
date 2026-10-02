@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.20.3"  # release v0.20.3 (AGENTS 12): el HEAD lleva la etiqueta
+__version__ = "0.20.3.dev0"  # post-release v0.20.3 (AGENTS 12): bump .dev0 tras el tag
 
 from skillgraph.core.errors import (
     IdentityConflictError,

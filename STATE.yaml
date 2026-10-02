@@ -561,7 +561,7 @@ tests:
   total: 2673   # re-medido 2026-10-03 (bloque WI-102) en la CI canonica run efebb07c: 2673 passed. +12 sobre 2661 = C5 (todo scripts/check_*.py lo invoca la receta canonica): 4 tests de la propiedad, 3 del lector de invocaciones, 2 del descubrimiento y 3 contra el repo real; mas 2 que atan el descubrimiento con el lector para los subdirectorios.
   passed: 2673
   duration_s: 224.37   # MEDIDO en la CI canonica de WI-102 (stage unit-tests, recipe de cobertura), run efebb07c. pytest a pelo son ~120 s: el delta es el coste de instrumentar los subprocesos.
-  package_version: "0.20.3"   # release v0.20.3 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
+  package_version: "0.20.3.dev0"   # trabajo post-release v0.20.3 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1143,7 +1143,7 @@ release:
   releases:
     - tag: v0.20.3
       fecha: 2026-10-03
-      sha: "PENDIENTE"
+      sha: "69f8eac3d690adf82a6d13860177b1616ed6330d"
       nota: "WI-102: la receta canonica puede perder un contrato exigible y seguir dando verde. Se borro la etapa coverage-floors de .pipeline.kts y ni el guard de paridad (exit 0), ni sus 37 tests, ni la propia receta ejecutada de verdad (SUCCESS) se dieron cuenta. C3 solo comprobaba que la lista de etapas fuera legible. C5 exige que todo scripts/check_*.py lo invoque la receta, con el conjunto derivado del repo y sin lista; cubre tambien el checker escrito y no enchufado. Despues del arreglo la receta se detecta a si misma (FAILURE). Mutaciones 6/6, una sobre el fichero real y otra que produce falso positivo. 2673 passed, run efebb07c."
     - tag: v0.20.2
       fecha: 2026-10-02
