@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from skillgraph.core.errors import SkillGraphError
 from skillgraph.platform.ports import StoredNodeExecution
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan
-from skillgraph.runtime.agent import AgentResult
+from skillgraph.runtime.agent import AgentResult, adapter_name
 from skillgraph.runtime.engine import EventBuilder
 from skillgraph.runtime.handoff import Handoff
 from skillgraph.runtime.run_types import (
@@ -420,11 +420,19 @@ class NodeExecutionDelegations:
         abierto por `_open_node_execution` para mantener la
         trazabilidad de eventos (todos comparten el mismo `correlation_id`).
         """
+        # La procedencia la pone el MOTOR, que es quien sabe que
+        # adapter invoco, y no el adapter. Antes no la ponia nadie: el
+        # evento persistido de una ejecucion no decia QUIEN produjo el
+        # resultado (medido en .pipelinek/b3_provenance_measure.py).
+        # Sin esto, «¿quien afirmo esto?» no tiene respuesta sobre lo
+        # unico que sobrevive a la sesion.
+        nombre_adapter = adapter_name(self._adapter)
         ev_completed = events.node_completed(
             run_id=run_id,
             node_execution_id=node_execution_id,
             outcome=result.outcome,
             context_hash=context_hash,
+            adapter=nombre_adapter,
         )
         # UAT-04: deja evidencia. Emitido como evento dentro de la
         # transaccion atomica.
@@ -434,6 +442,7 @@ class NodeExecutionDelegations:
             outcome=result.outcome,
             context_hash=context_hash,
             evidence_ref=result.evidence_ref or context_hash,
+            adapter=nombre_adapter,
         )
         self._runs.complete_node_execution_atomically(
             event_completed=ev_completed,

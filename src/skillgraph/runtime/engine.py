@@ -349,7 +349,15 @@ class EventBuilder:
         node_execution_id: str,
         outcome: str,
         context_hash: str,
+        adapter: str,
     ) -> RuntimeEvent:
+        """Cierre de un nodo, CON la procedencia de quien lo ejecuto.
+
+        `adapter` no tiene default a proposito: si lo tuviera, un
+        call-site nuevo podria omitirlo y el evento volveria a no decir
+        quien, sin que nada fallara. La procedencia se pierde en
+        silencio, que es la forma mas cara de perderla.
+        """
         return self._emit(
             kind="NodeCompleted",
             run_id=run_id,
@@ -358,6 +366,7 @@ class EventBuilder:
                 "node_execution_id": node_execution_id,
                 "outcome": outcome,
                 "context_hash": context_hash,
+                "adapter": adapter,
             },
         )
 
@@ -390,6 +399,7 @@ class EventBuilder:
         outcome: str,
         context_hash: str,
         evidence_ref: str,
+        adapter: str,
     ) -> RuntimeEvent:
         return self._emit(
             kind="EvidenceProduced",
@@ -400,6 +410,7 @@ class EventBuilder:
                 "outcome": outcome,
                 "context_hash": context_hash,
                 "evidence_ref": evidence_ref,
+                "adapter": adapter,
             },
         )
 

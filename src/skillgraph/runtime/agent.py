@@ -90,6 +90,43 @@ class AgentAdapter(Protocol):
     def invoke(self, handoff: Handoff) -> AgentResult: ...
 
 
+def adapter_name(adapter: object) -> str:
+    """El nombre de un adapter: lo declarado, o el de su clase.
+
+    **POR QUE EXISTE.** Ningun artefacto persistido de una ejecucion
+    decia QUE ADAPTER produjo el resultado. Medido ejecutando un nodo
+    (`.pipelinek/b3_provenance_measure.py`):
+
+        el AgentResult persistido: ['evidence_ref', 'outcome', 'result']
+        NodeCompleted             : {node_execution_id, outcome, context_hash}
+        EvidenceProduced          : {node_execution_id, outcome, context_hash, evidence_ref}
+
+    Y el motor SI lo sabia: es quien lo invoco. Lo que faltaba no era el
+    dato, era ponerlo donde se consulta.
+
+    **POR QUE EL DEFAULT ES EL NOMBRE DE LA CLASE Y NO UN ERROR.** Los
+    tres adapters que hay hoy —`FakeAgentAdapter`, `HttpAgentAdapter` y
+    el determinista— no declaran nombre. Si `adapter_name` exigiera un
+    `name`, habria que tocar los tres y el «contrato» solo lo cumplirian
+    los adapters de packs externos, que son los que no se pueden ver.
+
+    Con el default, la procedencia es estructural: no depende de que
+    nadie se acuerde. Un adapter de un pack puede declarar
+    ``name = "code.analysis.cognicode"`` y asi distinguirse de otro que
+    satisfaga el mismo tipo; si no lo declara, se llama como su clase, y
+    eso ya es una respuesta.
+
+    **POR QUE UN NOMBRE VACIO NO CUENTA COMO DECLARADO.** `name = ""` es
+    un olvido declarado, y tratarlo como declarado daria `""` en el
+    evento, que es PEOR que no tener nada: parece que se sabe quien fue
+    y no se sabe. Un nombre vacio cae al default.
+    """
+    declarado = getattr(adapter, "name", None)
+    if isinstance(declarado, str) and declarado.strip():
+        return declarado
+    return type(adapter).__name__
+
+
 class FakeAgentAdapter:
     """Adapter determinista para tests y modo local.
 
