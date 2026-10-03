@@ -14,6 +14,91 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.22.2] - 2026-10-03 — la inmutabilidad que era de fachada
+
+**PATCH**: derivado con `scripts/derive_semver.py` sobre el historial.
+
+Decimotercera vía de la serie «qué declara el repo que nada comprueba»,
+y la primera que encuentra el defecto en la estructura central del
+sistema: lo que el agente ve.
+
+`AGENTS.md §8` declaraba tres cosas del Handoff. **Ninguna se
+sostenía**, y las tres tenían la misma causa:
+
+> **Handoff**: inmutable + SHA-256 sobre serialización estable
+> (capacidades y budget ordenados). El Adapter recibe el hash
+> firmado; nunca lo recalcula.
+
+`frozen=True` congela el **enlace** del atributo, no su **valor**.
+`HandoffExecution.budget` era `dict[str, int]`, así que la estructura
+era mutable por dentro y la firma seguía diciendo «inmutable».
+
+### La segunda mitad es la grave
+
+El budget está **dentro del hash**, y el motor lo usaba en dos
+momentos distintos: lo persistía **antes** de invocar al Adapter
+(`node_execution_delegations.py:219`) y lo **recalculaba después**
+(`:144`). La línea 144 hacía exactamente lo que la viñeta prohíbe.
+
+Medido antes de tocar nada, ejecutando un nodo real contra un
+`Storage` real y leyendo de disco:
+
+```
+fila node_executions.context_hash : 0063e7dfd167afc6...
+evento NodeCompleted               : 951a2d3a16cf7ea8...
+evento EvidenceProduced            : 951a2d3a16cf7ea8...
+hash que el Adapter vio AL ENTRAR  : 0063e7dfd167afc6...
+budget en handoff_json persistido  : {'max_nodes': 1}
+```
+
+La fila describe el handoff de **antes**; los eventos, el de
+**después**. Los dos son la misma `node_execution`.
+
+### Cambios
+
+- **`HandoffExecution.budget`**: `dict[str, int]` → `Mapping[str, int]`,
+  envuelto en `MappingProxyType` sobre una **copia defensiva**. Escribir
+  lanza `TypeError`; mutar el dict que conserva el llamante no toca el
+  handoff. El `isinstance(budget, Mapping)` se mantiene: sin él, un
+  `str` pasaba como budget y el handoff quedaba corrupto.
+- **`_compile_node_handoff`** devuelve `(handoff, context_hash)`. El
+  Core calcula el hash **una vez**, al firmarlo, y de ahí en adelante
+  solo viaja.
+- **`_open_running_node`** extraído de `_execute_one`.
+
+**El guard no lee el código: ejecuta un nodo.** Un guard por AST habría
+medido la regla, no el defecto — el defecto estaba en la distancia
+temporal entre firmar y entregar, que no está en el texto de ningún
+fichero.
+
+### Tres defectos del propio guard
+
+Las mutaciones los dejaron ver, y quedan escritos en `AGENTS.md §8`:
+
+1. Un test comparaba contra una llamada **nueva** de `_handoff()` en vez
+   de releer el handoff mutado: no podía fallar nunca.
+2. `MappingProxyType == dict` es `True`. Un test que exigía un dict
+   plano comparando con `==` pasaba con el mapping vivo devuelto.
+3. Contar llamadas a `context_hash` sin distinguir el origen contaba la
+   lectura del propio Adapter como una recalculación del motor.
+
+M5 se reescribió **dos veces**: la primera mutación quitaba el
+`sorted()`, que resultó **inocua** — quitar el orden no rompe la
+copia— y su sonda apuntaba al test tautológico.
+
+### Dos guards rotos por el propio cambio
+
+Resueltos cambiando el código, no la regla:
+
+- **WI-66**, umbral de 80 LoC: 74 → 83 → **76** extrayendo
+  `_open_running_node`. El umbral no se sube.
+- **WI-67**, lista de métodos movidos: 22 → **23**.
+
+Un umbral que se sube para que el código pase no comprueba nada.
+
+19 tests, **5/5 mutaciones** con sonda por mutación. 2795 passed,
+0 skipped.
+
 ## [0.22.1] - 2026-10-03 — la etapa que se verificaba a sí misma
 
 **PATCH**: `git log v0.22.0..HEAD` = 1 `fix`, 4 `docs`, 0 breaking.

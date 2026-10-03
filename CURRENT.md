@@ -1,4 +1,67 @@
 # CURRENT — puntero operativo
+> **Bloque 2026-10-03 (vigésima tercera tanda) en curso — WI-111, release `v0.22.2`.**
+> Versión activa `0.22.1.dev0`; último tag `v0.22.1`.
+>
+> **WI-111 — la inmutabilidad del Handoff era de fachada.**
+> Decimotercera vía de la serie «qué declara el repo que nada comprueba»,
+> y la primera que encuentra el defecto en la estructura central: lo que
+> el agente ve.
+>
+> `AGENTS.md §8` declaraba tres cosas del Handoff —inmutable, hash
+> SHA-256 estable, y que el Adapter «recibe el hash firmado; nunca lo
+> recalcula»— y **ninguna se sostenía**. Las tres tenían la misma causa:
+> `frozen=True` congela el **enlace** del atributo, no su **valor**, y
+> `HandoffExecution.budget` era `dict[str, int]`.
+>
+> **Medido, no teórico.** El budget está **dentro del hash**, y el motor
+> lo persistía **antes** de invocar al Adapter
+> (`src/skillgraph/runtime/node_execution_delegations.py:260::_compile_node_handoff`,
+> dentro de `_compile_node_handoff`) y lo **recalculaba después**, en la
+> línea 144 de la versión previa a WI-111. Ejecutando un nodo real y
+> leyendo de disco:
+>
+> ```
+> fila node_executions.context_hash : 0063e7dfd167afc6...
+> evento NodeCompleted               : 951a2d3a16cf7ea8...
+> evento EvidenceProduced            : 951a2d3a16cf7ea8...
+> hash que el Adapter vio AL ENTRAR  : 0063e7dfd167afc6...
+> budget en handoff_json persistido  : {'max_nodes': 1}
+> ```
+>
+> La fila describe el handoff de **antes** y los eventos el de
+> **después**, para la misma `node_execution`. La línea 144 hacía
+> exactamente lo que la viñeta prohíbe.
+>
+> **El guard no lee el código: ejecuta un nodo.** Uno por AST habría
+> medido la regla y no el defecto, que estaba en la distancia temporal
+> entre firmar y entregar — y esa distancia no está en el texto de
+> ningún fichero.
+>
+> **Tres defectos del propio guard**, que las mutaciones dejaron ver y
+> que quedan escritos en `AGENTS.md §8`: un test comparaba contra una
+> llamada **nueva** de `_handoff()` y no podía fallar nunca;
+> `MappingProxyType == dict` es `True`, así que comparar con `==` pasaba
+> con el mapping vivo; y contar llamadas a `context_hash` sin distinguir
+> el origen contaba la lectura del Adapter como una recalculación del
+> motor.
+>
+> **M5 se reescribió dos veces**: la primera quitaba el `sorted()`, que
+> resultó **inocua** — quitar el orden no rompe la copia— y su sonda
+> apuntaba al test tautológico.
+>
+> **5/5 mutaciones**, 19 tests, 2795 passed, 0 skipped.
+>
+> **Dos guards rotos por el propio cambio**, resueltos cambiando el
+> código y no la regla: el de 80 LoC (WI-66) se cumplió extrayendo
+> `_open_running_node` — 74 → 83 → 76 — y el de WI-67, la lista de
+> métodos movidos, pasó de 22 a 23. **Un umbral que se sube para que el
+> código pase no comprueba nada.**
+
+---
+
+<details>
+<summary>Bloque anterior (WI-110)</summary>
+
 > **Bloque 2026-10-03 (vigésima segunda tanda) cerrado — WI-110, release `v0.22.1`.**
 > Versión activa `0.22.1.dev0`; último tag `v0.22.1`.
 >
