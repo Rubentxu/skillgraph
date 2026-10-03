@@ -1,7 +1,7 @@
 # CURRENT — puntero operativo
 
 > **Bloque 2026-10-03 (decimoctava tanda) cerrado — WI-106, SIN RELEASE.**
-> Versión activa `0.21.0.dev0`; último tag `v0.21.0`. 2702 passed, **0 skipped**.
+> Versión activa `0.21.0.dev0`; último tag `v0.21.0`. 2703 passed, **0 skipped**.
 >
 > **WI-106 — la causa de un bump era una afirmación sin verificar.**
 > Octava vía de la serie «qué declara el repo que nada comprueba», y la

@@ -12042,7 +12042,7 @@ puesta, el estado puede mentir y nadie lo ve, y eso demuestra que era el
 único punto de aplicación. Contarlo como fallo sería inventar una propiedad
 que no existe; esconderlo sería mentir sobre la cobertura.
 
-**2702 passed y 0 skipped** (+3).
+**2703 passed y 0 skipped** (+4).
 
 ### Errores propios de esta sesión, para no repetirlos
 
