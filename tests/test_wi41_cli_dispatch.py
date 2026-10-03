@@ -274,16 +274,130 @@ class TestPublicSurfaceStability:
 # ---------------------------------------------------------------------------
 
 
-class TestAuditGateForMain:
-    def test_main_no_esta_en_hotspots_publicos(self) -> None:
-        """Gate D1: el informe de deuda no debe listar `main` (cc>=20)."""
-        from datetime import UTC, datetime
+def arbol_con_hotspot(tmp_path: Path) -> tuple[Path, str]:
+    """Arbol minimo con una funcion publica de cc>=20. Devuelve (raiz, nombre).
 
-        report = Path("audits") / f"architecture-debt-{datetime.now(UTC).date()}.md"
-        if not report.exists():
-            pytest.skip("auditoria del dia no generada todavia")
-        text = report.read_text(encoding="utf-8")
-        section = text.split("## Hotspots publicos")[-1].split("##")[0]
-        assert "`main`" not in section, (
-            "main sigue listado como hotspot publico: refactor incompleto"
+    El contraejemplo del gate. Sin el, `test_el_arbol_real_no_tiene_main_como_hotspot`
+    pasaria siempre con la misma seguridad con la que pasaba antes WI-103: no
+    porque `main` este bien, sino porque nada miraba.
+
+    La cc del auditor es `1 + nº de If/For/While/With/Try`, asi que 25 `if`
+    dan cc=26. Se construye por generacion y no escrito a mano para que el
+    numero no dependa de contar lineas.
+    """
+    src = tmp_path / "src"
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "__init__.py").write_text("", encoding="utf-8")
+
+    cuerpo = "\n".join(f"    if valor == {i}:\n        total += {i}" for i in range(25))
+    (src / "modulo.py").write_text(
+        "def main(valor: int) -> int:\n    total = 0\n" + cuerpo + "\n    return total\n",
+        encoding="utf-8",
+    )
+    return src, "main"
+
+
+class TestAuditGateForMain:
+    """WI-103: la propiedad se mide, ya no depende de que exista un informe.
+
+    Antes este gate leia `audits/architecture-debt-<HOY>.md` y hacia
+    `pytest.skip` si no existia, de modo que solo corria los dias en que
+    alguien se acordaba de generar el informe. MEDIDO: 6 informes en 7 dias
+    (falta el `2026-09-30`) y hoy ni uno, con el gate en `SKIPPED` y exit 0.
+
+    Ahora ejecuta `audits/audit_debt.py` sobre el arbol que se le pase y
+    escribe el informe en un temporal, asi que la propiedad se comprueba
+    siempre y contra el codigo que hay ahora.
+    """
+
+    def test_el_arbol_real_no_tiene_main_como_hotspot(self, tmp_path: Path) -> None:
+        """LA puerta. `src/` de verdad, hoy.
+
+        Un gate que solo sabe fallar con arboles de prueba no vigila el
+        repositorio. Este es el que dice si el refactor de WI-41 sigue en pie.
+        """
+        from tests._gate_main_hotspot import hotspots_publicos
+
+        nombres = hotspots_publicos(Path("src"), out_dir=tmp_path / "out")
+        assert "main" not in nombres, (
+            f"main vuelve a listarse como hotspot publico: {sorted(nombres)}"
         )
+
+    def test_la_medicion_detecta_un_main_realmente_hotspot(self, tmp_path: Path) -> None:
+        """El contraejemplo: sin el, el gate de arriba podria ser vacio.
+
+        Un contraejemplo que no degrada nada no prueba que el guard funcione
+        (leccion de WI-99). Si la medicion no encontrase un `main` con cc>=20
+        en un arbol que lo tiene, el gate de arriba pasaria siempre sin
+        decir nada, que es exactamente el defecto que se esta corrigiendo.
+        """
+        from tests._gate_main_hotspot import hotspots_publicos
+
+        src, nombre = arbol_con_hotspot(tmp_path)
+        nombres = hotspots_publicos(src, out_dir=tmp_path / "out")
+        assert nombre in nombres, (
+            f"la medicion no vio un hotspot publico con cc>=20 en un arbol que "
+            f"lo tiene: devio encontrar {nombre!r} y encontro {sorted(nombres)}"
+        )
+
+    def test_no_puede_saltarse_ninguna_vez(self, tmp_path: Path) -> None:
+        """El helper no puede saltarse: ni siquiera importa pytest.
+
+        La primera version de este guard buscaba la cadena `skip` en el fuente
+        del modulo, y se ponia en rojo **por su propio docstring**, que explica
+        el defecto que arregla. Un guard que busca una palabra encuentra la
+        palabra, no la propiedad: es la serie completa de este bloque en una
+        linea, y la razon por la que este guard se escribe sobre el arbol de
+        sintaxis y no sobre el texto.
+
+        Un modulo que no importa pytest no puede llamar a `pytest.skip`. Y el
+        comportamiento ya lo comprueban los tests de arriba: si se saltara,
+        ellos no llegarian a su `assert`.
+        """
+        import ast
+        import inspect
+
+        from tests import _gate_main_hotspot
+
+        arbol = ast.parse(inspect.getsource(_gate_main_hotspot))
+        raices: set[str] = set()
+        for nodo in ast.walk(arbol):
+            if isinstance(nodo, ast.Import):
+                raices.update(alias.name.split(".")[0] for alias in nodo.names)
+            elif isinstance(nodo, ast.ImportFrom) and nodo.module:
+                raices.add(nodo.module.split(".")[0])
+        assert "pytest" not in raices, (
+            f"el helper vuelve a poder saltarse: importa {sorted(raices)}"
+        )
+
+    def test_la_medicion_no_es_una_cadena_vacia(self) -> None:
+        """Devuelve una tupla, siempre. Including cuando no hay hotspots.
+
+        Una funcion que devuelve `()` porque no encontro nada y una que
+        devuelve `()` porque no mire se distinguen por el segundo test: el
+        contraejemplo obliga a que la medicion vea un hotspot real. Este solo
+        fija que la forma del contrato no se degrade a `None`.
+        """
+        import inspect as _i
+
+        from tests._gate_main_hotspot import hotspots_publicos
+
+        firma = _i.signature(hotspots_publicos)
+        assert "out_dir" in firma.parameters, (
+            "el helper perdio out_dir y podria escribir en audits/"
+        )
+        assert firma.parameters["out_dir"].kind is _i.Parameter.KEYWORD_ONLY, (
+            "out_dir debe ser solo-de-palabra-clave: como posicional, un "
+            "llamador podria auditar y escribir en el repo por accidente"
+        )
+
+    def test_no_escribe_en_audits(self, tmp_path: Path) -> None:
+        """`audits/` esta versionado: un test que escribe ahi deja el arbol
+        sucio y ensucia el historico. WI-89 hizo `--out-dir` parametro; esto
+        lo comprueba."""
+        from tests._gate_main_hotspot import hotspots_publicos
+
+        antes = sorted(p.name for p in Path("audits").glob("*"))
+        hotspots_publicos(Path("src"), out_dir=tmp_path / "out")
+        despues = sorted(p.name for p in Path("audits").glob("*"))
+        assert antes == despues, f"el test escribio en audits/: {set(despues) - set(antes)}"

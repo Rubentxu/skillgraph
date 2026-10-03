@@ -272,6 +272,36 @@ Configuración en `pyproject.toml`. Reglas activas relevantes:
 - NO usar `pytest.skip` para esconder fallos: o arreglas el test
   o lo borras.
 
+**Un `skip` por falta de artefacto es el mismo defecto, con otra forma.**
+
+Un gate que lee un fichero fechado y se salta si no existe no mide la
+propiedad que declara: mide si hoy alguien se acordaba de correr algo.
+MEDIDO en WI-103, con el gate que vigila que `main` no vuelva a listarse
+como hotspot público (`cc>=20`):
+
+| | |
+|---|---|
+| informes `architecture-debt-*` | **6** en 7 días (falta el `2026-09-30`) |
+| hoy | sin informe → gate en `SKIPPED`, **exit 0** |
+| informe de hoy generado | 1 passed (`main` no es hotspot hoy) |
+| informe de hoy con `main` inyectado | 1 **failed**, exit 1 |
+
+La propiedad era real y el gate mordía cuando el artefacto estaba. El
+defecto era **la existencia del artefacto**, y por eso la regla es más
+específica que la de arriba:
+
+> **Un gate mide.** Si su propiedad es sobre el código, ejecuta el análisis
+> sobre el código. Si su propiedad es sobre un artefacto versionado,
+> entonces el artefacto es parte del contrato y su ausencia es un fallo, no
+> una excusa para no mirar.
+
+Y el contrasalto, porque es donde estos casos se esconden: **un gate que
+solo sabe pasar no está probado.** El arreglo de WI-103 trae un
+contraejemplo que construye un árbol con un `main` real de `cc>=20` y exige
+que la medición lo vea. Sin ese test, una medición que devolviera siempre
+`()` habría pasado todo verde — indistinguible de la que no mide nada.
+Mutaciones 5/5, y la M2 es exactamente esa: la medición que no mide nada.
+
 ### 6.3 Cobertura mínima
 
 - Módulos del core (errors, bricks, parser, registry, storage,
