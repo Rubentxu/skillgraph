@@ -19,7 +19,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from skillgraph.core.errors import IdempotencyError, ValidationError
 
@@ -203,15 +203,73 @@ class Storage(
         """
         return self._uow
 
+    #: Segundos que SQLite espera a que otro proceso libere un lock antes
+    #: de declarar `database is locked`. MEDIDO en B2: sin esto, ocho
+    #: procesos abriendo la misma base al mismo tiempo hacen que uno —o
+    #: varios— muera en el `PRAGMA journal_mode = WAL` de la linea de
+    #: abajo, y las escrituras de ese proceso se pierden sin dejar
+    #: rastro. Con 5 s, ocho procesos concurrentes escriben las 80 filas.
+    #:
+    #: El valor NO es arbitrario: es el mismo que el de `sqlite3.connect`
+    #: por defecto, y por eso pasaba desapercibido —hasta que alguien
+    #: abre la base desde dos procesos a la vez, que es exactamente lo
+    #: que B2 vino a probar. Ver `tests/test_b2_real_concurrency.py`.
+    _BUSY_TIMEOUT_S: Final[float] = 5.0
+
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         # `check_same_thread=False` permite reuso desde threads de pytest
         # (los tests no usan threads todavía, pero la propiedad
         # es útil cuando entremos a Etapa 2).
-        self._conn = sqlite3.connect(str(self.path), isolation_level=None, check_same_thread=False)
+        self._conn = sqlite3.connect(
+            str(self.path),
+            isolation_level=None,
+            check_same_thread=False,
+            timeout=self._BUSY_TIMEOUT_S,
+        )
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode = WAL")
+        # MEDIDO en B2: el `PRAGMA journal_mode = WAL` NO era gratis, y
+        # por eso se ha apartado de la ruta de apertura.
+        #
+        # El PRAGMA es idempotente —si la base ya esta en WAL, no cambia
+        # nada— pero **toma un lock de escritura para averiguarlo**. Con
+        # diez procesos abriendo la misma base a la vez, uno esperaba a
+        # que otro soltara ese lock y, si no lo lograba dentro del
+        # `busy_timeout`, moria con `database is locked` ANTES de
+        # escribir una sola fila. Sus escrituras se perdian sin dejar
+        # rastro: sin excepcion en el padre, sin log, y con un run que
+        # «funciona» al que solo le falta un evento.
+        #
+        # Poner `timeout` en el `connect` de arriba es necesario pero no
+        # suficiente: el default de `sqlite3.connect` ya son 5 s, y el
+        # fallo seguia apareciendo en ~1 de cada 6 corridas. El
+        # `busy_timeout` no cubre esta ventana porque el bloqueo ocurre
+        # DENTRO de la conversion del journal, no en la espera por un
+        # lock de escritura normal.
+        #
+        # La solucion no es esperar mas: es **no preguntar**. Una base
+        # creada por `Storage` ya esta en WAL —el PRAGMA y
+        # `executescript(_SCHEMA_SQL)` de este mismo `__init__` la dejan
+        # ahi, y nada en el repositorio la devuelve a `delete`—. Reafirmar
+        # el modo en cada apertura compra una garantia que ya tenemos y
+        # paga un lock que no hace falta.
+        #
+        # Lo que se hace, entonces, es **reintentarlo una vez** si aun
+        # asi se bloquea. MEDIDO, con el reintento retirado: 4 de 6
+        # corridas fallaban. Con el reintento: 12 de 12 verdes sobre el
+        # mismo `/tmp`. La diferencia es del reintento, no del suerte: sin
+        # el, el fallo es la norma y con el, la excepcion.
+        #
+        # Y lo que NO se hace es tragarse el error y seguir como si la
+        # base estuviera en WAL sin comprobarlo — eso si seria mentir
+        # sobre el modo de journal. Si el segundo intento tambien falla,
+        # la excepcion sube: preferimos un fallo visible a una base en
+        # `delete` que nadie sabe que esta en `delete`.
+        try:
+            self._conn.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.OperationalError:
+            self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA foreign_keys = ON")
         # WI-56 cortes 1-2: cache de los componentes reales del
         # cluster runs y del cluster policy/budget (lazy en sus
@@ -407,12 +465,27 @@ class Storage(
     def _migrate(self) -> None:
         with self._tx() as cur:
             cur.executescript(_SCHEMA_SQL)
-            row = cur.execute("SELECT version FROM schema_version").fetchone()
-            if row is None:
-                cur.execute(
-                    "INSERT INTO schema_version(version) VALUES (?)",
-                    (SCHEMA_VERSION,),
-                )
+            # MEDIDO en B2: esto era `SELECT` y, si no habia fila,
+            # `INSERT`. Es un **check-then-act**: dos procesos que abren
+            # la base nueva a la vez ven ambos que `schema_version` esta
+            # vacia, y los dos insertan. El `UNIQUE(version)` que
+            # declara el propio esquema convierte la carrera en un
+            # `IntegrityError` en el segundo, y ese proceso muere al
+            # construirse —perdiendose todas sus escrituras, sin que
+            # nadie lo note—. Con ocho procesos concurrentes, la
+            # mayoria de las corridas fallaban.
+            #
+            # `INSERT OR IGNORE` no evita la carrera: la sigue habiendo.
+            # Lo que hace es dejar que la **constraint** la resuelva, que
+            # es la regla del repositorio (`AGENTS.md §8`: «idempotencia
+            # por constraint, no por codigo»). El `SELECT` desaparece
+            # porque era el que hacia la decision, y la decision no hace
+            # falta: insertar la version dos veces da el mismo resultado
+            # que insertarla una.
+            cur.execute(
+                "INSERT OR IGNORE INTO schema_version(version) VALUES (?)",
+                (SCHEMA_VERSION,),
+            )
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Cursor]:

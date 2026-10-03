@@ -95,6 +95,14 @@ TESTS = ROOT / "tests"
 SKIPS_DECLARADOS: dict[str, str] = {
     "tests/test_locks.py": "fcntl no existe en Windows: no es un fallo escondido",
     "tests/test_evidence_lock.py": "idem: el test toma el lock con fcntl",
+    # B2: opt-in por credencial y coste. No es un skip de plataforma
+    # como los dos de arriba —es un skip de ENTORNO—, y aun asi se
+    # declara, porque un skip sin escribir es un fallo escondido.
+    # La razon se duplica aqui a proposito: `test_la_lista_de_declarados_
+    # tiene_una_sola_fuente` exige que las dos copias coincidan, y una
+    # entrada en un sitio y no en el otro es exactamente la deriva que
+    # ese test existe para cazar.
+    "tests/test_uat_real_provider.py": "opt-in por credencial y coste: requiere SG_UAT_REAL_PROVIDER=1",
 }
 
 LLAMADA_SKIP = frozenset({"pytest.skip", "pytest.mark.skip"})

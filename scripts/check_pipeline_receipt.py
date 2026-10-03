@@ -104,6 +104,13 @@ TESTS_SALTEADOS: Final = re.compile(r"\b(\d+)\s+(?:skipped|xfailed)\b", re.IGNOR
 SKIPS_PLATAFORMA: Final[dict[str, str]] = {
     "tests/test_locks.py": "fcntl no existe en Windows: no es un fallo escondido",
     "tests/test_evidence_lock.py": "idem: el test toma el lock con fcntl",
+    # B2: la UAT real contra el proveedor necesita credencial, que no
+    # puede estar en el repo, y cuesta dinero, asi que es opt-in por
+    # `SG_UAT_REAL_PROVIDER=1`. NO es un skip de plataforma como los dos
+    # de arriba: es un skip de ENTORNO, y por eso lleva su propia razon.
+    # Lo que NO se haria es no declararlo: un skip sin escribir es un
+    # fallo escondido, y el guard existe para que la decision se vea.
+    "tests/test_uat_real_provider.py": "opt-in por credencial y coste: requiere SG_UAT_REAL_PROVIDER=1",
 }
 
 #: La etapa que se verifica A SI MISMA.
