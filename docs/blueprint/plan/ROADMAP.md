@@ -1,5 +1,19 @@
 # Roadmap de implementación
 
+> ## 📜 HISTÓRICO — este NO es el roadmap del proyecto
+>
+> Esto es el roadmap del **blueprint v1**, y el blueprint v1 está terminado
+> (H0..H9, más la línea evolution-v2 H10..H15). Se conserva **sin cambios**
+> porque es la referencia de la versión congelada y porque la evidencia
+> histórica del repositorio lo cita por esta ruta: mudarlo rompería citas
+> que son provenance, no documentación.
+>
+> **El roadmap vivo es [`ROADMAP.md`](../../../ROADMAP.md) en la raíz**, y
+> es el único que responde a *«¿qué toca después?»*.
+>
+> Lo que sigue describe el plan **tal y como se escribió antes** de
+> ejecutarlo. Sus etapas se cumplieron; no son trabajo pendiente.
+
 ## Principio de entrega
 
 Construir vertical slices completos.
