@@ -30,7 +30,7 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B2** — Runtime real, no representativo
+> Bloque vivo: **B3** — Core extensible de verdad
 > Versión activa `0.22.5.dev0` · último tag `v0.22.5` · 2875 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*

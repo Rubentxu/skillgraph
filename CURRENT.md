@@ -1,4 +1,100 @@
-# CURRENT — puntero operativo
+> **Bloque 2026-10-03 (B3) — Core extensible de verdad.**
+> Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
+>
+> **B3 — el hueco estaba medido antes de escribir una línea.** En el
+> árbol real, las capabilities se declaraban, se transportaban, se
+> serializaban, se imprimían y se validaban contra un registro de
+> strings. Y nadie las resolvía a nada ejecutable:
+>
+> ```
+> resources/workflow.py:71::WorkflowNode.capabilities        tuple[str, ...]
+> governance/graph_expansion.py:349::_check_capabilities     contra un Mapping[str, str]
+> knowledge/context_controller.py:139::build_capabilities    produce ('stale',)
+> runtime/http_adapter.py:168::_build_prompt                las imprime
+> alguien que las RESUELVA                                 —— NINGUNO ——
+> ```
+>
+> Eso es un hueco de **arquitectura**, no una función que falte. B1 ya
+> lo había visto y lo dejó escrito como «la base de B3» en vez de
+> deuda.
+>
+> **Lo que hay ahora**: `platform/ports/capabilities.py` — `CapabilitySpec`,
+> `CapabilityRequest`, `CapabilityResult` (que **lleva `adapter`**: la
+> procedencia que B6 necesitará para «¿quién afirmó esto?»), un
+> `Protocol` **mínimo** (`spec` + `invoke`) y un `CapabilityRegistry`
+> que es un **valor inyectado**, no un singleton. `resolve` lanza
+> `CapabilityNotFound` tipado —cuelga de `SkillGraphError`, con `code`,
+> traducible a exit code— en vez de devolver `None`.
+>
+> **El primer gate medía mal, y es el hallazgo del bloque.** Exigía
+> `a == b` para dos registros, que es una propiedad que un **singleton
+> cumple mejor que un valor**: un singleton siempre es igual a sí mismo.
+> Medido sobre un registro convertido a singleton:
+>
+> ```
+> hoy            : a == b  -> False   (el test lo exigía)
+> singleton      : s1 == s2 -> True   <-- la aserción PASABA igual
+> singleton      : s1.types  -> ('A',)  <-- la contaminación seguía ahí
+> ```
+>
+> Exigía una propiedad cuyo único incumplimiento era el correcto, así
+> que no distinguía un valor de un singleton. Reemplazada por
+> **no-contaminación**, que sí discrimina. Es el error de WI-114 dado la
+> vuelta: allí el instrumento medía la convención que el workitem
+> eliminaba; aquí medía una que sí distingue, pero de una forma que un
+> singleton también cumple.
+>
+> **Error propio, y el más importante: el harness de mutación se escribió
+> al revés** —buscaba el texto *nuevo* para aplicar la mutación— y dio
+> `0/12` con `SIN_SONDA` en las doce. La sonda hizo su trabajo y prefirió
+> decir «no he medido nada» a contar doce victorias sobre un árbol que
+> nunca cambió. **15/15 mutaciones cazadas**, 0 sondas inválidas, árbol
+> restaurado byte a byte con sha256, repetido 3 veces seguidas.
+>
+> **Y una mutación era intermitente.** Quitar el `sorted` de `types`
+> devuelve `tuple(set)`, y el orden de un set de cadenas depende del
+> hash, que Python aleatoriza por proceso: **8 órdenes distintos en 8
+> corridas**. Un defecto intermitente en un guard es peor que no tener
+> guard, porque entrena a leer «a veces pasa» como ruido. Arreglado por
+> dos vías: cinco capabilities en vez de dos en el test (con dos el set
+> sale ordenado la mitad de las veces) y `PYTHONHASHSEED=0` en el
+> harness, que hace el resultado atribuible al cambio y no al proceso.
+>
+> **Hallazgo de arquitectura, medido ejecutando un nodo de verdad.**
+> `handoff.capabilities` tiene **dos productores con semánticas
+> distintas**:
+>
+> ```
+> runtime/runcontroller.py:580::RunController._build_handoff   -> node.capabilities
+> knowledge/context_controller.py:341::ContextController.compile_handoff -> ('stale',) o ()
+> ```
+>
+> Y `'stale'` es un valor de `FreshnessState`
+> (`core/runtime_types.py:71::FreshnessState`): un **estado de frescura**,
+> no una capability. Los dos caminos entregan lo mismo al Adapter — medido
+> sobre disco, `.pipelinek/b3_measure.py`— pero **no porque el código lo
+> decida**: porque
+> `runtime/runcontroller.py:639::RunController._compile_knowledge`
+> hace `return compiled.knowledge`, de modo que `compile_handoff` construye un
+> `Handoff` **entero** —con identity, budget, capabilities y hash
+> firmable— y lo destruye para usar una parte. Funciona por accidente.
+> La decisión de si `'stale'` debe viajar en su propio campo es de B3 y
+> no se ha tomado todavía; lo que sí se ha hecho es fijarla por test
+> para que no cambie **por descuido**.
+>
+> **Dónde están las cosas**: el contrato, en
+> `src/skillgraph/platform/ports/capabilities.py::CapabilityRegistry`;
+> el gate, en `tests/test_b3_capability_kernel.py`; la medición, en
+> `.pipelinek/b3_measure.py`; y las mutaciones, en
+> `.pipelinek/b3_mutate.py`.
+>
+> **Sin release, y por regla**: `derive_semver.py` manda.
+>
+> ---
+>
+> <details>
+> <summary>Bloque anterior (B2)</summary>
+>
 > **Bloque 2026-10-03 (B2) — Runtime real, no representativo.**
 > Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
 >
@@ -71,6 +167,8 @@
 > proceso al construirse, en la clase `Storage` de ese mismo fichero.
 >
 > **Sin release, y por regla**: `derive_semver.py` manda.
+>
+> </details>
 >
 > ---
 >
