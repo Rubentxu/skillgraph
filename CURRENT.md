@@ -10,7 +10,7 @@
 > resources/workflow.py:71::WorkflowNode.capabilities        tuple[str, ...]
 > governance/graph_expansion.py:449::_check_capabilities     dos preguntas al registro
 > knowledge/context_controller.py:139::build_capabilities    produce ('stale',)
-> runtime/http_adapter.py:168::_build_prompt                las imprime
+> runtime/http_adapter.py:167::_build_prompt                las imprime
 > alguien que las RESUELVA                                 —— NINGUNO ——
 > ```
 >
@@ -78,9 +78,58 @@
 > hace `return compiled.knowledge`, de modo que `compile_handoff` construye un
 > `Handoff` **entero** —con identity, budget, capabilities y hash
 > firmable— y lo destruye para usar una parte. Funciona por accidente.
-> La decisión de si `'stale'` debe viajar en su propio campo es de B3 y
-> no se ha tomado todavía; lo que sí se ha hecho es fijarla por test
-> para que no cambie **por descuido**.
+>
+> **CUARTA ENTREGA: `'stale'` se queda en `capabilities`, y la deuda se
+> escribe donde se tropieza.** Medido con `Storage` real y una `Claim`
+> real: `best_effort` produce `capabilities=('stale',)` con hash
+> `e1f384db63feab26…`; `strict` lanza `StaleKnowledgeError` sin construir
+> handoff. El coste de moverlo no es de estilo:
+> `runtime/handoff.py:195::Handoff.to_dict` mete
+> `sorted(self.capabilities)` en el **hash firmado**, luego cambiarlo
+> rompe el replay de los runs ya persistidos. Y **no se pierde
+> información**, porque el estado de frescura ya viaja por otra vía:
+> `knowledge.included` lleva el recurso con su `stale`. La deuda queda
+> escrita en el código —`runtime/http_adapter.py:167::_build_prompt`, justo encima del
+> bucle que imprime un bloque titulado literalmente `## Capabilities` con
+> una línea `- stale`, y en la docstring de
+> `knowledge/context_controller.py:139::build_capabilities`— y fijada por
+> test en las dos direcciones, con un mensaje que dice que moverla es un
+> **cambio de contrato**, no un refactor.
+>
+> **Quinta entrega, y es de B3 aunque el arreglo parezca de B6: la
+> procedencia se pierde ANTES de que nadie la pida.** `CapabilityResult`
+> lleva `adapter` desde la primera entrega, y aun así **ningún artefacto
+> persistido decía qué adapter produjo el resultado**. Ejecutando un nodo
+> de verdad y leyendo de disco (`.pipelinek/b3_provenance_measure.py`):
+>
+> ```
+> el AgentResult persistido : ['evidence_ref', 'outcome', 'result']
+> hay campo 'adapter'       : False
+> NodeCompleted       {node_execution_id, outcome, context_hash}
+> EvidenceProduced    {node_execution_id, outcome, context_hash, evidence_ref}
+> ```
+>
+> El motor sí lo sabía —es quien invocó al adapter—, y lo que falta no es
+> un type al que añadirle un campo: es que **el type que el motor escribe
+> lo lleve**. B6 no habría encontrado un type nuevo al que ponerle
+> procedencia; habría encontrado que **no existe**, y la pérdida está en el
+> runtime, luego es B3.
+>
+> El arreglo son `runtime/agent.py::adapter_name(adapter)` —lo declarado
+> por `name`, o el nombre de la clase, **con default** porque los tres
+> adapters del repo no declaran ninguno— y `adapter: str` **sin default**
+> en las firmas de `node_completed` y `evidence_produced`, para que un
+> call-site nuevo no pueda omitirlo sin que nada falle. Va en el **evento**
+> y no en `AgentResult`, que es el payload que produjo el modelo: ahí el
+> nombre del runtime se mezclaría con lo que el agente afirma. La columna
+> en `node_executions` se deja para **B8**, porque añadir una columna es
+> migración.
+>
+> **Un agujero en el guard, cazado por mutación (M30):** el test que
+> fija que el nombre **no** se cuela en el resultado miraba solo *dentro*
+> de `result`. Una mutación que lo ponía en la **raíz** de `result_json`
+> pasaba sin ser vista. El guard afirmaba vigilar el lugar exacto donde
+> la mezcla es perigosa, y la mezcla ocurría un nivel más arriba.
 >
 > **SEGUNDA ENTREGA: el invariante I4 no comprobaba lo que decía.**
 > Buscando el segundo consumidor de `capabilities` apareció un
@@ -135,9 +184,14 @@
 >
 > **Dónde están las cosas**: el contrato, en
 > `src/skillgraph/platform/ports/capabilities.py::CapabilityRegistry`;
-> el gate, en `tests/test_b3_capability_kernel.py`; la medición, en
-> `.pipelinek/b3_measure.py`; y las mutaciones, en
-> `.pipelinek/b3_mutate.py`.
+> el gate, en `tests/test_b3_capability_kernel.py`; el invariante I4, en
+> `src/skillgraph/governance/graph_expansion.py::ExpansionRegistry` con
+> su test en `tests/test_b3_i4_reference_invariant.py`; la procedencia, en
+> `src/skillgraph/runtime/agent.py::adapter_name` con su test en
+> `tests/test_b3_provenance_persisted.py`; las mediciones, en
+> `.pipelinek/b3_measure.py`, `.pipelinek/b3_i4_measure.py`,
+> `.pipelinek/b3_stale_measure.py` y `.pipelinek/b3_provenance_measure.py`;
+> y las 30 mutaciones, en `.pipelinek/b3_mutate.py`.
 >
 > **Sin release, y por regla**: `derive_semver.py` manda.
 >
