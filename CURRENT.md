@@ -1,4 +1,54 @@
 # CURRENT — puntero operativo
+> **Bloque 2026-10-03 (vigésima segunda tanda) cerrado — WI-110, release `v0.22.1`.**
+> Versión activa `0.22.1.dev0`; último tag `v0.22.1`.
+>
+> **WI-110 — la etapa `evidence` se verificaba a sí misma y la cadena no volvía.**
+> Duodécima vía de la serie «qué declara el repo que nada comprueba», y la
+> primera que no cierra un hueco del **código** sino del **instrumento**.
+> Las once anteriores cerraban una propiedad sin comprobar; esta hace que
+> el aparato que comprueba pueda volver a comprobar.
+>
+> **Medido, no teórico** — `8d6a9594` (03:48:17) fue el último run con las
+> 8 etapas en `success`. Los **cinco siguientes** tuvieron las **siete
+> etapas de código** en `success`, `2754 passed`, y **todos** terminaron en
+> `failure`.
+>
+> **La causa**: `evidence` mide el run **anterior** (cuando corre, el run
+> en curso aún no tiene `RunFinished`), así que su propio paso aparece
+> como `StepFailed` dentro del run que falló por ella, y
+> `check_pipeline_receipt.py:314::evaluar` lo rechazaba por el **mismo**
+> criterio con el que rechaza un fallo de código. **Un fallo ya
+> corregido no devolvía la cadena a verde**: dejaba de estar en el código
+> pero seguía en el veredicto.
+>
+> **Y la medición desmintió el diagnóstico del bloque anterior.** WI-109
+> escribió que arreglarlo exigía tocar `.pipeline.kts`, y lo descartó por
+> eso. Era **medio verdad**: el criterio no vive en la receta, vive en
+> `evaluar()`. Por eso el SHA-256 de `.pipeline.kts` **no cambia**,
+> sigue `7541ced5…`, y las once certificaciones anteriores siguen
+> valiendo. Un test lo fija.
+>
+> **El cambio de fondo es el nombre.** `step_failed` era un **contador**,
+> y un contador no sabe quién falló: por eso no había base para exculpar.
+> `InformeRun.paso_fallido` lo lleva desde el journal.
+>
+> **La exculpación es mínima**, por eso son **tres** condiciones: un solo
+> `StepFailed`, con el nombre conocido, y que el nombre sea `evidence/`.
+> Y el **veredicto del run nunca** se exculpa.
+>
+> **Medido**: `startswith(ETAPA_AUTOEVALUADA)` sin la barra dejaba pasar
+> `evidence-hack/sh-0`. Lo cazaron las ocho etapas del parametrize, y mi
+> propio comentario lo daba por bueno: un comentario que describe un
+> hueco sin cerrarlo es una promesa que el código no cumple.
+>
+> **11/11 mutaciones** con sonda por mutación, y el harness distingue
+> **cuatro** salidas porque cuatro sondas apuntaban mal y las contaba
+> como victorias sin que el guard hubiera opinado.
+
+---
+
+<details>
+<summary>Bloques anteriores (WI-109 y anteriores)</summary>
 
 > **Bloque 2026-10-03 (vigésima primera tanda) cerrado — WI-109, release `v0.22.0`.**
 > Versión activa `0.22.0.dev0`; último tag `v0.22.0`. 2754 passed, **0 skipped**.
@@ -78,9 +128,6 @@
 > **Sin push**: 158 commits sin publicar, `origin/main` en `0ebbd58`.
 
 ---
-
-<details>
-<summary>Bloques anteriores (WI-108 y anteriores)</summary>
 
 > **Bloque 2026-10-03 (vigésima tanda) cerrado — WI-108, release `v0.21.2`.**
 > Versión activa `0.21.2.dev0`; último tag `v0.21.2`. 2735 passed, **0 skipped**.
@@ -283,4 +330,5 @@
 >
 > **Sin push**: 143 commits sin publicar, `origin/main` en `0ebbd58`.
 
+</details>
 </details>

@@ -14,6 +14,52 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.22.1] - 2026-10-03 — la etapa que se verificaba a sí misma
+
+**PATCH**: `git log v0.22.0..HEAD` = 1 `fix`, 4 `docs`, 0 breaking.
+Derivado con `scripts/derive_semver.py` (`b/f/x/n/d 0/0/1/4/0`).
+
+Duodécima vía de la serie «qué declara el repo que nada comprueba»,
+y la primera que no cierra un hueco del **código** sino del
+**instrumento**.
+
+La etapa `evidence` mide el run **anterior** —cuando corre, el run
+en curso aún no tiene `RunFinished`—, así que su propio paso aparece
+como `StepFailed` dentro del run que falló por ella. `evaluar()` lo
+rechazaba por el mismo criterio con el que rechaza un fallo de
+código, porque `step_failed` es un **contador** y un contador no
+sabe quién falló.
+
+**Medido sobre el journal real**: `8d6a9594` fue el último run con
+las 8 etapas en `success`. Los cinco siguientes tuvieron las siete
+etapas de código en `success` y todos terminaron en `failure`. Un fallo
+ya corregido no devolvía la cadena a verde.
+
+### Cambios
+
+- **`InformeRun.paso_fallido`**: el **nombre** del paso, leído de
+  `stepName`. Es el cambio de fondo: sin él no hay base para
+  exculpar. Con valor por defecto `None` a propósito, que es lo
+  que evita romper el guard de WI-108.
+- **`ETAPA_AUTOEVALUADA`** declarado como constante, para que un
+  test pueda exigir que las dos copias no diverjan.
+- **`evaluar()` exculpa con TRES condiciones**: un solo
+  `StepFailed`, con el nombre conocido, y que el nombre sea
+  `evidence/`. El veredicto del run **nunca** se exculpa.
+- **`.pipeline.kts` NO se toca**: su SHA-256 sigue siendo
+  `7541ced5…` y las once certificaciones anteriores siguen
+  valiendo. Un test lo fija.
+
+**La medición desmintió el diagnóstico de WI-109**, que descartó
+el arreglo por «toca la receta». El criterio vive en `evaluar()`,
+no en la receta.
+
+Guard: 22 tests, con más tests para la mitad peligrosa —la que
+perdona de más— que para la que arregla. **11/11 mutaciones** con
+sonda por mutación, y el harness distingue **cuatro** salidas porque
+cuatro sondas apuntaban mal y las contaba como victorias sin que el
+guard hubiera opinado.
+
 ## [0.22.0] - 2026-10-03 — la viñeta que sí era cierta y nadie ejecutaba
 
 **MINOR**: `git log v0.21.2..HEAD` = 1 `feat`, 0 `fix`, 3 `docs`, 0 breaking.

@@ -12315,3 +12315,54 @@ con dos tests; se corrigió la sonda y se añadió M6b para la herencia.
     ultimos runs por `run_id` y `occurred_at`, no el veredicto del run.
     El veredicto no dice nada sobre su propio codigo, y es lo primero
     que uno mira.
+
+
+## 2026-10-03 — Bloque WI-110 (duodécima vía, release `v0.22.1`)
+
+**Tema: el instrumento, no el código.** Las once vías anteriores
+cerraban una propiedad que el repo declaraba y nada comprobaba. Esta
+cierra el aparato que comprueba: la etapa `evidence` se verificaba a sí
+misma, y una vez fallada ningún run volvía a terminar en
+`Pipeline finished with SUCCESS`.
+
+**Medido antes de tocar nada** (`.pipelinek/wi110_measure.py`, sin
+mutar el árbol porque `evaluar()` es pura): `8d6a9594` fue el último run
+con 8/8 en `success`; los cinco siguientes tuvieron 7/7 etapas de código
+verdes y todos terminaron en `failure`.
+
+**La causa**: `evidence` mide el run anterior, así que su propio paso
+aparece como `StepFailed` en el run que falló por ella, y `evaluar()` no
+puede distinguirlo de un fallo de código porque `step_failed` es un
+**contador**.
+
+**La medición desmintió mi propio diagnóstico del bloque anterior.**
+WI-109 escribió que el arreglo exigía tocar `.pipeline.kts` y lo
+descartó por eso. Era medio verdad: el criterio vive en `evaluar()`, y
+la receta solo propaga el exit code. El SHA-256 de `.pipeline.kts` no
+cambia y las once certificaciones anteriores siguen valiendo.
+
+### Errores propios de este bloque
+
+24. **Escribí el hueco antes de cerrarlo, y lo describí como
+    aceptable.** El comentario de `evaluar()` decía, textualmente, que
+    con `startswith(ETAPA_AUTOEVALUADA)` una etapa llamada
+    `evidence-hack` también pasaría. No lo era, y las ocho etapas del
+    parametrize lo cazaron. Un comentario que describe un hueco sin
+    cerrarlo es una promesa que el código no cumple, y documentar
+    primero y cerrar después es exactamente el reflejo que hace que el
+    hueco exista. Lo que faltaba no era noticing: era no aceptar el
+    noticing como si fuera una decisión.
+
+25. **Cuatro sondas del harness apuntaban a tests mal escritos y las
+    contou como victorias.** M2, M5, M5b y M6 decian «no tests ran», pytest
+    salió con código 5, y el harness leyó «returncode distinto de cero»
+    como «el guard falló». Cuatro CAZADAS que no eran ninguna: el guard
+    no llegó a opinar. El harness ahora distingue **cuatro** salidas con
+    nombre —CAZADA, NO_DETECTADA, SIN_SONDA e INVALIDA— y las sondas se
+    verifican una a una antes de contar. Es la regla de la serie
+    aplicada al instrumento: un harness que solo sabe decir «cazado»
+    miente igual que un guard que solo sabe pasar. Y un detalle que lo
+    hace peor: las cuatro sondas mal escritas estaban en el fichero
+    que yo escribía para **probar** que el guard muerde, así que el
+    fallo del instrumento era invisible justo en el sitio que existe
+    para detectarlo.
