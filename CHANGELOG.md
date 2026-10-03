@@ -14,6 +14,65 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.21.1] - 2026-10-03 — la lista de paquetes, y por qué cambiarle el eje no la deshace
+
+**PATCH**: `git log v0.21.0..HEAD` = 0 `feat`, 2 `fix`, 10 `docs`, 0 breaking.
+**2718 passed, 0 skipped** (+15).
+
+Novena vía de la serie «qué declara el repo que nada comprueba», y la tercera
+vez que la misma idea se salva a sí misma cambiando de forma.
+
+`AGENTS.md §6.3` declara suelos de cobertura por módulo. El guard que los
+comprueba ha tenido tres versiones, cada una creyendo que era la última:
+
+| | la lista | lo que dejaba fuera |
+|---|---|---|
+| WI-93 | 21 módulos escritos a mano | todo menos `runtime/` |
+| WI-94 | 8 prefijos de paquete escritos a mano | un paquete **nuevo** |
+| WI-107 | ninguna | — |
+
+El docstring de WI-94 afirmaba, con la razon que da un docstring recién
+escrito, que con una sola fuente «no se puede olvidar uno». Es falso: el suelo
+pasó a declararse por paquete, y el **conjunto de paquetes** seguía siendo un
+diccionario escrito a mano.
+
+**Medido antes de tocar nada**, con un paquete nuevo cuyo módulo nadie importa
+y que ya está versionado en git:
+
+```
+pytest                    2709 passed in 234.75s
+check_coverage_floors.py  exit 0, «todos los suelos se cumplen»
+cobertura de oracular.py  0 %  (18 sentencias, 10 ramas, 0 cubiertas)
+suelo global              94.85 %   (fail_under = 80)
+```
+
+Se midió dos veces, y la segunda es la que se cita. Con el paquete **sin**
+versionar la suite daba `1 failed`, y el rojo era `sg_build_sdist_no_versionado`
+(WI-97): un sdist no puede llevar lo que git no versiona. Ese guard lo ve,
+pero por otra propiedad y con otro mensaje, y un paquete nuevo se versiona.
+Escribir solo la primera medición habría producido una afirmación más fuerte
+y falsa.
+
+**El arreglo.** `SUELO_POR_DEFECTO = 90` alcanza a todo módulo que cuelgue de
+un subdirectorio de `src/skillgraph/`, paquete nuevo incluido, sin que nadie
+lo declare. Lo escrito son las **desviaciones**, que son datos y no se deducen
+del árbol: `cli/` al 70 % y `platform/paths.py` al 60 %. De ocho entradas, dos.
+`§6.3` deja de enumerar módulos, porque esa enumeración era una fuente de
+verdad más y ya estaba vieja: `runtime` no es un módulo sino un paquete.
+
+**Dos hallazgos que salieron de las mediciones**, no de un test. El primer
+guard de `§6.3` pasaba por la rama equivocada: buscaba `nombre.py` y `§6.3`
+escribe los módulos sin extensión, así que no encontraba nada. Y un
+contraejemplo mío usaba como «paquete que no existe» el nombre del paquete
+de la medición, así que con él presente el test se ponía rojo: un guard que
+depende del árbol sin decirlo es una coincidencia.
+
+**El harness de mutaciones cambió** por una flake con nombre. Primera pasada
+6/8 con `m2` sobrevivida; segunda, del mismo código, 7/8 con `m2` cazada. Una
+mutación que a veces sobrevive no es un guard que no muerde: es un
+experimento que no sabe qué midió. Con una **sonda por mutación** las tres
+salidas tienen nombre. 8/8 en tres pasadas consecutivas.
+
 ## [0.21.0] - 2026-10-03 — los criterios de éxito del CI eran una declaración
 
 **MINOR**: `git log v0.20.5..HEAD` = 1 `feat`, 0 `fix`, 1 `docs`, 0 breaking.
