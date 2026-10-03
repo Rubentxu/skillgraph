@@ -12609,6 +12609,28 @@ sería tocar código correcto sin prueba de que está mal.
   código, y un guard que se rompe con `ruff format` no está midiendo
   el código.
 
+- **33 — El guard existía, funcionaba, y su autor escribió mal la
+  cita.** La primera certificación de este bloque dio
+  `1 failed, 2826 passed`, y el fallo fue
+  `TestBlockCitationsDelCurrentVivoResuelven::test_toda_cita_del_bloque_vivo_apunta_a_lo_que_dice`
+  con «`node_execution_delegations.py:443` — la cita no dice a qué
+  símbolo apunta». WI-104 cerró exactamente ese defecto y yo lo
+  repetí en WI-113, en el bloque vivo y en siete sitios más. **Un
+  guard detecta el defecto de quien escribe; no evita escribirlo**, y
+  la lección no es tocar el guard —que hizo su trabajo— sino que la
+  cita tiene que salir del verificador y no de la memoria. El símbolo
+  se resolvió en el AST: la 443 cae en `_finalize_node_success`
+  (L407-444) y es el
+  `result_json=json.dumps(result_to_jsonable(result), sort_keys=True)`.
+
+- **33b — Dos correcciones de una cita que el guard no vigila.** Al
+  redactar la evidencia de este bloque escribí
+  `check_pipeline_receipt.py:353` para la asignación que empieza en la
+  **354**, y sin símbolo. El guard de WI-104 solo mira el bloque vivo
+  de `CURRENT.md`, así que esta cita falsa habría pasado sin que nada
+  la notara. Es la segunda mitad del error 33: la honestidad de las
+  citas no la produce el guard, la produce escribirlas bien.
+
 ### Resultado
 
 15 tests · **3/3 mutaciones** con sonda verificada antes de contar ·
