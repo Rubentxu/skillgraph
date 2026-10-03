@@ -295,3 +295,77 @@ def _contar_llamadas(arbol: ast.AST) -> int:
             ):
                 n += 1
     return n
+
+
+class TestLaNormalizacionNoVuelvePermisivoElTestDeEquivalencia:
+    """WI-112: arreglar la intermitencia no puede apagar el guard.
+
+    `tests/test_wi56_knowledge_repository_contracts.py` comparaba dos
+    llamadas al reloj real y fallaba 4 de cada 2000 veces. La
+    normalizacion de instantes lo arregla.
+
+    El riesgo de esa normalizacion es obvious: si normaliza de mas, el
+    test pasa a no mirar nada. Este test mide las DOS mitades de lo que
+    la normalizacion debe hacer:
+
+      - el instante NO es parte de la equivalencia que ese test mide,
+        asi que dos llamadas al reloj tienen que dar el mismo string;
+      - todo lo demas SI es parte, asi que un valor distinto tiene que
+        seguir dando un string distinto.
+
+    La version anterior de este test afirmaba las dos mitades y solo
+    cumplia la primera: `norm(a) != norm(c)` es FALSO cuando `a` y `c`
+    se diferencian solo en el instante, porque es justo lo que se
+    normaliza. Un contrasalto que no puede pasar no es un contrasalto.
+    """
+
+    def _norm(self, s: str) -> str:
+        import re
+
+        s = re.sub(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+            "UUID",
+            s,
+        )
+        return re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?\+00:00", "INSTANTE", s)
+
+    def test_dos_llamadas_al_reloj_dan_el_mismo_string(self) -> None:
+        """La mitad que arregla: el instante no es parte de la equivalencia."""
+        a = "Source(uid='11111111-1111-1111-1111-111111111111', checked_at='2026-10-03T08:01:30+00:00')"
+        b = "Source(uid='11111111-1111-1111-1111-111111111111', checked_at='2026-10-03T09:15:00+00:00')"
+        assert self._norm(a) == self._norm(b)
+
+    def test_un_valor_distinto_sigue_dando_un_string_distinto(self) -> None:
+        """La mitad que NO puede romperse: la normalizacion no se come el valor.
+
+        Si esto pasara, el test de equivalencia estaria comparando dos
+        cadenas identicas siempre, y un repositorio delegado que
+        devolviera basura pasaria el guard.
+
+        Los UUID **no** son un buen caso: el test de WI-56 los
+        normaliza a proposito, porque dos bases con UIDs generados
+        distintos son semanticamente iguales. Una version anterior de
+        este test afirmaba que dos UUID distintos debian seguir
+        distinguiendose, y es falso: contradice la normalizacion que ya
+        existia. Uso campos que si son parte de la equivalencia.
+        """
+        base = "Source(uid='11111111-1111-1111-1111-111111111111', checked_at='2026-10-03T08:01:30+00:00'"
+        assert self._norm(base + ", freshness='fresh')") != self._norm(
+            base + ", freshness='stale')"
+        )
+        assert self._norm(
+            "Source(kind='file', checked_at='2026-10-03T08:01:30+00:00')"
+        ) != self._norm("Source(kind='git', checked_at='2026-10-03T08:01:30+00:00')")
+        assert self._norm("Source(content_hash='aa11')") != self._norm(
+            "Source(content_hash='bb22')"
+        )
+
+    def test_los_uuids_siguen_normalizandose(self) -> None:
+        """La otra mitad de la misma pregunta, en el sentido correcto.
+
+        Los UUID generados SI deben colapsar: es lo que hace el test de
+        WI-56 para comparar dos bases semanticamente iguales.
+        """
+        a = "Source(uid='11111111-1111-1111-1111-111111111111')"
+        b = "Source(uid='22222222-2222-2222-2222-222222222222')"
+        assert self._norm(a) == self._norm(b)

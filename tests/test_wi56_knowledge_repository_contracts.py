@@ -390,11 +390,23 @@ class TestClusterEquivalence:
         assert _snapshot(live) == _snapshot(delegated)
 
         def norm(s: str) -> str:
-            return re.sub(
+            # WI-112: normaliza tambien los INSTANTES. Este test
+            # compara dos llamadas al repositorio, y `get_source`
+            # devuelve `checked_at`, que se rellena con el reloj real en
+            # cada llamada. Sin microsegundos el reloj puede cruzar un
+            # segundo entre las dos, y el test falla sin que el codigo
+            # este mal: medido, 4 de cada 2000 pares separados por 2 ms.
+            #
+            # No es un test que se haya vuelto fragil: es un test que
+            # comparaba el reloj. La equivalencia que quiere medir es
+            # "el camino delegado devuelve lo mismo que el directo", y un
+            # instante no es parte de esa equivalencia.
+            s = re.sub(
                 r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
                 "UUID",
                 s,
             )
+            return re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?\+00:00", "INSTANTE", s)
 
         assert norm(repr(live_ret)) == norm(repr(delegated_ret))
 
