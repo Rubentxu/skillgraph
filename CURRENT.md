@@ -1,5 +1,5 @@
 > **Bloque 2026-10-03 (B5) — El diff del grafo deja de ser un parche sin comparar.**
-> Versión activa `0.24.0.dev0`; último tag `v0.24.0`.
+> Versión activa `0.25.0`; último tag `v0.25.0`.
 >
 > **B5: la secuencia del gate tenía un hueco con nombre.** El roadmap exige
 > `Proposal → Diff → Policy → Decision → Evidence → Apply`, y medido sobre el

@@ -14,6 +14,118 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.25.0] - 2026-10-03 — el diff del grafo deja de ser un parche sin comparar
+
+**El bloque B5, cerrado.** La secuencia del gate tenía un hueco con
+nombre: `Proposal → Diff → Policy → …`, y el `Diff` no estaba.
+
+SemVer derivado con `scripts/derive_semver.py`: desde `v0.24.0`,
+`b/f/x/n/d 0/1/0/2/0`, la regla pide **MINOR**. Ningún commit con
+marcador de ruptura.
+
+### Lo que estaba medido, y por qué el hueco era real
+
+Con `scripts/measure_b5_graph_diff.py` — **6 de 6 preguntas abiertas**.
+La que resumía el bloque entero era una línea:
+
+```
+GraphExpansionProposal.operations: tuple[object, ...]
+```
+
+Un saco de operaciones sin tipar. Las tres clases ya existían
+(`AddNode`, `AddTransition`, `RemoveTransition`) y el comentario del
+propio código decía *«PatchOp es ADT cerrado»* desde antes de que
+existiera un `PatchOp` que cerrara nada. Sin él, nada que quisiera
+preguntarle al parche qué invalida tenía por dónde mirar, y el `Diff`
+no podía ser una etapa del gate porque no había nada que comparar.
+
+### Added
+
+- **`GraphDiff` y `GraphChange`** (`governance/graph_diff.py`), frozen y
+  con `slots`. `ChangeSubject` es un `Literal` **cerrado** sobre las
+  siete clases de cambio del roadmap: `node`, `relation`, `capability`,
+  `policy`, `budget`, `priority`, `evidence_requirement`.
+- **`diff_graph(plan, proposal)`** calcula el cambio comparando el plan
+  que hay con lo que la propuesta propone, y responde a las **siete
+  preguntas** que el roadmap le exige a un diff.
+- **`base_fingerprint`**: SHA-256 de una serialización estable del plan.
+  No es adorno — ver más abajo.
+- **`Storage`-equivalente del gate**: `apply_expansion` acepta el diff y
+  lo **rechaza** si no es de esa aplicación, en tres capas: revisión,
+  huella y recálculo.
+- **`operations` pasa de `tuple[object, …]` a `tuple[PatchOp, …]`**, y
+  `es_patch_op` lo comprueba en runtime, no solo lo anota.
+
+### El hallazgo: el diff tiene que poder ver la mentira
+
+`GraphDiff` lleva **dos** conjuntos de capacidades, y no es redundancia:
+
+- `required_capabilities` — lo que las operaciones **producen**.
+- `declared_capabilities` — lo que la propuesta **dice**.
+
+Que discrepen no es un defecto del diff: es el resultado. Un diff que
+devolviera la declaración sería un eco con mejor tipografía, y un gate
+que comprueba ecos no mira nada. La sonda M1 sustituye el derivado por
+el declarado y la red lo cazó.
+
+### La huella, y por qué el diff sin ella no era un diff
+
+La primera versión llevaba solo `base_revision`, y se rompió de una
+forma que solo se ve ejecutando: **con el parche vacío el diff sale
+vacío sea cual sea el plan**, así que un diff calculado sobre otro
+grafo pasaba por suyo siempre que coincidiera la revisión. Y dos
+estados pueden compartir revisión.
+
+Sin la huella, *conectar ≠ contener* (WI-102) se queda en buena
+intención. `base_fingerprint` es lo que ata el diff a su estado.
+
+### Changed
+
+- **`record_rejection` se muda** a `governance/expansion_audit.py`, y
+  se reexporta desde `graph_expansion` para que su ruta de importación
+  no cambie. Persistir un rechazo es escribir un registro de auditoría,
+  no expandir un grafo.
+
+  Lo decidió una medición, no un gusto: al integrar el diff,
+  `graph_expansion.py` pasó de 787 a **901** LoC y el guard de god file
+  lo puso rojo. La salida no fue recortar prosa — la razón por la que
+  era larga es que el razonamiento no cabía allí. Queda en **785**.
+
+### Verificación
+
+- **28 tests** en `tests/test_b5_graph_diff.py`, uno de los cuales
+  ejecuta el instrumento que abrió el bloque y exige que ya no reporte
+  el hueco, y otro le inyecta un `GraphDiff` real y exige que el
+  medidor se cierre — el contrasalto de un instrumento que solo sabe
+  decir «abierto».
+- **8/8 sondas de mutación cazadas**, 0 inválidas, árbol restaurado
+  byte a byte verificado por `git diff`.
+
+**Tres sondas encontraron agujeros reales en la red, no sondas malas:**
+
+- **M5 no fue cazada dos veces.** La primera quitaba el `sorted()` de
+  `to_dict` y no podía fallar: el constructor ya entregaba tuplas
+  ordenadas, luego la propiedad era **vacua**. La segunda lo quitaba
+  del constructor y tampoco — y ese es el hallazgo: la garantía está
+  puesta **dos veces**, así que no se rompe quitando una. Es la misma
+  clase que la M6 de B4, segunda vez en dos bloques.
+- **M7** puso `reversible=True` fijo y nadie la cazó porque **ningún
+  test** afirmaba que la séptima pregunta dependiera del plan de
+  rollback.
+- **M8** puso `esperado = diff`, con lo que la comparación se vuelve
+  `diff != diff`. No la cazó nadie porque la huella salta **antes** y
+  los tests de R6 usaban un diff bien calculado: la capa de recálculo
+  no se ejecutaba nunca. Un guard que solo se ejercita por el camino
+  bueno no sabe si el malo está cerrado.
+
+### Fuera de alcance, y registrado como tal
+
+Las **cuatro vistas** del roadmap (Execution, Knowledge,
+Decision/Evidence, Capability/Control) siguen sin existir. El medidor
+las mantiene **abiertas y visibles**, y por eso **no bajan el
+veredicto**: son deuda registrada, no un olvido. Construirlas sin el
+diff sería construirlas sin criterio.
+
 ## [0.24.0] - 2026-10-03 — la mitad observada de un recurso, alcanzable
 
 **El bloque B4, cerrado.** Siete commits, un `feat` y seis sin bump. La
