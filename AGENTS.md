@@ -212,6 +212,68 @@ texto anterior: es el error 32 de WI-113 repetido en el workitem
 siguiente, y se detectó antes de contar porque el harness distingue
 `SIN_SONDA` de `CAZADA`.
 
+### Cómo se comprueba (WI-115)
+
+`STATE.yaml` declara `tests.total` y lo usa como contexto del proyecto
+entero: cada bloque añade su «+N sobre M» y con eso se lee la historia
+del repo. Esa cifra **debería** ser una propiedad medida. No lo era, y
+el caso es instructivo porque la cifra ya había roto una certificación.
+
+Medido antes de arreglar nada, con `STATE.yaml` restaurado byte a byte
+y sha verificado (`.pipelinek/wi115_measure.py`):
+
+```
+STATE.yaml tests.total : 2834
+tests colectados       : 2834
+hoy coinciden: True
+
+M1  tests.total = 2834 -> 2971:  governance rc=0  VERDE (NO LO VE)
+M2  añadido 1 test (2835 colectados, estado en 2834):  rc=0  VERDE
+```
+
+Que hoy coincidan **no es la propiedad**. La propiedad es: si dejaran de
+coincidir, ¿algo se pone rojo? La respuesta era no, en las dos
+direcciones.
+
+**Lo que le da gravedad está medido también.** En WI-109 la primera
+certificación dio `2753 passed + 1 failed`, y el fallo **era este
+campo**: el post-release bumpeaba `__init__.py` y dejó
+`tests.package_version` viejo, que es justo el par que cruza
+`test_release_governance.py::test_current_version_is_documented_in_state`.
+El hermano pequeño quedó vigilado desde entonces. El grande no, y M1
+dice que hoy tampoco.
+
+**El recuento viene del árbol, no del estado.** Un guard que comparase
+la cifra contra una copia escrita en el propio test sería el guard que
+compara contra su propia copia —el error de WI-106—, que hoy acierta y
+el día que la verdad se mueva dirá lo contrario con toda la autoridad de
+un test. Aquí la verdad es `pytest --collect-only` sobre el árbol real.
+
+**Por qué un test y no una etapa de la receta.** `.pipeline.kts` tiene
+un SHA-256 declarado invariante desde WI-110. Añadir una etapa sería
+cambiar ese invariante por un fallo que se cierra dentro de la suite. Un
+test es un test; una etapa nueva es un contrato de CI.
+
+| propiedad | quién la mide |
+|---|---|
+| la cifra declarada es la que colecta el árbol | `test_el_total_declarado_es_el_total_colectado`, y el fallo **dice cuál es la buena** |
+| el campo existe y es un entero | `test_el_campo_existe_y_es_un_entero` |
+| el estado sigue parseando como YAML | `test_el_estado_sigue_leyendose_como_yaml` — WI-85 demostró que la sección `tests:` se puede tapar con un snapshot anidado |
+| el recuento real se puede leer y es plausible | `test_el_recuento_real_se_puede_leer` |
+
+**Tres de los cuatro son contrasaltos, y no es decoración.** Sin ellos,
+borrar el campo daría un `KeyError` que parece un fallo del guard; sin
+el último, el patrón de la salida de pytest podría dejar de coincidir y
+el guard compararía contra un **cero silencioso** el día que pytest
+cambie una cadena. M2 de la sonda de mutación mide exactamente eso, y
+está cazada.
+
+El recuento se cachea por sesión: sin cache el fichero lanzaría cuatro
+subprocesos de colecta completa para leer siempre el mismo número.
+Medido: 4,10 s → 2,34 s.
+
+Mutaciones: **3/3** con sonda por mutación (`.pipelinek/wi115_mutate.py`).
+
 ### 1.3 Sin I/O oculto
 
 - Las funciones puras (e.g. `Handoff.context_hash`,

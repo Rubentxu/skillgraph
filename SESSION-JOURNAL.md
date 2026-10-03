@@ -12746,3 +12746,95 @@ es el M2 de WI-110— y que el helper no quede muerto.
 7 tests · **4/4 mutaciones** con sonda verificada antes de contar ·
 1214 tests afectados verdes · ruff limpio · **cero CJK añadido** ·
 SemVer derivado con `scripts/derive_semver.py` → PATCH → `v0.22.5`.
+
+## 2026-10-03 — Bloque WI-115 (decimoséptima vía, release `v0.22.6`)
+
+**Tema**: `STATE.yaml` declara `tests.total` y nadie comprueba que la
+cifra sea cierta. **Ciclo**: `p-b7740b96d79ec013/wi115-state-total-truthfulness` (A-full).
+
+### De dónde salió el workitem
+
+De una línea que escribí yo en WI-113, al registrar un descarte. Decía
+que no existía ningún guard que comparase `tests.total` con el recuento
+real, y lo anoté como una precisión sobre por qué ese campo no había
+causado el fallo. Era cierto, y era exactamente el siguiente hueco. La
+serie «qué declara el repo que nada comprueba» se había estaba a punto de
+anotar su propio siguiente workitem sin verlo.
+
+### Lo medido, en las dos direcciones
+
+```
+STATE.yaml tests.total : 2834
+tests colectados       : 2834
+hoy coinciden: True
+
+M1  tests.total = 2834 -> 2971:  governance rc=0  VERDE (NO LO VE)
+M2  añadido 1 test (2835 colectados, estado en 2834):  rc=0  VERDE
+```
+
+Que hoy coincidan no es la propiedad. La propiedad es si dejaran de
+coincidir, ¿algo se pone rojo?
+
+### Lo que le da gravedad, medido también
+
+En WI-109 la primera certificación dio `2753 passed + 1 failed`, y **el
+fallo era este campo**: el post-release bumpeaba `__init__.py` y dejó
+`tests.package_version` viejo, que es justo el par que cruza
+`test_release_governance.py::test_current_version_is_documented_in_state`.
+
+El hermano pequeño quedó vigilado desde entonces. El grande no, y M1 dice
+que hoy tampoco.
+
+### El recuento viene del árbol
+
+`pytest --collect-only` en un subproceso, nunca del estado. Un guard que
+comparase contra una copia escrita en el propio test sería el de WI-106:
+hoy acierta y el día que la verdad se mueva dirá lo contrario con toda la
+autoridad de un test.
+
+**Un test y no una etapa de la receta**: `.pipeline.kts` tiene un SHA-256
+declarado invariante desde WI-110, y añadir una etapa sería cambiar ese
+invariante por un fallo que se cierra dentro de la suite.
+
+### Los tres contrasaltos
+
+1. El campo existe y es un entero. Sin esto, borrar el campo daría un
+   `KeyError` que parece un bug del guard.
+2. El estado sigue parseando como YAML. WI-85 demostró que la sección
+   `tests:` se puede tapar con un snapshot anidado por error.
+3. El recuento real se puede leer y es plausible. **Sin este, el guard
+   compararía contra un cero silencioso** el día que pytest cambie una
+   cadena de su salida. Es la propiedad de la que depende el guard
+   entero, y por eso hay una mutación que la rompe a propósito.
+
+**Errores propios que registró este bloque:**
+
+- **38 — El subject de 74 caracteres, la segunda vez en dos workitems.**
+  En WI-114 fue el mismo error y lo enmendé. En WI-115 lo **medí**
+  (`awk '{print length($0)}'`, salía 74), leí el número, y seguí
+  adelante igualmente. El instrumento estaba ahí y la lectura falló, que
+  no es lo mismo que el instrumento. El commit se enmendó igual porque
+  el bloque no estaba publicado.
+
+- **39 — Una sonda que no apuntaba, y se comprobó antes de contar.** M3
+  tenía ocho espacios de indentación donde el texto real tenía cuatro.
+  Es el error 34 de WI-114 por tercera vez, y la diferencia es que esta
+  vez la comprobación de sondas está **antes** de mutar, no después: el
+  harness imprime `SOBLA`/`FALTA` para cada sonda y solo entonces cuenta.
+  Esa es la forma correcta, y es la que evita perder el conteo.
+
+- **40 — El guard de WI-104 exigiendo una cita en el bloque vivo.** El
+  bloque nuevo de WI-115 no tenía ninguna cita con formato
+  `fichero.py:LINEA::simbolo`, y el guard dijo
+  `test_el_bloque_vivo_tiene_al_una_cita_que_verificar`. No es un
+  defecto del guard: un bloque vivo que no señala nada comprobable es un
+  bloque que no se puede auditar. La cita se resolvió en el AST —
+  `tests/test_wi115_state_total_truthfulness.py:113::test_el_total_declarado_es_el_total_colectado`
+  — y no a ojo, que es como se explican los errores 33 y 35.
+
+### Resultado
+
+4 tests · **3/3 mutaciones** con sonda verificada antes de contar ·
+39 tests afectados verdes · ruff limpio · **cero CJK añadido** ·
+cache por sesión del recuento, medido 4,10 s → 2,34 s · SemVer derivado
+con `scripts/derive_semver.py` → PATCH → `v0.22.6`.

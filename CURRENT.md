@@ -1,5 +1,65 @@
 # CURRENT — puntero operativo
-> **Bloque 2026-10-03 (vigésima sexta tanda) en curso — WI-114, release `v0.22.5`.**
+> **Bloque 2026-10-03 (vigésima séptima tanda) en curso — WI-115, release `v0.22.6`.**
+> Versión activa `0.22.6.dev0`; último tag `v0.22.6`.
+>
+> **WI-115 — el estado declara una cifra y nadie comprueba que sea cierta.**
+> Decimoséptima vía de la serie «qué declara el repo que nada comprueba».
+> Y es la más autoconsciente: el workitem salió de una **línea que yo
+> mismo escribí** en WI-113, al registrar un descarte. Decía, textualmente,
+> que no existía ningún guard que comparase `tests.total` con el recuento
+> real, y lo dejé anotado como una precisión sobre por qué ese campo no
+> había causado el fallo. Era cierto, y era exactamente el siguiente hueco.
+>
+> **Medido en las dos direcciones**, con `STATE.yaml` restaurado byte a
+> byte y sha verificado:
+>
+> ```
+> STATE.yaml tests.total : 2834
+> tests colectados       : 2834
+> hoy coinciden: True
+>
+> M1  tests.total = 2834 -> 2971:  governance rc=0  VERDE (NO LO VE)
+> M2  añadido 1 test (2835 colectados, estado en 2834):  rc=0  VERDE
+> ```
+>
+> Que hoy coincidan no es la propiedad. La propiedad es: **si dejaran de
+> coincidir, ¿algo se pone rojo?** La respuesta era no, por exceso y por
+> defecto.
+>
+> **Lo que le da gravedad está medido también.** En WI-109 la primera
+> certificación dio `2753 passed + 1 failed`, y **el fallo era este
+> campo**. Su hermano `package_version` quedó vigilado desde entonces;
+> este grande seguía a oscuras.
+>
+> **El recuento viene del árbol**, con `pytest --collect-only` en un
+> subproceso. Un guard que comparase contra una copia escrita en el
+> propio test sería el de WI-106: hoy acierta y el día que la verdad se
+> mueva dirá lo contrario con toda la autoridad de un test. La verdad
+> está en
+> `tests/test_wi115_state_total_truthfulness.py:113::test_el_total_declarado_es_el_total_colectado`.
+>
+> **Un test y no una etapa de la receta**, porque `.pipeline.kts` tiene un
+> SHA-256 declarado invariante desde WI-110. Una etapa nueva es un
+> contrato de CI; un test es un test.
+>
+> **4 tests, 3 de ellos contrasaltos**: que el campo exista y sea entero
+> (si no, borrar el campo daría un `KeyError` que parece un bug del
+> guard), que el YAML siga parseando, y que el recuento real se pueda
+> leer —sin ese último, el guard compararía contra un **cero silencioso**
+> el día que pytest cambie una cadena de su salida.
+>
+> **Mutaciones 3/3**, y la sonda M2 mide precisamente ese cero: rompe el
+> patrón de la salida de pytest, y el guard tiene que **fallar por no
+> poder medirse**, no pasar. Está cazada. M3 no apuntaba al principio
+> —ocho espacios de indentación donde el texto real tiene cuatro— y eso
+> se comprobó **antes** de mutar, que es lo único que hace falta.
+>
+> ---
+>
+> <details>
+> <summary>Bloque anterior (WI-114)</summary>
+>
+> **Bloque 2026-10-03 (vigésima sexta tanda) cerrado — WI-114, release `v0.22.5`.**
 > Versión activa `0.22.5.dev0`; último tag `v0.22.5`.
 >
 > **WI-114 — la frontera de idempotencia la sostenían cinco personas distintas.**

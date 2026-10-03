@@ -14,6 +14,51 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.22.6] - 2026-10-03 — el estado declara una cifra y nadie la comprueba
+
+**PATCH**: derivado con `scripts/derive_semver.py` sobre el historial.
+
+**Decimoséptima** vía de la serie «qué declara el repo que nada
+comprueba», y la más autoconsciente: el workitem salió de una línea que
+el autor de WI-113 escribió él mismo al registrar un descarte.
+
+### Lo medido, en las dos direcciones
+
+```
+STATE.yaml tests.total : 2834
+tests colectados       : 2834
+hoy coinciden: True
+
+M1  tests.total = 2834 -> 2971:  governance rc=0  VERDE (NO LO VE)
+M2  añadido 1 test (2835 colectados, estado en 2834):  rc=0  VERDE
+```
+
+Que hoy coincidan **no es la propiedad**. La propiedad es: si dejaran de
+coincidir, ¿algo se pone rojo? La respuesta era no, por exceso y por
+defecto.
+
+### Lo que le da gravedad también está medido
+
+En WI-109 la primera certificación dio `2753 passed + 1 failed`, y **el
+fallo era este campo**: el post-release bumpeaba `__init__.py` y dejó
+`tests.package_version` viejo. El hermano pequeño quedó vigilado desde
+entonces. El grande no.
+
+### El arreglo
+
+El recuento se deriva del árbol con `pytest --collect-only` en un
+subproceso, nunca del estado. Un guard que comparase contra una copia
+escrita en el propio test sería el de WI-106: hoy acierta y el día que la
+verdad se mueva dirá lo contrario con toda la autoridad de un test.
+
+| | |
+|---|---|
+| forma | **test de pytest**, no etapa de la receta: `.pipeline.kts` tiene un SHA invariante desde WI-110 |
+| tests | 4, de los que **3 son contrasaltos** |
+| el contrasalto que importa | que el recuento real se pueda leer: sin él, el guard compararía contra un **cero silencioso** si pytest cambia una cadena |
+| mutaciones | **3/3**, y M2 mide justo ese cero |
+| cache | por sesión: 4,10 s → 2,34 s |
+
 ## [0.22.5] - 2026-10-03 — la frontera la sostenían cinco personas distintas
 
 **PATCH**: derivado con `scripts/derive_semver.py` sobre el historial.
