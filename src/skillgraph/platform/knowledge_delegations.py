@@ -27,6 +27,7 @@ from skillgraph.knowledge.graph import (
     Source,
 )
 from skillgraph.resources.bricks import Brick
+from skillgraph.resources.status import ResourceStatus
 
 if TYPE_CHECKING:
     from skillgraph.platform.ports import (
@@ -57,6 +58,30 @@ class KnowledgeDelegations:
     ) -> StoredResource | None:
         """Delegado WI-56: ver ``SqliteKnowledgeRepository.get_resource``."""
         return self.knowledge_repository().get_resource(uid)
+
+    def update_resource_status(
+        self,
+        *,
+        uid: str,
+        status: ResourceStatus,
+    ) -> ResourceStatus:
+        """B4: ver ``SqliteKnowledgeRepository.update_resource_status``.
+
+        **POR QUE ESTA LA DELEGACION Y NO UN METODO EN `Storage`.** El
+        facade expone cada metodo publico de los cinco adapters como alias,
+        y este es el primero que **escribe** la mitad observada. Ponerlo
+        aqui y no en el cuerpo de `Storage` es lo que mantiene la frontera:
+        la invariante de `generation` vive en un unico sitio, el
+        repositorio, y el facade no la reimplementa.
+        """
+        return self.knowledge_repository().update_resource_status(uid=uid, status=status)
+
+    def get_resource_status(
+        self,
+        uid: str,
+    ) -> ResourceStatus | None:
+        """B4: ver ``SqliteKnowledgeRepository.get_resource_status``."""
+        return self.knowledge_repository().get_resource_status(uid=uid)
 
     def list_resources(
         self,

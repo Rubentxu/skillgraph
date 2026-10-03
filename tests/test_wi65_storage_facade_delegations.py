@@ -3,7 +3,7 @@
 Fija el contrato del corte 1 de WI-65 (ADR pendiente, mismos numeros
 que el patron estrangulador de ADR-0016/WI-56):
 
-1. Los 65 metodos de delegacion de ``Storage`` NO se redefinen en el
+1. Los 67 metodos de delegacion de ``Storage`` NO se redefinen en el
    cuerpo de la clase: se heredan de los cinco mixin por componente
    (``RunDelegations``, ``KnowledgeDelegations``,
    ``PromotionDelegations``, ``EventStoreDelegations``,
@@ -11,8 +11,10 @@ que el patron estrangulador de ADR-0016/WI-56):
 2. ``Storage.<metodo>`` es **la misma funcion** que
    ``<Mixin>.<metodo>``: identidad de funcion, no solo igualdad de
    comportamiento. Esto es lo que detecta una copia divergente.
-3. La superficie publica de ``Storage`` no se pierde: los 80 metodos
-   siguen siendo alcanzables desde la clase.
+3. La superficie publica de ``Storage`` no se pierde: los metodos
+   siguen siendo alcanzables desde la clase. La cifra viva no es esta,
+   es ``TestPublicSurfacePreserved.EXPECTED_PUBLIC``, y su motivo esta
+   al lado; un numero en la prosa envejece sin que nadie lo note.
 4. Los metodos con SQL vivo (los 7 que usan ``_conn``/``_tx``/
    ``_atomic``) **siguen definidos en ``Storage``**: los mixin solo
    anaden nombres, nunca los pisan (orden de resolucion MRO).
@@ -21,7 +23,7 @@ que el patron estrangulador de ADR-0016/WI-56):
 
 Tests de forma e identidad contra las clases reales. Sin mocks: la
 red fija el contrato estructural, y el comportamiento observable de
-los 65 metodos ya esta cubierto por la red existente de WI-56 y H9.
+los 67 metodos ya esta cubierto por la red existente de WI-56 y H9.
 """
 
 from __future__ import annotations
@@ -79,7 +81,7 @@ def _public_methods(cls: type) -> tuple[str, ...]:
     """Nombres publicos definidos en el cuerpo de la clase.
 
     Cuenta tambien `@property`: ``inspect.isfunction`` devuelve False
-    para un property, y excluirlos daria 71 en vez de los 72 reales
+    para un property, y excluirlos daria 73 en vez de los 74 reales
     (``uow`` es el unico property del facade).
     """
     return tuple(
@@ -137,7 +139,13 @@ class TestMixinsAreDisjoint:
             for name in _mixin_methods(mixin):
                 assert name not in seen, f"{name} aparece en {seen.get(name)} y {mixin.__name__}"
                 seen[name] = mixin.__name__
-        assert len(seen) == 65, f"esperados 65 metodos, hay {len(seen)}"
+        # 65 -> 67 en B4, y el motivo vive aqui y no en el modulo: los dos
+        # metodos que hacen alcanzable la mitad observada de un recurso
+        # (`get_resource_status`, `update_resource_status`) se delegan
+        # desde `KnowledgeDelegations` como cualquier otro. La
+        # disyuncion es la propiedad; la cifra es la consequence, y sube
+        # solo cuando un nombre nuevo entra en la red.
+        assert len(seen) == 67, f"esperados 67 metodos, hay {len(seen)}"
 
     def test_each_mixin_delegates_to_exactly_one_accessor(self) -> None:
         """AST, no grep: los `return self.x(...)` multilinea no se leen
@@ -170,12 +178,37 @@ class TestMixinsAreDisjoint:
 class TestPublicSurfacePreserved:
     """REQ-WI65-3: la API publica de Storage no se pierde."""
 
-    EXPECTED_PUBLIC = 72
+    #: 72 -> 74 en B4, y el cambio es INTENCIONAL y esta nombrado: se
+    #: anaden `update_resource_status` y `get_resource_status`, los dos
+    #: unicos que hacen alcanzable la mitad observada de un recurso. La
+    #: columna `status_json` estaba declarada `NOT NULL DEFAULT '{}'` y no
+    #: habia ni un `UPDATE` en el repo, luego la superficie faltaba
+    #: exactamente ahi. Sube +2 y no mas: si sube mas, es otro cambio.
+    #:
+    #: LO QUE ESTA GUARDA NO MIDE, medido el 2026-10-03: una cuenta ve
+    #: CUANTOS metodos hay, no CUALES. Renombrar `get_resource_status` a
+    #: `get_resource_status_renombrado` deja la cuenta en 74 y las tres
+    #: guardas de superficie de este fichero en verde; se comprobo. La
+    #: propiedad "el metodo correcto es el que esta ahi" la cubren los
+    #: tests que lo LLAMAN por nombre (`tests/test_b4_observed_state.py`:
+    #: 4 fallos bajo esa misma mutacion), no esta red. Por eso aqui no
+    #: se deriva un conjunto de nombres: la cuenta es la property que
+    #: esta red afirma, y afirmar mas seria mentira.
+    EXPECTED_PUBLIC = 74
     # Solo los privados no-dunder: `__init__`/`__enter__`/`__exit__`
     # estan cubiertos por LIVE_SQL_METHODS y por `close`/`uow`.
     EXPECTED_PRIVATE = 5
 
-    def test_storage_still_exposes_seventy_two_public_methods(self) -> None:
+    def test_el_numero_de_metodos_publicos_es_el_esperado(self) -> None:
+        """El numero no va en el NOMBRE del test, y antes si iba.
+
+        Se llamaba `test_storage_still_exposes_seventy_two_public_methods`.
+        Al subir la superficie a 74, ese nombre mentia: un test cuyo nombre
+        afirma un numero que ya no comprueba es la forma mas barata de
+        perder el unico dato que el test tiene. El numero vive ahora en
+        `EXPECTED_PUBLIC`, con el motivo del cambio al lado, y el nombre
+        dice lo que el test hace.
+        """
         inherited: set[str] = set()
         for mixin in MIXINS:
             inherited.update(_mixin_methods(mixin))
@@ -216,7 +249,7 @@ class TestPublicSurfacePreserved:
 class TestReExportsArePreserved:
     """REQ-WI65-5: los DTO re-exportados por `storage` no desaparecen.
 
-    Regresion real de este corte: al mover los 65 metodos, `Storage`
+    Regresion real de este corte: al mover los 67 metodos, `Storage`
     dejo de usar internamente `StoredClaim`/`StoredEvidence`/
     `StoredRelation`/`StoredResource`, y `ruff --fix` los borro por
     F401. Siete modulos los importan **desde** `skillgraph.platform.

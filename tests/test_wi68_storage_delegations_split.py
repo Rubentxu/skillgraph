@@ -137,6 +137,11 @@ class TestStorageStillInherits:
 
     def test_method_count_preserved(self) -> None:
         moved = set().union(*(_mixin_methods(m) for m in ALL_MIXINS))
-        assert len(moved) == 65, f"esperados 65 metodos de delegacion, hay {len(moved)}"
+        # 65 -> 67 en B4. Lo que se conserva aqui no es la cifra, es que
+        # lo que el corte movio a los mixin sigue siendo alcanzable desde
+        # `Storage`: por eso el bucle de alcanzabilidad va DESPUES de la
+        # cifra y no dentro de ella. Los dos nombres nuevos son
+        # `get_resource_status` y `update_resource_status`.
+        assert len(moved) == 67, f"esperados 67 metodos de delegacion, hay {len(moved)}"
         for name in moved:
             assert callable(getattr(Storage, name, None)), f"{name} ya no es alcanzable"

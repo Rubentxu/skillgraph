@@ -18,7 +18,7 @@ import json
 import sqlite3
 from typing import Any
 
-from skillgraph.core.errors import IdentityConflictError, ValidationError
+from skillgraph.core.errors import IdentityConflictError, NotFoundError, ValidationError
 from skillgraph.knowledge.graph import (
     Claim,
     Entity,
@@ -49,6 +49,7 @@ from skillgraph.platform.ports import (
 from skillgraph.platform.row_mappers import _uid
 from skillgraph.platform.storage import Storage
 from skillgraph.resources.bricks import Brick
+from skillgraph.resources.status import ResourceStatus, status_from_json, status_to_json
 
 
 class SqliteKnowledgeRepository:
@@ -111,6 +112,86 @@ class SqliteKnowledgeRepository:
         if row is None:
             return None
         return _row_to_resource(row)
+
+    def update_resource_status(self, *, uid: str, status: ResourceStatus) -> ResourceStatus:
+        """Escribe la mitad OBSERVADA de un recurso. B4.
+
+        **Es el primer `UPDATE` sobre `resources` de todo el repo**, y eso
+        es lo que hace que la columna `status_json` deje de estar fijada en
+        `'{}'` para siempre. Antes habia un `INSERT` y ningun `UPDATE`, con
+        la columna declarada `NOT NULL DEFAULT '{}'`: el peor de los dos
+        mundos, porque el sistema *parecia* tener estado y no lo tenia.
+        Medido antes de escribir nada, con
+        `scripts/measure_b4_observed_state.py`.
+
+        **LA INVARIANTE, y es la parte que nadie protege:**
+        un cambio de `status` sube `resource_version` y **no** `generation`.
+
+        Es la semantica de Kubernetes y no es arbitraria: `generation`
+        identifica la version del **spec**, y `resourceVersion` es el reloj
+        de **cualquier** escritura. Sin esa asimetria, `status` es un campo
+        mas con otro nombre y la separacion que B4 pide es decorativa — y
+        se rompe **sin que nada falle**, que es lo que la hace fácil de
+        romper por accidente.
+
+        Y por eso el `status` que se persiste **no** es el que recibe el
+        llamante: se le sustituye `observed_generation` por la que hay en la
+        fila en este momento. Si el status declarara su propia generacion,
+        el campo mentiria en cuanto el spec cambiara por debajo, y el
+        guardado seria una copia de lo que el status CREIA, no de lo que
+        observo.
+
+        Devuelve el status **tal como quedo persistido**, que no es
+        necesariamente el que se paso: lo que se guarda es lo que se
+        observaba, no lo que el status creia observar.
+        """
+        fila = self._conn.execute(
+            "SELECT generation FROM resources WHERE uid = ?", (uid,)
+        ).fetchone()
+        if fila is None:
+            raise NotFoundError(f"no hay recurso con uid {uid!r} que actualizar")
+        observado = ResourceStatus(
+            phase=status.phase,
+            conditions=status.conditions,
+            observed_generation=fila["generation"],
+        )
+        with self._storage._tx() as cur:
+            cur.execute(
+                """
+                UPDATE resources
+                SET status_json = ?,
+                    resource_version = resource_version + 1
+                WHERE uid = ?
+                """,
+                (status_to_json(observado), uid),
+            )
+        return observado
+
+    def get_resource_status(self, *, uid: str) -> ResourceStatus | None:
+        """La mitad observada como TIPO, o `None` si no se ha escrito.
+
+        `StoredResource.status_json` es texto crudo a proposito
+        (`dto.py:191`): *«preservando la frontera de persistencia»*. Esta es
+        la capa de uso que cruza esa frontera, y la primera que lo hace.
+
+        **`None` no es lo mismo que un status sin condiciones.**
+        «no hay status escrito» y «hay un status y no tiene condiciones» son
+        preguntas distintas, y colapsarlas hace que un recurso recien
+        creado parezca uno que se ha comprobado y no ha pasado nada.
+        """
+        row = self._conn.execute(
+            "SELECT status_json FROM resources WHERE uid = ?", (uid,)
+        ).fetchone()
+        if row is None:
+            return None
+        # `'{}'` es el DEFAULT del esquema, y por eso es «no se ha escrito
+        # un status», no «se ha escrito un status roto». Confundir los dos
+        # convierte un recurso recien creado en un error de deserializacion,
+        # y el operador acaba creyendo que el recurso esta mal en vez de
+        # que nadie lo ha mirado todavia.
+        if row["status_json"].strip() in ("", "{}"):
+            return None
+        return status_from_json(row["status_json"])
 
     def list_resources(
         self,
