@@ -24,6 +24,7 @@ Reglas de diseno:
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -61,11 +62,26 @@ class AgentResult:
         outcome_raw = payload["outcome"]
         if not outcome_raw:
             raise OutcomeInvalidError("outcome vacio en fixture")
-        result = payload["result"]
         evidence_ref = payload.get("evidence_ref")
         if evidence_ref is not None and not isinstance(evidence_ref, str):
             raise ValidationError("evidence_ref debe ser str o ausente")
-        return AgentResult(outcome=outcome_raw, result=result, evidence_ref=evidence_ref)
+        # WI-113: copia defensiva. El payload viene de un fixture en disco
+        # o de un Adapter, que es codigo EXTERNO al repo, y antes se
+        # guardaba tal cual: el `AgentResult` que el Core creia inmutable
+        # ERA el dict de quien lo produjo. Medido: mutar el origen cambiaba
+        # el resultado, y `node_execution_delegations.py:443` serializa
+        # ese dict a disco, asi que lo persistido era el del Adapter.
+        # `deepcopy` y no `dict()`: el payload tiene niveles anidados y
+        # una copia de primer nivel deja los hijos compartidos.
+        #
+        # No se envuelve en `MappingProxyType` porque el motor serializa
+        # el resultado y espera un dict plano. La inmutabilidad la aporta
+        # que el Core ya no comparta memoria con el exterior.
+        return AgentResult(
+            outcome=outcome_raw,
+            result=deepcopy(payload["result"]),
+            evidence_ref=evidence_ref,
+        )
 
 
 class AgentAdapter(Protocol):
