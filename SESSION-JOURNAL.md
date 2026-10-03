@@ -12637,3 +12637,112 @@ sería tocar código correcto sin prueba de que está mal.
 923 tests afectados verdes · ruff limpio · **cero CJK añadido** ·
 SemVer derivado con `scripts/derive_semver.py`: b/f/x/n/d
 0/0/1/2/0 → PATCH → `v0.22.4`.
+
+## 2026-10-03 — Bloque WI-114 (decimosexta vía, release `v0.22.5`)
+
+**Tema**: la frontera de idempotencia la sostenían cinco personas
+distintas. Primer workitem de la serie **elegido por medición entre
+varias candidatas**, no por intuición.
+
+**Ciclo**: `p-b7740b96d79ec013/wi114-idempotency-boundary` (A-full).
+**Commits**: `87ebdbf` (código), trazabilidad, release + tag `v0.22.5`,
+post-release.
+
+### Cómo se eligió
+
+Antes de abrir el bloque se rastrearon ocho viñetas declaradas de
+`AGENTS.md` con `.pipelinek/wi114_measure.py`:
+
+| viñeta | sitios | veredicto |
+|---|---|---|
+| §1.4 sin `lru_cache` | 0 | se sostiene |
+| §1.4 un solo reloj | 0 | se sostiene |
+| §4.2 sin `Optional[T]` | 0 | se sostiene |
+| §8 cero ORM | 0 | se sostiene |
+| §8 idempotencia por constraint | 0 `ON CONFLICT` | **cero sospechoso** |
+
+Cuatro ceros son cuatro verdades que hoy se sostienen. Añadirles un
+guard sería instrumentar algo que nadie puede romper, que es la peor
+versión de un guard — el error que WI-109 cometió al inventarse un
+guard para una prohibición que ya se cumplía. El quinto cero sí era
+sospechoso: `UNIQUE(event_id)` existe en el schema, luego la
+idempotencia la detecta la base, pero **no había un solo `ON CONFLICT`
+en todo el repo**.
+
+### Lo medido
+
+```
+6 sitios escriben eventos. 5 traducen, 1 no.
+```
+
+Y el docstring de `storage._atomic_state_and_event` decía «Re-raise
+como `IdempotencyError` cuando el UNIQUE sobre
+`runtime_events.event_id` se viola (UAT-07, replay-safe)», mientras su
+cuerpo hacía `except BaseException: raise`. La traducción la hacían los
+cinco llamadores, por su cuenta, y no había guard.
+
+### Lo grave: no es que hoy falle
+
+`sqlite3.IntegrityError` no es `SkillGraphError`, luego atraviesa el
+`except` que traduce a exit code (WI-109) y sale como Traceback al
+usuario. Un camino de escritura nuevo sin `try` abría la frontera, y no
+tendría ni a quién preguntarle.
+
+### El instrumento también tuvo que cambiar
+
+El script que medía «quién traduce» tenía como predicado exactamente la
+convención que este bloque elimina. Después del arreglo daba **0 de 6**,
+que no era un resultado sino una mentira: el predicado buscaba
+`except sqlite3.IntegrityError` con `IdempotencyError` en el cuerpo, y
+tras mover la traducción al helper ya no había ninguno.
+
+Se reescribió para que mida **de dónde puede salir** un error del
+adapter, que es la propiedad que sobrevive al refactor. Un guard que
+mide la convención que acabas de tirar necesita tirarse también él, o
+miente en verde.
+
+### El guard deriva el conjunto
+
+Ni los seis caminos ni las cinco funciones están escritos en el test:
+salen de buscar las llamadas a los dos helpers. Una lista de «los sitios
+que traducen» es la misma trampa que `DIRECTORIOS_NO_RECETA` (WI-99) y
+que «conectar ≠ contener» (WI-102).
+
+Dos contrasaltos: que la derivación encuentre al menos seis caminos —una
+derivación que devolviera siempre la lista vacía pasaría todo en verde,
+es el M2 de WI-110— y que el helper no quede muerto.
+
+**Errores propios que registró este bloque:**
+
+- **34 — El error 32 repetido en el workitem siguiente.** Tres de las
+  cuatro sondas apuntaban al texto que `ruff format` había colapsado a
+  una línea. Se detectó **antes de contar**, que es lo único que hace
+  falta: el harness distingue `SIN_SONDA` de `CAZADA` y aborta con un
+  `SystemExit` si el texto aparece más de una vez. Quinta vez que el
+  formateo rompe algo en esta serie. La regla que sale de ahí es simple
+  y no admite excepciones: **una sonda se verifica contra el texto real
+  después de formatear, nunca antes.**
+
+- **35 — El error 33, por tercera vez, y con la misma causa.** Escribí
+  `storage.py:569` en el bloque vivo sin símbolo. En WI-113 pasó lo
+  mismo. Dos workitems después, el patrón es que la cita se escribe de
+  memoria. La cita correcta, resuelta en el AST, es
+  `storage.py:568::_atomic_state_and_event`: la 568 es la línea donde
+  arranca el `def`, y el símbolo tiene que caer dentro de su rango.
+
+- **36 — Un bug del harness que parecía un fallo de la sonda.** Al
+  escribir los textos de mutación como `viejo=(` followed de coma
+  final, la concatenación de literales adyacentes se convierte en una
+  **tupla de un elemento**, y `str.replace` lanza
+  `TypeError: replace() argument 2 must be str, not tuple`. El mensaje
+  apunta a la mutación y el defecto estaba en el harness. Se movieron
+  los textos a constantes de módulo, que es donde deben estar: un texto
+  de mutación escrito dentro del constructor es un texto que se puede
+  romper sin que nadie lo note, porque el fallo aparece en la línea de
+  la sonda y no en la del texto.
+
+### Resultado
+
+7 tests · **4/4 mutaciones** con sonda verificada antes de contar ·
+1214 tests afectados verdes · ruff limpio · **cero CJK añadido** ·
+SemVer derivado con `scripts/derive_semver.py` → PATCH → `v0.22.5`.

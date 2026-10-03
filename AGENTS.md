@@ -143,6 +143,75 @@ error que ve el usuario. Convertirlos es otro workitem; aquí sólo se
 registra, porque un guard que declara exceptions en una lista es la
 misma lista un nivel más abajo.
 
+### Cómo se comprueba (WI-114)
+
+La tercera viñeta de §1.2 («el `code` traduce a exit code») y la de §8
+(«idempotencia por constraint, no por código») se unían en un punto
+que nadie miraba: **quién traduce el error del adapter al dominio**.
+
+`storage._atomic_state_and_event` tenía un docstring que decía «Re-raise
+como `IdempotencyError` cuando el UNIQUE sobre `runtime_events.event_id`
+se viola (UAT-07, replay-safe)», y su cuerpo hacía `except
+BaseException: raise`. La traducción no la hacía ese método: la hacía
+**cada uno de los cinco llamadores**, cada uno por su cuenta.
+
+Medido por AST sobre el árbol real, antes de tocar nada:
+
+```
+6 sitios escriben eventos. 5 traducen, 1 no.
+```
+
+Lo grave no era que hoy fallara. Era que `sqlite3.IntegrityError` no es
+`SkillGraphError`, luego atraviesa el `except` que traduce a exit code
+y sale como **Traceback al usuario** — el defecto que WI-109 cerró para
+el `json.loads` de la CLI, por el otro lado de la misma frontera. Un
+camino de escritura nuevo sin `try` abría la frontera, y no tendría ni
+a quién preguntarle.
+
+| propiedad | quién la mide | cómo |
+|---|---|---|
+| un `event_id` repetido sale como `IdempotencyError` | `test_un_event_id_repetido_sale_como_idempotency_error` | se inserta dos veces y se mira la clase que sale |
+| y cuelga de `SkillGraphError`, con `code` | `test_el_error_traspasado_pertenece_al_dominio` | la jerarquía, no el nombre |
+| y no es un builtin de sqlite3 | `test_no_lo_atiende_el_adapter_sino_el_dominio` | la única aserción que un guard por lectura no puede hacer |
+| el mensaje dice qué evento se duplicó | `test_el_mensaje_dice_que_evento_se_duplico` | un verificador que dice «falso» sin decir «dónde» es un callejón |
+| ningún camino de escritura atrapa el error del adapter | `test_ningun_camino_atrapa_el_error_del_adapter` | por AST, sobre el conjunto **derivado del árbol** |
+
+**El conjunto se deriva del árbol, no de una lista.** Ni la lista de
+caminos de escritura ni la de funciones que deben traducir están
+escritas en el test: salen de buscar las llamadas a los dos helpers.
+Una lista de «los sitios que traducen» es la misma trampa que
+`DIRECTORIOS_NO_RECETA` (WI-99) y que el «conectar ≠ contener» de
+WI-102, y obligaría a mantener enumerado lo que el guard debería
+comprobar solo.
+
+**Dos contrasaltos, y no son decoración.** Uno exige que la derivación
+encuentre al menos seis caminos: una derivación que devolviera siempre
+la lista vacía pasaría todos los demás tests en verde (es el M2 de
+WI-110). El otro exige que el helper siga usándose: si
+`_insert_event_in_tx` quedara muerto, el guard de los `except` pasaría
+porque no habría caminos, y la propiedad se perdería en silencio.
+
+**La traducción vive en el helper, no en los llamadores.** El helper es
+donde ocurre el INSERT y por donde pasan los seis. Los cinco llamadores
+capturan ahora el error **del dominio** para enriquecer el mensaje con
+su nombre de función; su `except sqlite3.IntegrityError` era código
+muerto que además parecía vivo, porque de ahí se deducía que la
+traducción dependía de él.
+
+**El instrumento también tuvo que cambiar.** El script que medía «quién
+traduce» tenía como predicado exactamente la convención que este
+workitem elimina. Después del arreglo daba 0 de 6, que no era un
+resultado sino una mentira: ahora mide **de dónde puede salir** un error
+del adapter. Un guard que mide la convención que acabas de tirar
+necesita tirarse también él, o miente en verde.
+
+Mutaciones: **4/4** con sonda por mutación
+(`.pipelinek/wi114_mutate.py`). Cada sonda se verificó contra el texto
+real **después** de `ruff format`, y tres de las cuatro apuntaban al
+texto anterior: es el error 32 de WI-113 repetido en el workitem
+siguiente, y se detectó antes de contar porque el harness distingue
+`SIN_SONDA` de `CAZADA`.
+
 ### 1.3 Sin I/O oculto
 
 - Las funciones puras (e.g. `Handoff.context_hash`,

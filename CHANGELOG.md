@@ -14,6 +14,55 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.22.5] - 2026-10-03 — la frontera la sostenían cinco personas distintas
+
+**PATCH**: derivado con `scripts/derive_semver.py` sobre el historial.
+
+Decimosexta vía de la serie «qué declara el repo que nada comprueba»,
+y la primera **elegida por medición entre varias**: antes de abrirla se
+rastrearon ocho viñetas declaradas de `AGENTS.md` y cuatro dieron
+cero —`lru_cache`, `time.time()`, `Optional[T]`, ORM—, que se
+sostienen hoy y que no se abren, porque instrumentar una verdad que
+nadie puede romper es la peor versión de un guard. La quinta dio un
+cero **sospechoso**: cero `ON CONFLICT` en todo el repo, con un
+`UNIQUE(event_id)` que sí existe.
+
+### El defecto
+
+`storage._atomic_state_and_event` tenía un docstring que decía
+literalmente *«Re-raise como `IdempotencyError` cuando el UNIQUE sobre
+`runtime_events.event_id` se viola (UAT-07, replay-safe)»*, y su cuerpo
+hacía `except BaseException: raise`. La traducción no la hacía ese
+método: **la hacían los cinco llamadores, cada uno por su cuenta, y
+nada lo comprobaba.**
+
+```
+6 sitios escriben eventos. 5 traducen, 1 no.
+```
+
+Lo grave no es que hoy falle. Es que `sqlite3.IntegrityError` no es
+`SkillGraphError`, luego atraviesa el `except` que traduce a exit code
+—el de WI-109— y sale como **Traceback al usuario**. Un camino de
+escritura nuevo sin `try` abría la frontera, y no tendría ni a quién
+preguntarle.
+
+### El arreglo
+
+La traducción baja a `_insert_event_in_tx`, que es donde ocurre el
+INSERT y por donde pasan los seis caminos. Los cinco llamadores capturan
+ahora el error **del dominio** para enriquecer el mensaje con su nombre
+de función; su `except sqlite3.IntegrityError` era código muerto que
+además parecía vivo.
+
+| | |
+|---|---|
+| el conjunto de caminos | **derivado del árbol**, no una lista en el test |
+| contrasaltos | que la derivación encuentre ≥6 caminos, y que el helper no quede muerto |
+| el instrumento | cambió: medía la convención que este bloque elimina |
+
+7 tests · mutaciones 4/4 con sonda verificada tras `ruff format` ·
+1214 tests afectados verdes · cero CJK añadido.
+
 ## [0.22.4] - 2026-10-03 — el `AgentResult` del Adapter era un alias
 
 **PATCH**: derivado con `scripts/derive_semver.py` sobre el historial

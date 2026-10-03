@@ -1,5 +1,66 @@
 # CURRENT — puntero operativo
-> **Bloque 2026-10-03 (vigésima quinta tanda) en curso — WI-113, release `v0.22.4`.**
+> **Bloque 2026-10-03 (vigésima sexta tanda) en curso — WI-114, release `v0.22.5`.**
+> Versión activa `0.22.5.dev0`; último tag `v0.22.5`.
+>
+> **WI-114 — la frontera de idempotencia la sostenían cinco personas distintas.**
+> Decimosexta vía de la serie «qué declara el repo que nada comprueba».
+> Elegida por medición, no por suposición: antes de abrirla se rastrearon
+> ocho viñetas declaradas y **cuatro dieron cero** —`lru_cache`,
+> `time.time()`, `Optional[T]`, ORM—, que se sostienen hoy y que no se
+> abren porque instrumentar una verdad que nadie puede romper es la peor
+> versión de un guard. La quinta dio un cero **sospechoso**: cero
+> `ON CONFLICT` en todo el repo, con un `UNIQUE(event_id)` que sí existe.
+>
+> **El defecto, medido por AST sobre el árbol real:**
+> `storage.py:568::_atomic_state_and_event` tenía un docstring que decía «Re-raise como
+> `IdempotencyError` cuando el UNIQUE sobre `runtime_events.event_id` se
+> viola (UAT-07, replay-safe)», y su cuerpo hacía `except
+> BaseException: raise`. La traducción no la hacía ese método: **la
+> hacían los cinco llamadores, cada uno por su cuenta, sin ningún guard.**
+>
+> ```
+> 6 sitios escriben eventos. 5 traducen, 1 no.
+> ```
+>
+> **Lo grave no es que hoy falle.** Es que `sqlite3.IntegrityError` no
+> es `SkillGraphError`, luego atraviesa el `except` que traduce a exit
+> code —el de WI-109— y sale como **Traceback al usuario**. Bastaba un
+> camino de escritura nuevo sin `try` para abrir la frontera, y ese
+> camino no tendría ni a quién preguntarle.
+>
+> **La traducción baja al helper** `_insert_event_in_tx`, que es donde
+> ocurre el INSERT y por donde pasan los seis caminos. Los cinco
+> llamadores capturan ahora el error **del dominio** para enriquecer el
+> mensaje; su `except sqlite3.IntegrityError` era código muerto que
+> además parecía vivo, porque de ahí se deducía que la traducción
+> dependía de él.
+>
+> **El conjunto se deriva del árbol.** Ni los seis caminos ni las cinco
+> funciones están escritos en el test: salen de buscar las llamadas a
+> los dos helpers. Una lista de «los sitios que traducen» es la misma
+> trampa que `DIRECTORIAS_NO_RECETA` (WI-99) y que «conectar ≠
+> contener» (WI-102). Dos contrasaltos vigilan que la derivación no
+> devuelva siempre la lista vacía y que el helper no quede muerto.
+>
+> **El instrumento también tuvo que cambiar**, y eso es lo que más me
+> gusta del bloque: el script que medía «quién traduce» tenía como
+> predicado exactamente la convención que este trabajo elimina. Después
+> del arreglo daba 0 de 6, que no era un resultado sino una mentira. Ahora
+> mide **de dónde puede salir** un error del adapter. Un guard que mide
+> la convención que acabas de tirar necesita tirarse también él.
+>
+> **7 tests, 4/4 mutaciones** con sonda verificada contra el texto real
+> **después** de `ruff format` antes de contar. Tres de las cuatro
+> apuntaban al texto anterior: es el error 32 de WI-113 repetido, y se
+> detectó porque el harness distingue `SIN_SONDA` de `CAZADA`.
+> **1214 tests afectados verdes.**
+>
+> ---
+>
+> <details>
+> <summary>Bloque anterior (WI-113)</summary>
+>
+> **Bloque 2026-10-03 (vigésima quinta tanda) cerrado — WI-113, release `v0.22.4`.**
 > Versión activa `0.22.4.dev0`; último tag `v0.22.4`.
 >
 > **WI-113 — el `AgentResult` del Adapter era un alias del dict externo.**
