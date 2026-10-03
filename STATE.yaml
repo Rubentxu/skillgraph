@@ -162,6 +162,8 @@ blocks:
     workspace_id: w-f6da19435edd0461faa706d3
     cycle_b0: p-b7740b96d79ec013/b0
     cycle_b1: p-b7740b96d79ec013/b1
+    cycle_b1_phase: specify   # explore cerrada con el gate exploration-sufficient
+                               # (receipt gate-exploration-sufficient-3960bd3e7b568759-1)
     cycle_phase: specify   # explore cerrada con el gate exploration-sufficient
                            # (receipt gate-exploration-sufficient-9d7acba3dd97e576-1),
                            # artefacto exploration-report = evidence/sddk-b0-2026-10-03.md
