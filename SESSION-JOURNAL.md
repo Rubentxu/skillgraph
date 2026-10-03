@@ -11969,3 +11969,89 @@ filas— parece un dato, no un fallo.
     orden correcto es etiqueta vacía en el commit de release y sha real en el
     post-release, porque **en el commit de release la etiqueta todavía no
     existe**.
+
+---
+
+## 2026-10-03 — WI-106, octava vía: la causa de un bump, sin verificar
+
+**Ciclo**: `p-b7740b96d79ec013/wi106-semver-bump-afirmacion-sin-verificador`
+**Sesión**: `wi106-20261003T034000Z` · **Release**: **ninguna**, y por regla
+
+### El defecto
+
+`STATE.yaml` declara por qué se movió la versión (`release.semver_bump`).
+`scripts/derive_semver.py` la calcula. Nadie los comparaba.
+
+Medido, con `STATE.yaml` restaurado byte a byte y sha verificado: puesto el
+campo a `MAJOR` cuando el release fue `MINOR`, la suite de gobernanza de
+release daba **18 passed, exit 0**, y los tres checkers de la receta y el
+bundle de auditoría, también `exit 0`.
+
+El **nivel** de la versión sí estaba verificado — `test_wi96_semver_rule.py`
+vigila que la lista de divergencias históricas no crezca. Lo que no exigía
+nadie es que el campo dijera la verdad.
+
+### Sin release, y por regla
+
+Los cinco commits desde `v0.21.0` clasifican como `neutro`. El bump
+derivado es **SIN RELEASE**, y `AGENTS.md §12` dice: *«Si la regla dice
+“sin bump”, no se emite etiqueta: el trabajo se acumula»*.
+
+Es el primer bloque de la serie que no libera. Es la regla siguiendo, no la
+regla saltándose: un `test` y un `docs` no mueven la versión, y forzar una
+release para «cerrar el bloque» sería exactamente la decisión a mano que
+`AGENTS.md §12` prohíbe.
+
+### Dos hipótesis que medí y resultaron falsas
+
+1. *El `pre-push` comprueba el CI con un `grep` sobre el stdout.* **Falso**:
+   usa el exit code de `scripts/ci.sh`, y ese script pasa `--rerun`, así que
+   es inmune al veredicto cacheado. No hay workitem ahí.
+2. *Los cuatro UAT stub (`_STUB_UATS`) pueden desaparecer en verde.*
+   **Falso**: WI-101 ya lo cerró. Apartando `UAT-08/09/12/13.json`,
+   `--verify` imprime `UAT-08: persistido=MISSING ejecutado=BLOCKED` y sale
+   con **1**.
+
+Escribir las hipótesis antes de medirlas y publicarlas después vale porque
+el camino descartado también es evidencia: son dos propiedades que este repo
+declara y que sí se sostienen.
+
+### Las dos trampas, y por qué las encontré
+
+La primera versión del guard daba **4/6** mutaciones:
+
+1. Comparar contra una **constante escrita a mano** en vez de la
+   herramienta. Hoy la copia dice lo mismo que la verdad y el test pasa
+   verde; el día que la regla cambie dirá lo contrario, con toda la
+   autoridad de un test. Se corrige exigiendo que el cálculo acierte en
+   **dos bumps distintos**, cosa que un literal no puede.
+2. Comprobar el **dominio sobre el valor de hoy**. Que `MINOR` sea válido no
+   es que el dominio exista: anulada esa comprobación, el test seguía verde.
+   Se extrae `_bump_valido` como predicado puro y se le llama con
+   `RELLENO`, `""` y `minor`.
+3. El tercer test **duplicaba** al primero. Dos copias de la misma
+   aserción no son redundancia, son decoración: una sobrevive a que borren
+   la otra. Se sustituyó por una propiedad distinta —que la etiqueta
+   declarada exista en git— con su propio contraejemplo (`v9.9.9`).
+
+### M1 no se cuenta como fallo
+
+Borrar la única aserción que pronuncia la propiedad es **indetectable por
+construcción**. Lo que sí es informativo es su interacción con M6: con M1
+puesta, el estado puede mentir y nadie lo ve, y eso demuestra que era el
+único punto de aplicación. Contarlo como fallo sería inventar una propiedad
+que no existe; esconderlo sería mentir sobre la cobertura.
+
+**2702 passed y 0 skipped** (+3).
+
+### Errores propios de esta sesión, para no repetirlos
+
+13. **Sospechar de una mutación anterior sin comprobarla.** Sospeché que la
+    M2 de WI-105 partía el fichero entero y que su rojo era un falso
+    positivo. La apliqué e inspeccioné: quitó exactamente su bloque y el
+    fichero compila. Era legítima. La sospecha no era el defecto; medirla
+    sí.
+14. **Escribir un guard que se relaja sin que nada se note.** La primera
+    versión de este bloque comparaba contra la herramienta y estaba en
+    verde, y aun así cuatro mutaciones la atravesaban. Estar verde no es
+    estar verificado, y la diferencia se ve exactamente en las mutaciones.

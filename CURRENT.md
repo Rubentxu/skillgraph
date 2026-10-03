@@ -1,47 +1,62 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-03 (decimoséptima tanda) cerrado — WI-105, release `v0.21.0`.**
-> Versión activa `0.21.0.dev0`; último tag `v0.21.0`. 2699 passed, **0 skipped**.
+> **Bloque 2026-10-03 (decimoctava tanda) cerrado — WI-106, SIN RELEASE.**
+> Versión activa `0.21.0.dev0`; último tag `v0.21.0`. 2702 passed, **0 skipped**.
 >
-> **WI-105 — los criterios de éxito del CI eran una declaración.**
-> Séptima vía de la serie «qué declara el repo que nada comprueba», y la
-> más amplia: no un instrumento mal, sino **seis criterios escritos que
-> nadie comprobaba**.
+> **WI-106 — la causa de un bump era una afirmación sin verificar.**
+> Octava vía de la serie «qué declara el repo que nada comprueba», y la
+> más pequeña: un solo campo.
 >
-> `AGENTS.md` enumera SEIS criterios que un run «debe cumplir». La etapa
-> `evidence` de la receta era el único sitio que tocaba `.pipelinek/`, y
-> sus tres comandos **no podían fallar**: los tres operandos los crea el
-> motor **antes** de la etapa. Medido contra el journal real —15 runs, 3
-> de ellos `RunFinished/failure`—: imprimía «present» en los quince.
-> El único criterio citado en algún sitio era el 1, con un `grep` sobre el
-> stdout en un hook que no está instalado.
+> `STATE.yaml` declara **por qué** se movió la versión
+> (`release.semver_bump`). `scripts/derive_semver.py` la **calcula**.
+> Nadie los comparaba: el campo aparecía en un sitio y en dos informes de
+> `audits/`, y ningún test lo leía.
 >
-> **Ahora mide:** `scripts/check_pipeline_receipt.py:209::evaluar` comprueba
-> los criterios **1 a 5** desde el journal y el árbol. El **6 no se
-> automatiza**: es el SHA-256 «registrado en la sesión», y una sesión es
-> del agente, no del repo — declararlo comprobado sería la misma mentira
-> que el script viene a arreglar.
+> **Medido**, con `STATE.yaml` restaurado byte a byte y sha verificado:
+> puesto el campo a `MAJOR` cuando el release fue `MINOR`, la suite de
+> gobernanza de release daba **18 passed, exit 0**, y los tres checkers
+> de la receta y el bundle de auditoría, también `exit 0`. Con el guard
+> puesto, la misma mentira da **2 failed, exit 1**.
 >
-> **El contraejemplo que manda no es el run rojo, es el run VERDE QUE NO
-> EJECUTÓ NADA.** Un veredicto cacheado y una verificación real dicen los
-> dos `Pipeline finished with SUCCESS`; el criterio 2 existe para
-> separarlos y era el único modo de fallo que nada distinguía. Mutaciones
-> **7/7 a la primera**, y la última degrada la conexión sobre el
-> `.pipeline.kts` real — lo que debe morder ahí es C5 de WI-102, no un
-> test de este bloque.
+> **Ahora se contrasta:**
+> `tests/test_wi96_semver_rule.py:380::TestLaDeclaracionDelBumpCoincideConLaHerramienta`
+> exige que el campo sea lo que la regla dice para `release.tag`. El
+> **nivel** de la versión ya estaba verificado —la lista de divergencias
+> históricas no puede crecer—; lo que no exigía nadie es que el campo
+> dijera la verdad.
 >
-> **El huevo y la gallina era real y lo resuelve el motor:** cuando la
-> etapa corre, el run en curso aún no tiene `RunFinished`, así que «el
-> `RunFinished` más reciente» **es el run anterior**.
+> **Dos trampas, y las dos las encontré porque las mutaciones
+> sobrevivieron.** La primera versión daba 4/6. (1) Comparar contra una
+> **constante escrita a mano**: hoy la copia dice lo mismo que la verdad,
+> y el día que la regla cambie dirá lo contrario — se exige que el cálculo
+> acierte en **dos bumps distintos**, cosa que un literal no puede. (2)
+> Comprobar el dominio sobre el valor de hoy: que `MINOR` sea válido no
+> es que el dominio exista, así que `RELLENO` y `v9.9.9` tienen que ser
+> rechazados por entrada, no por el valor real.
 >
-> **Un detalle de instrumento costó una medición entera:** el `payload` del
-> journal es una **lista JSON con un dict dentro**, no un objeto.
-> `json_extract(payload, '$.outcome')` devuelve `NULL` sobre ese schema, y
-> leerlo por la ruta de objeto salía con `None` en los 15 `RunFinished`.
-> Un instrumento que no abre el contenedor no mide lo que cree medir.
+> **M1 —borrar la aserción que manda— NO se cuenta como fallo.** Es
+> indetectable por construcción: un test que comprueba que el estado
+> coincide con la herramienta no puede comprobar que sigue ahí. Lo que
+> se mide es su interacción con M6, y con M1 puesta el estado puede
+> mentir y nadie lo ve: la demostración de que era el **único** punto de
+> aplicación. Mutaciones 6/6.
 >
-> **Sin push**: 136 commits sin publicar, `origin/main` en `0ebbd58`.
+> **SIN RELEASE, y por regla.** Los cinco commits desde `v0.21.0`
+> clasifican como `neutro` —ni `feat` ni `fix`— así que
+> `derive_semver.py` dice **SIN RELEASE**, y `AGENTS.md §12` es
+> explícito: *«Si la regla dice “sin bump”, no se emite etiqueta: el
+> trabajo se acumula»*. Es el primer bloque de la serie que no libera, y
+> es la regla siguiendo en vez de la regla saltándose.
+>
+> **Dos hipótesis que medí y resultaron falsas**, antes de llegar a esta:
+> que el `pre-push` comprobara el CI con un `grep` sobre el stdout —falso:
+> usa el exit code, y `ci.sh` pasa `--rerun`— y que los cuatro UAT stub
+> pudieran desaparecer en verde —falso: WI-101 lo cerró, `--verify` da
+> exit 1 con `persistido=MISSING`.
+>
+> **Sin push**: 143 commits sin publicar, `origin/main` en `0ebbd58`.
 
+---
 ---
 ---
 
