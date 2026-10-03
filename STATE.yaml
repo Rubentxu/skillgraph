@@ -560,7 +560,7 @@ deliverables:
 tests:
   total: 2684   # bloque WI-104: +7 sobre 2677 = 6 contraejemplos del verificador de citas (anclaje, desalineacion, simbolo ausente, simbolo en otro fichero, prosa de docstring, mensaje que dice donde esta) y 1 que verifica el bloque vivo de CURRENT.md. El conteo lo confirma el pre-commit, que corre la suite entera.
   passed: 2684
-  duration_s: 231.72   # MEDIDO en la CI canonica de WI-103 (stage unit-tests, recipe de cobertura), run 9db8a440. pytest a pelo son ~130 s: el delta es el coste de instrumentar los subprocesos.
+  duration_s: 239.16   # MEDIDO en la CI canonica de WI-104 (stage unit-tests, recipe de cobertura), run 88d16828, sobre arbol quieto. La certificacion ANTERIOR de este mismo bloque (run 7d68ca93) FALLO con 1 failed por una etiqueta sin registrar en release.releases[].
   package_version: "0.20.5.dev0"   # trabajo post-release v0.20.5 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
