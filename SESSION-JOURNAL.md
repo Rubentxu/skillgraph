@@ -11671,3 +11671,139 @@ exactamente lo que este bloque ha hecho mal tres veces.
 
 El skip **no invalida** la certificación: 2672 + 1 = 2673, el total coincide
 con el del código, y el motivo es una fecha con su explicación.
+
+---
+
+## 2026-10-03 — WI-103: el gate de `main` solo existía los días con informe
+
+Ciclo `p-b7740b96d79ec013/wi103-gate-conditional-al-artefacto`. Release
+`v0.20.4` (PATCH). Run de certificación `9db8a440-1031-4c4a-98c9-3fee571c9999`.
+
+### Cómo apareció, y por eso es de la serie
+
+La re-certificación del estado final de WI-102 dio `2672 passed, **1 skipped**`
+donde la certificación del código había dado 2673 sin skips. La fecha
+rolloveró a `2026-10-03` durante la sesión y el informe de ese día no existía:
+
+```
+SKIPPED [1] tests/test_wi41_cli_dispatch.py:284: auditoria del dia no generada todavia
+```
+
+Un skip que nadie miró porque la suite salía verde. **La quinta vía, y la más
+discreta**: no un instrumento que mide mal, sino uno que no llega a medir.
+
+### Lo que se decía y lo que se hacía
+
+`TestAuditGateForMain` declara una propiedad sobre el **código** —«`main` no
+debe listarse como hotspot público, cc≥20»— y la comprobaba leyendo
+`audits/architecture-debt-<HOY>.md`, con `pytest.skip` si no existía.
+
+| situación | resultado |
+|---|---|
+| sin informe de hoy | **SKIPPED, exit 0** |
+| informe de hoy generado | 1 passed |
+| informe de hoy con `main` inyectado | 1 **failed, exit 1** |
+
+La propiedad es real y el gate muerde cuando el artefacto está. El defecto es
+**la existencia del artefacto**: 6 informes `architecture-debt-*` en 7 días
+(falta el `2026-09-30`) y hoy ninguno. Un gate que solo corre cuando alguien
+se acuerda de correr el auditor no es un gate: es un registro de que alguien
+lo corrió.
+
+`AGENTS.md §6.2`: «NO usar `pytest.skip` para esconder fallos».
+
+### El arreglo: que el gate mida
+
+`tests/_gate_main_hotspot.py::hotspots_publicos(arbol, *, out_dir)` ejecuta
+`audits/audit_debt.py` con `--src-root` sobre el árbol que se le pase y
+`--out-dir` a un temporal. Ambos son parámetros desde WI-89, hechos parámetros
+precisamente para que un test pueda auditar sin mutar `audits/`, que tiene 51
+ficheros versionados.
+
+El análisis usa el propio auditor y no una cuenta propia: reimplementar la
+métrica sería tener dos verdades sobre qué es un hotspot.
+
+Gana tres: **siempre activo**, **siempre fresco** (antes validaba un snapshot
+de la última vez que se corrió) y **sin efectos secundarios**.
+
+### El contraejemplo es parte del arreglo
+
+Sin un test que ponga un `main` real de `cc≥20` en un árbol y exija que la
+medición lo vea, **una medición que devolviera siempre `()` habría pasado
+todo verde** — indistinguible de la que no mide nada.
+
+Es la diferencia entre un gate roto y un gate que no existe, y por
+construcción son indistinguibles hasta que se degrada a propósito. M2 es esa
+degradación.
+
+El árbol del contraejemplo se construye por generación (25 `if` ⇒ cc=26; el
+algoritmo del auditor es `1 + nº de If/For/While/With/Try`), para que el número
+no dependa de contar líneas a mano.
+
+### Un guard que se escribió mal de la primera
+
+El guard que prohíbe el `skip` buscaba la cadena `skip` en el fuente del
+módulo. Se puso en rojo **por su propio docstring**, que explica el defecto
+que arregla:
+
+```
+E  'skip' is contained here:
+E  n `pytest.skip` si ese fichero no
+E  ?           ++++
+```
+
+Un guard que busca una palabra encuentra la palabra, no la propiedad. Es la
+serie completa del bloque en una línea, y la razón de reescribirlo sobre el
+**árbol de sintaxis**: un módulo que no importa `pytest` no puede llamar a
+`pytest.skip`. M3 reintroduce el skip por la puerta de atrás —dentro del
+helper, un nivel más abajo— y el guard lo ve.
+
+### Mutaciones 5/5
+
+`.pipelinek/wi103_mutate.sh` + `wi103_muts/m1..m5.py`.
+
+**M1 y M2 son degradaciones por incapacidad, no por ignorancia**: el guard
+sigue leyendo ficheros y ejecutando el auditor, y su veredicto es el correcto
+para un umbral o una medición que nadie alcanza. Un guard que no puede fallar
+es indistinguible de uno que aprueba todo, y por eso hacen falta las dos.
+
+**M5** deshace en una línea el parámetro de WI-89: con `out_dir` posicional,
+un llamador nuevo puede auditar y escribir en `audits/`, que está versionado.
+
+### Cierre
+
+- **2677 passed, 0 skipped** en la CI canónica, run `9db8a440`, 8/8 stages,
+  **0 `StepFailed`**, sobre el árbol quieto.
+- Antes: 2672 passed + 1 skipped. La diferencia no es un test nuevo: es el
+  mismo test, que antes no se ejecutaba.
+- 44 ciclos CLOSED, 0 pendientes.
+
+### Lo que NO se resolvió
+
+- **No se genera el informe que falta.** Fabricar el artefacto para tapar el
+  gate sería circular, y además ensuciaría `audits/` con un fichero producido
+  por un test.
+- **No se cambia la política de los 51 ficheros de `audits/`**: decisión del
+  mantenedor.
+- **No se audita el contenido de los informes ya escritos.** El gate vigila el
+  código, que es lo que declara medir.
+- **El guard de citas sigue comprobando resolubilidad, no verdad** (medido
+  en WI-102). Anotado, no arreglado: es otro workitem.
+- Hooks sin instalar. 123 commits sin publicar, `origin/main` en `0ebbd58`.
+  Push no autorizado.
+- Credenciales Anthropic/OpenAI: siguen bloqueando H9 desde WI-91.
+- `release.complete` inalcanzable (exige `Cargo.toml`) → `cycle supersede`.
+
+### Errores propios de esta sesión, para no repetirlos
+
+5. **Un guard que busca una palabra en un fichero que explica el defecto.**
+   Buscó `skip` en el fuente y encontró su propio docstring. Para fijar «esto
+   no puede saltarse», mirar **imports en el AST**: un módulo que no importa
+   pytest no puede llamar a `pytest.skip`. La propiedad, no la cadena.
+6. **Un eco con backticks sin entrecomillar en un script de medición.**
+   `` echo "…`main`…" `` intentó ejecutar `main`. Falló con «orden no
+   encontrada» y siguió: el resto del script corrió y dio datos correctos.
+   Un error de shell que no detiene el script no es un error visible.
+7. **Certificar y después tocar el árbol.** Ya pasó en WI-102: un run en
+   SUCCESS sobre ficheros que se movían. Repetir el run sobre el árbol quieto
+   no es redundancia, es lo que lo hace una certificación.

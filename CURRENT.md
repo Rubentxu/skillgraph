@@ -1,5 +1,48 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-03 (quinceava tanda) cerrado — WI-103, release `v0.20.4`.**
+> Versión activa `0.20.4.dev0`; último tag `v0.20.4`. 2677 passed, **0 skipped**.
+>
+> **WI-103 — un gate que solo existía los días que su artefacto existía.**
+> Quinta vía de la serie «qué declara el repo que nada comprueba», y la más
+> discreta: no un instrumento que mide mal, sino uno que **no llega a medir**
+> y da verde.
+>
+> **Apareció por la re-certificación de WI-102:** `2672 passed, 1 skipped`
+> donde el código había dado 2673 sin skips. La fecha rolloveró a `2026-10-03`
+> y el informe de ese día no existía.
+>
+> `TestAuditGateForMain` declara una propiedad sobre el **código** —«`main` no
+> debe listarse como hotspot público, cc≥20»— y la comprobaba leyendo
+> `audits/architecture-debt-<HOY>.md`, con `pytest.skip` si no estaba:
+>
+> | situación | resultado |
+> |---|---|
+> | sin informe de hoy | **SKIPPED, exit 0** |
+> | informe de hoy generado | 1 passed |
+> | informe de hoy con `main` inyectado | 1 **failed, exit 1** |
+>
+> **La propiedad es real y el gate muerde cuando el artefacto está. El
+> defecto es la existencia del artefacto:** 6 informes en 7 días (falta el
+> `2026-09-30`) y hoy ninguno. Un gate que solo corre cuando alguien se
+> acuerda de correr el auditor no es un gate.
+>
+> **Ahora mide:** `tests/_gate_main_hotspot.py:73` ejecuta `audits/audit_debt.py`
+> con `--src-root` sobre el árbol que se le pase y `--out-dir` a un temporal
+> (parámetros desde WI-89, hechos parámetros justo para que un test pueda
+> auditar sin mutar los 51 ficheros versionados de `audits/`).
+>
+> **El contraejemplo es parte del arreglo:** sin un test que ponga un `main`
+> real de `cc≥20` en un árbol y exija que la medición lo vea, una medición que
+> devolviera siempre `()` habría pasado todo verde. Mutaciones **5/5**, dos de
+> ellas degradaciones por *incapacidad*. Run `9db8a440`, 8/8 stages,
+> **2677 passed y 0 skipped**: la diferencia no es un test nuevo, es el mismo
+> test que antes no se ejecutaba.
+>
+> **Sin push**: 123 commits sin publicar, `origin/main` en `0ebbd58`.
+
+---
+
 > **Bloque 2026-10-03 (catorceava tanda) cerrado — WI-102, release `v0.20.3`.**
 > Versión activa `0.20.3.dev0`; último tag `v0.20.3`. 2673 passed.
 >

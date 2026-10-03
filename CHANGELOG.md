@@ -14,6 +14,56 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.20.4] - 2026-10-03 — el gate de `main` solo existía los días con informe
+
+**PATCH**: `git log v0.20.3..HEAD` = 0 `feat`, 1 `fix`, 0 `test`/`docs`, 0 breaking.
+**2677 passed, 0 skipped** (2672 passed + 1 skipped antes; +4).
+
+Apareció por la re-certificación de WI-102, que dio `2672 passed, 1 skipped`
+donde el código había dado 2673 sin skips. La fecha rolloveró a `2026-10-03`
+durante la sesión y el informe de ese día no existía.
+
+### Medido
+
+`TestAuditGateForMain` declara una propiedad sobre el **código** —«`main` no
+debe listarse como hotspot público, cc≥20»— y la comprobaba leyendo
+`audits/architecture-debt-<HOY>.md`, con `pytest.skip` si no existía.
+
+| situación | resultado |
+|---|---|
+| sin informe de hoy | **SKIPPED, exit 0** |
+| informe de hoy generado | 1 passed |
+| informe de hoy con `main` inyectado | 1 **failed, exit 1** |
+
+**La propiedad es real y el gate muerde cuando el artefacto está. El defecto
+es la existencia del artefacto:** 6 informes `architecture-debt-*` en 7 días
+(falta el `2026-09-30`) y hoy no hay ninguno.
+
+`AGENTS.md §6.2`: «NO usar `pytest.skip` para esconder fallos».
+
+### El arreglo: que el gate mida
+
+`hotspots_publicos(arbol, *, out_dir)` ejecuta `audits/audit_debt.py` con
+`--src-root` sobre el árbol que se le pase y `--out-dir` a un temporal —ambos
+parámetros desde WI-89, que los hizo parámetros para que un test pudiera
+auditar sin mutar `audits/`, que tiene 51 ficheros versionados. El análisis usa
+el propio auditor, no una cuenta propia: reimplementar la métrica sería tener
+dos verdades sobre qué es un hotspot.
+
+Gana tres cosas: **siempre activo** (no depende de la fecha), **siempre
+fresco** (antes validaba un snapshot de la última vez que se corrió) y **sin
+efectos secundarios**.
+
+### El contraejemplo es parte del arreglo
+
+Sin un test que ponga un `main` real de `cc>=20` en un árbol y exija que la
+medición lo vea, **una medición que devolviera siempre `()` habría pasado todo
+verde**. Un gate que solo sabe pasar no está probado. M2 es esa degradación.
+
+Mutaciones 5/5, y dos de ellas son degradaciones por *incapacidad* —el guard
+sigue leyendo ficheros y su veredicto es correcto para un umbral que nadie
+alcanza—, que es más difícil de ver que una desactivación.
+
 ## [0.20.3] - 2026-10-03 — la receta canónica puede perder un contrato y seguir verde
 
 **PATCH**: `git log v0.20.2..HEAD` = 0 `feat`, 2 `fix`, 0 `test`/`docs`, 0 breaking.
