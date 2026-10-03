@@ -3,8 +3,9 @@
 - **Ciclo**: `p-b7740b96d79ec013/wi103-gate-conditional-al-artefacto`
 - **Sesión**: `wi103-20261003T001100Z`
 - **Fecha**: 2026-10-03
-- **Run de certificación**: `9db8a440-1031-4c4a-98c9-3fee571c9999`
-  — 8/8 stages, **2677 passed, 0 skipped**, 0 `StepFailed`, árbol quieto
+- **Run de certificación (el que cierra)**: `371256a0-dcf9-4498-8248-1453a4452898`
+  — 8/8 stages, **2677 passed, 0 skipped**, 0 `StepFailed`, árbol quieto.
+- **Run del código**: `9db8a440-1031-4c4a-98c9-3fee571c9999` — las mismas cifras.
 - **SHA-256 de `.pipeline.kts`**: sin cambios (`d8658968…3ddcc`)
 
 ---
