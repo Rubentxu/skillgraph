@@ -4,11 +4,20 @@
 - **Sesión**: `wi105-20261003T031000Z`
 - **Fecha**: 2026-10-03
 - **Release**: `v0.21.0` (MINOR, derivado con `scripts/derive_semver.py`)
-- **Run que cierra**: `cd5124bb-d040-47dd-a617-cf06fff0b9ff`
+- **Run que cierra**: `c16d25f3-1086-49a9-b9b6-9c7f41aded31`
   — 8/8 stages `success`, **2699 passed, 0 skipped**, 0 `StepFailed`,
   `VEREDICTO: todos los suelos declarados se cumplen`, árbol quieto.
+  Es el run que certifica **el estado final**, con esta evidencia escrita.
+- **Run del código** (antes de escribir la evidencia):
+  `cd5124bb-d040-47dd-a617-cf06fff0b9ff` — las mismas cifras.
 - **SHA-256 de `.pipeline.kts`**: `7541ced5…dd42`. **Cambió respecto a
   WI-104** (`d8658968…3ddcc`), a propósito: es la etapa `evidence`.
+
+> El commit posterior a `c16d25f3` sólo toca la cabecera de este fichero
+> para anotar el identificador. Es la convención que el repo viene usando
+> desde WI-101: el run certifica el estado, y el commit posterior es el
+> que *cuenta* esa certificación. Editar el árbol **con el run en marcha**
+> sí lo invalidaría — eso costó una certificación descartada en WI-102.
 
 ---
 
