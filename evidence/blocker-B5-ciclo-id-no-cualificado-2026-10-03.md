@@ -108,3 +108,47 @@ del ciclo**, y está resuelto usando el id cualificado. Los cuatro gates de
 va a pasar mientras los gates de deuda no sean evaluables —ver
 `blocker-B4-debt-report-context.md`, que sigue vigente y cuya redacción
 la propia herramienta confirma.
+
+## Tercera manifestación, medida en B6: el artefacto se guarda y el ciclo no lo ve
+
+El 2026-10-04, al caminar el ciclo `b6`, apareció la misma clase de fallo
+en otro sitio: **una escritura que la herramienta reporta como exitosa y
+que no llega al destino que la hace útil**.
+
+```bash
+$ sddk artifact store --file evidence/sddk-b6-exploration-2026-10-03.md \
+      --kind exploration-report --cycle p-b7740b96d79ec013/b6 --producer mavis-b6
+{"artifact_id": "art-98ecdb80d9dd-40c4a166",
+ "sha256": "sha256:98ecdb80d9dd56e2918fa04abc78da50e4b895344d50873063cefdaca9e46ecb",
+ "size": 3835}
+
+$ sddk cycle status --cycle p-b7740b96d79ec013/b6
+{"status": "OPEN", "phase": "explore", "artifacts": 0}      # <-- 0
+
+$ sddk cycle transition --transition phase.explore.complete ...
+error[ENGINE_MISSING_ARTIFACT]: missing artifact "exploration-report"
+```
+
+El artefacto **sí** existe y se lee byte a byte idéntico
+(`sddk artifact get --digest ... --output` y `diff` no encuentran
+diferencia). Lo que no se escribe es la **vinculación** artefacto → ciclo.
+
+Las tres manifestaciones del mismo defecto, entonces:
+
+| # | qué dice el comando | qué es verdad |
+|---|---|---|
+| 1 | `cycle status --cycle b5` → `cycle not found` | el ciclo existe; sólo falla el id corto |
+| 2 | `cycle start` → `OPEN` con `event_id` | el evento va con `sequence 1`, que colisiona con 130 |
+| 3 | `artifact store` → `artifact_id` y `sha256` | el ciclo sigue con `artifacts: 0` |
+
+**Por qué importa más de lo que parece.** Las tres devuelven un
+identificador y un digest convincentes. Un agente que se fíe de la salida
+daria el bloque por registrado. Aquí no se hizo: el ciclo `b6` queda en
+`explore` con la evidencia commiteada **en el repositorio**, que es donde
+se puede leer y verificar, y no en el store del framework, que es donde no
+se puede.
+
+**Workaround.** La evidencia de un bloque vive en `evidence/` y se
+commitea. El ciclo registra lo que sí puede registrar —los gates, con su
+`argv`, `exit_code` y `output_digest` reales— y lo que no puede, queda
+dicho en el informe de verificación en vez de darse por bueno.
