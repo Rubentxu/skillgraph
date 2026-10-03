@@ -38,8 +38,17 @@ from skillgraph.platform.ports import (
     RunRepository,
     StoredRun,
 )
+
+# B3-cierre: por la RUTA COMPLETA, y no desde `platform.ports`. B3
+# decidio explicitamente que `capabilities` NO se reexporta desde el
+# indice de WI-69 —catorce tipos, contrato cerrado con su propio test— y
+# anadirlo seria cambiar ese contrato desde otro bloque. La ruta
+# completa deja ademas el origen a la vista cuando alguien busca de
+# donde sale una capability.
+from skillgraph.platform.ports.capabilities import CapabilityNotFound, CapabilityRegistry
 from skillgraph.resources.workflow import WorkflowNode, WorkflowPlan
 from skillgraph.runtime.agent import AgentAdapter
+from skillgraph.runtime.capability_controller import CapabilityController
 from skillgraph.runtime.engine import EventBuilder, EventLog
 from skillgraph.runtime.locks import (
     LockMode,
@@ -103,6 +112,7 @@ class RunController(
         adapter: AgentAdapter,
         recipe_resolver: Callable[[str], ContextRecipe | None] | None = None,
         knowledge: KnowledgeRepository | None = None,
+        capabilities: CapabilityRegistry | None = None,
         lock_dir: Path | None = None,
         lock_mode: LockMode = "none",
         lock_timeout_seconds: float = 30.0,
@@ -135,6 +145,38 @@ class RunController(
         # typing de knowledge), el caller debera pasar
         # explícitamente ``knowledge=storage.knowledge_repository()``.
         self._knowledge: KnowledgeRepository | None = knowledge
+        # B3-cierre: la costura que hace ALCANZABLE el puerto de
+        # capabilities desde produccion. Sin esto, el gate de B3 se
+        # cumplia en vacio: se podia anadir una capability sin tocar el
+        # core porque el core no la veia nunca. Medido antes de escribir
+        # nada (criterio declarado por delante): 16 construcciones de
+        # `CapabilityRegistry` en el arbol, las 16 en tests, cero
+        # importadores del puerto bajo `src/`.
+        #
+        # LA POLITICA, Y POR QUE EL DEFAULT ES `None`. La exigencia la
+        # PIDE quien despliega, y solo si la pide:
+        #
+        # - `None` (default): comportamiento EXACTAMENTE el de antes. Un
+        #   plan que declara `'stale'` —que no es una capability sino un
+        #   `FreshnessState`, y que `build_capabilities` produce— sigue
+        #   ejecutandose igual. Cero ruptura, y por eso esto se puede
+        #   aterrizar sin migrar nada.
+        # - con registro: lo que el plan declara tiene que existir. Si no,
+        #   el nodo queda FAILED con `CapabilityNotFound`, que es un
+        #   `SkillGraphError` con `code`, traducible a exit code.
+        #
+        # Exigir siempre habria roto los 9 sitios que construyen
+        # `node.capabilities` y los 30 que lo leen. Exigir nunca habria
+        # dejado el puerto sin consumidor, que es el estado medido.
+        #
+        # LO QUE NO SE AFIRMA: que las capabilities se invoquen durante la
+        # ejecucion. No se invocan. `Handoff.capabilities` sigue siendo un
+        # `tuple[str, ...]` porque cambiar su forma esta MEDIDO como
+        # ruptura de datos (`runtime/handoff.py:195` lo mete en el hash
+        # firmado), y es materia de B8. Lo que se hace es que la
+        # declaracion tenga un consumidor que la verifique, en vez de
+        # viajar a un prompt sin que nadie la mire.
+        self._capabilities: CapabilityRegistry | None = capabilities
         # S6 Etapa 7: configuracion de locks por run_id.
         # `lock_dir=None` + `lock_mode='none'` = no locks (compat
         # pre-S6; tests existentes no se enteran). Cualquier otra
@@ -534,6 +576,46 @@ class RunController(
         self._runs.recover_interrupted_node_executions(
             tenant_id=tenant_id, project_id=project_id, run_id=run_id
         )
+
+    def _verificar_capabilities(self, *, node: WorkflowNode) -> None:
+        """Comprueba que el despliegue sepa lo que el nodo declara.
+
+        **POR QUE LA LLAMADA ESTA EN `_compile_node_handoff`.** Dentro del
+        `try` de ahi, y por dos razones que dependen la una de la otra: ese
+        `except SkillGraphError` ya sabe persistir el fallo con su mensaje,
+        y esa fase corre ANTES de `_invoke_node_adapter`. De las dos sale la
+        propiedad que no se ve en la fila del nodo: un plan mal declarado no
+        llega a **gastar una llamada al adapter**. Un plan que paga una
+        llamada de red y luego falla PARECE funcional, y esa fila en la base
+        es la unica que delata que no lo fue.
+
+        **NO HACE NADA si no hay registro inyectado.** Esa es la politica,
+        y esta escrita en `__init__`: la exigencia la pide quien despliega.
+        Sin registro, un plan que declara `'stale'` —que no es una
+        capability— sigue ejecutandose como antes, y por eso esto se puede
+        aterrizar sin migrar nada.
+
+        Delega en `CapabilityController.missing`, que ya existe, en vez de
+        repetir el calculo: el criterio de «falta» vive en un sitio, y
+        dos copias de un criterio divergen sin que nada lo note.
+
+        Lanza `CapabilityNotFound` —un `SkillGraphError` con `code`, que la
+        CLI traduce a exit code (WI-109)— y el `except` del llamante lo
+        convierte en nodo FAILED. No devuelve una lista: la ausencia de
+        una capability que el plan promete es un fallo del despliegue, y
+        devolverla convertiria un error en un dato que alguien interpretara
+        como «no hay nada que hacer».
+        """
+        if self._capabilities is None:
+            return
+        kernel = CapabilityController(registry=self._capabilities)
+        faltan = kernel.missing(node.capabilities)
+        if faltan:
+            raise CapabilityNotFound(
+                f"el nodo {node.name!r} declara {list(faltan)} y este "
+                f"despliegue no las resuelve. Resuelve: "
+                f"{list(kernel.types) or '(ninguna)'}"
+            )
 
     def _build_handoff(
         self,

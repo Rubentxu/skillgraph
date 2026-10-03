@@ -325,11 +325,7 @@ def _salteados_declarados() -> int:
             if not isinstance(nodo, ast.Call):
                 continue
             func = nodo.func
-            nombre = (
-                func.attr
-                if isinstance(func, ast.Attribute)
-                else getattr(func, "id", "")
-            )
+            nombre = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
             # `pytest.mark.skipif(...)` es un `skipif` de plataforma; un
             # `skip(...)` en cuerpo es ejecucion. Los dos cuentan, porque
             # los dos son tests que no se ejecutan.
@@ -468,10 +464,7 @@ def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
     # el numero no es el que la lista dice, lista y run han divergido.
     if salteados and salteados != declarados:
         if salteados > declarados:
-            detalle = (
-                f"{salteados - declarados} de ellos NO estan declarados en "
-                "SKIPS_PLATAFORMA"
-            )
+            detalle = f"{salteados - declarados} de ellos NO estan declarados en SKIPS_PLATAFORMA"
         else:
             detalle = (
                 f"la lista declarada espera {declarados} y el run trae "

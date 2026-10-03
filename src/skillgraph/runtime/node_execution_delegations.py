@@ -236,8 +236,14 @@ class NodeExecutionDelegations:
         H9-context-in-run: los errores tipados de compilacion de
         contexto (Stale, MissingObligatory, TokenBudget) marcan el nodo
         FAILED sin invocar el adapter.
+
+        B3-cierre: aqui tambien se VERIFICAN las capabilities que declara
+        el nodo, cuando quien despliego inyectó un `CapabilityRegistry`. El
+        motivo de que sea aqui y no en otro sitio esta en
+        `_verificar_capabilities`.
         """
         try:
+            self._verificar_capabilities(node=running.node)
             handoff = self._build_handoff(
                 tenant_id=tenant_id,
                 project_id=project_id,
