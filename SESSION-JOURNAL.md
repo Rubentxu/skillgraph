@@ -12142,12 +12142,29 @@ salidas tienen nombre y se distinguen:
     versionar, la suite daba 1 failed, y escribir solo lo primero habría
     sido escribir la mitad del dato. La medición va con su contrafactual.
 
-17. **Contar los caracteres del subject a ojo, cuatro veces seguidas.** En
-    este bloque, cuatro commits pasaron de 72 (75, 74, 75, 81) y hubo que
-    enmendar los cuatro. El cuarto lo demostro de la manera mas redonda
-    posible: el commit que anota este error como «tres veces» es el que
-    lo repite. El protocolo de `/home/rubentxu/AGENTS.md` pone el
+17. **Contar los caracteres del subject a ojo, cinco veces seguidas.** En
+    WI-107 cuatro commits pasaron de 72 (75, 74, 75, 81) y hubo que enmendar
+    los cuatro. El cuarto lo demostro de la manera mas redonda posible: el
+    commit que anota este error como «tres veces» es el que lo repite. En
+    WI-108 el quinto, a 94 caracteres. Anotarlo aqui no lo arreglo: la causa
+    es que estimo la cifra mentalmente, que es exactamente lo que este
+    bloque va contando en todas partes. El protocolo de `/home/rubentxu/AGENTS.md` pone el
     límite en 72 y el barrito de control es `awk '{print length($0)}'`
     **antes** de confirmar, no después de enmendar. Es un hábito, no un
     accidente: la cifra se estimaba mentalmente en vez de medirse, que es
     exactamente lo que este bloque va contando en todas partes.
+
+18. **Commitear despues de decir que paras.** El barrido de CJK de WI-108
+    reporto un hallazgo —dos ideogramas colados en un docstring— en la MISMA
+    linea de comando que el `git add` y el `git commit`, y commitee. Un
+    barrido que encuentra algo es una parada, no un aviso: separarlo en su
+    propio paso, y si sale, arreglar y enmendar antes de seguir. Y no citar
+    los caracteres en la nota que explica el error, porque eso mete el
+    hallazgo de vuelta en el fichero: se describe, no se muestra.
+19. **`git add` antes de enmendar y luego editar.** Corregi el CJK despues
+    del `git add`, y el `git commit --amend` commitea lo que hay en el
+    indice, no el working tree: el fix se quedo fuera y me aparecio como un
+    cambio fantasma en el fichero que las mutaciones iban a tocar. Un
+    cambio que no se ve en el commit es un cambio que no existe. Lo bueno es
+    que el harness de mutaciones lo aborta por baseline sucio, que es
+    exactamente para lo que esta.
