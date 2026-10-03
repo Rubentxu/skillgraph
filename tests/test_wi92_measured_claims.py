@@ -36,6 +36,7 @@ import ast
 import dataclasses
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
@@ -45,6 +46,11 @@ REPO_ROOT: Final = Path(__file__).resolve().parent.parent
 RECEIPTS_PY: Final = REPO_ROOT / "src/skillgraph/governance/receipts.py"
 AGENT_PY: Final = REPO_ROOT / "src/skillgraph/runtime/agent.py"
 CURRENT_MD: Final = REPO_ROOT / "CURRENT.md"
+
+# Una cita es `fichero.py:LINEA::simbolo`. El simbolo es OBLIGATORIO y el
+# grupo es opcional en la regex solo para poder decir «no lo dice» con un
+# mensaje util, en vez de dejar de encontrar la cita en silencio.
+CITA: Final = r"([A-Za-z0-9_/]+\.py):(\d+)(?:::([A-Za-z_][A-Za-z0-9_]*))?"
 
 
 def _indice() -> dict[str, list[Path]]:
@@ -190,31 +196,228 @@ def _bloque_vivo() -> str:
     return texto[: cabeceras[1]]
 
 
-def _citas_vivo() -> list[tuple[str, int]]:
+def _citas_vivo() -> list[tuple[str, int, str | None]]:
+    # `re.findall` devuelve '' —no None— cuando el grupo opcional no
+    # participa. Sin normalizar, una cita sin ancla llegaria aqui como
+    # cadena vacia y el check de `simbolo is None` no la veria nunca.
     return [
-        (nombre, int(linea))
-        for nombre, linea in re.findall(r"([A-Za-z0-9_/]+\.py):(\d+)", _bloque_vivo())
+        (nombre, int(linea), simbolo or None)
+        for nombre, linea, simbolo in re.findall(CITA, _bloque_vivo())
     ]
 
 
-class TestBlockCitationsDelCurrentVivoResuelven:
-    def test_toda_cita_del_bloque_vivo_resuelve(self) -> None:
+def _deficiones(ruta: Path) -> dict[str, tuple[tuple[int, int], ...]]:
+    """Simbolo -> span(s) que lo definen, leidos del AST.
+
+    Se lee el AST y no se ejecuta el modulo: este fichero tiene que
+    seguir funcionando aunque el fichero que cita este roto, que es
+    justo el fallo que vigila.
+
+    Un simbolo con MAS DE UN span se queda con todos. La ambiguedad es
+    informacion: si se descartara en silencio, una cita a un nombre
+    repetido diria «no existe» y señalaria al sitio equivocado.
+    """
+    arbol = ast.parse(ruta.read_text(encoding="utf-8"))
+    candidatas: dict[str, list[tuple[int, int]]] = defaultdict(list)
+
+    def registrar(nombre: str, nodo: ast.AST) -> None:
+        inicio = int(getattr(nodo, "lineno", 0))
+        candidatas[nombre].append((inicio, int(getattr(nodo, "end_lineno", inicio))))
+
+    for nodo in arbol.body:
+        if isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            registrar(nodo.name, nodo)
+            for sub in getattr(nodo, "body", []):
+                if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    registrar(f"{nodo.name}.{sub.name}", sub)
+                    registrar(sub.name, sub)
+        elif isinstance(nodo, ast.AnnAssign) and isinstance(nodo.target, ast.Name):
+            registrar(nodo.target.id, nodo)
+        elif isinstance(nodo, ast.Assign):
+            for tgt in nodo.targets:
+                if isinstance(tgt, ast.Name):
+                    registrar(tgt.id, nodo)
+
+    return {nombre: tuple(tramos) for nombre, tramos in candidatas.items()}
+
+
+def _modulo_unico(indice: dict[str, list[Path]], nombre: str) -> tuple[Path | None, str]:
+    """Resuelve el nombre de una cita a UN fichero, o explica por que no."""
+    candidatas = indice.get(Path(nombre).name, [])
+    if not candidatas:
+        return None, f"{nombre} — no existe ese modulo"
+    if len(candidatas) > 1:
+        return None, f"{nombre} — ambiguo: " + ", ".join(
+            str(c.relative_to(REPO_ROOT)) for c in candidatas
+        )
+    return candidatas[0], ""
+
+
+def _problemas_de_la_cita(
+    indice: dict[str, list[Path]], nombre: str, linea: int, simbolo: str | None
+) -> tuple[str, ...]:
+    """Los porques de que esta cita no diga la verdad. Vacio = correcta.
+
+    La cita tiene que decir QUE apunta, no solo DONDE. Sin el simbolo
+    no hay nada que verificar: `fichero.py:352` es cierto y no dice
+    nada, y por eso WI-92 lo acepto dos veces.
+    """
+    donde, error = _modulo_unico(indice, nombre)
+    if donde is None:
+        return (f"{nombre}:{linea} — {error}",)
+    if simbolo is None:
+        return (f"{nombre}:{linea} — la cita no dice a que simbolo apunta",)
+
+    total = len(donde.read_text(encoding="utf-8").splitlines())
+    if linea > total:
+        return (f"{nombre}:{linea} — el fichero tiene {total} lineas",)
+
+    tramos = _deficiones(donde).get(simbolo)
+    if not tramos:
+        return (f"{nombre}:{linea} — {simbolo} no lo define {donde.name}",)
+    if len(tramos) > 1:
+        return (
+            f"{nombre}:{linea} — {simbolo} es ambiguo en {donde.name}; cita el nombre completo",
+        )
+    inicio, fin = tramos[0]
+    if inicio <= linea <= fin:
+        return ()
+    return (f"{nombre}:{linea} — {simbolo} esta en la linea {inicio}, no en la {linea}",)
+
+
+def _problemas_del_bloque(citas: Sequence[tuple[str, int, str | None]]) -> tuple[str, ...]:
+    """Verifica una lista de citas cualquiera, no solo las del bloque vivo.
+
+    Existe para que la regla del ancla se pueda comprobar sobre una cita
+    SIN ancla. Si el guard solo acepta citas ya parseadas, la regla «el
+    ancla es obligatoria» queda fuera de alcance de cualquier prueba: el
+    parser nunca produce una cita sin ancla, asi que el mutacion que la
+    relaja —M3— pasaria verde sin que nadie lo note.
+    """
+    indice = _indice()
+    return tuple(
+        problema
+        for nombre, linea, simbolo in citas
+        for problema in _problemas_de_la_cita(indice, nombre, linea, simbolo)
+    )
+
+
+class TestLaCitaDeclaraQueSimboloApunta:
+    """El contraejemplo del arreglo: citas que TIENEN linea y no dicen nada.
+
+    Sin esto, un verificador que devolviera siempre `()` pasaria todo
+    verde. Se comprueba sobre citas REALES de este repo, no sobre
+    informes sinteticos: la pregunta es si el vercriptor distingue la
+    cita verdadera de la que solo tiene un numero.
+    """
+
+    def test_la_cita_verdadera_no_produce_problemas(self) -> None:
+        assert (
+            _problemas_de_la_cita(_indice(), "tests/_gate_main_hotspot.py", 73, "hotspots_publicos")
+            == ()
+        )
+
+    def test_linea_real_con_simbolo_equivocado_falla(self) -> None:
+        """`:73` existe y es una linea real. No es la de `_cargar_auditor`.
+
+        Es la forma exacta del fallo de WI-102: un numero que existe
+        apuntando a otra cosa. El simbolo TIENE que existir —si no, la
+        prueba pasaria por la rama de «no lo define» y no mediria nada,
+        que es como se colaba la primera version— y por eso se usa
+        `_cargar_auditor`, que existe de verdad entre 53 y 70.
+        """
+        problemas = _problemas_de_la_cita(
+            _indice(), "tests/_gate_main_hotspot.py", 73, "_cargar_auditor"
+        )
+        assert problemas, (
+            "una cita que apunta a la linea de otro simbolo se ha dado por "
+            "buena: el guard sigue comprobando resolubilidad, no verdad"
+        )
+        assert any("53" in p for p in problemas), (
+            "falla, pero no dice que linea es la buena: "
+            f"{problemas}. Sin eso la prueba no distingue esta rama de la "
+            "de «el simbolo no existe»."
+        )
+
+    def test_simbolo_que_no_existe_falla(self) -> None:
+        problemas = _problemas_de_la_cita(
+            _indice(), "tests/_gate_main_hotspot.py", 73, "no_existe_este_simbolo"
+        )
+        assert problemas, "el verificador acepta un simbolo que nadie define"
+
+    def test_simbolo_existe_pero_en_otro_fichero_falla(self) -> None:
+        """`checkers_de` existe en el repo, en otro fichero.
+
+        El fallo es resolver por basename. Se comprueba que el error diga
+        QUE fichero es el que deberia definirlo: si el verificador
+        buscara en cualquier parte del repo, daria otro error —el de
+        desalineacion— y por eso esta prueba lo distingue.
+        """
+        problemas = _problemas_de_la_cita(
+            _indice(), "tests/_gate_main_hotspot.py", 73, "checkers_de"
+        )
+        assert problemas, (
+            "el simbolo existe en el repo pero no en el fichero que la cita "
+            "nombra: es el fallo de resolver por basename"
+        )
+        assert any("no lo define _gate_main_hotspot.py" in p for p in problemas), (
+            f"el error no senala el fichero que deberia definirlo: {problemas}"
+        )
+
+    def test_linea_de_prosa_dentro_de_un_docstring_falla(self) -> None:
+        """Las dos citas que WI-102 escribio mal, con su linea real.
+
+        `:352` y `:479` de `check_ci_recipe_parity.py` caen en prosa de
+        docstring. Existen. El guard las dio por buenas. Este es el
+        contraejemplo historico, reproducido.
+        """
         indice = _indice()
-        rotas: list[str] = []
-        for nombre, linea in _citas_vivo():
-            candidatas = indice.get(Path(nombre).name, [])
-            if not candidatas:
-                rotas.append(f"{nombre}:{linea} — no existe ese modulo")
-                continue
-            if len(candidatas) > 1:
-                rotas.append(
-                    f"{nombre}:{linea} — ambiguo: "
-                    + ", ".join(str(c.relative_to(REPO_ROOT)) for c in candidatas)
-                )
-                continue
-            total = len(candidatas[0].read_text(encoding="utf-8").splitlines())
-            if linea > total:
-                rotas.append(f"{nombre}:{linea} — el fichero tiene {total} lineas")
+        for linea in (352, 479):
+            assert _problemas_de_la_cita(
+                indice, "scripts/check_ci_recipe_parity.py", linea, "checkers_de"
+            ), f"la cita falsa a :{linea} se ha dado por buena"
+
+    def test_una_cita_sin_ancla_no_pasa_la_verificacion(self) -> None:
+        """La regla se comprueba sobre el VERIFICADOR, no sobre el parser.
+
+        Mirar `_citas_vivo()` y contar las que no traen simbolo no
+        comprueba nada del verificador: el parser nunca fabrica una cita
+        sin ancla, de modo que relajar la regla dentro del verificador
+        —la mutacion M3, la mas probable porque no rompe nada visible—
+        pasaria verde. Aqui se le pasa la cita sin ancla directamente.
+        """
+        problemas = _problemas_del_bloque([("tests/_gate_main_hotspot.py", 73, None)])
+        assert problemas, (
+            "una cita sin simbolo pasa la verificacion: el ancla se ha "
+            "vuelto opcional y el guard vuelve a ser el de WI-92"
+        )
+
+    def test_el_error_dice_donde_esta_el_simbolo(self) -> None:
+        """Un verificador que dice «falso» sin decir dónde es un callejón.
+
+        Cuando la linea se queda vieja —que es lo que pasa en cuanto
+        alguien inserta una linea arriba— el mensaje tiene que senalar la
+        linea buena, o el que lo arregla tiene que buscar a mano.
+        """
+        problemas = _problemas_de_la_cita(
+            _indice(), "tests/_gate_main_hotspot.py", 70, "hotspots_publicos"
+        )
+        assert problemas
+        assert any("73" in p for p in problemas), (
+            f"el mensaje no dice donde esta el simbolo: {problemas}"
+        )
+
+
+class TestBlockCitationsDelCurrentVivoResuelven:
+    def test_toda_cita_del_bloque_vivo_apunta_a_lo_que_dice(self) -> None:
+        """La cita no solo tiene que existir: tiene que SEÑALAR.
+
+        Antes (WI-92 … WI-103) bastaba con que `linea <= total`, asi que
+        `check_ci_recipe_parity.py:352` —una linea de prosa dentro de
+        un docstring— pasaba por buena. Ver `.pipelinek/wi104_measure.py`
+        para la medicion con los cinco casos.
+        """
+        rotas = _problemas_del_bloque(_citas_vivo())
         assert not rotas, (
             "el bloque vivo de CURRENT.md cita codigo que no esta donde dice:\n  "
             + "\n  ".join(rotas)

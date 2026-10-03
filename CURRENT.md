@@ -27,10 +27,11 @@
 > `2026-09-30`) y hoy ninguno. Un gate que solo corre cuando alguien se
 > acuerda de correr el auditor no es un gate.
 >
-> **Ahora mide:** `tests/_gate_main_hotspot.py:73` ejecuta `audits/audit_debt.py`
-> con `--src-root` sobre el árbol que se le pase y `--out-dir` a un temporal
-> (parámetros desde WI-89, hechos parámetros justo para que un test pueda
-> auditar sin mutar los 51 ficheros versionados de `audits/`).
+> **Ahora mide:** `tests/_gate_main_hotspot.py:73::hotspots_publicos` ejecuta
+> `audits/audit_debt.py` con `--src-root` sobre el árbol que se le pase y
+> `--out-dir` a un temporal (parámetros desde WI-89, hechos parámetros justo
+> para que un test pueda auditar sin mutar los 51 ficheros versionados de
+> `audits/`).
 >
 > **El contraejemplo es parte del arreglo:** sin un test que ponga un `main`
 > real de `cc≥20` en un árbol y exija que la medición lo vea, una medición que
