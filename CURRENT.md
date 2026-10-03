@@ -27,7 +27,7 @@
 > r.result  ->  {'dato': 999}
 > ```
 >
-> **No era cosmético**: `node_execution_delegations.py:443` serializa
+> **No era cosmético**: `node_execution_delegations.py:443::_finalize_node_success` serializa
 > ese dict a disco, así que lo persistido era el del Adapter. El
 > hash firmado del Handoff no se ve afectado — por eso el descarte de
 > WI-111 era correcto *para el hash* y no para el resto.

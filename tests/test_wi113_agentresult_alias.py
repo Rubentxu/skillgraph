@@ -25,7 +25,7 @@ Medido antes de arreglar nada:
     r.result  ->  {'dato': 999, 'inyectado': 'tras la construccion'}
 
 El `AgentResult` cambio sin que nadie lo tocara. Y no es cosmetico:
-`node_execution_delegations.py:443` serializa ese dict a disco, asi
+`node_execution_delegations.py:443::_finalize_node_success` serializa ese dict a disco, asi
 que lo que se persiste es el dict del Adapter.
 
 **El guard ejecuta, no lee.** Un guard por AST veria que el campo esta
@@ -93,7 +93,7 @@ class TestElAgentResultNoSeAliasaAlLlamante:
 
         En WI-111 el `budget` se envolvio en `MappingProxyType` porque
         solo se leia. Aqui no: el motor serializa el resultado a disco
-        (`node_execution_delegations.py:443`) y `json.dumps` **no**
+        (`node_execution_delegations.py:443::_finalize_node_success`) y `json.dumps` **no**
         acepta un mappingproxy. Envolverlo rompe la frontera.
 
         La inmutabilidad de este campo no la aporta el tipo, la aporta

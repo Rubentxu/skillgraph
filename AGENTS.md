@@ -61,7 +61,7 @@ externo["result"]["dato"] = 999
 r.result  ->  {'dato': 999}
 ```
 
-Y no era cosmético: `node_execution_delegations.py:443` serializa
+Y no era cosmético: `node_execution_delegations.py:443::_finalize_node_success` serializa
 ese dict a disco, así que lo persistido era el del Adapter.
 
 | propiedad | quién la mide | cómo |

@@ -36,7 +36,7 @@ return AgentResult(outcome=outcome_raw, result=result, ...)
 ```
 
 Medido con ejecución real: mutar el dict de origen cambiaba el
-`AgentResult`, y `node_execution_delegations.py:443` serializa ese
+`AgentResult`, y `node_execution_delegations.py:443::_finalize_node_success` serializa ese
 dict a disco — lo persistido era el del Adapter.
 
 | | |

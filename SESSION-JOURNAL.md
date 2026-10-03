@@ -12563,7 +12563,7 @@ r.result  ->  {'dato': 999, 'inyectado': 'tras la construccion'}
 ```
 
 El `AgentResult` cambió sin que nadie lo tocara. **Y no era
-cosmético**: `node_execution_delegations.py:443` serializa ese dict a
+cosmético**: `node_execution_delegations.py:443::_finalize_node_success` serializa ese dict a
 disco, así que lo persistido era el del Adapter.
 
 ### El descarte de WI-111 era correcto y no lo era

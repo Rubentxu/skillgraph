@@ -69,7 +69,7 @@ class AgentResult:
         # o de un Adapter, que es codigo EXTERNO al repo, y antes se
         # guardaba tal cual: el `AgentResult` que el Core creia inmutable
         # ERA el dict de quien lo produjo. Medido: mutar el origen cambiaba
-        # el resultado, y `node_execution_delegations.py:443` serializa
+        # el resultado, y `node_execution_delegations.py:443::_finalize_node_success` serializa
         # ese dict a disco, asi que lo persistido era el del Adapter.
         # `deepcopy` y no `dict()`: el payload tiene niveles anidados y
         # una copia de primer nivel deja los hijos compartidos.
