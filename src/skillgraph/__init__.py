@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.22.2.dev0"  # post-release v0.22.2 (AGENTS 12): bump .dev0 tras el tag
+__version__ = "0.22.3"  # release v0.22.3 (AGENTS 12): PATCH derivado con derive_semver.py
 
 from skillgraph.core.errors import (
     IdentityConflictError,
