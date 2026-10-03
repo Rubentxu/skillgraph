@@ -1,76 +1,74 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-03 (decimonovena tanda) cerrado — WI-107, release `v0.21.1`.**
-> Versión activa `0.21.1.dev0`; último tag `v0.21.1`. 2718 passed, **0 skipped**.
+> **Bloque 2026-10-03 (vigésima tanda) cerrado — WI-108, release `v0.21.2`.**
+> Versión activa `0.21.2.dev0`; último tag `v0.21.2`. 2735 passed, **0 skipped**.
 >
-> **WI-107 — la lista que se salva cambiando de eje no deja de ser una lista.**
-> Novena vía de la serie «qué declara el repo que nada comprueba», y la
-> tercera vez que la misma idea se salva a sí misma con otra forma.
+> **WI-108 — la regla que se escribe con tu letra y no se comprueba con ninguna.**
+> Décima vía de la serie «qué declara el repo que nada comprueba», y la más
+> pequeña en código: una prohibición de siete palabras con su «por qué»
+> escrito al lado.
 >
-> `AGENTS.md §6.3` declara suelos de cobertura. WI-93 lo implementó con una
-> lista de 21 módulos; WI-94 la cambió por un suelo por paquete, con **ocho
-> prefijos escritos a mano**, y su docstring afirmaba que con eso «no se
-> puede olvidar uno». Es falso: cambiar el eje de una lista no la deshace.
+> `AGENTS.md §6.2` dice: **NO usar `pytest.skip` para esconder fallos**,
+> y que *un skip por falta de artefacto es el mismo defecto, con otra
+> forma*. La segunda línea la escribió WI-103 midiendo un gate que se
+> saltaba por falta de informe. De todo el repo, los instrumentos que
+> miran skips: **0**. Las etapas de la receta que los miran: **0**.
 >
-> **Medido antes de tocar nada**, con un paquete nuevo (`telepatia/`) con
-> código que nadie importa y **ya versionado en git**:
+> **Medido antes de tocar nada**, con un run sintético cuyo único cambio es
+> la línea de resumen del journal:
 >
 > ```
-> pytest                    2709 passed in 234.75s
-> check_coverage_floors.py  exit 0, «todos los suelos se cumplen»
-> cobertura de oracular.py  0 %  (18 sentencias, 10 ramas, 0 cubiertas)
-> suelo global              94.85 %   (fail_under = 80)
+> run sin skips:   0 problemas []
+> run con 3 skips: 0 problemas []
+> veredicto: «OK: el run cumple los criterios que declara AGENTS.md»
 > ```
 >
-> Se midió **dos veces** y la segunda es la que se cita, porque la primera
-> daba un resultado más fuerte y falso: con el paquete sin versionar, la
-> suite daba `1 failed`, y el rojo era `sg_build_sdist_no_versionado`
-> (WI-97), que lo delata por otra propiedad y con otro mensaje. Un paquete
-> nuevo se versiona; ese aviso no es el contrato de §6.3.
+> **El detalle grave no es el regex.** Es que el **criterio 2** —el que
+> existe para separar un run real de un veredicto cacheado— acepta un
+> resumen con skips: `2715 passed, 3 skipped` casa con su regex igual que
+> `2718 passed`. No es un bug del regex: es que **la pregunta no se había
+> hecho**. Una regla y el criterio que la vigila no se contradicen cuando
+> nunca se cruzan.
 >
-> **Ahora el suelo es la norma y las listas son las desviaciones.**
-> `tests/test_wi107_coverage_package_symmetry.py:220::TestTodoPaqueteTieneSuelo`
-> exige que un paquete que no figura en ninguna lista herede el suelo por
-> defecto. Lo escrito son dos entradas —`cli/` al 70 % y
-> `platform/paths.py` al 60 %— porque son datos que el código no puede
-> deducir. De ocho, dos. Y `§6.3` deja de enumerar módulos: `runtime` no es
-> un módulo sino un paquete, `runtime.py` no existe, y nueve de los diez
-> enumerados vivían fuera de `core/`.
+> **Y la regla la incumplía el autor de la regla.** De los cinco skips,
+> dos son de plataforma (`fcntl` no existe en Windows: no esconden un
+> fallo) y **tres de artefacto** —«sin journal: clon nuevo»—, que es
+> literalmente lo que la segunda línea prohíbe. Los escribí yo en WI-105,
+> en el guard que construí para no esconder nada.
 >
-> **El mismo dato, el otro veredicto.** Antes `exit 0`; ahora `exit 1` con
-> `BAJO 0.00 % (suelo 90.0 %) src/skillgraph/telepatia/oracular.py`. Mismo
-> dato, distinto veredicto: lo que cambió fue el instrumento, no la
-> medición.
+> **Ahora**, `tests/test_wi108_zero_skips.py:301::TestTodoSkipEstaDeclarado`
+> exige que no haya skip de ejecución y que los legítimos estén
+> declarados, y `scripts/check_pipeline_receipt.py:240::resumen_sin_skips`
+> es el predicado puro que la etapa `evidence` mide vía
+> `sg_pipeline_tests_skipped`. Pregunta por el **valor**, no por la
+> presencia: `0 skipped` es un run limpio.
 >
-> **Dos hallazgos que salieron de las propias mediciones**, no de un test:
-> (1) El primer guard de `§6.3` **pasaba por la rama equivocada**: buscaba
-> `nombre.py` y `§6.3` escribe los módulos sin extensión, así que no
-> encontraba nada. Se sustituyó por un predicado puro probado antes contra
-> un texto escrito en la forma real del doc. (2) Un contraejemplo mío
-> usaba como «paquete que no existe» el nombre del paquete de la medición,
-> así que con él presente el test se ponía rojo: un guard que depende del
-> árbol sin decirlo es una coincidencia. Lo destapó la medición post.
+> **Los 3 skips se fueron y no se sustituyeron por nada**, que es la
+> decisión que hay que defender: medían el **entorno** —qué pasó en esta
+> máquina— y no el **entregable**. El journal no está versionado, así que
+> en un clon nuevo se saltaban en silencio y la suite pasaba en verde con
+> skips. La tabla de dónde vive ahora cada propiedad está en el fichero
+> donde estaban, en `TestLaClaseDeTestQueVivioAQui`.
 >
-> **La mutación que a veces sobrevivía, y por qué el harness cambió.**
-> Primera pasada: 6/8 con `m2` sobrevivida. Segunda, del **mismo** código:
-> 7/8 con `m2` cazada. Una mutación que a veces sobrevive no es un guard
-> que no muerde: es un experimento que no sabe qué midió. Con
-> `PYTHONDONTWRITEBYTECODE=1` y una **sonda por mutación** —una expresión
-> que tiene que cambiar de valor con el código ya mutado— las tres salidas
-> tienen nombre: *cazada*, *inválida* (la sonda no cambió: la mutación no
-> degradaba nada) y *el entorno no vio la mutación*. **8/8 en tres pasadas
-> consecutivas**, árbol restaurado byte a byte en las tres.
+> **El guard que mira el código mira el AST, no el texto.** La primera
+> versión buscaba `pytest.skip(` con regex y se puso roja **por su propia
+> documentación**: un docstring que cita el patrón es indistinguible de una
+> llamada. Segunda vez en dos semanas, mismo repositorio, mismo motivo.
 >
-> **2718 passed y 0 SKIPPED** (+15: 22 tests nuevos de WI-107 menos los 7
-> que pierde el parametrize de WI-94, que pasa de ocho paquetes a uno).
-> Mutaciones 8/8. Run canónico `332e09e6` verificado por `run_id`.
+> **Mutaciones 9/9 en tres pasadas.** Una de las nueve no la cazó la
+> primera sonda porque medía la forma de retorno de un árbol sin llamadas,
+> donde esa forma nunca se ejerce: la mutación era inválida, y el harness
+> lo dijo en vez de acusar al guard.
 >
-> **Release `v0.21.1`**: PATCH derivado con `scripts/derive_semver.py`
-> (`b/f/x/n/d 0/0/2/10/0`). Commit de release `3f28ba0`, etiqueta anotada
-> sobre él, post-release `91f901d` con el sha real en `release.releases[0]`
-> y la versión activa de vuelta a `.dev0`.
+> **2735 passed y 0 SKIPPED** (+17: 20 tests nuevos de WI-108 menos los 3
+> de WI-105 que se fueron). La aritmética y el run coinciden:
+> `2718 + 20 − 3 = 2735`. Run canónico `2387c4cc`, verificado por `run_id`.
 >
-> **Sin push**: 150 commits sin publicar, `origin/main` en `0ebbd58`.
+> **Release `v0.21.2`**: PATCH derivado con `scripts/derive_semver.py`
+> (`b/f/x/n/d 0/0/1/4/0`). Commit `841a075`, etiqueta anotada sobre él,
+> post-release `4eb56af`.
+>
+> **Sin push**: 156 commits sin publicar, `origin/main` en `0ebbd58`.
 
 ---
 ---
