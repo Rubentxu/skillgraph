@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B3** — Core extensible de verdad
-> Versión activa `0.22.5.dev0` · último tag `v0.22.5` · 2875 tests · 16/16 UAT
+> Bloque vivo: **B5** — Graph Diff Gate + gobierno de evolución
+> Versión activa `0.25.0.dev0` · último tag `v0.25.0` · 3030 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
