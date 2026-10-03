@@ -31,7 +31,7 @@
 >
 > **Lo que NO se hace, por decisión:** las capabilities no se invocan
 > durante la ejecución, solo se verifican. `Handoff.capabilities` sigue
-> siendo `tuple[str, ...]` porque `runtime/handoff.py:195` lo mete en el
+> siendo `tuple[str, ...]` porque `runtime/handoff.py:195::Handoff.to_dict` lo mete en el
 > hash firmado, y moverlo es ruptura de datos: **B8**.
 >
 > **Mutaciones 6/6**, 0 sondas inválidas, árbol restaurado y verificado por
