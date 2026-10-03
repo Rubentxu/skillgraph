@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.22.3.dev0"  # post-release v0.22.3 (AGENTS 12): bump .dev0 tras el tag
+__version__ = "0.22.4"  # release v0.22.4:WI-113, el AgentResult era un alias
 
 from skillgraph.core.errors import (
     IdentityConflictError,
