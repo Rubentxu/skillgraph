@@ -201,6 +201,36 @@ primera vez en tres bloques: `2718 + 20 − 3 = 2735`. La cuenta anterior
 
 **Cobertura**: global 95.22 %, `cli/` 86.91 %, `runtime/` 97.98 %.
 
+## 7.bis Certificación del ESTADO final
+
+**Run** — `8d6a9594-f490-4fe9-80e1-43019aff842f`, sobre el árbol con la
+trazabilidad, el release y esta evidencia ya escritos.
+
+```
+pytest: 2735 passed in 243.81s (0:04:03)
+VEREDICTO: todo modulo gobernado por §6.3 cumple su suelo
+Pipeline finished with SUCCESS
+```
+
+Verificado por `run_id`:
+
+```
+$ mise exec -- uv run python scripts/check_pipeline_receipt.py --run-id 8d6a9594-...
+OK: el run cumple los criterios que declara AGENTS.md. run 8d6a9594-...:
+8/8 etapas, 9 pasos, veredicto 'success'.
+```
+
+Dos runs, dos objetos: `2387c4cc` certifica el **código** y `8d6a9594` el
+**estado final**. Escribir la certificación cambia el árbol, así que un run
+anterior certifica un estado que ya no es el que se entrega.
+
+Y una nota de método, porque la cometí: consulté el journal mientras el
+proceso escribía y el `RunFinished` no estaba todavía, así que el «último
+run» seguía siendo el de WI-107. No es un fallo del journal —el evento
+está ahí, `sequence: 47`— es un fallo de **cuándo** se lee. Un journal que
+se consulta a mitad de escritura devuelve la verdad de hace un minuto, que
+es indistinguible de la verdad.
+
 ## 8. Lo que NO se arregla, y se declara
 
 * `from pytest import skip` no lo cubre el guard (ver §5).
