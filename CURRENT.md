@@ -1,6 +1,6 @@
 # CURRENT — puntero operativo
 > **Bloque 2026-10-03 (vigésima tercera tanda) en curso — WI-111, release `v0.22.2`.**
-> Versión activa `0.22.1.dev0`; último tag `v0.22.1`.
+> Versión activa `0.22.2.dev0`; último tag `v0.22.2`.
 >
 > **WI-111 — la inmutabilidad del Handoff era de fachada.**
 > Decimotercera vía de la serie «qué declara el repo que nada comprueba»,
