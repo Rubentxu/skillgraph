@@ -260,7 +260,75 @@ guard de integridad exige que `release.tag` sea el último de git).
 
 ## 9. Certificación
 
-_(se completa tras el run canónico)_
+### Run 1 — `e722fe84-a8bb-47b0-bae5-c3d3de847b5d` (DESCARTADO)
+
+```
+pytest: 1 failed, 2753 passed in 243.22s
+Pipeline finished with FAILURE
+```
+
+**Run descartado, y se registra** (es la convención del bloque, no una
+excepción). El fallo:
+
+```
+tests/test_release_governance.py::test_current_version_is_documented_in_state
+assert 'package_version: "0.22.0.dev0"' in STATE.yaml
+```
+
+**La causa no es un descuido suelto.** El post-release bumpea **dos**
+sitios —`src/skillgraph/__init__.py` y `tests.package_version` en
+`STATE.yaml`— y el commit anterior sólo movió el primero. La regla de
+`AGENTS.md §12` dice que la versión se declara en el paquete y que el
+estado apunta a la verdad observable: los dos campos se mueven juntos, y
+si se mueve uno solo, el guard que los cruza se pone rojo. El guard
+**no tenía un fallo**: hacía su trabajo.
+
+Es el modo de fallo de WI-106 del revés: allí la cifra de tests escrita
+a mano no cuadraba con la del run; aquí es la versión declarada la que
+no cuadraba con la del paquete. En los dos casos **la cifra mandada es
+la del run**, y el estado se corrige hacia ella, no al revés.
+
+`2753 + 1 = 2754`.
+
+### Run 2 — `16251236-d5b1-4e6f-840f-01ec1a70b9e0` (el código, verde; veredicto FAILURE)
+
+```
+pytest: 2754 passed in 246.97s (0:04:06)
+coverage-floors : VEREDICTO todo modulo gobernado por §6.3 cumple su suelo
+                   cli/ 86.96 % · runtime/ 97.98 % · global 95.24 %
+package-build   : OK
+ci-parity       : OK
+lint            : All checks passed!
+evidence        : FALLO (2 criterios)
+```
+
+**Los siete pasos reales pasaron.** El `FAILURE` viene entero de la
+etapa `evidence`, y su propio mensaje lo dice:
+
+```
+[sg_pipeline_run_failure]  el run e722fe84 termino en 'failure'
+[sg_pipeline_step_failed]  el run e722fe84 registra 1 StepFailed
+```
+
+**Está midiendo el run ANTERIOR** (`e722fe84`, el que dio 2753+1), no
+este. Es el comportamiento documentado de la etapa: verifica el run
+previo porque el run en curso aún no tiene `RunFinished` que leer. Por
+eso un run cuyo código está verde puede acabar en `FAILURE` si el run
+que tenía delante falló.
+
+Esto no es un defecto del bloque: es la propiedad de la que ya se
+hablaba en `STATE.yaml` desde WI-105, y la causa está escrita en el
+mensaje del propio guard («el `run_id` se reutiliza entre replays»).
+
+**El código de WI-109 está certificado por este run**: 2754 passed, 0
+skipped, los cinco contratos exigibles en verde. Lo que sigue es la
+etapa que verifica el estado final, y necesita un run que encuentre
+delante.
+
+### Run 3
+
+_(verificado por `run_id` al terminar)_
+
 
 ## 10. Límites declarados
 

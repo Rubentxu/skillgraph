@@ -12277,3 +12277,17 @@ con dos tests; se corrigió la sonda y se añadió M6b para la herencia.
     mitad de lo que este bloque cuenta. Y describir el error sin citar
     los caracteres, que es lo que hizo el error 18 y lo que este
     párrafo hace.
+
+22. **Un post-release bumpea dos sitios y yo bumpee uno.** La primera
+    certificacion de WI-109 dio 2753 passed + 1 failed, y el fallo fue
+    `test_release_governance.py::test_current_version_is_documented_in_state`,
+    que cruza `STATE.yaml tests.package_version` con la version de
+    `src/skillgraph/__init__.py`. El commit de post-release bumpeo el
+    paquete y dejo el estado detras. No es un descuido suelto: la regla
+    de AGENTS.md 12 dice que la version se declara en el paquete y que el
+    estado apunta a la verdad observable, y eso significa que los dos
+    campos se mueven JUNTOS o el guard que los cruza se pone rojo. El
+    guard no tenia un fallo: hacia su trabajo. Y es el modo de fallo de
+    WI-106 del reves: alli la cifra de tests escrita a mano no cuadraba
+    con la del run; aqui es la version declarada la que no cuadraba con
+    la del paquete. En los dos casos la cifra mandada es la del run.
