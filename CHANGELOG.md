@@ -14,6 +14,72 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.20.5] - 2026-10-03 — una cita que no dice a qué apunta no es una cita
+
+**PATCH**: `git log v0.20.4..HEAD` = 0 `feat`, 1 `fix`, 1 `docs`, 0 breaking.
+**2684 passed, 0 skipped** (+7).
+
+Sexta vía de la serie «qué declara el repo que nada comprueba». A diferencia
+de las otras cinco, el defecto es **propio** y estaba anotado desde WI-102
+como «medido, no arreglado».
+
+### El defecto
+
+`test_toda_cita_del_bloque_vivo_resuelve` daba por buena cualquier cita
+`fichero.py:N` de la que existiera la línea N. Eso es **resolubilidad, no
+verdad**, y se notó porque yo escribí en `CURRENT.md` las líneas 352 y 479
+de `scripts/check_ci_recipe_parity.py` cuando las reales eran la 421 y la
+589. Las cuatro líneas existen hoy. El guard dio las cuatro por buenas.
+
+### Medido
+
+`.pipelinek/wi104_measure.py` (solo lectura, cinco casos con la verdad al
+lado): el predicado actual acepta las dos citas falsas; el de sitio de
+definición las separa con **cero** errores. La razón es concreta: 352 y 479
+son **prosa dentro de un docstring**; 421 y 589 son líneas `def`.
+
+### El arreglo
+
+El formato de cita pasa a `ruta/fichero.py:LINEA::simbolo`.
+
+El símbolo no es decoración: es lo que hace la afirmación *falsable*. Con
+sólo el número no hay manera de distinguir «he abierto el fichero» de «he
+escrito un número que me sonaba», y por eso el error se colaba sin que nada
+lo notara. Se resuelve en el AST del fichero que la cita nombra —no en
+cualquiera del repo, que es el fallo de resolver por basename— y `LINEA`
+tiene que caer dentro de su definición. Cuando una cita se queda vieja, el
+error **dice dónde está el símbolo ahora**.
+
+Lo que el guard **no** comprueba, y se declara: que la prosa describa de
+verdad el símbolo. Eso no es machine-checkable.
+
+### El contraejemplo hubo que arreglarlo dos veces
+
+Seis mutaciones, todas en rojo. Pero la primera pasada dio **3/6**, y las tres
+que sobrevivieron no eran contraejemplos débiles: **pasaban por el motivo
+equivocado**.
+
+1. La prueba de desalineación usaba `cargar_auditor`, que no es un símbolo —
+   se llama `_cargar_auditor`—, así que medía la rama de «no lo define» y la
+   mutación que apaga la comprobación de línea pasaba verde.
+2. La regla del ancla se comprobaba sobre el *parser*, que nunca produce una
+   cita sin ancla, así que **relajarla por dentro** pasaba sin que nada lo
+   notara. Se extrajo `_problemas_del_bloque`, que verifica una lista de
+   citas cualquiera.
+3. Resolver el símbolo en todo el repo daba el error equivocado sin que
+   ninguna prueba lo notara. Ahora el test exige que el error señale **el
+   fichero** que debería definirlo.
+
+### El guard atrapó al autor
+
+Al escribir el bloque vivo de `CURRENT.md` conté el fallo anterior usando el
+patrón `fichero.py:352`, y el guard lo leyó como una afirmación y lo rechazó.
+Es lo correcto: un bloque que cuenta un error usando el formato del error se
+contradice a sí mismo. La regla queda escrita: el bloque vivo cita el código
+de hoy; la arqueología va aquí.
+
+---
+
 ## [0.20.4] - 2026-10-03 — el gate de `main` solo existía los días con informe
 
 **PATCH**: `git log v0.20.3..HEAD` = 0 `feat`, 1 `fix`, 0 `test`/`docs`, 0 breaking.

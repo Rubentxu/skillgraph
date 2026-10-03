@@ -1105,6 +1105,12 @@ Tres reglas que se siguen:
    es el «conectar ≠ contener» de WI-102 aplicado a las citas.
 3. **Las citas de bloques anteriores no se comprueban.** Son la foto de un
    código que ya no existe; corregirlas sería falsificar la historia.
+4. **El bloque vivo tampoco narra historia con sintaxis de cita.** Al
+   escribir WI-104 se cuenta el fallo Anterior —«escribí la línea 352 en vez
+   de la 421»— usando el patrón `fichero.py:352`, y el guard lo leyó como una
+   afirmación y lo rechazó. Es lo correcto: un bloque que cuenta un error
+   usando el formato del error se contradice a sí mismo. La arqueología va al
+   `CHANGELOG.md`; el puntero de hoy cita el código de hoy.
 
 Cuando una cita se queda vieja porque alguien insertó una línea arriba, el
 error **dice dónde está el símbolo ahora**. Un verificador que dice «falso» sin

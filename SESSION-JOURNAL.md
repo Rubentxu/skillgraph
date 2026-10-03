@@ -11807,3 +11807,85 @@ un llamador nuevo puede auditar y escribir en `audits/`, que está versionado.
 7. **Certificar y después tocar el árbol.** Ya pasó en WI-102: un run en
    SUCCESS sobre ficheros que se movían. Repetir el run sobre el árbol quieto
    no es redundancia, es lo que lo hace una certificación.
+
+---
+
+## 2026-10-03 — WI-104, sexta vía: la cita que no dice a qué apunta
+
+**Ciclo**: `p-b7740b96d79ec013/wi104-la-cita-debe-decir-a-que-simbolo-apunta`
+**Sesión**: `wi104-20261003T025000Z` · **Release**: `v0.20.5` (PATCH, derivado)
+
+### El defecto, y por qué salió de mí
+
+`test_toda_cita_del_bloque_vivo_resuelve` daba por buena cualquier cita
+`fichero.py:N` de la que existiera la línea N. Es **resolubilidad, no
+verdad**, y en WI-102 escribí las líneas 352 y 479 de
+`scripts/check_ci_recipe_parity.py` cuando las reales eran la 421 y la 589.
+Las cuatro existen hoy. El guard dio las cuatro por buenas.
+
+Medido con `.pipelinek/wi104_measure.py` (solo lectura, 5 casos con la verdad
+al lado): el predicado actual acepta las 2 falsas; el de sitio de definición
+las separa con cero errores. 352 y 479 son **prosa dentro de un docstring**;
+421 y 589 son líneas `def`.
+
+La causa raíz no es el número: es que **con sólo un número no hay manera de
+distinguir «he abierto el fichero» de «he escrito un número que me sonaba»**.
+
+### El arreglo
+
+Formato `ruta/fichero.py:LINEA::simbolo`. El símbolo se resuelve en el AST
+del fichero que la cita nombra y `LINEA` tiene que caer dentro de su
+definición. El error dice **dónde está el símbolo ahora**, porque un
+verificador que dice «falso» sin decir «está aquí» es un callejón sin salida.
+
+### Mutaciones: 6/6, pero hubo que arreglar el contraejemplo dos veces
+
+La primera pasada dio **3/6**. Las tres que sobrevivieron no eran
+contraejemplos débiles: **pasaban por el motivo equivocado**.
+
+1. La prueba de desalineación usaba `cargar_auditor`, que no es un símbolo
+   (es `_cargar_auditor`): medía la rama de «no lo define», y M1 —que apaga
+   la comprobación de línea— pasaba verde.
+2. La regla del ancla se comprobaba sobre `_citas_vivo()`, que **nunca**
+   produce una cita sin ancla. Relajarla *dentro* del verificador (M3, la más
+   probable porque no rompe nada visible) pasaba sin que nada lo notara.
+   Se extrajo `_problemas_del_bloque`, que verifica cualquier lista.
+3. Resolver el símbolo en todo el repo (M4) daba el error equivocado sin que
+   ninguna prueba lo notara. Ahora el test exige que el error señale **el
+   fichero** que debería definirlo.
+
+**2684 passed y 0 skipped** (+7 sobre 2677). SemVer PATCH derivado por
+`scripts/derive_semver.py`: «la regla pide PATCH -> v0.20.5».
+
+### El guard atrapó al autor
+
+Al escribir el bloque vivo de `CURRENT.md` conté el fallo anterior usando el
+patrón `fichero.py:352`; el guard lo leyó como una afirmación y lo rechazó.
+Es lo correcto: un bloque que cuenta un error usando el formato del error se
+contradice a sí mismo. Regla escrita en `AGENTS.md`: el bloque vivo cita el
+código de hoy, la arqueología va al `CHANGELOG.md`.
+
+### Lo que NO se resolvió
+
+- Que la prosa describa de verdad el símbolo **no es machine-checkable**. El
+  guard baja la afirmación a una propiedad real y verificable, no a la prosa.
+- Hooks sin instalar. 128 commits sin publicar, `origin/main` en `0ebbd58`.
+- Credenciales Anthropic/OpenAI: siguen bloqueando H9 desde WI-91.
+- `release.complete` inalcanzable (exige `Cargo.toml`) → `cycle supersede`.
+
+### Errores propios de esta sesión, para no repetirlos
+
+8. **Un contraejemplo que pasa por la rama equivocada es peor que ninguno.**
+   Verde por el motivo incorrecto entrena a quien lo lee: parecía cubierta la
+   desalineación y no lo estaba. La señal de que algo va mal es que la
+   **mutación sobrevive**, no que el test esté en verde.
+9. **Comprobar una regla sobre el parser en vez de sobre el verificador.**
+   El parser nunca produce la entrada que rompe la regla, así que el test
+   pasa y la regla es inverificable. La entrada tiene que entrar por la
+   puerta que la regla cierra.
+10. **El commit de release no puede tener la suite en verde**, porque
+    `test_version_matches_git_tag` exige que la etiqueta exista y la etiqueta
+    se crea **después** del commit. Se usa el escape que el propio hook
+    documenta (`HOOK_SKIP_TESTS=1`), que existe justo para esto; el verde
+    real se comprueba en el commit post-release, y es lo que certifica la
+    receta canónica.

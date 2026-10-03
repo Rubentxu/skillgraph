@@ -1,46 +1,43 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-03 (quinceava tanda) cerrado — WI-103, release `v0.20.4`.**
-> Versión activa `0.20.4.dev0`; último tag `v0.20.4`. 2677 passed, **0 skipped**.
+> **Bloque 2026-10-03 (decimosexta tanda) cerrado — WI-104, release `v0.20.5`.**
+> Versión activa `0.20.5`; último tag `v0.20.5`. 2684 passed, **0 skipped**.
 >
-> **WI-103 — un gate que solo existía los días que su artefacto existía.**
-> Quinta vía de la serie «qué declara el repo que nada comprueba», y la más
-> discreta: no un instrumento que mide mal, sino uno que **no llega a medir**
-> y da verde.
+> **WI-104 — una cita que no dice a qué apunta no es una cita.**
+> Sexta vía de la serie «qué declara el repo que nada comprueba», y la más
+> silenciosa: no un instrumento que mide mal, sino uno que **no puede
+> distinguir** una afirmación verdadera de otra falsa.
 >
-> **Apareció por la re-certificación de WI-102:** `2672 passed, 1 skipped`
-> donde el código había dado 2673 sin skips. La fecha rolloveró a `2026-10-03`
-> y el informe de ese día no existía.
+> **Salió de mí.** En WI-102 escribí las líneas 352 y 479 de
+> `scripts/check_ci_recipe_parity.py` cuando las reales eran la 421 y la 589.
+> Las cuatro líneas existen hoy y el guard dio las cuatro por buenas:
+> `tests/test_wi92_measured_claims.py:256::_problemas_de_la_cita` exigía
+> `linea <= total_lineas`, que es **resolubilidad, no verdad**.
 >
-> `TestAuditGateForMain` declara una propiedad sobre el **código** —«`main` no
-> debe listarse como hotspot público, cc≥20»— y la comprobaba leyendo
-> `audits/architecture-debt-<HOY>.md`, con `pytest.skip` si no estaba:
+> **Medido** con `.pipelinek/wi104_measure.py` (solo lectura, 5 casos): el
+> predicado actual acepta las 2 citas falsas; el de sitio de definición las
+> separa con **cero** errores. `:352` y `:479` son prosa dentro de un
+> docstring; `:421` y `:589` son líneas `def`.
 >
-> | situación | resultado |
-> |---|---|
-> | sin informe de hoy | **SKIPPED, exit 0** |
-> | informe de hoy generado | 1 passed |
-> | informe de hoy con `main` inyectado | 1 **failed, exit 1** |
+> **Ahora la cita dice a qué apunta:** el formato pasa a
+> `ruta/fichero.py:LINEA::simbolo`. El símbolo es lo que hace la afirmación
+> *falsable*: con sólo el número no hay manera de distinguir «he abierto el
+> fichero» de «he escrito un número que me sonaba», y por eso el error se
+> colaba sin que nada lo notara. Se resuelve en el AST del fichero que la
+> cita nombra —no en cualquiera del repo— y cuando una cita se queda vieja
+> el error **dice dónde está el símbolo ahora**.
 >
-> **La propiedad es real y el gate muerde cuando el artefacto está. El
-> defecto es la existencia del artefacto:** 6 informes en 7 días (falta el
-> `2026-09-30`) y hoy ninguno. Un gate que solo corre cuando alguien se
-> acuerda de correr el auditor no es un gate.
+> **El contraejemplo es parte del arreglo, y hubo que arreglarlo dos veces.**
+> Mutaciones **6/6** en rojo, incluida M6, que degrada la afirmación sobre el
+> `CURRENT.md` real y no sobre un informe sintético. Pero tres de los seis
+> contraejemplos **pasaban por el motivo equivocado** y no lo vi hasta que las
+> mutaciones sobrevivieron: `cargar_auditor` no es un símbolo —es
+> `_cargar_auditor`—, así que la prueba de desalineación pasaba por la rama de
+> «no lo define»; y la regla del ancla se comprobaba sobre el parser, que nunca
+> produce una cita sin ancla, así que **relajarla por dentro** pasaba verde.
+> Run de cierre: 8/8 stages, **2684 passed y 0 skipped**.
 >
-> **Ahora mide:** `tests/_gate_main_hotspot.py:73::hotspots_publicos` ejecuta
-> `audits/audit_debt.py` con `--src-root` sobre el árbol que se le pase y
-> `--out-dir` a un temporal (parámetros desde WI-89, hechos parámetros justo
-> para que un test pueda auditar sin mutar los 51 ficheros versionados de
-> `audits/`).
->
-> **El contraejemplo es parte del arreglo:** sin un test que ponga un `main`
-> real de `cc≥20` en un árbol y exija que la medición lo vea, una medición que
-> devolviera siempre `()` habría pasado todo verde. Mutaciones **5/5**, dos de
-> ellas degradaciones por *incapacidad*. Run `9db8a440`, 8/8 stages,
-> **2677 passed y 0 skipped**: la diferencia no es un test nuevo, es el mismo
-> test que antes no se ejecutaba.
->
-> **Sin push**: 123 commits sin publicar, `origin/main` en `0ebbd58`.
+> **Sin push**: 128 commits sin publicar, `origin/main` en `0ebbd58`.
 
 ---
 
