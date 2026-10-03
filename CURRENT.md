@@ -1,5 +1,5 @@
 > **Bloque 2026-10-03 (B3) — Core extensible de verdad.**
-> Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
+> Versión activa `0.23.0.dev0`; último tag `v0.23.0`.
 >
 > **B3 cerrado: el puerto tiene consumidor y un adapter de producción.**
 > Siete entregas. Las seis dejaron contrato, invariantes y procedencia; la
@@ -264,7 +264,7 @@
 > <summary>Bloque anterior (B2)</summary>
 >
 > **Bloque 2026-10-03 (B2) — Runtime real, no representativo.**
-> Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
+> Versión activa `0.23.0.dev0`; último tag `v0.23.0`.
 >
 > **B2 — el repositorio admitía que ciertos escenarios eran
 > *representativos*. Esto los atraviesa, y encontró tres defectos reales.**
@@ -344,7 +344,7 @@
 > <summary>Bloque anterior (B1)</summary>
 >
 > **Bloque 2026-10-03 (B1) — Cierre de stewardship.**
-> Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
+> Versión activa `0.23.0.dev0`; último tag `v0.23.0`.
 >
 > **B1 — la pregunta «¿qué declara el repo que nadie comprueba?» ya no
 > admite un workitem por contrato, para siempre.** B0 cerró la serie
