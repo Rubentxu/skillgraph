@@ -1,5 +1,5 @@
 > **Bloque 2026-10-03 (B6) — Cada afirmacion dice QUIEN la afirma.**
-> Versión activa `0.25.0.dev0`; último tag `v0.25.0`.
+> Versión activa `0.26.0`; último tag `v0.26.0`.
 >
 > **B6: el campo que parecia el sitio del origen no lo era.** El gate pide
 > que cada afirmacion del Knowledge Graph distinga `observed` ·

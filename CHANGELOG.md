@@ -14,6 +14,97 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.26.0] - 2026-10-03 — cada afirmación dice QUIÉN la afirma
+
+**El bloque B6, cerrado.** El gate pide que cada afirmación del Knowledge
+Graph distinga `observed` · `derived-deterministically` · `agent-inferred` ·
+`human-asserted`. Medido antes de escribir nada: **4 de 4 preguntas
+abiertas**.
+
+SemVer derivado con `scripts/derive_semver.py`: desde `v0.25.0`,
+`b/f/x/n/d 0/1/1/4/0`, la regla pide **MINOR**. Ningún commit con
+marcador de ruptura. Tag `v0.26.0` en `259d723`.
+
+### Lo que estaba medido, y por qué el hueco era real
+
+El hueco **no es un campo que falte**. `Claim.extraction_method` ya existía
+— y no decía lo que su nombre decía. Es un `str` libre cuyos tres valores
+medidos (`static_analysis`, `regex_def`, `manual`) son **métodos de
+extracción**, no orígenes epistémicos. Son dos ejes ortogonales: con
+`regex_def` no se sabe si lo afirmó la máquina o una persona, y escribir
+`agent-inferred` ahí perdería el método. Un campo no puede decir las dos
+cosas.
+
+Y medido, en contra de lo que parece: **nadie escribe `extraction_method`
+en `src/`**. Las 10 de `"manual"` y las 4 de `"regex_def"` están todas en
+`tests/`; en producción sólo vive el default de la declaración. Un eje que
+nadie rellena no puede ser donde nazca el origen.
+
+### Added
+
+- **`AssertionOrigin`** (`core/runtime_types.py`), `Literal` cerrado sobre
+  los cuatro orígenes del gate, con **`ASSERTION_ORIGINS` derivado** por
+  `get_args` — nunca escrito a mano, que es el error de QW-E: un conjunto
+  literal se queda corto cuando alguien añade un valor al tipo, y la
+  validación rechaza el valor nuevo que el tipo sí acepta.
+- **`Claim.assertion_origin`**, con default `observed`. El default es una
+  decisión: es el único de los cuatro que no promete autoridad, luego el
+  único correcto para un valor que nadie ha declarado.
+- **`InvalidAssertionOriginError`** con `code` propio
+  `sg_invalid_assertion_origin`, porque un `code` compartido rompe la
+  traducción a exit code (WI-109).
+- **`scripts/measure_b6_provenance.py`** y
+  **`scripts/mutate_b6_provenance.py`**, versionados en `scripts/` y no en
+  `.pipelinek/` (backlog `bl-bl-01M41DFZEZ0003882TZNP7NPM0`).
+
+### Changed
+
+- **`claims.assertion_origin`** lleva `CHECK` en la DDL, y se propaga por
+  `INSERT`, `SELECT`, mappers, DTO, promoción y la proyección de query.
+- **`_migrate`** añade la columna si la tabla ya existía sin ella.
+  `CREATE TABLE IF NOT EXISTS` **no** añade columnas a una tabla que ya
+  existe: es un no-op silencioso. Medido — una base nueva funciona y una
+  vieja no, y el fallo sale en producción y no en los tests, porque los
+  tests construyen la base desde cero cada vez.
+- **`_claim_to_payload`** extraído en `cli/commands/promotion.py`, para
+  que el test verifique el código y no una copia escrita en el propio test
+  (WI-106).
+
+### Lo que el harness encontró, y no eran sondas malas
+
+**Cuatro agujeros reales en la red**, todos del mismo tipo: una medición
+que dice «falso» sin decir «dónde».
+
+1. El guard de P6 buscaba la *mención* de los dos nombres con `ast.dump` y
+   pasaba en verde con la validación gutiada, porque el mensaje del
+   `raise` sigue nombrando el conjunto. Un guard que mide la prosa del
+   error no mide la validación. Corregido para exigir un `not in` real.
+2. El harness llevaba `-x`, y sin `-x`, **M3, M6, M7 y M8 no cazaban**:
+   sus mutaciones dejaban la suite en verde. El 8/8 era un número que no
+   se podía desarmar, con cuatro sondas heredando el fallo de la anterior.
+   Añadidos los cuatro tests que faltaban; el recheck da **8 causas
+   distintas de 8 sondas**.
+3. El harness guardaba el `sha` y «restauraba» reescribiendo el fichero con
+   sus propios bytes, que es no hacer nada. Ahora restaura bytes
+   guardados.
+4. El guard de WI-92 («un guard sobre cero citas no vigila nada») cazó el
+   bloque vivo dos veces: primero porque no citaba ninguna línea, después
+   porque las citas no resolvían — el formato es `fichero.py:LÍNEA::Símbolo`
+   con **dos** puntos. Se corrigieron las citas, no el guard.
+
+### Verification
+
+23 tests en `tests/test_b6_provenance.py`; mutaciones **8/8 con 8 causas
+distintas**, árbol restaurado byte a byte. `tests.total` 3053 (+23, todos
+de este fichero: el bloque no creó módulos nuevos, así que el guard de
+`wi47` no generó casos). Cobertura: `core/errors.py` 100 %,
+`core/runtime_types.py` 98 %, `knowledge/graph.py` 96 %.
+
+**Fuera de alcance y registrado:** P5 —si el proveedor real *puebla*
+conocimiento o lo *consume*—, que depende de una credencial que este
+entorno no tiene. El medidor la mantiene abierta y por eso **no** baja el
+veredicto: es deuda, no un olvido.
+
 ## [0.25.0] - 2026-10-03 — el diff del grafo deja de ser un parche sin comparar
 
 **El bloque B5, cerrado.** La secuencia del gate tenía un hueco con

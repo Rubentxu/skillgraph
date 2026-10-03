@@ -273,9 +273,67 @@ class TestLaRespuestaSePuedeRomper:
             "workitem_state": "B0",
             "workitem_current": "B0",
         }
-        problemas = project_truth._contradicciones(base)
+        problemas = project_truth._contradicciones(base, head_en_la_etiqueta=False)
         assert any("version" in p for p in problemas), (
             f"una version que no deriva del tag paso sin decir nada: {problemas}"
+        )
+
+    def test_con_head_en_la_etiqueta_el_semver_puro_no_es_contradiccion(self) -> None:
+        """La otra mitad del caso, y la que B6 hizo hacer falta.
+
+        MEDIDO al liberar v0.26.0: este guard exigia SIEMPRE
+        `<tag>.dev0`, y `test_release_governance.py` exigia el SemVer PURO
+        cuando HEAD esta en la etiqueta. Los dos son del repo y los dos se
+        ejecutan, luego el estado «HEAD en el tag con la version publica»
+        era INALCANZABLE por construccion — ninguna version satisfacia a
+        los dos guards a la vez.
+
+        Se corrigio la REGLA de este guard, no la del otro: el de release
+        ya distinguia los tres casos (en etiqueta / posterior / sin
+        etiqueta) y este lo habia simplificado. Corregir el mas simple
+        era lo que hacia; cambiar el mas preciso habria sido tirar
+        information real para salir del paso.
+
+        Y el parametro se expone para que este test pueda construir los
+        dos casos sin depender de donde este el checkout: un guard que
+        solo sabe ver uno de sus dos estados es medio guard.
+        """
+        base = {
+            "bloque": "B6",
+            "version": "0.26.0",
+            "release": "0.26.0",
+            "tag_vcs": "0.26.0",
+            "tests_declarados": 3053,
+            "tests_reales": 3053,
+            "workitem_state": "B6",
+            "workitem_current": "B6",
+        }
+        problemas = project_truth._contradicciones(base, head_en_la_etiqueta=True)
+        assert not any("version" in p for p in problemas), (
+            f"con HEAD en la etiqueta, el SemVer puro dio contraste: {problemas}"
+        )
+
+    def test_la_excepcion_no_desactiva_el_guard_entre_releases(self) -> None:
+        """La excepcion es para HEAD EN la etiqueta, y solo para ahi.
+
+        Si aceptase el SemVer puro en cualquier momento, el guard de WI-109
+        —«el paquete construido no lleva la version de una release ya
+        publicada»— dejaria de comprobar nada, que es el fallo que la
+        regla wrote para evitar.
+        """
+        base = {
+            "bloque": "B6",
+            "version": "0.26.0",
+            "release": "0.26.0",
+            "tag_vcs": "0.26.0",
+            "tests_declarados": 3053,
+            "tests_reales": 3053,
+            "workitem_state": "B6",
+            "workitem_current": "B6",
+        }
+        problemas = project_truth._contradicciones(base, head_en_la_etiqueta=False)
+        assert any("version" in p for p in problemas), (
+            f"fuera de la etiqueta el SemVer puro paso sin decir nada: {problemas}"
         )
 
 

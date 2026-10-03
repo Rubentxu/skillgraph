@@ -117,6 +117,55 @@ def tag_real() -> str | None:
     return proc.stdout.strip().lstrip("v") or None
 
 
+def _head_esta_en_la_etiqueta() -> bool:
+    """True si HEAD esta exactamente en el commit del ultimo tag.
+
+    MEDIDO al escribir B6: este script exigia SIEMPRE `<tag>.dev0`, y eso
+    contradecía a `tests/test_release_governance.py::test_version_matches_git_tag`,
+    que exige el SemVer PURO cuando HEAD esta en la etiqueta. Los dos
+    guards son del repo y los dos se ejecutan, luego no hay version que
+    los satisfaga a la vez: el estado «HEAD en el tag con la version
+    publica» es INALCANZABLE por construccion.
+
+    Los tres casos que el guard de release ya distinguishe, y que aqui se
+    replican para que los dos dejen de contradecirse:
+
+    1. HEAD en la etiqueta -> SemVer puro.
+    2. HEAD posterior a la etiqueta -> `<tag>.dev0` (o superior, si ya se
+       esta preparando un MINOR).
+    3. Sin etiqueta -> cualquier `.devN`.
+    """
+    describe = subprocess.run(
+        ["git", "describe", "--tags", "--abbrev=0"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if describe.returncode != 0:
+        return False
+    tag = describe.stdout.strip()
+    if not tag:
+        return False
+    head = subprocess.run(
+        ["git", "rev-list", "-1", tag],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if head.returncode != 0:
+        return False
+    actual = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return actual.returncode == 0 and actual.stdout.strip() == head.stdout.strip()
+
+
 def tests_declarados() -> int:
     m = _TOTAL.search(_lee("STATE.yaml"))
     if m is None:
@@ -236,8 +285,19 @@ def _objetivo_del_bloque(bloque: str) -> str:
     return m.group(1).strip() if m else bloque
 
 
-def _contradicciones(v: dict[str, Any]) -> tuple[str, ...]:
+def _contradicciones(
+    v: dict[str, Any], *, head_en_la_etiqueta: bool | None = None
+) -> tuple[str, ...]:
     """Cruza las cinco verdades. Cada comparacion nombra las dos caras.
+
+    `head_en_la_etiqueta` es un PARAMETRO y no una llamada a git dentro, a
+    proposito: los tests tienen que poder construir los dos casos —con
+    HEAD en la etiqueta y sin HEAD— sin depender de donde este el
+    checkout. La primera version de la excepcion consultaba git DENTRO de
+    la funcion, y el test que la exercita dejo de ver el caso off-tag
+    porque el repositorio real estaba en un tag: un guard que solo puede
+    ver un caso es medio guard. `None` significa «preguntale a git».
+
 
     El mensaje dice SIEMPRE las dos partes. Un verificador que dice
     «falso» sin decir «cual era la verdad» deja a quien corrige haciendo
@@ -265,7 +325,21 @@ def _contradicciones(v: dict[str, Any]) -> tuple[str, ...]:
     # desarrollo. Sin esta regla, `__version__` podria quedar en el tag
     # Release y el guard de WI-109 (`package_version`) pasaria mientras el
     # paquete construido lleva la version de la release ya publicada.
-    if v["tag_vcs"] is not None and v["version"] != f"{v['tag_vcs']}.dev0":
+    #
+    # EXCEPTO cuando HEAD esta EN la etiqueta: ahi el release ya ocurrio
+    # y la version correcta es el SemVer PURO. Sin esta excepcion este
+    # script y `test_release_governance.py` se contradicen —los dos son
+    # del repo y los dos se ejecutan— y no existe version que satisfaga a
+    # los dos a la vez. Se cambio la REGLA de este script, no la del otro:
+    # el guard de release ya distinguish los tres casos y este lo hacia
+    # bien; el que estaba simplificado era este.
+    if (
+        v["tag_vcs"] is not None
+        and not (
+            head_en_la_etiqueta if head_en_la_etiqueta is not None else _head_esta_en_la_etiqueta()
+        )
+        and v["version"] != f"{v['tag_vcs']}.dev0"
+    ):
         problemas.append(
             f"version: __init__.py declara {v['version']} y el ultimo tag es "
             f"v{v['tag_vcs']}; lo esperable es {v['tag_vcs']}.dev0"
