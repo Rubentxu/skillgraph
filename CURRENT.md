@@ -44,6 +44,27 @@
 > **11/11 mutaciones** con sonda por mutación, y el harness distingue
 > **cuatro** salidas porque cuatro sondas apuntaban mal y las contaba
 > como victorias sin que el guard hubiera opinado.
+>
+> **Certificado** — run `be32259e-f012-47f7-b146-1490343ada10`, terminado
+> a las `06:10:30.751893188Z`, `exit=0`, `RunFinished outcome=success`,
+> **8/8 etapas en `success`**, `2776 passed in 277.98s`. Leído del
+> journal **después** de terminar, por `run_id` **y** `occurred_at`.
+>
+> **La línea que prueba el arreglo** la escribió la propia etapa
+> `evidence` al evaluarse a sí misma:
+>
+> ```
+> run bf2a8e23-c07d-46f9-89f2-9ac939be3ea5: 7/7 etapas, 9 pasos,
+> veredicto 'failure'
+> ```
+>
+> **`evidence` pasó evaluando un run en `failure`.** Esa combinación era
+> imposible antes: el run en `failure` es el inmediatamente anterior, y
+> su único `StepFailed` era el propio fallo de `evidence`. El deadlock se
+> había exculpado a sí mismo. Lo que se midió es que la cadena **deja de
+> envenenarse**; un run con `evidence` en rojo y las otras siete verdes
+> sigue terminando en `FAILURE` por construcción, y llega verde **uno
+> después**.
 
 ---
 
