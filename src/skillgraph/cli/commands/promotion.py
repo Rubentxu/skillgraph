@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, NoReturn
 
@@ -22,6 +21,7 @@ from skillgraph.cli.support import (
 )
 from skillgraph.knowledge.graph import Source
 from skillgraph.platform.storage import Storage
+from skillgraph.runtime.engine import now_iso
 
 
 def _apply_pending_promotions(
@@ -137,7 +137,7 @@ def _default_claim_importer(storage: Storage, *, tenant_id: str, target_project:
                     git_commit_sha=s.get("git_commit_sha"),
                     git_tree_sha=s.get("git_tree_sha"),
                     working_tree_status=s.get("working_tree_status"),
-                    checked_at=s.get("checked_at") or datetime.now(UTC).isoformat(),
+                    checked_at=s.get("checked_at") or now_iso(),
                     freshness=s.get("freshness", "fresh"),
                 ),
             )

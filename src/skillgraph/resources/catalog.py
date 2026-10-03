@@ -13,11 +13,11 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from skillgraph.core.errors import IdentityConflictError, ValidationError
+from skillgraph.runtime.engine import now_iso
 
 SCHEMA_VERSION = 1
 
@@ -81,7 +81,7 @@ class Catalog:
                     tenant_id,
                     name,
                     str(db_path),
-                    datetime.now(UTC).isoformat(),
+                    now_iso(),
                 ),
             )
 

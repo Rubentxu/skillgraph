@@ -12,7 +12,6 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
-from datetime import UTC
 from pathlib import Path
 
 from skillgraph.cli.support import (
@@ -41,6 +40,7 @@ from skillgraph.governance.graph_expansion import (
 )
 from skillgraph.platform.storage import Storage
 from skillgraph.resources.workflow import WorkflowNode, WorkflowTransition
+from skillgraph.runtime.engine import now_iso
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,9 +58,8 @@ class RejectionScan:
 
 def _utcnow_iso() -> str:
     """ISO-8601 UTC con sufijo +00:00 (legible, ordenable lexicograficamente)."""
-    from datetime import datetime
 
-    return datetime.now(UTC).isoformat()
+    return now_iso()
 
 
 def _infer_proposal_stage(

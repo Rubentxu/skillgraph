@@ -25,11 +25,39 @@ from skillgraph.runtime.redaction import redact_payload
 
 SCHEMA_VERSION = 1
 
+# WI-112: reloj inyectable. Antes `RuntimeEvent` usaba
+# `default_factory=lambda: datetime.now(UTC)`, y una lambda que captura
+# el reloj real no tiene por donde pasarle otro: "se puede mockear" era
+# cierto solo con monkeypatch del modulo. `now_iso(clock=...)` es la via.
+Clock = Callable[[], datetime]
+
 # QW-D (WI-31, 2026-09-27): ``EVENT_KINDS`` se importa desde
 # ``skillgraph.core.runtime_types``. La unica fuente de verdad es el
 # Literal ``EventType``; ``EVENT_KINDS`` se deriva de ``get_args()``.
 # Si necesitas anadir un evento nuevo, declaralo en ``EventType``
 # (en runtime_types.py) y un ADR con la justificacion del contrato.
+
+
+def now_iso(clock: Clock | None = None) -> str:
+    """ISO 8601 UTC sin microsegundos. Unico punto de lectura del reloj.
+
+    WI-112: este helper declara desde hace tiempo ser el "unico punto de
+    definicion" y habia **10** llamadas a `datetime.now` repartidas por el
+    nucleo, en tres formatos distintos. Dos instantes del mismo segundo
+    podian serializarse a dos strings que no se comparaban entre si.
+
+    Aqui se lee el reloj real, y en ningun otro sitio de
+    `src/skillgraph/`. Para fijarlo en un test se pasa `clock`: no hace
+    falta monkeypatchear el modulo.
+
+    `clock` es `Callable[[], datetime]`. Se pasa explicito en vez de
+    leer un global porque `AGENTS.md` 1.4 prohibe el estado global
+    mutable, y un reloj global seria exactamente eso.
+    """
+    momento = clock() if clock is not None else datetime.now(UTC)
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=UTC)
+    return momento.astimezone(UTC).replace(microsecond=0).isoformat()
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +77,17 @@ class RuntimeEvent:
     causation_id: str | None
     correlation_id: str | None
     payload: dict[str, Any]
-    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    # WI-112: antes era `field(default_factory=lambda:
+    # datetime.now(UTC).isoformat())` — una lambda que capturaba el reloj
+    # real, con su propio formato y su propia copia. `AGENTS.md` 1.3 pide
+    # un default factory con `datetime.now(UTC)`, asi que el default se
+    # queda; lo que cambia es que ahora el reloj se lee a traves de
+    # `now_iso`, y por tanto con el formato unico del nucleo.
+    #
+    # La via de inyeccion es `now_iso(clock=...)` y `EventBuilder
+    # ._emit(timestamp=...)`, no este default: un default factory que
+    # llama al reloj es comodo de usar y opaco de fijar.
+    timestamp: str = field(default_factory=now_iso)
     schema_version: int = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -207,16 +245,6 @@ def new_event_id() -> str:
     return str(uuid.uuid4())
 
 
-def now_iso() -> str:
-    """ISO 8601 UTC sin microsegundos. Centralizado para evitar drift.
-
-    Unico punto de definicion: antes existian 3 copias (_now_iso en
-    git_source/context_controller/knowledge_invalidator). Cualquier
-    serializacion temporal del runtime debe usar este helper.
-    """
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
-
-
 # --- Builder funcional para eventos ----------------------------------------
 
 
@@ -254,6 +282,7 @@ class EventBuilder:
         resource_ref: str,
         payload: dict[str, Any],
         causation_id: str | None = None,
+        timestamp: str | None = None,
     ) -> RuntimeEvent:
         return RuntimeEvent(
             event_id=new_event_id(),
@@ -265,6 +294,9 @@ class EventBuilder:
             causation_id=causation_id,
             correlation_id=self._correlation_id,
             payload=payload,
+            # WI-112: el reloj se lee en UN sitio, `now_iso`. Quien
+            # quiera fijarlo pasa `timestamp`; si no, lo lee de ahi.
+            timestamp=timestamp if timestamp is not None else now_iso(),
         )
 
     def run_created(self, *, run_id: str, initial_node: str) -> RuntimeEvent:

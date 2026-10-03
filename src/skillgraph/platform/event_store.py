@@ -17,12 +17,12 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Mapping
-from datetime import UTC
 from typing import Any
 
 from skillgraph.platform.ports import StoredEvent
 from skillgraph.platform.row_mappers import _row_to_stored_event
 from skillgraph.platform.storage import _SCHEMA_SQL, Storage
+from skillgraph.runtime.engine import now_iso
 
 
 class SqliteEventStore:
@@ -71,9 +71,9 @@ class SqliteEventStore:
         `payload` se serializa como JSON. `timestamp` por defecto = now UTC.
         """
         import json as _json
-        from datetime import datetime
 
-        ts = timestamp or datetime.now(UTC).replace(microsecond=0).isoformat()
+        # WI-112: el reloj se lee solo en `runtime.engine.now_iso`.
+        ts = timestamp or now_iso()
         try:
             with self._storage._tx() as cur:
                 cur.execute(

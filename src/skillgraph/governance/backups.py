@@ -37,6 +37,7 @@ from skillgraph.platform.paths import (
     project_dir,
     resolve_data_root,
 )
+from skillgraph.runtime.engine import now_iso
 
 BACKUP_FORMAT_VERSION: Final[str] = "1.0"
 BACKUP_DIR_NAME: Final[str] = "backups"
@@ -310,7 +311,7 @@ def create_backup(
                 zf.write(source, arcname=rel)
             manifest = BackupManifest(
                 format_version=BACKUP_FORMAT_VERSION,
-                created_at=datetime.now(UTC).isoformat(),
+                created_at=now_iso(),
                 data_root=str(data_root),
                 tenant_count=tenant_count,
                 project_count=project_count,

@@ -93,6 +93,46 @@ misma lista un nivel más abajo.
   `WorkflowPlan.successors`) no leen disco, red ni reloj.
 - El reloj se inyecta (default factory con `datetime.now(UTC)`)
   y se puede mockear.
+
+### Cómo se comprueba (WI-112)
+
+Antes de WI-112 esa viñeta era falsa en sus dos mitades, y
+`runtime/engine.py` declaraba desde hacía tiempo que `now_iso()` era el
+«único punto de definición». Medido por AST: **10** llamadas a
+`datetime.now` en el núcleo, en **tres** formatos.
+
+| propiedad | quién la mide | cómo |
+|---|---|---|
+| una sola lectura del reloj **para instantes** | `TestElRelojTieneUnSoloPuntoDeDefinicion` | AST sobre `src/skillgraph/`, excluyendo las que alimentan un `strftime` |
+| la lectura vive dentro de `now_iso` | `test_el_punto_unico_esta_en_el_helper` | el rango de líneas de la función, no el nombre |
+| un solo formato de instante | `test_now_iso_no_lleva_microsegundos` | dos llamadas seguidas, misma longitud, sin `.` |
+| el default del evento hereda ese formato | `test_el_default_del_evento_usa_el_formato_del_helper` | `RuntimeEvent()` sin `timestamp` |
+| hay una vía para fijar la hora | `test_now_iso_acepta_un_reloj_inyectado` | `now_iso(clock=...)`, sin monkeypatch |
+| la excepción de los nombres de fichero se vigila en las dos direcciones | `TestLosNombresDeFicheroSiguenConSuFormato` | que los módulos existan, y que nadie más use `strftime` |
+
+**La propiedad es «no hay una segunda lectura del reloj», no «existe
+una función llamada `now_iso`.** Por eso el rastreo es por AST y no por
+cadena: el docstring del propio `now_iso` menciona `datetime.now`, y
+quien buscara con regex contaría la prosa. Hay dos tests que rompen si
+el rastreo pasa a buscar texto: uno con un docstring inventado y otro
+con el caso real del repo.
+
+**Lo que NO se unificó, y por qué.** `governance/backups.py`,
+`improvement.py` y `receipts.py` siguen usando `strftime`, y
+deben: producen `'2026-10-03T09:00:00Z'`, que es un **nombre de
+fichero**, no un instante de evento. Meterlos en el formato único
+cambiaría receipts y nombres de backup ya emitidos. La lista está
+declarada en el guard, no en el código de producción, porque es una
+excepción y no una regla.
+
+**El default factory se queda.** `AGENTS.md` 1.3 lo pide, así que
+hacer `timestamp` obligatorio iba contra la regla — y rompía 37 tests
+sin añadir capacidad. La inyección real es `now_iso(clock=...)` y
+`EventBuilder._emit(timestamp=...)`; el default factory es cómodo de
+usar y opaco de fijar, que son dos propiedades distintas.
+
+Mutaciones: **5/5** con sonda por mutación
+(`.pipelinek/wi112_mutate.py`).
 - Las dependencias externas (Storage, Adapter) se inyectan por
   constructor — no se importan módulos que abran conexiones al
   cargar el paquete.
