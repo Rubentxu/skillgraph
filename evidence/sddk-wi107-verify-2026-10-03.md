@@ -239,6 +239,33 @@ run, no la cuenta**: `2703 + 22` serían 2725, y el run dio 2718.
 
 **Cobertura**: global 95.22 %, `cli/` 86.91 %, `runtime/` 97.98 %.
 
+## 7.bis Certificación del ESTADO final
+
+**Run** — `fdb35d26-0836-49e1-b923-4b55e6441a7e`, sobre el árbol con la
+trazabilidad, el release y esta evidencia ya escritos.
+
+```
+pytest: 2718 passed in 240.06s (0:04:00)
+== suelos declarados a mano, y si lo que nombran existe ==
+  OK   todo suelo declarado a mano nombra algo que existe
+  OK    95.22 %  (fail_under = 80 %)
+VEREDICTO: todo modulo gobernado por §6.3 cumple su suelo
+Pipeline finished with SUCCESS
+```
+
+Verificado por `run_id`:
+
+```
+$ mise exec -- uv run python scripts/check_pipeline_receipt.py --run-id fdb35d26-...
+OK: el run cumple los criterios que declara AGENTS.md. run fdb35d26-...:
+8/8 etapas, 9 pasos, veredicto 'success'.
+```
+
+Dos runs, dos objetos distintos: `332e09e6` certifica el **código**,
+`fdb35d26` certifica el **estado final**. La reproducibilidad hay que
+certificarla después de escribir la certificación, porque escribirla cambia
+el árbol — es la lección de WI-99, y la razón de que este bloque tenga dos.
+
 ## 8. Lo que NO se arregla, y se declara
 
 * `scripts/coverage.sh` sigue siendo una instrumentación de la suite, y
