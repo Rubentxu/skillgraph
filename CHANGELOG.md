@@ -14,8 +14,104 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
-## Sin release — WI-115 (2026-10-03) — el estado declara una cifra y nadie la comprueba
+## [0.23.0] - 2026-10-03 — el puerto de capabilities, alcanzable y con un adapter real
 
+**El bloque B3, cerrado.** Siete entregas. Las seis dejaron el contrato,
+los invariantes y la procedencia; la séptima cierra los dos huecos que
+quedaban, y eran el mismo hueco un nivel más arriba.
+
+SemVer derivado con `scripts/derive_semver.py`: `b/f/x/n/d 0/5/2/20/0`, la
+regla pide **MINOR**. Ningún commit con marcador de ruptura.
+
+### Lo que estaba medido, y por qué el gate se cumplía en vacío
+
+El gate anterior demostraba que el **contrato** se puede cumplir: una
+capability inventada dentro de un test se registraba, se resolví­a y se
+invocaba. No demostraba que el **runtime lo pudiera alcanzar**. Y medido,
+antes de escribir nada:
+
+- dieciséis construcciones de `CapabilityRegistry` en el árbol;
+- **las dieciséis en tests**;
+- cero módulos bajo `src/` que importaran el puerto.
+
+Veredicto: `INALCANZABLE_DESDE_PRODUCCION`. El criterio del roadmap —«añadir
+una capability sin modificar `RunController`, el storage base ni el motor
+del workflow»— se cumplía de forma **vacía**: se podía añadir una
+capability sin tocar el core porque el core no la veía nunca.
+
+### Added
+
+- **`sg.knowledge.query`** (`knowledge/knowledge_query.py`), el primer
+  adapter de **producción** del repo. Depende del `Protocol`
+  `KnowledgeRepository`, no de `Storage`. Es la capability elegida por una
+  razón concreta: el roadmap lista siete candidatas, seis de productos
+  externos —que SkillGraph no debe reconstruir— y la séptima es dominio
+  propio, con su acceso ya declarado como puerto y sin usar como
+  capability.
+- **`CapabilityController`** y **`CapabilityOutcome`**
+  (`runtime/capability_controller.py`), el kernel que B3 nombraba y que no
+  existía. Recibe **nombres**, los resuelve contra el registro inyectado y
+  devuelve procedencia. `CapabilityOutcome` une el tipo **pedido** con el
+  `spec` que **respondió**: son dos cosas, y sin el par no se puede auditar
+  «este nodo pidió X y alguien entregó Y».
+- **`scripts/mutate_b3_production_gate.py`**, sonda de mutación del gate,
+  **versionada** y no en `.pipelinek/`. La razón está abajo.
+
+### Changed
+
+- **`RunController` acepta `capabilities=`**, un `CapabilityRegistry`
+  **opcional**, cuya ausencia **es** la política. Sin registro —el
+  default— un plan que declara `'stale'` sigue ejecutándose igual, porque
+  `'stale'` es un `FreshnessState` y no una capability: cero ruptura, y por
+  eso esto se puede aterrizar sin migrar nada. Con registro, lo que el plan
+  declara tiene que existir, o el nodo queda `FAILED` con
+  `CapabilityNotFound` —un `SkillGraphError` con `code`, traducible a exit
+  code— **sin gastar una llamada al adapter**: la verificación va dentro
+  del `try` de `_compile_node_handoff`, que corre antes de
+  `_invoke_node_adapter`. Esa propiedad no se ve en la fila del nodo, y un
+  plan que paga una llamada de red y luego falla **parece funcional**.
+
+### La procedencia, por elemento y no por resultado
+
+`CapabilityResult.adapter` responde «¿quién ejecutó esto?», que no es «¿de
+dónde salió **esto**?». B6 quiere distinguir `observed` de lo que afirmó
+un agente, así que cada elemento lleva su `source_id` y su
+`checked_at_revision`.
+
+### Lo que NO se hace, y es una decisión
+
+Las capabilities **no se invocan** durante la ejecución del nodo: solo se
+verifican. `Handoff.capabilities` sigue siendo `tuple[str, ...]` porque
+`runtime/handoff.py:195::Handoff.to_dict` lo mete en el **hash firmado**, y
+cambiar la forma es ruptura de datos: materia de **B8**.
+
+### El guard, y por qué es AST
+
+La propiedad del roadmap es **estructural**: el núcleo no debe saber qué
+adapters existen. Un test de comportamiento pasaría igual con un
+`if tipo == "sg.knowledge.query"` dentro del kernel, porque el resultado
+sería idéntico. Lleva **dos contrasaltos**, porque cada uno tapa un
+agujero distinto: que el rastreo encuentre el núcleo, y que el rastreo
+**detecte**.
+
+### Fixed
+
+- `STATE.yaml` declaraba un `project_id` y un `workspace_id` **que no
+  existen**, y las cuatro líneas siguientes ya usaban el prefijo correcto:
+  el fichero se contradecía a sí mismo y el id equivocado no lo comprobaba
+  nadie. Es la campaña «qué declara el repo que nada comprueba», con una
+  forma que no se había visto: no era una afirmación demasiado optimista,
+  era un id que apunta a otro proyecto.
+
+### Verificación
+
+Suite completa verde; mutaciones **6/6** cazadas, 0 sondas inválidas, árbol
+restaurado y verificado por `git diff` de salida idéntico al de entrada.
+`tests.total: 2974`, medido con `pytest --collect-only` **después** del run.
+
+---
+
+## Sin release — WI-115 (2026-10-03) — el estado declara una cifra y nadie la comprueba
 **SIN RELEASE, Y POR REGLA.** Desde `v0.22.5` hasta HEAD hay
 `b/f/x/n/d 0/0/0/4/4`: la herramienta dice literalmente *«la regla dice
 SIN BUMP: no hay release que emitir, se acumula»*, y `AGENTS.md §12` es
