@@ -12366,3 +12366,86 @@ cambia y las once certificaciones anteriores siguen valiendo.
     que yo escribía para **probar** que el guard muerde, así que el
     fallo del instrumento era invisible justo en el sitio que existe
     para detectarlo.
+
+---
+
+## 2026-10-03 — Bloque WI-111 (decimotercera vía, release `v0.22.2`)
+
+**Tema**: `AGENTS.md §8` declaraba tres cosas del Handoff que no se
+sostenían. Duodécima y decimotercera vía de la serie.
+
+**Ciclo**: `p-b7740b96d79ec013/wi111-handoff-frozen-window` (A-full).
+**Commits**: `a0b39c4` (código), `8bbb743` (trazabilidad), `1c68a03`
+(release + tag `v0.22.2`), `76a0e17` (post-release).
+
+### Lo medido
+
+`frozen=True` congela el enlace del atributo, no su valor, y
+`HandoffExecution.budget` era `dict[str, int]`. Peor: el budget está
+**dentro del hash**, y el motor lo persistía antes de invocar al
+Adapter (línea 219) y lo recalculaba después (línea 144). Medido
+ejecutando un nodo real contra un `Storage` real:
+
+```
+fila node_executions.context_hash : 0063e7dfd167afc6...
+evento NodeCompleted               : 951a2d3a16cf7ea8...
+evento EvidenceProduced            : 951a2d3a16cf7ea8...
+budget en handoff_json persistido  : {'max_nodes': 1}
+```
+
+La fila describe el handoff de antes y los eventos el de después, para
+la misma `node_execution`. La línea 144 hacía exactamente lo que la
+viñeta prohíbe.
+
+### El guard ejecuta, no lee
+
+Un guard por AST habría medido la regla y no el defecto: el defecto
+está en la distancia temporal entre firmar y entregar, que no está en
+el texto de ningún fichero. El guard hace un `reconcile_run` y lee
+`node_executions` y `runtime_events` después.
+
+**Errores propios que registró este bloque:**
+
+- **26 — Un test que no puede fallar.** `test_el_budget_del_dict_es_
+  copia` mutaba el dict devuelto y comparaba contra `_handoff()`,
+  una **llamada nueva**. Dos objetos distintos: el assert no podía
+  fallar. Pasaba verde con el defecto puesto.
+- **27 — `MappingProxyType == dict` es `True`.** Un test que exigía que
+  `to_dict` devolviera un dict plano comparaba con `==`, así que
+  pasaba con el mapping vivo devuelto. Lo que discrimina es el tipo, y
+  que `json.dumps` lo acepte.
+- **28 — Contar sin distinguir el origen.** El contador de llamadas a
+  `context_hash` daba 2 y el motor calcula 1: la segunda era la
+  lectura del propio Adapter. Un guard que cuenta sin preguntar quién
+  pregunta se quejaba de lo equivocado.
+
+**M5 se reescribió dos veces.** La primera quitaba el `sorted()`, que
+resultó **inocua** — quitar el orden no rompe la copia— y su sonda
+apuntaba al test del error 26. Es WI-110 con otro disfraz: una sonda
+mal apuntada contada como victoria porque el guard no sabe que mira
+el sitio equivocado.
+
+### Dos guards que el cambio rompió
+
+No eran ruido: eran la red que este bloque dice que existe. Los dos se
+resolvieron **cambiando el código, no la regla**.
+
+- **WI-66**, umbral de 80 LoC: `_execute_one` pasó de 74 a 83. Se
+  extrajo `_open_running_node` y quedó en 76. **El umbral no se sube:
+  un umbral que se sube para que el código pase no comprueba nada.**
+- **WI-67**, lista de métodos movidos: 22 → 23.
+
+### Resultado
+
+19 tests · **5/5 mutaciones** con sonda por mutación · 2795 passed,
+0 skipped · mypy 16 antes, 16 después (preexistentes del mixin) ·
+ruff limpio · **cero CJK añadido**.
+
+### Deuda registrada, no abierta
+
+El barrido por AST encontró **12 campos** `list`/`dict`/`set` dentro de
+dataclasses `frozen=True`. Se arregló **uno**, el único que participa
+en el hash firmado. Los otros once están en
+`evidence/sddk-wi111-exploration-2026-10-03.md` §9. También 6
+dataclasses sin `frozen` en `platform/uow.py`, capa adaptadora, que no
+mutan `self`.

@@ -128,12 +128,74 @@ No eran ruido: eran la red que este bloque dice que existe.
 Un umbral que se sube para que el código pase no comprueba nada. Los
 dos se resolvieron cambiando el código, no la regla.
 
-## 10. Lo que NO arregla
+## 10. Certificación
+
+**Run canónico**: `4a6a2ad2-282b-4ac3-be4d-cd50d9ce4a0c`. Leído del
+journal **después** de terminar, por `run_id` **y** `occurred_at` —
+nunca por la línea de salida. 9 pasos ejecutados.
+
+| # | etapa | outcome |
+|---|---|---|
+| 0 | `discover-repo` | success |
+| 1 | `sync-deps` | success |
+| 2 | `unit-tests` | success |
+| 3 | `coverage-floors` | success |
+| 4 | `package-build` | success |
+| 5 | `ci-parity` | success |
+| 6 | `lint` | success |
+| 7 | `evidence` | success |
+
+`RunFinished` → `outcome: success`, `diagnostics: []`. **8/8 etapas en
+`success`**.
+
+**Suite dentro del run**: `pytest: 2795 passed in 250.96s`, **0
+skipped**. Coincide con la ejecución local previa: 2776 + 19 = 2795.
+
+**El arreglo en el estado final, verificado a mano.** Con un Adapter
+que intenta escribir en el budget que recibe:
+
+```
+--- NodeFailed
+    {"error": "TypeError: 'mappingproxy' object does not support item assignment"}
+```
+
+El nodo queda FAILED con el motivo persistido, en vez de continuar
+como si nada. **Un intento de escritura ilegal no deja una segunda
+descripción que contradiga a la firma.**
+
+**Estado del repo al certificar:**
+
+| | |
+|---|---|
+| HEAD | `76a0e17` post-release |
+| versión activa | `0.22.2.dev0` |
+| último tag | `v0.22.2` sobre `1c68a03` |
+| SHA-256 `.pipeline.kts` | `7541ced5…2dd42`, **sin drift** |
+| árbol | limpio |
+
+**Criterios del PRE-FLIGHT:**
+
+| criterio | verificado |
+|---|---|
+| C1 `budget` deja de ser dict mutable | `TypeError` al escribir; `MappingProxyType` sobre copia |
+| C2 fila y eventos, mismo hash | `TestElHashNoSeRecalculaDespuesDelInvoke` |
+| C3 el hash no se recalcula tras el invoke | contador de llamadas, por origen: **1** |
+| C4 deduplicación intacta | dos handoffs iguales → mismo hash; el orden no cambia |
+| C5 `to_dict()` sigue serializando | `isinstance(dict)` + `json.dumps` |
+| C6 `.pipeline.kts` intacto | SHA sin drift |
+| C7 el guard muerde si se revierte | **5/5 mutaciones cazadas** |
+
+## 11. Lo que NO arregla
 
 El barrido por AST encontró **12 campos** `list`/`dict`/`set` dentro de
 dataclasses `frozen=True`+`slots=True`. Se arregló **uno**, el único
 que participa en el hash firmado. Los otros once se registran en
 `evidence/sddk-wi111-exploration-2026-10-03.md` §9.
+
+El criterio de no abrir ese frente es la frontera misma: el hash
+firmado es lo que separa lo publicado de lo que el agente ve, y lo
+que está al otro lado no participa en él. Arreglar los doce sería
+mezclar un defecto con una convención.
 
 También: **6 dataclasses sin `frozen=True`**, todas en
 `platform/uow.py`, capa adaptadora, que no mutan `self`.
