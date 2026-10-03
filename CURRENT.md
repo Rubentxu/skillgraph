@@ -1,7 +1,7 @@
 # CURRENT — puntero operativo
 
 > **Bloque 2026-10-03 (decimosexta tanda) cerrado — WI-104, release `v0.20.5`.**
-> Versión activa `0.20.5`; último tag `v0.20.5`. 2684 passed, **0 skipped**.
+> Versión activa `0.20.5.dev0`; último tag `v0.20.5`. 2684 passed, **0 skipped**.
 >
 > **WI-104 — una cita que no dice a qué apunta no es una cita.**
 > Sexta vía de la serie «qué declara el repo que nada comprueba», y la más

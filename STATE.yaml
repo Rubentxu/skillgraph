@@ -561,7 +561,7 @@ tests:
   total: 2677   # re-medido 2026-10-03 (bloque WI-103) en la CI canonica run 9db8a440: 2677 passed, 0 skipped. +4 sobre 2672+1skip = el gate de `main` como hotspot deja de depender de un informe fechado: 1 sobre el arbol real, 1 contraejemplo que pone un main con cc>=20 y exige que la medicion lo vea, 1 que exige por AST que el helper no pueda saltarse, 1 que comprueba que no escribe en audits/.
   passed: 2677
   duration_s: 231.72   # MEDIDO en la CI canonica de WI-103 (stage unit-tests, recipe de cobertura), run 9db8a440. pytest a pelo son ~130 s: el delta es el coste de instrumentar los subprocesos.
-  package_version: "0.20.5"   # release WI-104 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
+  package_version: "0.20.5.dev0"   # trabajo post-release v0.20.5 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
