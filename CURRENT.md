@@ -1,7 +1,7 @@
 # CURRENT — puntero operativo
 
 > **Bloque 2026-10-03 (decimoséptima tanda) cerrado — WI-105, release `v0.21.0`.**
-> Versión activa `0.21.0`; último tag `v0.21.0`. 2699 passed, **0 skipped**.
+> Versión activa `0.21.0.dev0`; último tag `v0.21.0`. 2699 passed, **0 skipped**.
 >
 > **WI-105 — los criterios de éxito del CI eran una declaración.**
 > Séptima vía de la serie «qué declara el repo que nada comprueba», y la

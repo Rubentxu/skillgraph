@@ -561,7 +561,7 @@ tests:
   total: 2699   # bloque WI-105: +15 sobre 2684 = los contras de WI-105. Bloque anterior WI-104: +7 sobre 2677 = 6 contraejemplos del verificador de citas (anclaje, desalineacion, simbolo ausente, simbolo en otro fichero, prosa de docstring, mensaje que dice donde esta) y 1 que verifica el bloque vivo de CURRENT.md. El conteo lo confirma el pre-commit, que corre la suite entera.
   passed: 2699
   duration_s: 239.16   # MEDIDO en la CI canonica de WI-104 (stage unit-tests, recipe de cobertura), run 88d16828, sobre arbol quieto. La certificacion ANTERIOR de este mismo bloque (run 7d68ca93) FALLO con 1 failed por una etiqueta sin registrar en release.releases[].
-  package_version: "0.21.0"   # release WI-105 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
+  package_version: "0.21.0.dev0"   # trabajo post-release v0.21.0 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1146,11 +1146,7 @@ release:
   releases:
     - tag: v0.21.0
       fecha: 2026-10-03
-      # El sha se rellena en el commit post-release: en este commit la
-      # etiqueta todavia NO existe, asi que no hay sha real que escribir.
-      # Escribirlo aqui obligaria a corregirlo despues — que es
-      # exactamente lo que rompio la certificacion de WI-104.
-      sha: ""
+      sha: "ba2552cb1a2bb6c3984a721bdc112d4aa72ddc68"
       nota: "WI-105: los seis criterios de exito que AGENTS.md declara para un run no los comprobaba ninguna herramienta. La etapa evidence de la receta —el unico sitio que tocaba .pipelinek/— imprimia «present» con tres test -d cuyos operandos crea el motor antes de la etapa, asi que no podian fallar: medido sobre el journal real, 15 runs con 3 en failure y la etapa dice lo mismo en los quince. Ahora scripts/check_pipeline_receipt.py comprueba los criterios 1 a 5 desde el journal y el arbol; el 6 se declara que no se automatiza porque es una accion del agente. El contraejemplo que manda es el run VERDE QUE NO EJECUTO NADA, que es indistinguible de una verificacion real. La receta verifica el run ANTERIOR porque el suyo aun no tiene RunFinished cuando la etapa corre. Mutaciones 7/7 a la primera, la ultima sobre el .pipeline.kts real mordida por C5 de WI-102. 2699 passed, 0 skipped."
     - tag: v0.20.5
       fecha: 2026-10-03
