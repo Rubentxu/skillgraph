@@ -11643,3 +11643,31 @@ para comprobar nada.
 4. **Escribir una cita sin abrir el fichero.** El guard de citas comprueba
    que la línea exista. Escritas de memoria, tres de cuatro apuntaban a
    líneas que existían y no eran las del texto.
+
+### La re-certificación dio 2672 passed, 1 skipped
+
+El run del estado final dio `2672 passed, 1 skipped` donde la certificación
+del código había dado `2673 passed` sin skips:
+
+```
+SKIPPED [1] tests/test_wi41_cli_dispatch.py:284: auditoria del dia no generada todavia
+```
+
+`TestAuditGateForMain::test_main_no_esta_en_hotspots_publicos` lee
+`audits/architecture-debt-<hoy>.md` y, si no existe, hace `pytest.skip`. La
+fecha rolloveró a `2026-10-03` durante la sesión.
+
+Medido: 6 informes entre `2026-09-26` y `2026-10-02` (7 días), falta el
+`2026-09-30`, y hoy no hay ninguno. **El gate que protege de que `main`
+vuelva a listarse como hotspot público solo corre en los días en que alguien
+se acuerda de generar el informe.** Los demás días da verde sin comprobar
+nada, y `AGENTS.md §6.2` dice literalmente: «NO usar `pytest.skip` para
+esconder fallos».
+
+Es la misma serie por el otro lado: un artefacto que se declara fuente y un
+gate que depende de que ese artefacto exista hoy. **Candidato a WI-103**, y
+no se abre aquí: abrir un workitem con el release a medio cerrar es
+exactamente lo que este bloque ha hecho mal tres veces.
+
+El skip **no invalida** la certificación: 2672 + 1 = 2673, el total coincide
+con el del código, y el motivo es una fecha con su explicación.

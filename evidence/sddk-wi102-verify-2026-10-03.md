@@ -183,7 +183,45 @@ citas tiene esa debilidad.
 
 `Pipeline finished with SUCCESS`, **0 `StepFailed`**, 8/8.
 
-## 9. Criterios de aceptación
+## 9. Un skip que la certificación destapó
+
+La re-certificación dio **`2672 passed, 1 skipped`** donde la certificación
+del código había dado `2673 passed` sin skips. El skip:
+
+```
+SKIPPED [1] tests/test_wi41_cli_dispatch.py:284: auditoria del dia no generada todavia
+```
+
+`TestAuditGateForMain::test_main_no_esta_en_hotspots_publicos` lee
+`audits/architecture-debt-<hoy>.md` y, si no existe, hace `pytest.skip`. La
+fecha rolloveró a `2026-10-03` durante la sesión y el informe de hoy no
+existe, así que el gate pasó a ser **un no-op**.
+
+Medido:
+
+| | |
+|---|---|
+| informes `architecture-debt-*` | **6** |
+| rango | `2026-09-26` … `2026-10-02` |
+| días transcurridos en el rango | 7 |
+| días **sin** informe | 1 (`2026-09-30`) |
+| hoy | sin informe → **gate inactivo ahora mismo** |
+
+Es decir: el gate que protege de que `main` vuelva a listarse como hotspot
+público **solo corre en los días en que alguien se acuerda de generar el
+informe**. Los demás días da verde sin comprobar nada — y `AGENTS.md §6.2`
+dice, literalmente, «NO usar `pytest.skip` para esconder fallos».
+
+**No se arregla aquí.** Es un workitem propio con su propia medición, y
+abrirlo con el release a medio cerrar es lo que este bloque lleva tres
+veces haciendo mal. Queda anotado como candidato siguiente: **WI-103, un gate que
+solo existe los días que su artefacto existe.**
+
+Nota sobre la certificación: el skip **no invalida** el run. 2672 + 1 = 2673,
+el total coincide con el de la certificación del código, y el motivo es una
+fecha con su explicación, no un fallo disfrazado.
+
+## 10. Criterios de aceptación
 
 | # | criterio | estado |
 |---|---|---|
@@ -196,7 +234,7 @@ citas tiene esa debilidad.
 | 7 | `ruff check src tests scripts` + `format --check` | verdes |
 | 8 | receta canónica 8/8, `SUCCESS` | run `efebb07c` |
 
-## 10. Lo que este bloque NO arregla
+## 11. Lo que este bloque NO arregla
 
 - **No exige un número de etapas.** Un número es una constante que hay que
   actualizar cada vez que se añade una etapa, y actualizar una constante
