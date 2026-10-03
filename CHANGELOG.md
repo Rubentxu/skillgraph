@@ -14,6 +14,80 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.21.0] - 2026-10-03 — los criterios de éxito del CI eran una declaración
+
+**MINOR**: `git log v0.20.5..HEAD` = 1 `feat`, 0 `fix`, 1 `docs`, 0 breaking.
+**2699 passed, 0 skipped** (+15).
+
+Séptima vía de la serie «qué declara el repo que nada comprueba». A diferencia
+de las otras seis, el defecto no es un instrumento mal construido: son **seis
+criterios escritos que nadie comprobaba**.
+
+### El defecto
+
+`AGENTS.md` («CI Local Obligatorio») enumera seis criterios que un run «debe
+cumplir». La etapa `evidence` de `.pipeline.kts` era el único sitio de la receta
+que tocaba `.pipelinek/`, y sus tres comandos **no podían fallar**: un `ls` del
+journal y dos `test -d` sobre directorios que el motor crea **antes** de la
+etapa.
+
+Medido contra el journal real de este repo —15 runs, 3 de ellos
+`RunFinished/failure`—: la etapa imprime `last-run present` y
+`workspace tracking present` **en los quince**, indistinguibles. Es la forma de
+WI-101 —una etapa que certifica sin ejecutar la comprobación— aplicada al
+registro del propio CI.
+
+El alcance era mayor: el único criterio citado en algún sitio era el 1, con un
+`grep` sobre el stdout dentro de `scripts/hooks/pre-push`, hook que no está
+instalado y cuyo `grep` ya se comió esa cadena exacta una vez en la historia
+del repo.
+
+### Lo que se comprueba
+
+`scripts/check_pipeline_receipt.py` verifica los criterios **1 a 5** desde el
+journal y el árbol. El **6 no se automatiza**, y se declara: es el SHA-256
+«registrado en la sesión», y una sesión es del agente, no del repo. Meterlo en
+el script habría sido la misma mentira que el script viene a arreglar.
+
+### El contraejemplo que manda
+
+No es el run rojo. Es el run **verde que no ejecutó nada**: un veredicto
+cacheado y una verificación real dicen los dos `Pipeline finished with
+SUCCESS`. `AGENTS.md` describe el caso con sus palabras —«sin `--rerun`, un run
+cuyo script no ha cambiado reutiliza el veredicto previo y termina en
+`Pipeline finished with SUCCESS` sin ejecutar un solo step»— y el criterio 2
+existe para separarlos. Era el único modo de fallo que nada distinguía.
+
+### Por qué verifica el run anterior
+
+La receta no puede verificar su propio run: cuando la etapa corre, el run en
+curso todavía no tiene `RunFinished`. El huevo y la gallina es real, y lo
+resuelve el propio motor: **el `RunFinished` más reciente es, durante un run, el
+run anterior**. El mismo script con `--run-id` verifica uno concreto, que es lo
+que hace la certificación.
+
+### Un detalle de instrumento costó una medición entera
+
+El `payload` del journal es una **lista JSON con un dict dentro**, no un objeto.
+`json_extract(payload, '$.outcome')` devuelve `NULL` sobre ese schema, y leerlo
+por la ruta de objeto salía con `None` en los 15 `RunFinished`: el run más sano
+del repo habría salido como `failure`. Un instrumento que no abre el
+contenedor no mide lo que cree medir, y el síntoma —un `None` silencioso en 15
+filas— parece un dato, no un fallo.
+
+### Mutaciones 7/7 a la primera
+
+`.pipelinek/wi105_mutate.sh`, incluida M7, que degrada la **conexión** sobre el
+`.pipeline.kts` real: lo que debe morder ahí es C5 de WI-102, no un test de
+este bloque. M6 funde las dos mitades del criterio 2 en un código, porque un
+solo código haría decir «veredicto cacheado» a un run que sí ejecutó pasos: un
+guard que señala de más entrena a su lector a ignorar sus avisos.
+
+No hizo falta la segunda pasada de WI-104 porque cada test exige el **código**
+del problema, no solo que la lista no esté vacía. Exigir solo «hay problemas» es
+justo lo que dejó pasar a tres contraejemplos allí.
+
+---
 ## [0.20.5] - 2026-10-03 — una cita que no dice a qué apunta no es una cita
 
 **PATCH**: `git log v0.20.4..HEAD` = 0 `feat`, 1 `fix`, 1 `docs`, 0 breaking.

@@ -1,44 +1,48 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-03 (decimosexta tanda) cerrado — WI-104, release `v0.20.5`.**
-> Versión activa `0.20.5.dev0`; último tag `v0.20.5`. 2684 passed, **0 skipped**.
+> **Bloque 2026-10-03 (decimoséptima tanda) cerrado — WI-105, release `v0.21.0`.**
+> Versión activa `0.21.0`; último tag `v0.21.0`. 2699 passed, **0 skipped**.
 >
-> **WI-104 — una cita que no dice a qué apunta no es una cita.**
-> Sexta vía de la serie «qué declara el repo que nada comprueba», y la más
-> silenciosa: no un instrumento que mide mal, sino uno que **no puede
-> distinguir** una afirmación verdadera de otra falsa.
+> **WI-105 — los criterios de éxito del CI eran una declaración.**
+> Séptima vía de la serie «qué declara el repo que nada comprueba», y la
+> más amplia: no un instrumento mal, sino **seis criterios escritos que
+> nadie comprobaba**.
 >
-> **Salió de mí.** En WI-102 escribí las líneas 352 y 479 de
-> `scripts/check_ci_recipe_parity.py` cuando las reales eran la 421 y la 589.
-> Las cuatro líneas existen hoy y el guard dio las cuatro por buenas:
-> `tests/test_wi92_measured_claims.py:256::_problemas_de_la_cita` exigía
-> `linea <= total_lineas`, que es **resolubilidad, no verdad**.
+> `AGENTS.md` enumera SEIS criterios que un run «debe cumplir». La etapa
+> `evidence` de la receta era el único sitio que tocaba `.pipelinek/`, y
+> sus tres comandos **no podían fallar**: los tres operandos los crea el
+> motor **antes** de la etapa. Medido contra el journal real —15 runs, 3
+> de ellos `RunFinished/failure`—: imprimía «present» en los quince.
+> El único criterio citado en algún sitio era el 1, con un `grep` sobre el
+> stdout en un hook que no está instalado.
 >
-> **Medido** con `.pipelinek/wi104_measure.py` (solo lectura, 5 casos): el
-> predicado actual acepta las 2 citas falsas; el de sitio de definición las
-> separa con **cero** errores. `:352` y `:479` son prosa dentro de un
-> docstring; `:421` y `:589` son líneas `def`.
+> **Ahora mide:** `scripts/check_pipeline_receipt.py:209::evaluar` comprueba
+> los criterios **1 a 5** desde el journal y el árbol. El **6 no se
+> automatiza**: es el SHA-256 «registrado en la sesión», y una sesión es
+> del agente, no del repo — declararlo comprobado sería la misma mentira
+> que el script viene a arreglar.
 >
-> **Ahora la cita dice a qué apunta:** el formato pasa a
-> `ruta/fichero.py:LINEA::simbolo`. El símbolo es lo que hace la afirmación
-> *falsable*: con sólo el número no hay manera de distinguir «he abierto el
-> fichero» de «he escrito un número que me sonaba», y por eso el error se
-> colaba sin que nada lo notara. Se resuelve en el AST del fichero que la
-> cita nombra —no en cualquiera del repo— y cuando una cita se queda vieja
-> el error **dice dónde está el símbolo ahora**.
+> **El contraejemplo que manda no es el run rojo, es el run VERDE QUE NO
+> EJECUTÓ NADA.** Un veredicto cacheado y una verificación real dicen los
+> dos `Pipeline finished with SUCCESS`; el criterio 2 existe para
+> separarlos y era el único modo de fallo que nada distinguía. Mutaciones
+> **7/7 a la primera**, y la última degrada la conexión sobre el
+> `.pipeline.kts` real — lo que debe morder ahí es C5 de WI-102, no un
+> test de este bloque.
 >
-> **El contraejemplo es parte del arreglo, y hubo que arreglarlo dos veces.**
-> Mutaciones **6/6** en rojo, incluida M6, que degrada la afirmación sobre el
-> `CURRENT.md` real y no sobre un informe sintético. Pero tres de los seis
-> contraejemplos **pasaban por el motivo equivocado** y no lo vi hasta que las
-> mutaciones sobrevivieron: `cargar_auditor` no es un símbolo —es
-> `_cargar_auditor`—, así que la prueba de desalineación pasaba por la rama de
-> «no lo define»; y la regla del ancla se comprobaba sobre el parser, que nunca
-> produce una cita sin ancla, así que **relajarla por dentro** pasaba verde.
-> Run de cierre: 8/8 stages, **2684 passed y 0 skipped**.
+> **El huevo y la gallina era real y lo resuelve el motor:** cuando la
+> etapa corre, el run en curso aún no tiene `RunFinished`, así que «el
+> `RunFinished` más reciente» **es el run anterior**.
 >
-> **Sin push**: 128 commits sin publicar, `origin/main` en `0ebbd58`.
+> **Un detalle de instrumento costó una medición entera:** el `payload` del
+> journal es una **lista JSON con un dict dentro**, no un objeto.
+> `json_extract(payload, '$.outcome')` devuelve `NULL` sobre ese schema, y
+> leerlo por la ruta de objeto salía con `None` en los 15 `RunFinished`.
+> Un instrumento que no abre el contenedor no mide lo que cree medir.
+>
+> **Sin push**: 136 commits sin publicar, `origin/main` en `0ebbd58`.
 
+---
 ---
 
 > **Bloque 2026-10-03 (catorceava tanda) cerrado — WI-102, release `v0.20.3`.**

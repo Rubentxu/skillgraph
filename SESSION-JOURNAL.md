@@ -11889,3 +11889,83 @@ código de hoy, la arqueología va al `CHANGELOG.md`.
     documenta (`HOOK_SKIP_TESTS=1`), que existe justo para esto; el verde
     real se comprueba en el commit post-release, y es lo que certifica la
     receta canónica.
+
+---
+
+## 2026-10-03 — WI-105, séptima vía: los criterios de éxito del CI
+
+**Ciclo**: `p-b7740b96d79ec013/wi105-la-etapa-evidence-declara-y-no-comprueba`
+**Sesión**: `wi105-20261003T031000Z` · **Release**: `v0.21.0` (MINOR, derivado)
+
+### El defecto
+
+`AGENTS.md` enumera **seis** criterios que un run «debe cumplir». No los
+comprobaba ninguna herramienta. La etapa `evidence` de `.pipeline.kts` era el
+único sitio que tocaba `.pipelinek/`, y sus tres comandos no podían fallar: los
+tres operandos los crea el motor **antes** de la etapa.
+
+Medido contra el journal real: 15 runs, 3 de ellos `RunFinished/failure`, y la
+etapa dice «present» en los quince. El único criterio citado en algún sitio era
+el 1, con un `grep` sobre el stdout en `scripts/hooks/pre-push` — hook no
+instalado, y cuyo `grep` ya se comió esa cadena exacta una vez.
+
+### El contraejemplo que manda
+
+No es el run rojo, es el run **verde que no ejecutó nada**. Un veredicto
+cacheado y una verificación real dicen los dos `Pipeline finished with SUCCESS`,
+y el criterio 2 existe justo para separarlos.
+
+### El huevo y la gallina
+
+La receta no puede verificar su propio run: cuando la etapa corre, el run en
+curso no tiene `RunFinished`. Lo resuelve el motor: **el `RunFinished` más
+reciente es, durante un run, el run anterior**. El mismo script con `--run-id`
+verifica uno concreto.
+
+### Lo que NO se automatiza
+
+El **criterio 6**: el SHA-256 «registrado en la sesión». Una sesión es del
+agente, no del repo. Meterlo en el script habría sido la misma mentira que el
+script viene a arreglar.
+
+### Mutaciones: 7/7 a la primera
+
+Sin la segunda pasada que hizo falta en WI-104. La diferencia está en cómo
+están escritos los tests: cada uno exige el **código** del problema, no solo que
+la lista no esté vacía. Exigir solo «hay problemas» es exactamente lo que dejó
+pasar a tres contraejemplos en WI-104, que pasaban por la rama equivocada.
+
+M7 degrada la **conexión** sobre el `.pipeline.kts` real y lo que debe morder es
+C5 de WI-102.
+
+**2699 passed y 0 skipped** (+15). SemVer MINOR derivado por
+`scripts/derive_semver.py`: «la regla pide MINOR -> v0.21.0».
+
+### Un detalle de instrumento que costó una medición entera
+
+El `payload` del journal es una **lista JSON con un dict dentro**, no un objeto.
+`json_extract(payload, '$.outcome')` devuelve `NULL` sobre ese schema, y leerlo
+por la ruta de objeto daba `None` en los 15 `RunFinished`: el run más sano del
+repo habría salido como `failure`. El síntoma —un `None` silencioso en 15
+filas— parece un dato, no un fallo.
+
+### Lo que NO se resolvió
+
+- El criterio 6 sigue siendo del agente, y declarado.
+- Hooks sin instalar. 136 commits sin publicar, `origin/main` en `0ebbd58`.
+- Credenciales Anthropic/OpenAI: siguen bloqueando H9 desde WI-91.
+- `release.complete` inalcanzable (exige `Cargo.toml`) → `cycle supersede`.
+
+### Errores propios de esta sesión, para no repetirlos
+
+11. **Dar por bueno un criterio de `test -d` sin ejecutarlo con sus tres
+    operandos reales.** Di «criterio 4 incumplido, faltan tres paths» después
+    de un `find` cuyo patrón de exclusión no era el que creía. Lo que
+    acababa de medir era mi filtro, no el árbol. `ls` directo lo desmintió en
+    un segundo. Un `find` con `-not -path` es un instrumento con opiniones.
+12. **Meter `PENDIENTE` en el campo `sha` de `STATE.yaml`.** El campo admite un
+    SHA o vacío, y `test_sha_field_never_holds_prose` rechaza la prosa. La
+    certificación de WI-104 ya había fallado por no registrar la etiqueta; el
+    orden correcto es etiqueta vacía en el commit de release y sha real en el
+    post-release, porque **en el commit de release la etiqueta todavía no
+    existe**.
