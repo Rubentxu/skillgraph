@@ -4,12 +4,22 @@
 - **Sesión**: `wi104-20261003T025000Z`
 - **Fecha**: 2026-10-03
 - **Release**: `v0.20.5` (PATCH, derivado con `scripts/derive_semver.py`)
-- **Run que cierra**: `88d16828-4b9c-4c80-be16-52dcc78c220e`
+- **Run que cierra**: `4f407df9-c8f5-40df-a700-82f3739bb858`
   — 8/8 stages `success`, **2684 passed, 0 skipped**, 0 `StepFailed`,
   `VEREDICTO: todos los suelos declarados se cumplen`, árbol quieto.
+  Es el run que certifica **el estado final**, con este fichero ya escrito.
+- **Run del código** (antes de escribir la evidencia):
+  `88d16828-4b9c-4c80-be16-52dcc78c220e` — las mismas cifras.
 - **Run descartado**: `7d68ca93-ded4-4a14-a265-e4d5c2b81cd2`
   — `RunFinished/failure`, 1 `StepFailed`, `1 failed, 2683 passed`.
 - **SHA-256 de `.pipeline.kts`**: `d8658968…3ddcc`, sin drift desde WI-98.
+
+> El commit que sigue a este run sólo toca la cabecera de este fichero para
+> anotar el identificador. Es la convención que el repo ya viene usando desde
+> WI-101: el run certifica el estado, y el commit posterior es el que
+> *cuenta* esa certificación. Lo que no se haría es editar el árbol con el run
+> en marcha —eso sí lo invalidaría, porque nadie sabe qué ficheros leyó el
+> pytest de dentro.
 
 ---
 
