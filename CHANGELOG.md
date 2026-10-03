@@ -14,6 +14,76 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.21.2] - 2026-10-03 — la regla que se escribe con tu letra y no se comprueba con ninguna
+
+**PATCH**: `git log v0.21.1..HEAD` = 0 `feat`, 2 `fix`, 4 `docs`, 0 breaking.
+**2735 passed, 0 skipped** (+17).
+
+Décima vía de la serie «qué declara el repo que nada comprueba», y la más
+pequeña en código: una prohibición de siete palabras con su «por qué»
+escrito al lado.
+
+`AGENTS.md §6.2`:
+
+> **NO usar `pytest.skip` para esconder fallos: o arreglas el test o lo
+> borras.**
+> **Un `skip` por falta de artefacto es el mismo defecto, con otra forma.**
+
+La segunda la escribió WI-103 después de medir un gate que se saltaba por
+falta de informe. Y de todo el repo:
+
+```
+instrumentos que miran skips (scripts/, src/): 0
+etapas de la receta que los miran:               0
+```
+
+Medido antes de escribir una línea, con un run sintético cuyo único cambio
+es la línea de resumen del journal:
+
+```
+run sin skips:   0 problemas []
+run con 3 skips: 0 problemas []
+veredicto: «OK: el run cumple los criterios que declara AGENTS.md»
+```
+
+**El detalle que lo hace grave no es el regex.** Es que el **criterio 2** —
+el que existe para distinguir un run real de un veredicto cacheado— acepta
+un resumen con skips: `2715 passed, 3 skipped` casa con su regex igual que
+`2718 passed`. No es un bug del regex: es que la pregunta por los skips **no
+se había hecho**. Una regla y el criterio que la vigila no se contradicen
+cuando nunca se cruzan.
+
+**Y la regla la incumplía el autor de la regla.** De los cinco skips que
+había, dos son de plataforma (`fcntl` no existe en Windows: no esconden un
+fallo, describen una diferencia real entre máquinas) y **tres son de
+artefacto** —«sin journal: clon nuevo»—, que es literalmente lo que la
+segunda línea prohíbe. Los escribí yo en WI-105, en el guard que construí
+precisamente para no esconder nada.
+
+Los tres se fueron, y **no se sustituyeron por nada**, que es la decisión
+que hay que defender: los tres medían el **entorno** —qué pasó en esta
+máquina— y no el **entregable** —qué garantiza el guard—. El journal no
+está versionado, así que en un clon nuevo se saltaban en silencio y la
+suite pasaba en verde con skips. Sus tres propiedades ya tienen sitio: dos
+en la etapa `evidence` en cada run, una sintética desde WI-105.
+
+**El guard que mira el código mira el AST, no el texto.** La primera
+versión buscaba `pytest.skip(` con un regex y se puso roja **por su propia
+documentación**: un docstring que cita el patrón es indistinguible de una
+llamada. Es la segunda vez en dos semanas y en el mismo repositorio, y por
+eso la propiedad «este código *llama* a `pytest.skip`» se responde con el
+árbol sintáctico.
+
+**Límite declarado:** `from pytest import skip` seguido de `skip(...)` no
+lo ve el AST, porque el nombre ya no es `pytest.skip`. Es un alias, no la
+forma que pytest documenta, y queda escrito en vez de descubrirse.
+
+**Mutaciones 9/9 en tres pasadas**, con sonda por mutación: el patrón que
+WI-107 dejó montado, aplicado desde el principio. Una de las nueve no la
+cazó la primera sonda porque medía la forma de retorno de un árbol sin
+llamadas, donde esa forma nunca se ejerce: la mutación era inválida, y el
+harness lo dijo en vez de acusar al guard.
+
 ## [0.21.1] - 2026-10-03 — la lista de paquetes, y por qué cambiarle el eje no la deshace
 
 **PATCH**: `git log v0.21.0..HEAD` = 0 `feat`, 2 `fix`, 10 `docs`, 0 breaking.
