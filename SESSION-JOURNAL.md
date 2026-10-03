@@ -12449,3 +12449,80 @@ en el hash firmado. Los otros once están en
 `evidence/sddk-wi111-exploration-2026-10-03.md` §9. También 6
 dataclasses sin `frozen` en `platform/uow.py`, capa adaptadora, que no
 mutan `self`.
+
+---
+
+## 2026-10-03 — Bloque WI-112 (decimocuarta vía, release `v0.22.3`)
+
+**Tema**: el reloj tenía diez puntos de definición y declaraba uno.
+Primera vía de la serie que toca cómo el repo mide el paso del tiempo.
+
+**Ciclo**: `p-b7740b96d79ec013/wi112-clock-single-source` (A-full).
+**Commits**: `166f0b1` (código), `ffbb524` (trazabilidad), `e461193`
+(prueba intermitente), `5812c7b` (release + tag `v0.22.3`), `c6575ce`
+(post-release).
+
+### Lo medido
+
+`AGENTS.md 1.3` decía que el reloj «se inyecta (default factory con
+`datetime.now(UTC)`) y se puede mockear», y `runtime/engine.py`
+declaraba que `now_iso()` era el «Unico punto de definicion». Ninguna
+se sostenía. Rastreo por AST: **10** llamadas a `datetime.now` en el
+núcleo, en **tres** formatos (`isoformat()` 5,
+`replace(microsecond=0)` 2, `strftime` 3).
+
+Además `RuntimeEvent` traía
+`field(default_factory=lambda: datetime.now(UTC).isoformat())`: una
+lambda que captura el reloj real no tiene por dónde inyectarle otro.
+
+**Errores propios que registró este bloque:**
+
+- **29 — Un guard que tenía razón y cuyo veredicto había que aceptar.** Al
+  correr la suite con `TMPDIR` **dentro** del repo para esquivar un
+  `OSError: [Errno 122] Disk quota exceeded`, WI-89 falló diciendo que
+  el sandbox escribía DENTRO del repositorio. Era verdad. El sandbox
+  se movió a `/var/home` y el guard **no se tocó**. Es WI-108 con otro
+  disfraz: un guard que mide el entorno y te dice que rompiste el
+  contrato.
+- **30 — Un contrasalto que no podía pasar.** La primera versión del
+  contrasalti de normalización afirmaba que dos UUID distintos deben
+  seguir distinguiéndose. Es FALSO: contradice la normalización de
+  UUIDs que el propio test ya tenía. Un contraejemplo que no puede
+  fallar no es un contraejemplo.
+- **31 — Una prueba que comparaba el reloj, no el código.**
+  `test_wi56` compara dos llamadas al repositorio y `get_source`
+  devuelve `checked_at`, que se rellena con el reloj real en cada
+  llamada. Medido: **4 de 2000** pares de `now_iso` separados por 2 ms
+  cruzan un segundo. Falló **2 de 22** runs. Con microsegundos nunca
+  habría pasado: la unificación cambió la **probabilidad**, no la
+  extensión.
+
+**Lo que NO se unificó, y por qué.** `backups`, `improvement` y
+`receipts` siguen usando `strftime` a propósito: producen
+`2026-10-03T09:00:00Z`, que es un **nombre de fichero**, no un
+instante de evento. Unificarlos cambiaría receipts y nombres de
+backup ya emitidos. La lista está en el guard, no en producción,
+porque es una excepción y no una regla, y se vigila en las dos
+direcciones.
+
+**El default factory se queda.** `AGENTS.md 1.3` lo pide. Hacer
+`timestamp` obligatorio iba contra la regla y rompía **37 tests** sin
+añadir capacidad. La inyección real es `now_iso(clock=...)` y
+`EventBuilder._emit(timestamp=...)`.
+
+### El guard mide la propiedad, no el nombre
+
+«No hay una segunda lectura del reloj», no «existe una función llamada
+`now_iso`». Rastrea por AST porque el docstring del propio `now_iso`
+menciona `datetime.now` y un rastreo por cadena contaría la prosa.
+Dos tests rompen si el rastreo pasa a buscar texto: uno con un
+docstring inventado y otro con el caso real del repo.
+
+### Resultado
+
+17 tests · **5/5 mutaciones** con sonda por mutación · mypy 143 antes,
+143 después · ruff limpio · **cero CJK añadido** · SemVer PATCH →
+`v0.22.3`.
+
+Verificación de la intermitencia: **32 métodos parametrizados × 6 runs
+= 192, todos verdes**.

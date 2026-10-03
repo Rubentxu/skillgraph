@@ -123,7 +123,48 @@ dice que has roto el contrato.
 El `Disk quota exceeded` era de `/tmp`: 38 GB de un tmpfs con cuota
 de 38,5 GB, ocupado en 26 GB por trabajo ajeno. No es del bloque.
 
-## 8. Resultado
+## 8. Certificación
+
+**Run canónico**: `d760dba5-29a7-41ca-9628-3c29010b9df1`. Leído del
+journal **después** de terminar, por `run_id` **y** `occurred_at`.
+
+| # | etapa | outcome |
+|---|---|---|
+| 0 | `discover-repo` | success |
+| 1 | `sync-deps` | success |
+| 2 | `unit-tests` | success |
+| 3 | `coverage-floors` | success |
+| 4 | `package-build` | success |
+| 5 | `ci-parity` | success |
+| 6 | `lint` | success |
+| 7 | `evidence` | success |
+
+`RunFinished` → `outcome: success`, `diagnostics: []`. **8/8 etapas en
+`success`**.
+
+**Suite dentro del run**: `pytest: 2812 passed in 576.33s`, **0
+skipped**. 2795 + 17 = 2812: la aritmética y el run coinciden.
+
+| | |
+|---|---|
+| HEAD | `c6575ce` post-release |
+| versión activa | `0.22.3.dev0` |
+| último tag | `v0.22.3` sobre `5812c7b` |
+| SHA-256 `.pipeline.kts` | `7541ced5…2dd42`, **sin drift** |
+| árbol | limpio |
+
+**Criterios del PRE-FLIGHT:**
+
+| criterio | verificado |
+|---|---|
+| C1 una sola lectura del reloj para instantes | 10 → 1, por AST |
+| C2 un solo formato de instante | sin microsegundos, `+00:00` |
+| C3 el default del evento hereda el formato | `RuntimeEvent()` sin `timestamp` |
+| C4 el reloj es inyectable | `now_iso(clock=...)`, sin monkeypatch |
+| C5 los `strftime` de nombre de fichero siguen igual | guard en las dos direcciones |
+| C6 suite verde | 2812 passed, 0 skipped, 8/8 etapas |
+
+## 9. Resultado
 
 | | |
 |---|---|
