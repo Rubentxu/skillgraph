@@ -56,9 +56,10 @@ class SqliteClaimRepository:
                 INSERT OR IGNORE INTO claims
                     (claim_id, tenant_id, project_id, subject_entity_id,
                      predicate, object_literal_json, source_id,
+                     assertion_origin,
                      extraction_method, extractor_version,
                      checked_at_revision, stale)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     claim.claim_id,
@@ -68,6 +69,7 @@ class SqliteClaimRepository:
                     claim.predicate,
                     obj_json,
                     claim.source_id,
+                    claim.assertion_origin,
                     claim.extraction_method,
                     claim.extractor_version,
                     claim.checked_at_revision,
@@ -123,7 +125,7 @@ class SqliteClaimRepository:
             """
             SELECT c.claim_id, c.subject_entity_id, c.predicate,
                    c.object_literal_json, c.source_id,
-                   c.extraction_method, c.extractor_version,
+                   c.assertion_origin, c.extraction_method, c.extractor_version,
                    c.checked_at_revision, c.stale,
                    GROUP_CONCAT(ce.evidence_id) AS evidence_ids_csv
             FROM claims c
@@ -147,6 +149,7 @@ class SqliteClaimRepository:
                     object_literal=json.loads(row["object_literal_json"]),
                     source_id=row["source_id"],
                     evidence_ids=ev_ids,
+                    assertion_origin=row["assertion_origin"],
                     extraction_method=row["extraction_method"],
                     extractor_version=row["extractor_version"],
                     checked_at_revision=row["checked_at_revision"],
@@ -243,7 +246,7 @@ class SqliteClaimRepository:
             """
             SELECT c.claim_id, c.subject_entity_id, c.predicate,
                    c.object_literal_json, c.source_id,
-                   c.extraction_method, c.extractor_version,
+                   c.assertion_origin, c.extraction_method, c.extractor_version,
                    c.checked_at_revision, c.stale,
                    GROUP_CONCAT(ce.evidence_id) AS evidence_ids_csv
             FROM claims c
@@ -266,6 +269,7 @@ class SqliteClaimRepository:
                     object_literal=_json.loads(row["object_literal_json"]),
                     source_id=row["source_id"],
                     evidence_ids=ev_ids,
+                    assertion_origin=row["assertion_origin"],
                     extraction_method=row["extraction_method"],
                     extractor_version=row["extractor_version"],
                     checked_at_revision=row["checked_at_revision"],

@@ -178,6 +178,7 @@ class KnowledgeQueryCapability:
                 "object_literal": c.object_literal,
                 "source_id": c.source_id,
                 "checked_at_revision": c.checked_at_revision,
+                "assertion_origin": c.assertion_origin,
                 "extraction_method": c.extraction_method,
                 "stale": c.stale,
             }

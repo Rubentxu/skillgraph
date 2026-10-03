@@ -196,73 +196,145 @@ def _existe_origen_b6() -> bool:
     return False
 
 
-def _metodos_tienen_vocabulario() -> bool:
-    """`extraction_method` sigue siendo `str` libre.
+def _origen_esta_tipado() -> bool:
+    """`Claim.assertion_origin` esta anotado, no es un str libre.
 
-    Si sigue siendo `str`, el campo no puede restringir lo que se escribe
-    en el, y la DDL (`TEXT NOT NULL`) lo confirma: no hay CHECK que
-    imponga vocabulario en ningun sitio.
+    La pregunta P2 cambio de objetivo al cerrar el bloque, y hay que
+    decirlo en vez de reutilizar el predicado viejo: `extraction_method`
+    SEGUIRA siendo `str` a proposito —describe la heuristica concreta y no
+    tiene un vocabulario cerrado que—justificar——. Lo que el gate exige
+    es que el ORIGEN este tipado, y se mide en su campo.
 
     Un campo que NO se encuentra NO cuenta como cerrado. Devolver False
     porque no se encontro seria dar por cumplida una propiedad que nadie
-    midio, y es la forma mas barata de tener un medidor verde: por eso
-    aqui no se busca un str cualquiera, se busca el campo con su nombre,
-    y si no esta se dice que no esta.
+    midio, y es la forma mas barata de tener un medidor verde.
     """
-    anotacion = _campo_de_claim("Claim", "extraction_method")
+    anotacion = _campo_de_claim("Claim", "assertion_origin")
     if anotacion is None:
         return False
-    return isinstance(anotacion, ast.Name) and anotacion.id == "str"
+    if isinstance(anotacion, ast.Constant) and isinstance(anotacion.value, str):
+        # La anotacion llega como cadena por `from __future__ import
+        # annotations`. Se compara contra los cuatro origenes; si no esta
+        # en la lista, NO esta tipada con el vocabulario del gate.
+        return anotacion.value in ORIGENES_B6 or (
+            anotacion.value.replace("-", "_") in {o.replace("-", "_") for o in ORIGENES_B6}
+        )
+    return isinstance(anotacion, ast.Name)
+
+
+def _ejes_estan_separados() -> bool:
+    """El origen y el metodo son CAMPOS DISTINTOS de `Claim`.
+
+    Separados, no confundidos. La version anterior de esta pregunta
+    estaba escrita para dar ABIERTO siempre y medi una confusion de
+    valores; la confusion real se mide sobre los CAMPOS, que es donde se
+    puede arreglar: si `assertion_origin` y `extraction_method` son el
+    mismo atributo, un valor no puede decir quien afirma y como se
+    extrajo, y el gate no tiene donde escribir.
+    """
+    return (
+        _campo_de_claim("Claim", "assertion_origin") is not None
+        and _campo_de_claim("Claim", "extraction_method") is not None
+    )
 
 
 def _ddl_tiene_check() -> bool:
-    """La DDL impone el vocabulario con un CHECK, no solo con NOT NULL.
+    """La DDL impone el vocabulario del ORIGEN con un CHECK en su columna.
 
     Sin CHECK, el vocabulario solo existe en Python y la base acepta
     cualquier texto. Un gate que dice «cada afirmacion distingue su
     origen» y no lo puede exigir en el sitio donde se escribe no se
     sostiene: basta un INSERT directo.
+
+    Se mide la RESTRICCION DE ESTA COLUMNA, no «hay un CHECK en el
+    fichero». La primera version hacia lo segundo y decia CERRADO sobre
+    una columna sin restringir: hay tres CHECK en schema.py y uno es de
+    `link_kind`, otro de `promotion.status`. Un predicado que busca la
+    convencion por el fichero entero encuentra la convencion de ALGO.
+
+    El CHECK de `assertion_origin` ocupa CUATRO lineas en el esquema, asi
+    que no se busca «CHECK en la linea que declara la columna» —eso solo
+    serviria para columnas de una linea— sino el bloque DDL completo de
+    la tabla `claims`, que es donde vive la restriccion entera.
     """
     esquema = SRC / "platform" / "schema.py"
     if not esquema.exists():
         return False
-    texto = esquema.read_text(encoding="utf-8").upper()
-    if "EXTRACTION_METHOD" not in texto:
+    texto = esquema.read_text(encoding="utf-8")
+    if "assertion_origin" not in texto:
         return False
-    # La PRIMERA version de este predicado buscaba "CHECK" en todo el
-    # fichero y decia CERRADO: hay tres CHECK en schema.py y ninguno es de
-    # esta columna —uno es de `link_kind` y otro de `promotion.status`—.
-    # Un predicado que busca la convencion por el fichero entero encuentra
-    # la convencion de ALGO, y el detalle decia «la DDL restringe el
-    # vocabulario» sobre una columna que no restringe nada. Es el error de
-    # WI-99 por el lado del DDL: enumerar donde buscar es mas facil que
-    # comprobar. Se mide la RESTRICCION DE ESTA COLUMNA: la linea que
-    # declara extraction_method tiene que traer su propio CHECK.
-    for linea in texto.splitlines():
-        if "EXTRACTION_METHOD" in linea and "TEXT" in linea:
-            return "CHECK" in linea
+    # El bloque de la tabla `claims`: desde su CREATE hasta su cierre.
+    inicio = texto.find("CREATE TABLE IF NOT EXISTS claims")
+    if inicio < 0:
+        return False
+    fin = texto.find(");", inicio)
+    bloque = texto[inicio:fin] if fin > inicio else texto[inicio:]
+    return "assertion_origin" in bloque and "CHECK" in bloque
+
+
+def _valida_en_post_init() -> bool:
+    """`__post_init__` rechaza un origen fuera del vocabulario.
+
+    No basta con que el campo este anotado: con `from __future__ import
+    annotations` la anotacion es una cadena que el runtime no comprueba,
+    luego un valor inventado llega intacto al INSERT. Y si llega al
+    INSERT, lo rechaza SQLite con un error que NO es del dominio — que es
+    exactamente el hueco que WI-114 cerro por el otro lado de la misma
+    frontera.
+
+    Se busca por AST la COMPARACION, no la MENCION. La primera version
+    hacia `ast.dump` del cuerpo y comprobaba que aparecieran las dos
+    cadenas, y eso la hacia pasar sobre un `__post_init__` gutiado: la
+    sonda M1 sustituye la comparacion por `if False:` y el `raise` de
+    abajo —con su mensaje, que NOMBRA `ASSERTION_ORIGINS`— se queda
+    intacto. Un predicado que busca la mencion encuentra la prosa del
+    error, y la prosa del error no es la validacion. Es el error 32 de
+    WI-113 aplicado a un predicado: el nombre de la convencion no es la
+    convencion.
+
+    Se exige una comparacion de pertenencia real: un `Compare` con
+    `NotIn` (o `In` con la comparacion negada) donde el lado izquierdo es
+    el atributo `assertion_origin` y el derecho el conjunto. Anyo asi, si
+    alguien borra la comprobacion, el `raise` puede quedarse y el
+    veredicto sigue bajando a rojo.
+    """
+    grafo = _arbol_de_python(SRC / "knowledge" / "graph.py")
+    if grafo is None:
+        return False
+    for nodo in grafo.body:
+        if not isinstance(nodo, ast.ClassDef) or nodo.name != "Claim":
+            continue
+        for item in nodo.body:
+            if not isinstance(item, ast.FunctionDef) or item.name != "__post_init__":
+                continue
+            for sub in ast.walk(item):
+                if not isinstance(sub, ast.Compare):
+                    continue
+                if not any(isinstance(op, ast.NotIn) for op in sub.ops):
+                    continue
+                izq = sub.left
+                der = sub.comparators[0] if sub.comparators else None
+                if not isinstance(izq, ast.Attribute):
+                    continue
+                if izq.attr != "assertion_origin":
+                    continue
+                if isinstance(der, ast.Name) and der.id == "ASSERTION_ORIGINS":
+                    return True
     return False
 
 
 def preguntas() -> tuple[Pregunta, ...]:
     conteo = _valores_de_extraction_method()
     metodos = sorted(k for k in conteo if k.endswith("(src)"))
-    # MEDIDO, y en contra de lo que parece: NO hay ninguna escritura
-    # explicita de `extraction_method` en `src/`. Los cuatro valores que
-    # se ven con grep —`manual` x10, `regex_def` x4— estan TODOS en
-    # `tests/`, y el unico valor que aparece en produccion es el DEFAULT
-    # de la declaracion del dataclass. Eso refuerza P4 en vez de
-    # contradecirlo: en el codigo que corre, este campo no lo escribe
-    # nadie, luego el metodo de extraccion no es un eje que el sistema
-    # mantenga — es un relleno. Un eje que nadie rellena no puede ser el
-    # sitio donde vive el origen epistemico.
     detalle_metodos = ", ".join(metodos) if metodos else "NINGUNO — no hay escritura en src/"
-    # Se mide UNA vez y se usa para el veredicto y para el detalle. Si se
-    # llamara dos veces, el detalle podria describir una medicion y el
-    # veredicto otra, que es exactamente el defecto que se acaba de
-    # corregir en P2.
-    metodo_es_str = _metodos_tienen_vocabulario()
+    # Se mide UNA vez cada predicado y se usa para el veredicto Y para el
+    # detalle. Si se llamara dos veces, el detalle podria describir una
+    # medicion y el veredicto otra, que es el defecto que se corrigio en
+    # P2 durante la primera version de este instrumento.
+    origen_tipado = _origen_esta_tipado()
+    ejes_separados = _ejes_estan_separados()
     ddl_restringe = _ddl_tiene_check()
+    valida_en_post_init = _valida_en_post_init()
 
     return (
         Pregunta(
@@ -271,30 +343,22 @@ def preguntas() -> tuple[Pregunta, ...]:
             abierta=not _existe_origen_b6(),
             en_alcance=True,
             detalle=(
-                "no hay ningun campo ni tipo que nombre uno de los cuatro origenes del gate"
+                "no hay ningun Literal que nombre los cuatro origenes del gate"
                 if not _existe_origen_b6()
-                else "el origen epistemico existe como nombre en el dominio"
+                else "AssertionOrigin es un Literal cerrado con los cuatro "
+                "valores del gate, y ASSERTION_ORIGINS se deriva de el"
             ),
         ),
         Pregunta(
             clave="P2",
-            enunciado="¿el metodo de extraccion esta tipado o es str libre?",
-            abierta=metodo_es_str,
+            enunciado="¿el origen esta TIPADO, no en un str libre?",
+            abierta=not origen_tipado,
             en_alcance=True,
-            # El detalle se DEDUCE de la predicado, no se escribe a mano.
-            # La primera version de esta pregunta decia «es str, sin
-            # restringir» en las dos ramas, y como la predicado dio
-            # False por un fallo de busqueda, el medidor imprimio
-            # CERRADO seguido de un texto que describia el hueco. Un
-            # verificador que dice «falso» sin decir «donde» es un
-            # callejon, y uno que ademas se contradice es peor: el
-            # detalle tiene que salir de la misma medida que el veredicto.
             detalle=(
-                f"Claim.extraction_method sigue siendo str libre: acepta "
-                f"cualquier texto. Valores escritos en src/: "
-                f"{detalle_metodos}. El default es 'static_analysis'."
-                if metodo_es_str
-                else "Claim.extraction_method ya no es str: tiene tipo propio"
+                "Claim.assertion_origin no esta anotado con el vocabulario"
+                if not origen_tipado
+                else "Claim.assertion_origin: AssertionOrigin, y el default es "
+                "'observed' — el unico origen que no promete autoridad"
             ),
         ),
         Pregunta(
@@ -303,24 +367,45 @@ def preguntas() -> tuple[Pregunta, ...]:
             abierta=not ddl_restringe,
             en_alcance=True,
             detalle=(
-                "extraction_method es TEXT NOT NULL y no hay CHECK: un INSERT "
-                "directo escribe cualquier texto y el gate no lo ve"
+                "assertion_origin no tiene CHECK en la DDL: un INSERT directo "
+                "escribe cualquier texto y el gate no lo ve"
                 if not ddl_restringe
-                else "la DDL restringe el vocabulario"
+                else "la columna lleva CHECK con los cuatro origenes, y la "
+                "migracion de una base previa lo declara tambien"
             ),
         ),
         Pregunta(
             clave="P4",
-            enunciado="¿los dos ejes (metodo y origen) estan separados?",
-            abierta=True,
+            enunciado="¿quien AFIRMA se distingue de COMO se extrajo?",
+            abierta=not ejes_separados,
             en_alcance=True,
             detalle=(
-                "CONFUNDIDOS en un solo campo. Un valor no puede decir las dos "
-                "cosas: 'regex_def' no dice quien afirma, y 'agent-inferred' no "
-                "diria como se extrajo. Medido: 'manual' aparece 10 veces y las "
-                "10 estan en tests/ — es comodidad de fixture, no un metodo que "
-                "el sistema use, luego no es ni metodo ni origen: es un valor "
-                "que solo existe para que los tests construyan Claims"
+                f"CONFUNDIDOS: un solo campo no puede decir las dos cosas. "
+                f"Medido antes de arreglarlo: los unicos valores escritos de "
+                f"extraction_method estan todos en tests/ ({detalle_metodos}), "
+                f"y en src/ solo existe su default 'static_analysis' — un eje "
+                f"que nadie rellena no puede ser donde viva el origen."
+                if not ejes_separados
+                else "separados: extraction_method dice COMO (regex_def, "
+                "static_analysis) y assertion_origin dice QUIEN (los cuatro "
+                "orígenes). Se propaga por el INSERT, el SELECT, los mappers, "
+                "el DTO, la promocion y la proyeccion de query"
+            ),
+        ),
+        Pregunta(
+            clave="P6",
+            enunciado="¿un valor fuera del vocabulario se rechaza al construir?",
+            abierta=not valida_en_post_init,
+            en_alcance=True,
+            detalle=(
+                "Claim.__post_init__ no valida assertion_origin, luego un valor "
+                "inventado pasa hasta la base —y la base lo rechaza con un error "
+                "de SQLite, no con un error de dominio (WI-114: el error del "
+                "adaptador no es del dominio)"
+                if not valida_en_post_init
+                else "__post_init__ valida contra ASSERTION_ORIGINS y lanza "
+                "InvalidAssertionOriginError, que es del dominio y con code "
+                "propio (sg_invalid_assertion_origin)"
             ),
         ),
     )

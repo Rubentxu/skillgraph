@@ -278,6 +278,11 @@ class StoredClaim:
     extractor_version: str
     checked_at_revision: str
     stale: bool
+    #: Quien afirma, no COMO se extrajo (gate B6). Ver `AssertionOrigin`.
+    #: Va AL FINAL a proposito: lleva default y un dataclass no admite un
+    #: campo con default antes de otro que no lo lleva. Ponerlo aqui por
+    #: orden logico rompia la clase al importarla.
+    assertion_origin: str = "observed"
 
     def __getitem__(self, key: str) -> Any:
         """Compatibilidad explícita con consumidores históricos basados en filas."""
@@ -306,6 +311,7 @@ class StoredClaim:
             "predicate": self.predicate,
             "object_literal_json": json.dumps(self.object_literal, sort_keys=True),
             "source_id": self.source_id,
+            "assertion_origin": self.assertion_origin,
             "extraction_method": self.extraction_method,
             "extractor_version": self.extractor_version,
             "checked_at_revision": self.checked_at_revision,

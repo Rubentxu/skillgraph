@@ -91,6 +91,50 @@ FindingResult = Literal["pass", "fail", "inconclusive"]
 """Resultado de aplicar una regla a una entidad."""
 
 TraceKind = Literal["SoftwareExecutionSlice"]
+
+#: Origen epistemico de una afirmacion (gate B6).
+AssertionOrigin = Literal[
+    "observed",
+    "derived-deterministically",
+    "agent-inferred",
+    "human-asserted",
+]
+"""QUIEN AFIRMA, y con que autoridad (gate B6 del roadmap).
+
+Este vocabulario NO es lo mismo que `extraction_method`, y separarlos es
+el punto. `extraction_method` responde «¿como se extrajo esto?» —un regex,
+un analisis estatico—. Este responde «¿quien AFIRMA que es verdad y con
+que autoridad?». Son ejes ortogonales: la misma afirmacion puede salir de
+un regex (`derived-deterministically`) o de una persona
+(`human-asserted`), y en los dos casos el metodo de extraccion es el
+mismo. Un solo campo no puede decir las dos cosas: con
+`extraction_method="regex_def"` no se sabe si lo afirmo la maquina o el
+agente, y escribir `agent-inferred` ahi perderia el metodo.
+
+Medido antes de anadirlo (`scripts/measure_b6_provenance.py`): no habia
+ningun campo que declarara este vocabulario, y `extraction_method` era un
+`str` libre al que NADIE escribe en `src/` — las diez apariciones de
+`"manual"` y las cuatro de `"regex_def"` estan todas en `tests/`, y en
+produccion solo existe el default de la declaracion. Un eje que nadie
+rellena no puede ser donde viva el origen.
+
+El default es `observed` y no `derived-deterministically` a proposito:
+`observed` es el unico origen que no promete nada, luego es el unico
+correcto para un valor por defecto. Poner el mas fuerte obligaria a
+declarar la intension de cada autor; poner el mas debil obligaria a
+corregir la afirmacion mas pequena. El default es la afirmacion minima
+que se puede hacer sin saber quien escribe.
+"""
+
+#: Conjunto canonico de origenes epistemicos (gate B6).
+ASSERTION_ORIGINS: Final[frozenset[str]] = frozenset(get_args(AssertionOrigin))
+"""Derivado del Literal, por la misma regla que `SOURCE_KINDS` (QW-E).
+
+Un conjunto escrito a mano seria una segunda fuente de verdad que se
+desincroniza en cuanto alguien anada un valor al Literal, y la validacion
+rechazaria el valor nuevo mientras el tipo lo acepta. Derivado, no puede
+divergir.
+"""
 """Tipo de OutcomeTrace. H3 cubre solo `SoftwareExecutionSlice`."""
 
 RuleRef = Literal["max_lines_per_function", "max_complexity", "naming_convention"]
@@ -222,6 +266,7 @@ def is_terminal_node_state(state: str) -> bool:
 
 # Public API surface for `from skillgraph.core.runtime_types import *`.
 __all__ = [
+    "ASSERTION_ORIGINS",
     "CLAIM_PREDICATES",
     "FINDING_RESULTS",
     "NODE_KINDS",
@@ -230,6 +275,7 @@ __all__ = [
     "SOURCE_KINDS",
     "TERMINAL_NODE_STATES",
     "TERMINAL_RUN_STATES",
+    "AssertionOrigin",
     "ClaimPredicate",
     "EventType",
     "FindingResult",

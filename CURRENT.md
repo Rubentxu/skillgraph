@@ -1,3 +1,80 @@
+> **Bloque 2026-10-03 (B6) — Cada afirmacion dice QUIEN la afirma.**
+> Versión activa `0.25.0.dev0`; último tag `v0.25.0`.
+>
+> **B6: el campo que parecia el sitio del origen no lo era.** El gate pide
+> que cada afirmacion del Knowledge Graph distinga `observed` ·
+> `derived-deterministically` · `agent-inferred` · `human-asserted`. Medido
+> sobre el árbol real (`scripts/measure_b6_provenance.py`): **4 de 4
+> preguntas abiertas**. Y lo que encuentra no es un campo que falte:
+>
+> ```
+> knowledge/graph.py:177::Claim     la clase cuyo campo parecia el sitio
+> ```
+>
+> Existe, y no dice lo que su nombre dice. Sus tres valores medidos —
+> `static_analysis`, `regex_def`, `manual` — son **métodos de extracción**,
+> no orígenes epistémicos. Son dos ejes ortogonales: con `regex_def` no se
+> sabe si lo afirmó la máquina o una persona, y escribir `agent-inferred`
+> ahí perdería el método. Un campo no puede decir las dos cosas.
+>
+> **Medido, y en contra de lo que parece:** nadie escribe
+> `extraction_method` en `src/`. Las 10 de `"manual"` y las 4 de
+> `"regex_def"` están todas en `tests/`; en producción sólo vive el default
+> de la declaración. Un eje que nadie rellena no puede ser donde nazca el
+> origen.
+>
+> ```
+> core/runtime_types.py:96::AssertionOrigin      Literal cerrado (los cuatro)
+> core/runtime_types.py:130::ASSERTION_ORIGINS    DERIVADO por get_args, nunca a mano
+> knowledge/graph.py:177::Claim                   el campo y su validacion
+> core/errors.py:135::InvalidAssertionOriginError   code sg_invalid_assertion_origin
+> platform/storage.py:466::_anade_column_claims_assertion_origin  la migracion
+> ```
+>
+> **El default es `observed` y es una decisión, no un descuido:** es el único
+> de los cuatro que no promete autoridad, luego el único correcto para un
+> valor que nadie ha declarado. Poner `agent-inferred` obligaría a corregir
+> la afirmación más pequeña del sistema.
+>
+> **La migración es el hallazgo que la suite no ve.** `CREATE TABLE IF NOT
+> EXISTS` **no** añade columnas a una tabla que ya existe: es un no-op
+> silencioso. Medido: una base nueva funciona y una vieja no, y el fallo sale
+> en producción y no en los tests, porque los tests construyen la base desde
+> cero cada vez.
+>
+> **Tres bugs del propio instrumento antes de que sirviera**, los tres el
+> error de siempre — un medidor que miente en verde. P3 buscaba `CHECK` en
+> todo `schema.py` y daba CERRADO con el `CHECK` de *otra* tabla. P2
+> escribía a mano «es str» en las dos ramas del detalle. Y `_campo_de_claim`
+> derivaba el nombre del campo del nombre de la clase (`Claim` → `claim`),
+> no encontraba `extraction_method`, devolvía `None` — y `None` se leía como
+> «ya no es str». Un helper que devuelve `None` y un predicado que trata
+> `None` como cerradura se combinan en una mentira con salida 0.
+>
+> **Cuatro agujeros reales encontró el harness, no sondas malas.** El
+> primero es sobre el guard: el de P6 buscaba la *mención* de los dos
+> nombres con `ast.dump` y pasaba en verde con la validación gutiada,
+> porque el mensaje del `raise` sigue nombrando el conjunto. Se corrigió
+> para exigir un `not in` real. El segundo es del harness: llevaba `-x`, y
+> sin `-x`, **M3, M6, M7 y M8 no cazaban** — sus mutaciones dejaban la suite
+> en verde. El 8/8 era un número que no se podía desarmar, con cuatro sondas
+> heredando el fallo de la anterior. Añadidos los cuatro tests que faltaban;
+> el recheck da **8 causas distintas de 8 sondas**: cada una rompe su propia
+> propiedad.
+>
+> **Verificación:** 23 tests, mutaciones 8/8 con 8 causas distintas, árbol
+> restaurado byte a byte. `tests.total` 3053 (+23, todos de
+> `test_b6_provenance.py`: a diferencia de B4 y B5, este bloque no creó
+> ningún módulo nuevo, así que el guard de `wi47` no generó casos).
+>
+> **Fuera de alcance y registrado:** P5 —si el proveedor real *puebla*
+> conocimiento o lo *consume*—, que depende de una credencial que este
+> entorno no tiene. El medidor la mantiene abierta y por eso no baja el
+> veredicto: es deuda, no un olvido.
+>
+> ---
+>
+
 > **Bloque 2026-10-03 (B5) — El diff del grafo deja de ser un parche sin comparar.**
 > Versión activa `0.25.0.dev0`; último tag `v0.25.0`.
 >

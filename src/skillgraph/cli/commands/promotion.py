@@ -19,7 +19,7 @@ from skillgraph.cli.support import (
     EXIT_OK,
     resolve_project,
 )
-from skillgraph.knowledge.graph import Source
+from skillgraph.knowledge.graph import Claim, Source
 from skillgraph.platform.storage import Storage
 from skillgraph.runtime.engine import now_iso
 
@@ -159,6 +159,11 @@ def _default_claim_importer(storage: Storage, *, tenant_id: str, target_project:
             object_literal=c["object_literal"],
             source_id=c["source_id"],
             evidence_ids=tuple(c.get("evidence_ids", ()) or ()),
+            # El origen se propaga en la promocion. Sin esta linea, un
+            # Claim promovido de un proyecto a otro perderia quien lo
+            # afirmaba y volvería a `observed`, que es exactamente la
+            # perdida de provenance que el gate B6 prohibe.
+            assertion_origin=c.get("assertion_origin", "observed"),
             extraction_method=c.get("extraction_method", "static_analysis"),
             extractor_version=c.get("extractor_version", "unknown"),
             checked_at_revision=c.get("checked_at_revision", "unknown"),
@@ -225,6 +230,35 @@ def _entity_to_payload(
     if entity is None:
         return None
     return dataclasses.asdict(entity)
+
+
+def _claim_to_payload(claim: Claim) -> dict:
+    """Serializa un Claim del proyecto origen para el payload de promocion.
+
+    Se extrae del `cmd_promotion_submit` para que el test pueda verificar
+    el payload contra el CODIGO y no contra una copia escrita en el propio
+    test. Un test que reconstruye el dict a mano verifica su propia copia,
+    que es el error de WI-106: las dos divergen el dia que una se
+    actualiza y la otra no, y el test sigue en verde.
+
+    `assertion_origin` va aqui por el gate B6: si el campo se perdiera al
+    exportar, la promocion funcionaria y el proyecto destino recibiria
+    `observed` —una afirmacion de una persona reinterpretada como
+    observacion— sin que nada fallara en el proyecto origen, que es
+    donde se mira.
+    """
+    return {
+        "claim_id": claim.claim_id,
+        "subject_entity_id": claim.subject_entity_id,
+        "predicate": claim.predicate,
+        "object_literal": claim.object_literal,
+        "source_id": claim.source_id,
+        "evidence_ids": list(claim.evidence_ids),
+        "assertion_origin": claim.assertion_origin,
+        "extraction_method": claim.extraction_method,
+        "extractor_version": claim.extractor_version,
+        "checked_at_revision": claim.checked_at_revision,
+    }
 
 
 PROMOTION_FAILPOINTS: Final[frozenset[str]] = frozenset(
@@ -311,17 +345,7 @@ def cmd_promotion_submit(args: argparse.Namespace) -> int:
                 project_id=args.project,
                 entity_id=claim.subject_entity_id,
             ),
-            "claim": {
-                "claim_id": claim.claim_id,
-                "subject_entity_id": claim.subject_entity_id,
-                "predicate": claim.predicate,
-                "object_literal": claim.object_literal,
-                "source_id": claim.source_id,
-                "evidence_ids": list(claim.evidence_ids),
-                "extraction_method": claim.extraction_method,
-                "extractor_version": claim.extractor_version,
-                "checked_at_revision": claim.checked_at_revision,
-            },
+            "claim": _claim_to_payload(claim),
         }
         proposal_id = args.proposal_id or f"promo-{args.claim_id}"
         try:

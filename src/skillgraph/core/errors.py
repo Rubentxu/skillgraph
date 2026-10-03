@@ -132,6 +132,18 @@ class UnknownClaimPredicateError(ValidationError):
     code = "sg_unknown_predicate"
 
 
+class InvalidAssertionOriginError(ValidationError):
+    """El origen epistemico de un Claim no esta en el vocabulario B6.
+
+    `code` PROPIO y no compartido: WI-109 demostro que dos errores con el
+    mismo `code` no pueden salir con exit codes distintos, y entonces el
+    `code` deja de ser la clave con la que se traduce. Este nace con el
+    suyo.
+    """
+
+    code = "sg_invalid_assertion_origin"
+
+
 class SkillGraphWarning(UserWarning):
     """Raíz de los warnings no fatales de SkillGraph.
 

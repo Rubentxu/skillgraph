@@ -33,13 +33,16 @@ from dataclasses import dataclass, field
 from typing import Any, NewType
 
 from skillgraph.core.errors import (
+    InvalidAssertionOriginError,
     InvalidEntityIDError,
     InvalidSourceError,
     InvalidSourceIDError,
     UnknownClaimPredicateError,
 )
 from skillgraph.core.runtime_types import (
+    ASSERTION_ORIGINS,
     CLAIM_PREDICATES,
+    AssertionOrigin,
     ClaimPredicate,
     FindingResult,
     FreshnessState,
@@ -188,6 +191,11 @@ class Claim:
     evidence_ids: tuple[EvidenceID, ...] = field(default_factory=tuple)
     extraction_method: str = "static_analysis"
     extractor_version: str = "skillgraph/0.1.0"
+    #: Quien afirma, no COMO se extrajo (gate B6). Eje DISTINTO de
+    #: `extraction_method` y deliberadamente aparte: ver la nota larga de
+    #: `AssertionOrigin` en `core/runtime_types.py`. El default es
+    #: `observed` porque es el unico origen que no promete autoridad.
+    assertion_origin: AssertionOrigin = "observed"
     checked_at_revision: str = ""
     stale: bool = False
 
@@ -195,6 +203,10 @@ class Claim:
         if self.predicate not in CLAIM_PREDICATES:
             raise UnknownClaimPredicateError(
                 f"predicate {self.predicate!r} no registrado en CLAIM_PREDICATES"
+            )
+        if self.assertion_origin not in ASSERTION_ORIGINS:
+            raise InvalidAssertionOriginError(
+                f"assertion_origin {self.assertion_origin!r} fuera de {sorted(ASSERTION_ORIGINS)}"
             )
 
 

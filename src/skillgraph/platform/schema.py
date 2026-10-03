@@ -207,6 +207,13 @@ CREATE TABLE IF NOT EXISTS claims (
     predicate             TEXT NOT NULL,
     object_literal_json   TEXT NOT NULL,
     source_id             TEXT NOT NULL REFERENCES sources(source_id),
+    assertion_origin      TEXT NOT NULL DEFAULT 'observed'
+        CHECK (assertion_origin IN (
+            'observed',
+            'derived-deterministically',
+            'agent-inferred',
+            'human-asserted'
+        )),
     extraction_method     TEXT NOT NULL,
     extractor_version     TEXT NOT NULL,
     checked_at_revision   TEXT NOT NULL,

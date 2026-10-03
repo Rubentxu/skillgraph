@@ -462,9 +462,46 @@ class Storage(
 
     # ----- ciclo de vida -----
 
+    @staticmethod
+    def _anade_column_claims_assertion_origin(cur: sqlite3.Cursor) -> None:
+        """Anade `claims.assertion_origin` si la tabla ya existia sin ella (B6).
+
+        `CREATE TABLE IF NOT EXISTS` NO anade columnas a una tabla que ya
+        existe: es un no-op silencioso. Medido: abriendo una base creada con
+        el esquema anterior, la columna no aparecia y todos los `SELECT`
+        que la nombran fallaban. Una base nueva funciona y una vieja no,
+        y el fallo aparece en produccion y no en los tests, porque los
+        tests construyen la base desde cero cada vez.
+
+        Por que NO es check-then-act otra vez: B2 ya sufrio por aqui, con
+        ocho procesos concurrentes perdiendo escrituras. SQLite no tiene
+        `ADD COLUMN IF NOT EXISTS`, asi que no se puede resolver por
+        constraint como el resto. Lo que se hace es que el `ALTER` este
+        dentro de la transaccion de `_migrate` y que el error de «columna
+        duplicada» —que es lo que daria el segundo proceso— se traguen
+        SOLO si la columna existe ya. Se distingue la causa en el nombre
+        del error, no se captura a pelo: capturar `sqlite3.OperationalError`
+        entero se tragaria tambien un disco lleno.
+        """
+        columnas = {fila[1] for fila in cur.execute("PRAGMA table_info(claims)")}
+        if "assertion_origin" in columnas:
+            return
+        try:
+            cur.execute(
+                "ALTER TABLE claims ADD COLUMN assertion_origin "
+                "TEXT NOT NULL DEFAULT 'observed' CHECK (assertion_origin IN ("
+                "'observed','derived-deterministically','agent-inferred',"
+                "'human-asserted'))"
+            )
+        except sqlite3.OperationalError as exc:
+            # Solo la carrera de dos procesos anadiendo la misma columna.
+            if "duplicate column name" not in str(exc).lower():
+                raise
+
     def _migrate(self) -> None:
         with self._tx() as cur:
             cur.executescript(_SCHEMA_SQL)
+            self._anade_column_claims_assertion_origin(cur)
             # MEDIDO en B2: esto era `SELECT` y, si no habia fila,
             # `INSERT`. Es un **check-then-act**: dos procesos que abren
             # la base nueva a la vez ven ambos que `schema_version` esta
