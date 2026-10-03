@@ -10,10 +10,10 @@ El repositorio declara DOS contratos de cobertura distintos:
 
   2. `AGENTS.md §6.3` -> suelos por modulo:
 
-         core (errors, bricks, parser, registry, storage, runtime,
-         handoff, agent, workflow, runcontroller)   >= 90 %
-         CLI                                           >= 70 %
-         paths.py                                      >= 60 %
+         todo modulo que cuelgue de un subdirectorio de
+         `src/skillgraph/`                                  >= 90 %
+         CLI                                                 >= 70 %
+         paths.py                                            >= 60 %
 
      **Este contrato no lo puede comprobar `coverage report`.** Solo admite
      un umbral global, y ningun test del repo lo miraba. Era una cifra que
@@ -22,21 +22,41 @@ El repositorio declara DOS contratos de cobertura distintos:
 Este script es la parte que faltaba. Vive en `scripts/` y no en
 `.pipelinek/`, porque un guard que no esta versionado no es un guard.
 
-Los suelos van POR PAQUETE, no por modulo
------------------------------------------
-WI-93 implemento este contrato con una lista de 21 modulos escrita a mano, y
-eso solo vigilaba `runtime/`: los otros siete paquetes podian recibir un
-modulo nuevo al 40 % sin que nadie se enterara. Era el mismo fallo que el
-propio WI-93 cerraba para `runtime/`, sin cerrar en el resto.
+El suelo es la NORMA; las listas son las desviaciones (WI-107)
+--------------------------------------------------------------
+El recorrido de este contrato tiene tres etapas, y cada una tapo una a una
+la anterior:
 
-Aqui el suelo lo **hereda el modulo de su paquete**:
+  * WI-93 lo implemento con una lista de 21 modulos escrita a mano. Solo
+    vigilaba `runtime/`: los otros siete paquetes podian recibir un modulo
+    nuevo al 40 % sin que nadie se enterara.
 
-    SUELOS_POR_PAQUETE: prefijo de ruta -> suelo
+  * WI-94 cambio el eje: el suelo lo hereda el modulo de su PAQUETE, con
+    `SUELOS_POR_PAQUETE` como unica fuente. Pero el **conjunto de
+    prefijos** seguia siendo un diccionario escrito a mano, de ocho
+    entradas. Medido el 2026-10-03: un paquete nuevo, versionado en git y
+    con un modulo al 0 %, daba `VEREDICTO: todos los suelos declarados se
+    cumplen` y exit 0. La lista habia cambiado de eje, no de naturaleza.
 
-Una sola fuente, sin lista que mantener, y un modulo nuevo en CUALQUIER
-paquete cubierto queda vigilado en el momento de aparecer. La unica excepcion
-es `paths.py`, al que §6.3 le da un suelo propio (60 %) distinto del de su
-paquete; esta en `EXCEPCIONES` y se declara a proposito.
+  * Aqui la lista desaparece. `SUELO_POR_DEFECTO` es la regla y alcanza a
+    todo lo que cuelga de un subdirectorio de `src/skillgraph/`, un paquete
+    nuevo incluido, sin que nadie lo declare. Lo que queda escrito son las
+    DESVIACIONES, que son datos y no pueden derivarse del arbol: el CLI al
+    70 % porque §6.3 lo exime, y `paths.py` al 60 % porque §6.3 le da un
+    suelo propio.
+
+    De ocho entradas escritas a mano quedan dos, y las dos son el contrato
+    diciendo algo que el codigo no puede deducir. Si un paquete necesita
+    otra cosa, se declara aqui con su motivo, y ese es el unico sitio donde
+    anadir un paquete es una decision.
+
+Lo que §6.3 NO gobierna, y por que
+----------------------------------
+`src/skillgraph/__init__.py` y `src/skillgraph/__main__.py` estan en la
+raiz, no cuelgan de un subdirectorio, y `pyproject.toml` los pone en
+`omit`. Medir un fichero que el instrumento ni recoge es ruido. La regla es
+«cuelga de un subdirectorio», no «esta bajo src/skillgraph/», y la
+distincion esta en `_cuelga_de_paquete()` para que se pueda probar sola.
 
 Trampa conocida: la agregacion
 ------------------------------
@@ -54,26 +74,27 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Final
 
 ROOT = Path(__file__).resolve().parent.parent
 RC = ROOT / ".coverage.rc"
 
-# AGENTS §6.3, por paquete. Todo modulo con codigo bajo uno de estos
-# prefijos hereda su suelo; no hay que listar modulos, y por eso no se puede
-# olvidar uno.
-SUELOS_POR_PAQUETE: dict[str, float] = {
-    "src/skillgraph/core/": 90.0,
-    "src/skillgraph/resources/": 90.0,
-    "src/skillgraph/runtime/": 90.0,
-    "src/skillgraph/platform/": 90.0,
-    "src/skillgraph/knowledge/": 90.0,
-    "src/skillgraph/governance/": 90.0,
-    "src/skillgraph/domain/": 90.0,
+# Raiz del paquete distribuible. Todo lo que cuelgue de un subdirectorio
+# de aqui hereda `SUELO_POR_DEFECTO`.
+RAIZ: Final = "src/skillgraph/"
+
+# AGENTS §6.3, la NORMA. Un modulo nuevo en un paquete que todavia no
+# existe hereda este suelo, y esa es toda la diferencia con WI-94.
+SUELO_POR_DEFECTO: Final = 90.0
+
+# Desviaciones por PAQUETE: suelo distinto del general. §6.3 exime al CLI
+# al 70 %, y es la unica excepcion por paquete.
+SUELOS_ESPECIALES: dict[str, float] = {
     "src/skillgraph/cli/": 70.0,
 }
 
-# Modulos con suelo PROPIO, distinto del de su paquete. §6.3 exime a
-# `paths.py` explicitamente (`>= 60 %`): aplicarle el 90 % de `platform/`
+# Desviaciones por MODULO: suelo distinto del de su paquete. §6.3 exime a
+# `paths.py` explicitamente (60 %), y aplicarle el 90 % de `platform/`
 # haria fallar al unico modulo que el propio contrato exonera.
 EXCEPCIONES: dict[str, float] = {
     "src/skillgraph/platform/paths.py": 60.0,
@@ -81,7 +102,7 @@ EXCEPCIONES: dict[str, float] = {
 
 # Comprobacion ADICIONAL, por conjunto. No sustituye a la por modulo: es la
 # que atrapa el caso de un paquete entero que se degrada de golpe, que la
-# suma de modulosflojos tambien veria, pero con un mensaje que lo dice.
+# suma de modulos flojos tambien veria, pero con un mensaje que lo dice.
 SUELOS_AGGREGADOS: dict[str, float] = {
     "src/skillgraph/runtime/": 90.0,
     "src/skillgraph/cli/": 70.0,
@@ -93,19 +114,46 @@ SUELOS_AGGREGADOS: dict[str, float] = {
 SUELO_GLOBAL = 80.0
 
 
+def _cuelga_de_paquete(ruta: str) -> bool:
+    """¿`ruta` esta dentro de un PAQUETE, o en la raiz del distribuible?
+
+    Un paquete es un subdirectorio. Lo que cuelga de uno hereda
+    `SUELO_POR_DEFECTO` aunque el paquete no figure en ninguna parte: esa
+    pregunta es la que WI-94 no se hacia y por la que un paquete nuevo
+    pasaba sin suelo.
+    """
+    if not ruta.startswith(RAIZ):
+        return False
+    return "/" in ruta[len(RAIZ) :]
+
+
 def suelo_de(ruta: str) -> float | None:
     """Suelo que hereda `ruta`, o `None` si §6.3 no gobierna ese modulo.
 
-    Precedencia: la excepcion propia gana al suelo del paquete. Se declara
-    aqui, y no repartida por `main()`, para que la regla sea una sola
-    pregunta y se pueda probar sola.
+    Precedencia, de mas especifico a mas general: la excepcion propia, el
+    especial de paquete, y el suelo por defecto. Se declara en una sola
+    pregunta para que la regla se pueda probar sola.
     """
     if ruta in EXCEPCIONES:
         return EXCEPCIONES[ruta]
-    for prefijo, suelo in SUELOS_POR_PAQUETE.items():
+    for prefijo, suelo in SUELOS_ESPECIALES.items():
         if ruta.startswith(prefijo):
             return suelo
+    if _cuelga_de_paquete(ruta):
+        return SUELO_POR_DEFECTO
     return None
+
+
+def _desviaciones() -> tuple[tuple[str, float], ...]:
+    """Los suelos que NO se deducen del arbol, con su etiqueta.
+
+    Prefijos de paquete y rutas de modulo se distinguen porque se
+    comprueban de forma distinta: a un prefijo se le exige que aporta
+    ALGUN modulo, a un modulo se le exige que EXISTA.
+    """
+    prefijos = tuple(sorted((p, s) for p, s in SUELOS_ESPECIALES.items()))
+    modulos = tuple(sorted((r, s) for r, s in EXCEPCIONES.items()))
+    return prefijos + modulos
 
 
 def informe() -> dict[str, dict[str, object]]:
@@ -158,7 +206,7 @@ def evaluar(files: dict[str, dict[str, object]]) -> tuple[list[str], list[str]]:
     lineas: list[str] = []
     fallos: list[str] = []
 
-    print("== AGENTS §6.3, por modulo (el suelo lo hereda del paquete) ==")
+    print("== AGENTS §6.3, por modulo (suelo por defecto; el paquete no se declara) ==")
     for ruta in sorted(files):
         suelo = suelo_de(ruta)
         if suelo is None:
@@ -179,21 +227,22 @@ def evaluar(files: dict[str, dict[str, object]]) -> tuple[list[str], list[str]]:
         if not ok:
             fallos.append(f"{ruta} mide {p:.2f} %, por debajo de su suelo del {suelo:.0f} %")
 
-    print("== paquetes declarados que no aportan ningun modulo ==")
-    for prefijo in sorted(SUELOS_POR_PAQUETE):
-        con_codigo = [f for f in files if f.startswith(prefijo) and _tiene_codigo(files[f])]
-        if con_codigo:
+    lineas.append("== suelos declarados a mano, y si lo que nombran existe ==")
+    for nombre, suelo in _desviaciones():
+        en_informe = [f for f in files if f == nombre or f.startswith(nombre)]
+        if any(_tiene_codigo(files[f]) for f in en_informe):
             continue
-        # Con suelos por paquete desaparece la via por la que WI-93
-        # detectaba un modulo fantasma (la lista lo nombraba). Esta es la
-        # asercion que la sustituye: si un paquete declarado no aporta ni un
-        # modulo, o se borro o se renombro, y hay que enterarse en vez de
-        # medir en silencio sobre un paquete que ya no existe.
-        msg = f"{prefijo}: paquete con suelo declarado y ningun modulo en el informe"
+        # Con suelo por defecto, «un paquete declarado que desaparece» ya no
+        # puede ocurrir: los paquetes no se declaran. Lo que queda escrito
+        # son las desviaciones, y una desviacion que nombra algo inexistente
+        # es una regla sobre la nada que ademas apaga el suelo que si
+        # existe. Sin esta asercion, borrar `paths.py` dejaria su 60 % sin
+        # vigilantar y el checker no diria nada.
+        msg = f"{nombre}: suelo declarado a mano ({suelo:.0f} %) y sin ningun modulo en el informe"
         lineas.append(f"  ?    {msg}")
         fallos.append(msg)
-    if not fallos or not any("ningun modulo" in f for f in fallos):
-        lineas.append("  OK   todo paquete declarado aporta modulos con codigo")
+    if not any("sin ningun modulo" in f for f in fallos):
+        lineas.append("  OK   todo suelo declarado a mano nombra algo que existe")
 
     lineas.append("")
     lineas.append("== AGENTS §6.3, conjuntos agregados (comprobacion adicional) ==")
@@ -218,7 +267,7 @@ def evaluar(files: dict[str, dict[str, object]]) -> tuple[list[str], list[str]]:
     ok = p >= SUELO_GLOBAL
     lineas.append(f"  {'OK  ' if ok else 'BAJO'} {p:6.2f} %  (fail_under = {SUELO_GLOBAL:.0f} %)")
     if not ok:
-        fallos.append(f"global mide {p:.2f} %, por debajo de {SUELO_GLOBAL:.0f} %")
+        fallos.append(f"global mide {p:.2f} %, por debajo del suelo del {SUELO_GLOBAL:.0f} %")
 
     return lineas, fallos
 
@@ -235,7 +284,7 @@ def main() -> int:
         for f in fallos:
             print(f"  - {f}")
         return 1
-    print("VEREDICTO: todos los suelos declarados se cumplen")
+    print("VEREDICTO: todo modulo gobernado por §6.3 cumple su suelo")
     return 0
 
 

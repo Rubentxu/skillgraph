@@ -304,11 +304,27 @@ Mutaciones 5/5, y la M2 es exactamente esa: la medición que no mide nada.
 
 ### 6.3 Cobertura mínima
 
-- Módulos del core (errors, bricks, parser, registry, storage,
-  runtime, handoff, agent, workflow, runcontroller): ≥ 90%.
-- CLI: ≥ 70% (lo que falta son ramas de error que ya cubre
+El suelo lo hereda el **paquete**, y el paquete no se declara: lo hereda
+todo módulo que cuelgue de un subdirectorio de `src/skillgraph/`.
+
+- Todo módulo de cualquier paquete: **≥ 90 %**.
+- `cli/`: **≥ 70 %** (lo que falta son ramas de error que ya cubre
   integración).
-- `paths.py`: ≥ 60% (la rama de Windows no se ejecuta en CI).
+- `src/skillgraph/platform/paths.py`: **≥ 60 %** (la rama de Windows no se
+  ejecuta en CI).
+
+`src/skillgraph/__init__.py` y `__main__.py` no cuelgan de un
+subdirectorio y están en `omit` de `pyproject.toml`: §6.3 no los gobierna.
+Un paquete que necesite un suelo distinto del 90 % se declara en
+`SUELOS_ESPECIALES`, y un módulo suelto en `EXCEPCIONES`, dentro de
+`scripts/check_coverage_floors.py`.
+
+Esta sección **no enumera módulos**, y es a propósito. La versión anterior
+los enumeraba —`errors, bricks, parser, registry, storage, runtime,
+handoff, agent, workflow, runcontroller`— y esa enumeración era una fuente
+de verdad más: `runtime` no es un módulo sino un paquete, y nueve de los
+diez vivían fuera de `core/`. Medido y cerrado en WI-107; el guard que lo
+impide es `tests/test_wi107_coverage_package_symmetry.py`.
 
 ### 6.4 Tests de extremo a extremo
 

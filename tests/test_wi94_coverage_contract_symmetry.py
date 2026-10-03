@@ -93,14 +93,38 @@ def _informe(*pares: tuple[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 
 def _base() -> dict[str, dict[str, Any]]:
-    """Informe minimo pero REALISTA: un modulo sano por paquete declarado.
+    """Informe minimo pero REALISTA: un modulo sano por paquete, mas los
+    modulos de `EXCEPCIONES`.
 
     Sin esto, un informe sintetico de un solo modulo haria que TODOS los
-    demas paquetes declarados apareciesen como «sin ningun modulo», que es un
-    fallo legitimo del contrato y no lo que el test quiere observar. Un
-    fixture que dispara ruido propio esconde el fallo que apunta.
+    demas paquetes apareciesen como «sin ningun modulo», que es un fallo
+    legitimo del contrato y no lo que el test quiere observar. Un fixture
+    que dispara ruido propio esconde el fallo que apunta.
+
+    Los modulos de `EXCEPCIONES` van aparte porque se declaran por ruta y
+    no por paquete, y un arbol sano los tiene.
     """
-    return {f"{prefijo}ok.py": _entry(100, 100) for prefijo in cc.SUELOS_POR_PAQUETE}
+    base = {f"{p}ok.py": _entry(100, 100) for p in _paquetes_del_arbol()}
+    return {**base, **{ruta: _entry(100, 100) for ruta in cc.EXCEPCIONES}}
+
+
+def _paquetes_del_arbol() -> tuple[str, ...]:
+    """`src/skillgraph/<paquete>/` que existen de verdad.
+
+    Del ARBOL y no del diccionario del contrato. WI-94 leia
+    `SUELOS_POR_PAQUETE` porque los paquetes se declaraban a mano; WI-107
+    quito esa lista porque un paquete no declarado se quedaba sin suelo, asi
+    que el conjunto tiene que salir del arbol. Leerlo del contrato seria
+    volver a medir la lista contra si misma.
+    """
+    base = ROOT / "src" / "skillgraph"
+    return tuple(
+        sorted(
+            f"src/skillgraph/{p.name}/"
+            for p in base.iterdir()
+            if p.is_dir() and p.name != "__pycache__" and any(p.rglob("*.py"))
+        )
+    )
 
 
 def _fallos(files: dict[str, dict[str, Any]]) -> list[str]:
@@ -223,18 +247,25 @@ class TestLimitesDelContrato:
         files = {**_base(), ruta: _entry(0, 0)}
         assert not _fallos_de(files, ruta), "un fichero vacio no puede incumplir un suelo"
 
-    def test_paquete_cubierto_sin_modulos_en_el_informe_es_fallo(self) -> None:
-        """Un paquete declarado que desaparece del informe no se ignora en silencio.
+    def test_suelo_declarado_a_mano_sin_modulo_es_fallo(self) -> None:
+        """Lo declarado a mano que desaparece del informe no se ignora.
 
-        Con suelos por lista a mano, un modulo fantasma era detectable porque
-        la lista lo nombraba. Con suelos por prefijo desaparece esa via, y
-        esta asercion es la que la sustituye: si `governance/` no aporta ni
-        un modulo, o se borro o se renombro, y hay que enterarse.
+        Esta asercion **cambio de objeto en WI-107** y el cambio es la
+        medida, no una retoque. Antes vigilaba que un PAQUETE declarado
+        aportase un modulo; con suelo por defecto los paquetes ya no se
+        declaran, asi que la pregunta quedo sin sujeto. La que la sustituye
+        vigila lo que si se declara a mano —el CLI al 70 % y `paths.py` al
+        60 %—, que es justo lo que puede quedarse viejo al borrar o
+        renombrar lo que nombra, y cuya disappearance apaga el suelo sin que
+        el contrato advierta nada.
+
+        Con suelo por defecto, vigilar que existan los ocho paquetes era
+        tautologico: se derivan del arbol.
         """
-        files = {f: e for f, e in _base().items() if not f.startswith("src/skillgraph/governance/")}
+        files = {f: e for f, e in _base().items() if f != "src/skillgraph/platform/paths.py"}
         fallos = _fallos(files)
-        assert any("governance/" in f for f in fallos), (
-            f"un paquete declarado sin ningun modulo pasa desapercibido. Fallos: {fallos}"
+        assert any("paths.py" in f for f in fallos), (
+            f"un suelo declarado a mano sin su modulo pasa desapercibido. Fallos: {fallos}"
         )
 
     def test_el_suelo_global_se_sigue_comprobando(self) -> None:
@@ -249,8 +280,8 @@ class TestLimitesDelContrato:
 class TestSuelosDeclaradosSonReales:
     """Un suelo sobre un paquete que no existe es una regla sobre la nada."""
 
-    @pytest.mark.parametrize("prefijo", sorted(cc.SUELOS_POR_PAQUETE))
-    def test_cada_paquete_declarado_tiene_modulos_de_verdad(self, prefijo: str) -> None:
+    @pytest.mark.parametrize("prefijo", sorted(cc.SUELOS_ESPECIALES))
+    def test_cada_paquete_declarado_a_mano_tiene_modulos_de_verdad(self, prefijo: str) -> None:
         """El prefijo existe en el ARBOL, no en el informe de cobertura.
 
         Lee el sistema de ficheros y no `coverage json` a proposito, y no por
