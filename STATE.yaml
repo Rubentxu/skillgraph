@@ -154,6 +154,17 @@ blocks:
   truth_command: scripts/project_truth.py
   guard: tests/test_b0_truth_convergence.py
   retired_series: "WI-91..WI-115 — campaign abierta «que declara el repo que nada comprueba», cerrada en B0/B1"
+  # SDDK orquesta el ciclo del bloque. El adopt no escribio NADA en el arbol
+  # (receipt y ledger viven bajo $HOME), asi que adoptsd no es un cambio de
+  # contrato del paquete: por eso este bloque no fuerza ninguna release.
+  sddk:
+    project_id: p-3ca9bad7c644076f
+    workspace_id: w-f6da19435edd0461faa706d3
+    cycle_b0: p-b7740b96d79ec013/b0
+    cycle_phase: specify   # explore cerrada con el gate exploration-sufficient
+                           # (receipt gate-exploration-sufficient-9d7acba3dd97e576-1),
+                           # artefacto exploration-report = evidence/sddk-b0-2026-10-03.md
+  next_block: B1   # B1 hereda la evidencia de B0 y la serie WI-91..WI-115 ya retirada
 
 roadmap:
   current_stage: 7
