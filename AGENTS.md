@@ -274,6 +274,36 @@ Configuración en `pyproject.toml`. Reglas activas relevantes:
 
 **Un `skip` por falta de artefacto es el mismo defecto, con otra forma.**
 
+**Cómo se comprueba (WI-108).** La regla se mide en dos sitios distintos,
+porque son dos propiedades distintas y el CI solo puede ver una:
+
+| propiedad | quién la mide | dónde |
+|---|---|---|
+| un run con `skipped`/`xfailed` es un incumplimiento | `sg_pipeline_tests_skipped` | etapa `evidence` de `.pipeline.kts`, vía `scripts/check_pipeline_receipt.py` |
+| todo skip del repo está declarado, y todo declarado existe | `tests/test_wi108_zero_skips.py` | pytest, sobre el **AST** de `tests/**/*.py` |
+
+La lista de skips **legítimos** es `SKIPS_PLATAFORMA` en
+`scripts/check_pipeline_receipt.py`, y se vigila en las dos direcciones: un
+skip de plataforma que se borre deja la declaración sin suelo, y un skip
+nuevo que nadie declare es un incumplimiento. La lista no es «los skips que
+hay», es «los skips cuya ausencia sería un defecto».
+
+El guard mira el **AST**, no el texto. La propiedad es «este código *llama*
+a `pytest.skip`», y un docstring que lo menciona es indistinguible de una
+llamada si buscas la cadena. La primera versión de ese guard buscaba con
+regex y se puso roja por la documentación del propio test que lo llevaba.
+
+Medido el 2026-10-03, antes del arreglo: un run cuyo resumen era
+`2715 passed, 3 skipped` daba **cero problemas** y el guard imprimía
+«OK: el run cumple los criterios que declara AGENTS.md». El criterio 2 —el
+que existe para separar un run real de un veredicto cacheado— aceptaba el
+resumen con skips sin pestañear, porque la pregunta no se había hecho.
+
+**Límite declarado:** un `from pytest import skip` seguido de `skip(...)`
+no lo ve el AST, porque el nombre ya no es `pytest.skip`. Es un alias, no
+la forma que pytest documenta, y no se cubre. Queda escrito en vez de
+descubrirlo.
+
 Un gate que lee un fichero fechado y se salta si no existe no mide la
 propiedad que declara: mide si hoy alguien se acordaba de correr algo.
 MEDIDO en WI-103, con el gate que vigila que `main` no vuelva a listarse

@@ -75,6 +75,37 @@ ROOT: Final = Path(__file__).resolve().parent.parent
 #: que separa una ejecución real de un veredicto cacheado. `N passed in Xs`.
 RESUMEN_PYTEST: Final = re.compile(r"\b\d+\s+(?:passed|failed|error)\b")
 
+#: Numero de tests que NO se ejecutaron, tal y como los imprime pytest.
+#:
+#: `skipped` y `xfailed` son la misma propiedad con dos nombres: un test que
+#: se salta y uno que se sabe que falla y no se mira. MEDIDO el 2026-10-03:
+#: con un run cuyo resumen es `2715 passed, 3 skipped`, `evaluar` devolvia
+#: cero problemas y decia «OK: el run cumple los criterios que declara
+#: AGENTS.md». El criterio 2 —el que existe para separar un run real de un
+#: veredicto cacheado— aceptaba el resumen con skips sin pestanear, porque la
+#: pregunta por los skips no existia. No era un bug del regex: era que nadie
+#: la habia hecho.
+TESTS_SALTEADOS: Final = re.compile(r"\b(\d+)\s+(?:skipped|xfailed)\b", re.IGNORECASE)
+
+#: Los skips LEGITIMOS del repo, declarados uno a uno (WI-108).
+#:
+#: No es la lista de los skips que hay: es la lista de los skips cuya
+#: AUSENCIA seria un defecto. La prohibition de AGENTS §6.2 es contra
+#: *esconder fallos*, y `fcntl` no existir en Windows no es un fallo
+#: escondido: es una diferencia real entre maquinas. Lo que §6.2 prohibe con
+#: nombre es el skip POR FALTA DE ARTEFACTO, y ese no entra aqui por mucho que
+#: alguien quiera declararlo.
+#:
+#: Vive en el guard y no en el test, y `tests/test_wi108_zero_skips.py`
+#: comprueba que las dos copias no han divergido. Vigilar solo en una
+#: direccion deja de ser vigilar: un skip de plataforma que se borra deja su
+#: declaracion sin suelo, igual que una desviacion de cobertura que apunta a
+#: un fichero que ya no esta.
+SKIPS_PLATAFORMA: Final[dict[str, str]] = {
+    "tests/test_locks.py": "fcntl no existe en Windows: no es un fallo escondido",
+    "tests/test_evidence_lock.py": "idem: el test toma el lock con fcntl",
+}
+
 #: Los cuatro paths que AGENTS.md declara obligatorios en el control root.
 CONTROL_ROOT: Final = ("last-run", "retry-control", "wait-until-control", "workspace")
 
@@ -206,6 +237,36 @@ def _control_incompleto(control: Path) -> tuple[str, ...]:
     return tuple(n for n in CONTROL_ROOT if not (control / n).is_dir())
 
 
+def resumen_sin_skips(resumen: str | None) -> bool:
+    """¿Este resumen de pytest declara cero tests sin ejecutar?
+
+    Predicado PURO y separado a proposito, por la misma razon que
+    `_bump_valido` en WI-106: un predicado que solo se llama con el valor
+    de hoy no comprueba un dominio, comprueba una coincidencia. Hoy el
+    resumen real no trae `skipped`, asi que aqui se le llama con numeros
+    que el repo no produce.
+
+    La pregunta es por el VALOR, no por la presencia: «2718 passed, 0
+    skipped» declara cero tests sin ejecutar y es un run limpio. pytest no
+    imprime el cero (lo omite), asi que un guard que mirara «hay skipped»
+    en vez de «cuantos» trataria una linea limpia como un incumplimiento —
+    un falso positivo que entrena a su lector a ignorar sus avisos.
+
+    `None` (sin resumen) devuelve `True`: la ausencia de resumen la juzga
+    otro criterio, y hacer que esta funcion dijera «no» anadiria un
+    incumplimiento duplicado con un mensaje que no sabe cual de los dos es
+    el bueno.
+    """
+    return _conteo_salteados(resumen) == 0
+
+
+def _conteo_salteados(resumen: str | None) -> int:
+    """Cuantos tests NO se ejecutaron, sumando `skipped` y `xfailed`."""
+    if resumen is None:
+        return 0
+    return sum(int(m) for m in TESTS_SALTEADOS.findall(resumen))
+
+
 def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
     """Los criterios que este run incumple. Vacío = cumple.
 
@@ -253,6 +314,22 @@ def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
                 "ningun EchoOutputCaptured trae el resumen de pytest "
                 "('N passed in Xs'); el criterio 2 lo exige y es lo que "
                 "separa un run real de uno que no midio la suite",
+            )
+        )
+
+    salteados = _conteo_salteados(informe.resumen_pytest)
+    if salteados:
+        problemas.append(
+            Problema(
+                "sg_pipeline_tests_skipped",
+                f"el run {rid} ejecuto la suite con {salteados} "
+                "test(s) sin ejecutar (skipped o xfailed) en "
+                f"{informe.resumen_pytest!r}. AGENTS.md 6.2 prohibe "
+                "pytest.skip para esconder fallos y dice que un skip por "
+                "falta de artefacto es el mismo defecto con otra forma: un "
+                "test que no se ejecuta no mide nada y el run pasa en verde "
+                "igual. Los skips de plataforma estan declarados en "
+                "SKIPS_PLATAFORMA; este no lo es",
             )
         )
 

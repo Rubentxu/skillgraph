@@ -57,8 +57,6 @@ evaluar = recibo.evaluar
 formatear = recibo.formatear
 informes = recibo.informes
 ultimo_terminado = recibo.ultimo_terminado
-DB_REAL: Path = REPO_ROOT / ".pipelinek/db.sqlite"
-CONTROL_REAL: Path = REPO_ROOT / ".pipelinek/control"
 
 #: Los cuatro paths que AGENTS.md declara obligatorios en el control root.
 CONTROL_COMPLETO: tuple[str, ...] = (
@@ -217,55 +215,42 @@ class TestElControlRootIncompletoFalla:
         assert "retry-control" in joined, joined
 
 
-class TestElJournalRealDelRepo:
-    """Comprobación de extremo a extremo, sobre el journal de verdad.
+class TestLaClaseDeTestQueVivioAQui:
+    """Tres tests que se fueron, y por que. WI-108.
 
-    Con una entrada sintetica el guard podría estar midiendo otra cosa.
+    Este fichero tenia una clase —`TestElJournalRealDelRepo`— con tres
+    tests que leian el journal REAL del repo y, cuando no existia, se
+    saltaban con `pytest.skip("sin journal: clon nuevo")`.
+
+    `AGENTS.md 6.2` dice, con las palabras exactas que este bloque midio:
+
+        NO usar `pytest.skip` para esconder fallos: o arreglas el test o lo borras.
+        Un `skip` por falta de artefacto es el mismo defecto, con otra forma.
+
+    Y esos tres eran exactamente eso. Peor: eran **mios**, escritos dos
+    bloques mas abajo en la misma serie que escribio la regla, para
+    comprobar el guard que construi precisamente para no esconder nada.
+
+    Que se fueran, y no que se arreglaran, es la conclusion de mirar que
+    MEDIAN, que es lo unico que se mide en esta serie:
+
+    | test que se fue | que comprobaba | donde vive ahora |
+    |---|---|---|
+    | `..._cumple_los_criterios` | el ULTIMO run real cumple | la etapa `evidence`, en cada run |
+    | `..._no_es_una_mediacion_vacia` | el run verificado tuvo pasos | `TestUnRunVerdeQueNoEjecutoNadaNoVale`, sintetico |
+    | `..._registra_runs_que_este_guard_rechazaria` | el journal tiene historia variedosa | la certificacion de cada bloque, leyendo el journal |
+
+    Los tres median el **entorno** — que paso en esta maquina — y no el
+    **entregable** — que garantiza el guard. El journal real no esta
+    versionado (`.pipelinek/` solo versiona su `.gitkeep`), asi que un
+    clon nuevo no lo tiene, y ahi los tres se saltaban en silencio: la
+    suite en verde con skips, que es la forma exacta que §6.2 prohibe.
+
+    No se han sustituido por nada, y esa es la decision que hay que
+    defender: las tres propiedades ya tienen sitio, y las tres estan
+    cubiertas por otra via. Un test que se va sin dejar nada detras no es
+    una perdida; es uno que estaba midiendo donde no podia.
     """
-
-    def test_el_ultimo_run_real_cumple_los_criterios(self) -> None:
-        if not DB_REAL.exists():
-            pytest.skip("sin journal: clon nuevo, no hay run que verificar")
-        informe = ultimo_terminado(informes(DB_REAL))
-        assert informe is not None, "el journal real no tiene ningun run terminado"
-        assert evaluar(informe, CONTROL_REAL) == (), (
-            "el ultimo run real del repo incumple los criterios que AGENTS.md declara obligatorios"
-        )
-
-    def test_el_ultimo_run_real_no_es_una_mediacion_vacia(self) -> None:
-        """Un guard que no puede ver nada tampoco puede fallar.
-
-        Si el ultimo run real no tuviera pasos, el test anterior pasaria
-        por la rama de «no hay nada que comprobar» y no mediria nada.
-        Este test exige que el run real que se verifica se ejecuto de
-        verdad, para que el anterior tenga sobre que pronunciarse.
-        """
-        if not DB_REAL.exists():
-            pytest.skip("sin journal: clon nuevo")
-        informe = ultimo_terminado(informes(DB_REAL))
-        assert informe is not None
-        assert informe.steps_iniciados > 0
-        assert informe.resumen_pytest is not None
-
-    def test_el_journal_real_registra_runs_que_este_guard_rechazaria(self, tmp_path: Path) -> None:
-        """La prueba de que el guard muerde sobre historia REAL.
-
-        El journal del repo contiene runs que, con veredicto 'success', no
-        cumplen criterio alguno. Si ninguno existiera, el guard solo
-        estaría probado contra dummies.
-        """
-        if not DB_REAL.exists():
-            pytest.skip("sin journal: clon nuevo")
-        # Control root vacio a proposito: deja que la unica causa de
-        # problema sea el run, para que este test pronunciese sobre el
-        # journal y no sobre el arbol.
-        control = tmp_path / "control-vacio"
-        control.mkdir()
-        malos = [inf for inf in informes(DB_REAL) if evaluar(inf, control)]
-        assert malos, (
-            "ningun run del journal real incumple los criterios: el guard "
-            "esta probado solo contra entradas inventadas"
-        )
 
 
 class TestElFormateoDiceQueHaPasado:
