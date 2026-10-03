@@ -69,6 +69,11 @@ import check_coverage_floors as cc  # noqa: E402
 # test que lo vigila.
 FANTASMA = "src/skillgraph/telepatia/"
 
+# Prefijo para un suelo declarado a mano que no tiene paquete detras. No
+# puede existir en el arbol, que es justo lo que un contraejemplo necesita:
+# uno que puede aparecer por si solo no prueba nada.
+INEXISTENTE = "src/skillgraph/paquete_que_no_existe/"
+
 
 # --- Informes sinteticos ---------------------------------------------------
 # Misma forma que emite `coverage json`. La deconstruccion vive en
@@ -312,13 +317,23 @@ class TestLasDesviacionesSiguenDeclaradas:
         assert not fallos, f"un suelo declarado a mano sin su modulo es un fallo: {fallos}"
 
     def test_un_prefijo_declarado_sin_modulo_es_fallo(self) -> None:
-        """El contraejemplo: se declara un paquete que no existe."""
-        cc.SUELOS_ESPECIALES[f"{FANTASMA}"] = 50.0
+        """El contraejemplo: se declara un paquete que no existe.
+
+        El nombre NO es `FANTASMA`. La primera version lo usaba, y el
+        fallo lo destapo la medicion post-arreglo, no un test: con el
+        paquete de la medicion presente en el arbol, `_base()` lo recogia
+        como un modulo mas, el prefijoDeclared aportaba algo, y el test
+        se ponia rojo. Es decir, afirmaba una propiedad que dependia del
+        arbol sin decirlo —y un guard que depende del arbol sin decirlo no
+        es un guard, es una coinidencia. Un contraejemplo tiene que ser
+        incapable de aparecer por si solo.
+        """
+        cc.SUELOS_ESPECIALES[INEXISTENTE] = 50.0
         try:
             fallos = _fallos(_base())
         finally:
-            del cc.SUELOS_ESPECIALES[f"{FANTASMA}"]
-        assert any(FANTASMA in f for f in fallos), (
+            del cc.SUELOS_ESPECIALES[INEXISTENTE]
+        assert any(INEXISTENTE in f for f in fallos), (
             f"un suelo declarado a mano para un paquete que no aporta ningun "
             f"modulo pasa desapercibido. Fallos: {fallos}"
         )
