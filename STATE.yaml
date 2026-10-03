@@ -560,7 +560,7 @@ deliverables:
 tests:
   total: 2699   # bloque WI-105: +15 sobre 2684 = los contras de WI-105. Bloque anterior WI-104: +7 sobre 2677 = 6 contraejemplos del verificador de citas (anclaje, desalineacion, simbolo ausente, simbolo en otro fichero, prosa de docstring, mensaje que dice donde esta) y 1 que verifica el bloque vivo de CURRENT.md. El conteo lo confirma el pre-commit, que corre la suite entera.
   passed: 2699
-  duration_s: 239.16   # MEDIDO en la CI canonica de WI-104 (stage unit-tests, recipe de cobertura), run 88d16828, sobre arbol quieto. La certificacion ANTERIOR de este mismo bloque (run 7d68ca93) FALLO con 1 failed por una etiqueta sin registrar en release.releases[].
+  duration_s: 239.97   # MEDIDO en la CI canonica de WI-105 (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
   package_version: "0.21.0.dev0"   # trabajo post-release v0.21.0 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
