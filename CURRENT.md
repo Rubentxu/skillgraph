@@ -1,5 +1,76 @@
 # CURRENT — puntero operativo
-> **Bloque 2026-10-03 (vigésima cuarta tanda) en curso — WI-112, release `v0.22.3`.**
+> **Bloque 2026-10-03 (vigésima quinta tanda) en curso — WI-113, release `v0.22.4`.**
+> Versión activa `0.22.4.dev0`; último tag `v0.22.4`.
+>
+> **WI-113 — el `AgentResult` del Adapter era un alias del dict externo.**
+> Decimoquinta vía de la serie «qué declara el repo que nada comprueba».
+>
+> `AGENTS.md §1.1` decía que un dict externo se envuelve en
+> `MappingProxyType`. **WI-111** lo aplicó al `budget` del Handoff y
+> dejó once campos `dict`/`list`/`set` dentro de dataclasses `frozen`
+> como deuda registrada, con el criterio de que no participaban en el
+> hash firmado.
+>
+> Ese criterio era correcto para el hash y **equivocado para el resto**.
+> Uno de los once no tenía un dict mutable: tenía un **alias**.
+> `AgentResult.from_fixture` validaba que `result` fuera un dict y lo
+> guardaba **tal cual**. El `AgentResult` que el Core creía inmutable
+> **era** el dict de quien lo produjo — y quien lo produce es el
+> Adapter, que es código externo al repo.
+>
+> Medido antes de arreglar nada:
+>
+> ```
+> externo = {"outcome": "ok", "result": {"dato": 1}}
+> r = AgentResult.from_fixture(externo)
+> externo["result"]["dato"] = 999
+> r.result  ->  {'dato': 999}
+> ```
+>
+> **No era cosmético**: `node_execution_delegations.py:443` serializa
+> ese dict a disco, así que lo persistido era el del Adapter. El
+> hash firmado del Handoff no se ve afectado — por eso el descarte de
+> WI-111 era correcto *para el hash* y no para el resto.
+>
+> **El guard ejecuta, no lee.** Por AST se vería que el campo está
+> anotado `dict[str, Any]`, que es exactamente lo que la regla
+> permite. La propiedad —«el valor no se aliasa al llamante»— solo se
+> mide construyendo el objeto y mutando el origen.
+>
+> **Por qué aquí NO hay `MappingProxyType`, y en WI-111 sí.** En
+> `HandoffExecution.budget` el dict solo se leía. Aquí el motor
+> **serializa** el resultado y `json.dumps` no acepta un
+> `mappingproxy`: envolverlo rompería la frontera. Se aplica
+> `deepcopy` y no `dict()` porque el payload tiene niveles anidados y
+> una copia de primer nivel deja los hijos compartidos. La
+> inmutabilidad de este campo no la aporta el tipo, la aporta que el
+> Core ya no comparte memoria con el exterior.
+>
+> **Los otros diez dicts no se abren.** Se buscó mutación sobre
+> `procedencia_por_firma`, `revisiones_por_fuente`, `limites` y
+> `metadatos`, y hay **cero** sitios que los toquen. Son dicts mutables
+> dentro de un frozen, pero nadie los cambia: es deuda de estilo, no
+> un defecto de comportamiento, y arreglarlos sería tocar código
+> correcto sin prueba de que está mal.
+>
+> **15 tests, 3/3 mutaciones**, cada sonda verificada con ejecución
+> real antes de contar. Un criterio se reformuló sobre la marcha: el
+> test que exigía `MappingProxyType` se sustituyó por
+> `test_el_resultado_es_un_dict_plano_y_serializable`, porque exigir el
+> tipo habría roto la frontera que el arreglo respeta.
+>
+> **Un error propio (32).** El primer harness daba 1/3 porque la
+> sonda M3 apuntaba a un texto que `ruff format` había colapsado a
+> una línea. Una mutación `INVALIDA` no es una mutación: es un
+> artefacto del formateo, y contarla habría hecho creer que el guard
+> cazaba menos de lo que caza.
+>
+> ---
+>
+> <details>
+> <summary>Bloque anterior (WI-112)</summary>
+>
+> **Bloque 2026-10-03 (vigésima cuarta tanda) cerrado — WI-112, release `v0.22.3`.**
 > Versión activa `0.22.3.dev0`; último tag `v0.22.3`.
 >
 > **WI-112 — el reloj tenía diez puntos de definición y declaraba uno.**
@@ -55,6 +126,8 @@
 > unificación cambió la **probabilidad**, no la extensión. Se normaliza
 > el instante, con un contrasalto que exige que la normalización no se
 > coma el resto del registro.
+
+</details>
 
 ---
 

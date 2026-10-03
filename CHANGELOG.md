@@ -14,6 +14,45 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.22.4] - 2026-10-03 — el `AgentResult` del Adapter era un alias
+
+**PATCH**: derivado con `scripts/derive_semver.py` sobre el historial
+(b/f/x/n/d 0/0/1/2/0).
+
+Decimoquinta vía de la serie «qué declara el repo que nada comprueba»,
+y la que vuelve a `AGENTS.md §1.1` después de que **WI-111** dejara
+constancia de lo que faltaba allí.
+
+Esa lista de once campos `dict`/`list`/`set` dentro de dataclasses
+`frozen` se registró con el criterio de que no participaban en el hash
+firmado. El criterio era correcto **para el hash** y equivocado
+**para el resto**: uno de los once no tenía un dict mutable, tenía un
+**alias**.
+
+```python
+# antes
+result = payload["result"]
+return AgentResult(outcome=outcome_raw, result=result, ...)
+```
+
+Medido con ejecución real: mutar el dict de origen cambiaba el
+`AgentResult`, y `node_execution_delegations.py:443` serializa ese
+dict a disco — lo persistido era el del Adapter.
+
+| | |
+|---|---|
+| arreglo | `deepcopy` del payload, no `dict()`: tiene niveles anidados |
+| por qué **no** `MappingProxyType` | el motor serializa el resultado y `json.dumps` no acepta un `mappingproxy` |
+| qué aporta la inmutabilidad aquí | que el Core ya no comparte memoria con el exterior |
+| los otros diez dicts | **no se abren**: cero sitios que los muten |
+
+Un criterio del guard se reformuló sobre la marcha: el test que exigía
+`MappingProxyType` pasó a exigir dict plano y serializable, porque
+exigir el tipo habría roto la frontera que el arreglo respeta.
+
+15 tests · 3/3 mutaciones con sonda verificada antes de contar ·
+cero CJK añadido.
+
 ## [0.22.3] - 2026-10-03 — el reloj tenía diez puntos de definición
 
 **PATCH**: derivado con `scripts/derive_semver.py` sobre el historial.

@@ -37,6 +37,62 @@ declararlo en su docstring y exponer solo operaciones que devuelven
 un builder nuevo. La regla `RUF005` está activada en ruff para
 forzar `(*xs, x)` en vez de `xs + (x,)`.
 
+### Cómo se comprueba (WI-113)
+
+La viñeta de las colecciones ya decía que un dict externo se envuelve
+en `MappingProxyType`. **WI-111** la aplicó al `budget` del Handoff, y
+dejó once campos `dict`/`list`/`set` dentro de dataclasses `frozen`
+como deuda registrada, con el criterio de que no participaban en el
+hash firmado.
+
+Ese criterio era correcto para el hash y **equivocado para el resto**.
+Uno de los once no tenía un dict mutable: tenía un **alias**.
+`AgentResult.from_fixture` validaba que `result` fuera un dict y lo
+guardaba **tal cual**, así que el `AgentResult` que el Core creía
+inmutable **era** el dict de quien lo produjo — y quien lo produce es
+el Adapter, que es código externo al repo.
+
+Medido antes de arreglar nada:
+
+```
+externo = {"outcome": "ok", "result": {"dato": 1}}
+r = AgentResult.from_fixture(externo)
+externo["result"]["dato"] = 999
+r.result  ->  {'dato': 999}
+```
+
+Y no era cosmético: `node_execution_delegations.py:443` serializa
+ese dict a disco, así que lo persistido era el del Adapter.
+
+| propiedad | quién la mide | cómo |
+|---|---|---|
+| mutar el origen no altera el resultado | `test_mutar_el_dict_externo_no_altera_el_resultado` | se construye y se muta la fuente |
+| una clave nueva externa no aparece | `test_una_clave_nueva_externa_no_aparece_dentro` | idem, con inserción |
+| la copia es real, no de primer nivel | `test_mutar_el_dict_anidado_tampoco_altera` | `deepcopy`, no `dict()` |
+| la copia no escribe de vuelta | `test_el_payload_fuente_no_se_ve_afectado_por_cualquier_cosa` | los dos sentidos, juntos |
+
+**El guard ejecuta, no lee.** Por AST se vería que el campo está
+anotado `dict[str, Any]`, que es exactamente lo que la regla permite.
+La propiedad —«el valor no se aliasa al llamante»— solo se mide
+construyendo el objeto y mutando el origen.
+
+**Por qué aquí NO hay `MappingProxyType`, y en WI-111 sí.** En
+`HandoffExecution.budget` el dict solo se leía. Aquí el motor
+**serializa** el resultado (`json.dumps` en la línea 443), y
+`json.dumps` no acepta un `mappingproxy`. Envolverlo rompería la
+frontera. La inmutabilidad de este campo no la aporta el tipo, la
+aporta que el Core ya no comparte memoria con el exterior.
+
+**Lo que NO se abre.** Los otros diez dicts: se buscó mutación sobre
+`procedencia_por_firma`, `revisiones_por_fuente`, `limites` y
+`metadatos`, y hay **cero** sitios que los toquen. Son dicts mutables
+dentro de un frozen, pero nadie los cambia: es deuda de estilo, no un
+defecto de comportamiento, y arreglarlos sería tocar código correcto
+sin prueba de que está mal.
+
+Mutaciones: **3/3** con sonda por mutación
+(`.pipelinek/wi113_mutate.py`).
+
 ### 1.2 Errores tipados, no strings
 
 - Toda validación lanza `ValidationError`, `ParseError`,

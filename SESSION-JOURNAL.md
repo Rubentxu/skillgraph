@@ -12526,3 +12526,92 @@ docstring inventado y otro con el caso real del repo.
 
 Verificación de la intermitencia: **32 métodos parametrizados × 6 runs
 = 192, todos verdes**.
+
+## 2026-10-03 — Bloque WI-113 (decimoquinta vía, release `v0.22.4`)
+
+**Tema**: el `AgentResult` del Adapter era un alias del dict externo.
+Vía que vuelve a la inmutabilidad declarada, donde WI-111 había
+dejado la lista de lo que faltaba.
+
+**Ciclo**: `p-b7740b96d79ec013/wi113-agentresult-alias` (A-full).
+**Commits**: `a52950d` (código), trazabilidad, release + tag `v0.22.4`,
+post-release.
+
+### Lo medido
+
+`AGENTS.md 1.1` decía que un dict externo se envuelve en
+`MappingProxyType`. WI-111 lo aplicó al `budget` del Handoff y dejó
+**once** campos `dict`/`list`/`set` dentro de dataclasses `frozen` como
+deuda registrada, con el criterio de que no participaban en el hash
+firmado.
+
+Ese criterio era correcto **para el hash** y equivocado **para el
+resto**. Uno de los once no tenía un dict mutable: tenía un **alias**.
+
+```python
+result = payload["result"]          # se guardaba TAL CUAL
+return AgentResult(outcome=outcome_raw, result=result, ...)
+```
+
+Medido con ejecución real:
+
+```
+externo = {"outcome": "ok", "result": {"dato": 1}}
+r = AgentResult.from_fixture(externo)
+externo["result"]["dato"] = 999
+r.result  ->  {'dato': 999, 'inyectado': 'tras la construccion'}
+```
+
+El `AgentResult` cambió sin que nadie lo tocara. **Y no era
+cosmético**: `node_execution_delegations.py:443` serializa ese dict a
+disco, así que lo persistido era el del Adapter.
+
+### El descarte de WI-111 era correcto y no lo era
+
+Que el hash firmado no se viera afectado era verdad, y por eso la deuda
+se registró con ese criterio. Pero el hash es **una** de las razones por
+que un valor no debería ser un alias; la otra —que el Core no comparte
+memoria con código externo— no estaba escrita en ninguna parte, y es la
+que se sostenía. Registrar la deuda con un criterio que cubre un
+camino y no los demás deja la mitad del hueco sin nombre.
+
+### Por qué aquí NO hay `MappingProxyType`
+
+En `HandoffExecution.budget` el dict solo se leía. Aquí el motor
+**serializa** el resultado y `json.dumps` no acepta un `mappingproxy`:
+envolverlo rompería la frontera. Se aplica `deepcopy` y no `dict()`
+porque el payload tiene niveles anidados y una copia de primer nivel
+deja los hijos compartidos.
+
+Un criterio del guard se reformuló sobre la marcha por esto: el test
+que exigía `MappingProxyType` pasó a ser
+`test_el_resultado_es_un_dict_plano_y_serializable`, porque exigir el
+tipo habría roto la frontera que el arreglo respeta.
+
+### Lo que NO se abre
+
+Los otros diez dicts —`procedencia_por_firma`, `revisiones_por_fuente`,
+`limites`, `metadatos`— se buscaron uno a uno y hay **cero** sitios que
+los muten. Son dicts mutables dentro de un frozen, pero nadie los
+cambia: es deuda de estilo, no un defecto de comportamiento. Arreglarlos
+sería tocar código correcto sin prueba de que está mal.
+
+**Errores propios que registró este bloque:**
+
+- **32 — Una mutación que no era una mutación.** El primer harness
+  daba 1/3 porque la sonda M3 apuntaba a un texto que `ruff format`
+  había colapsado a una sola línea. Una sonda `INVALIDA` no mide nada,
+  y contarla habría hecho creer que el guard cazaba menos de lo que
+  caza. Por eso el harness distingue cuatro salidas con nombre —
+  `CAZADA` / `NO_DETECTADA` / `SIN_SONDA` / `INVALIDA` — y verifica
+  cada sonda con ejecución real **antes** de contar. Volvió a ocurrir
+  por lo mismo que en WI-110 y WI-112: el formateo es parte del
+  código, y un guard que se rompe con `ruff format` no está midiendo
+  el código.
+
+### Resultado
+
+15 tests · **3/3 mutaciones** con sonda verificada antes de contar ·
+923 tests afectados verdes · ruff limpio · **cero CJK añadido** ·
+SemVer derivado con `scripts/derive_semver.py`: b/f/x/n/d
+0/0/1/2/0 → PATCH → `v0.22.4`.
