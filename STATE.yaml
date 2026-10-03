@@ -1151,7 +1151,7 @@ release:
   releases:
     - tag: v0.22.0
       fecha: 2026-10-03
-      sha: ""
+      sha: "bc5be8ce6c8c87d75fec6658c94ec438cc36dc4d"
       nota: "WI-109: AGENTS.md 1.2 decia que el code sg_* se usaba para traducir a exit codes, y no habia traduccion. main() hacia except SkillGraphError -> EXIT_DOMAIN para todo, y los codigos 11/12 se alcanzaban porque cada comando repetia su propio except ParseError. Ademas `knowledge compile <p> '{'` salia como Traceback con rc=1 porque el json.loads estaba fuera del try. Y tres clases compartian sg_error y dos sg_invalid_expansion, que hace la traduccion imposible de construir encima. Ahora exit_para(exc) en exit_codes.py, puro sobre exc.code, en el modulo hoja sin imports de ADR-0016, y main() la cablea. Medido con el binario: rc=1 + Traceback -> rc=11 + ERROR (sg_parse). 19 tests, 11/11 mutaciones con sonda."
     - tag: v0.21.2
       fecha: 2026-10-03
