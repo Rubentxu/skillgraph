@@ -881,6 +881,30 @@ corre `pytest` a pelo: más rápido, y por eso **no certifica**.
 6. SHA-256 del `.pipeline.kts` registrado en la sesión y comparable con
    `git log -- .pipeline.kts` para detectar drift no intencional.
 
+**Desde WI-105 los criterios 1 a 5 los comprueba una herramienta**, y el 6
+sigue siendo del agente a propósito:
+
+```bash
+mise exec -- uv run python scripts/check_pipeline_receipt.py                    # último run
+mise exec -- uv run python scripts/check_pipeline_receipt.py --run-id 4f407df9  # uno concreto
+```
+
+Es la etapa `evidence` de `.pipeline.kts`, que antes hacía tres `test -d`
+que **no podían fallar** porque sus operandos los crea el motor antes de
+la etapa. El **criterio 6 no se automatiza**: es el SHA-256 «registrado en
+la sesión», y una sesión es del agente, no del repo. Declararlo comprobado
+sería la misma mentira que el script viene a arreglar.
+
+Dos detalles que no son obvios, los dos MEDIDOS:
+
+- **Sin `--rerun` los criterios 1 y 2 no distinguen nada.** Un
+  veredicto cacheado y una verificación real dicen los dos
+  `Pipeline finished with SUCCESS`; el criterio 2 es el que los separa.
+- **La receta verifica el run ANTERIOR.** Cuando la etapa corre, el run en
+  curso todavía no tiene `RunFinished`, así que «el `RunFinished` más
+  reciente» es el run anterior. El huevo y la gallina es real, y lo
+  resuelve el propio motor sin trucos.
+
 ### Comando de validación rápida
 
 ```bash
@@ -1115,6 +1139,35 @@ Tres reglas que se siguen:
 Cuando una cita se queda vieja porque alguien insertó una línea arriba, el
 error **dice dónde está el símbolo ahora**. Un verificador que dice «falso» sin
 decir «está aquí» deja al que corrige en un callejón sin salida (mutación M5).
+
+### Un criterio declarado que nadie comprueba (WI-105)
+
+`AGENTS.md` enumera **seis** criterios que un run «debe cumplir». Hasta WI-105
+**ninguna herramienta comprobaba ninguno**: la etapa `evidence` de la receta
+—el único sitio que tocaba `.pipelinek/`— imprimía `present` con tres `test -d`
+cuyos operandos crea el motor **antes** de la etapa, así que los tres podían
+pasar y ninguno podía fallar. Medido contra el journal real: 15 runs, 3 de ellos
+`RunFinished/failure`, y la etapa dice lo mismo en los quince.
+
+Tres reglas que se sacan de ahí:
+
+1. **Un `SUCCESS` que no ejecutó nada no es una verificación.** Los dos dicen
+   `Pipeline finished with SUCCESS`. Si una etapa comprueba que el motor terminó
+   bien pero no que ejecutó pasos, está midiendo el motor, no el trabajo.
+   **Comprobar pasos, no veredictos.**
+2. **Lo que un guard no puede medir, se declara que no lo mide.** El criterio 6
+   —el SHA-256 «registrado en la sesión»— es del agente, no del repo. Meterlo en
+   el script habría sido la misma mentira que el script viene a arreglar.
+3. **El huevo y la gallina no es excusa para no comprobar.** La receta no puede
+   verificar su propio run, porque cuando la etapa corre el run en curso no
+   tiene `RunFinished`. El motor lo resuelve solo: *el `RunFinished` más
+   reciente es, durante un run, el run anterior*.
+
+Y un detalle de instrumento que costó una medición entera: **el `payload` del
+journal es una lista JSON con un dict dentro, no un objeto.** `json_extract(payload,
+'$.outcome')` devuelve `NULL` sobre ese schema. Leerlo por la ruta de objeto da
+`None` en los 15 `RunFinished` y convierte el run más sano del repo en
+`failure`. Un instrumento que no abre el contenedor no mide lo que cree medir.
 
 ### Compatibilidad con otros runners
 
