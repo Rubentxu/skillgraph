@@ -1075,6 +1075,41 @@ nombre del checker huérfano, 3 tests en rojo, y la receta **ella misma**
 verdad: un invariante que solo sabe fallar con informes sintéticos no ha
 medido nada.
 
+### Una cita tiene que decir a qué apunta (WI-104)
+
+`tests/test_wi92_measured_claims.py` vigila las citas `fichero.py:N` del bloque
+vivo de `CURRENT.md`. Hasta WI-104 comprobaba que `N <= total_lineas`: que la
+línea **existe**. Eso es resolubilidad, no verdad, y por eso WI-102 pudo
+escribir `scripts/check_ci_recipe_parity.py:352` y `:479` —dos líneas de prosa
+dentro de un docstring— donde las reales eran `:421` y `:589`, y el guard dio
+las cuatro por buenas.
+
+**La cita lleva el símbolo al que apunta:**
+
+```text
+ruta/fichero.py:LINEA::simbolo
+```
+
+`LINEA::simbolo` no es decoración: es lo que hace la afirmación falsable. Con
+sólo el número no hay manera de distinguir «he abierto el fichero» de «he
+escrito un número que me sonaba», y por eso el error se cuela sin que nada lo
+note. `tests/test_wi92_measured_claims.py::TestLaCitaDeclaraQueSimboloApunta`
+comprueba que el símbolo se resuelva en el fichero que la cita nombra —no en
+cualquiera del repo— y que `LINEA` caiga dentro de su definición.
+
+Tres reglas que se siguen:
+
+1. **La cita apunta a la definición que contiene la cosa**, no a una línea de
+   cuerpo. Todas las citas existentes ya lo hacen.
+2. **El ancla es obligatoria.** Opcional sería un chequeo que no se ejecuta:
+   es el «conectar ≠ contener» de WI-102 aplicado a las citas.
+3. **Las citas de bloques anteriores no se comprueban.** Son la foto de un
+   código que ya no existe; corregirlas sería falsificar la historia.
+
+Cuando una cita se queda vieja porque alguien insertó una línea arriba, el
+error **dice dónde está el símbolo ahora**. Un verificador que dice «falso» sin
+decir «está aquí» deja al que corrige en un callejón sin salida (mutación M5).
+
 ### Compatibilidad con otros runners
 
 `pipelinek` es la fuente de verdad local. GitHub Actions, GitLab CI,
