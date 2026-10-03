@@ -1,5 +1,68 @@
 # CURRENT — puntero operativo
-> **Bloque 2026-10-03 (vigésima séptima tanda) en curso — WI-115, SIN RELEASE.**
+> **Bloque 2026-10-03 (B0) en curso — Convergencia de verdad, SIN RELEASE.**
+> Versión activa `0.22.5.dev0`; último tag `v0.22.5`.
+>
+> **B0 — el proyecto tenía cinco verdades y se contradecían entre sí.**
+> WI-115 fue el último workitem de la serie «qué declara el repo que nada
+> comprueba», y el propio objetivo del bloque lo dice: **esa serie era
+> abierta** y podía producir trabajo indefinidamente. B0 la cierra.
+>
+> **Medido antes de arreglar nada** (`.pipelinek/b0_measure.py`, lectura):
+>
+> ```
+> version activa (__init__.py) : 0.22.5.dev0
+> release declarada (STATE)    : 0.22.5
+> tag real (git describe)      : 0.22.5
+> workitem (STATE)             : WI-96     ← vive 19 workitems atrás
+> workitem (CURRENT)           : WI-115
+> tests declarados (STATE)     : 2838
+> tests colectados (árbol)     : 2844      ← el guard de WI-115 EN ROJO
+> ```
+>
+> Lo que la cifra de 2844 delata: había un `tests/test_wi116_doctest_examples.py`
+> **sin trackear**, y el guard de WI-115 —que compara el estado contra el
+> árbol— estaba en rojo desde antes de abrir este bloque. Un guard que
+> funciona se ve feo; uno que no funciona no se ve.
+>
+> **Lo que hace este bloque:**
+>
+> 1. `ROADMAP.md` **en la raíz**, autoridad única del futuro (B0..B9).
+>    `docs/blueprint/plan/ROADMAP.md` pasa a **histórico**: era el roadmap
+>    del blueprint v1, no el del proyecto vivo. Se queda donde está y lo
+>    dice en su primera línea, en vez de mudarse — mudarlo rompería las
+>    citas de la evidencia vieja, y esa evidencia es *provenance*.
+> 2. `scripts/project_truth.py`: **una** respuesta machine-readable a
+>    *«¿dónde está el proyecto y qué toca después?»*. El cruce de las cinco
+>    verdades vive en `scripts/project_truth.py:239::_contradicciones`, y
+>    la respuesta completa en `scripts/project_truth.py:277::estado`.
+>    Nadie la reconstruye.
+> 3. `tests/test_b0_truth_convergence.py`: pone rojo el repo si las cinco
+>    verdades se contradicen de nuevo, **con dos contrasaltos** —que el
+>    cruce degradado se note, y que una verdad ilegible sea un fallo y no
+>    un verde.
+>
+> **El guard usa el script, no reimplementa el cruce.** Un guard que
+> calcula lo mismo por su cuenta tiene dos copias de la misma regla y se
+> divergen el día que una se actualiza y la otra no: el guard acaba
+> midiendo algo que el proyecto ya no responde. Es el error de WI-106
+> aplicado a una comparación.
+>
+> **Un guard huérfano re-homeado.** El fichero de doctests que estaba sin
+> trackear es `tests/test_doctest_examples_are_executable.py`: se llama
+> por su propiedad y no por `WI-116`, porque un guard cuyo nombre es un
+> número caduca con el contador. La propiedad que mide —el ejemplo del
+> `PlanBuilder` es ejecutable, `AGENTS.md §3.2.7`— es permanente. Probado
+> por mutación: Making el ejemplo mentir pone **dos** tests en rojo.
+>
+> **SIN RELEASE, Y POR REGLA.** `scripts/derive_semver.py` sigue mandando
+> y decide por sí solo; B0 no obliga a ninguna versión.
+>
+> ---
+>
+> <details>
+> <summary>Bloque anterior (WI-115)</summary>
+>
+> **Bloque 2026-10-03 (vigésima séptima tanda) cerrado — WI-115, SIN RELEASE.**
 > Versión activa `0.22.5.dev0`; último tag `v0.22.5`.
 >
 > **WI-115 — el estado declara una cifra y nadie comprueba que sea cierta.**

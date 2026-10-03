@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org)
 [![Status](https://img.shields.io/badge/status-3%20Alpha-orange)](https://pypi.org/classifiers/)
-[![Tests](https://img.shields.io/badge/tests-984%2F984%20PASS-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-ver%20la%20cifra%20real-informational)](scripts/project_truth.py)
 [![UAT](https://img.shields.io/badge/UAT-16%2F16%20PASS-success)](tests/uat-evidence/)
 [![Evolution v2](https://img.shields.io/badge/evolution_v2-100%25%20%28H11..H15%29-success)](src/skillgraph/knowledge/)
 
@@ -36,7 +36,13 @@ Most agent frameworks conflate **describing** a capability with **executing** it
 
 ### Current state
 
-**Blueprint v1 is complete, including the public CLI integration (H8).** The roadmap now spans 10 milestones (H0..H6, H8, H9 — see `specs/adr/ADR-0013-divergencia-h7-y-rectificacion-v060.md` for the renumbering) and 16 acceptance tests; all of them have an implementation and verified evidence.
+**Blueprint v1 is complete, including the public CLI integration (H8).** It spans 10 milestones (H0..H6, H8, H9 — renumbered by ADR-0013) and 16 acceptance tests, all with an implementation and verified evidence.
+
+**The roadmap that says what happens next is [`ROADMAP.md`](ROADMAP.md)** — a single authority at the repository root, organised as blocks B0..B9 with a closed objective, observable value and a strong gate each. To ask the machine where the project is and what is next:
+
+```bash
+python scripts/project_truth.py    # JSON: block, version, release, tests, coherence
+```
 
 The **evolution-v2 line** (H10..H15, 100% closed) adds typed knowledge reuse on top of the blueprint: file signatures, file scopes, expert handoffs, validation receipts, and bounded self-improvement — all isolated behind the storage boundary and persisted as `Evidence` rows (no new tables).
 
@@ -49,10 +55,10 @@ The **evolution-v2 line** (H10..H15, 100% closed) adds typed knowledge reuse on 
 | Skill import (H5) | ✅ Closed | `tests/test_skill_importer.py` |
 | Multipurpose: Domain Packs (H6) | ✅ Closed | `tests/test_h6_multiproposito.py` |
 | Cross-base promotion (H7→H9, library) | ✅ Closed | `tests/test_h7_promocion.py` |
-| **Public CLI integration (H8)**: `sg pack load`, `sg promotion submit/list/reconcile` with crash failpoints | ✅ Closed | `tests/test_h8_public_paths.py`, `tests/uat-evidence/UAT-12.json`, `tests/uat-evidence/UAT-13.json` |
+| **Public CLI integration (H8)**: `skillgraph pack load`, `skillgraph promotion submit/list/reconcile` with crash failpoints | ✅ Closed | `tests/test_h8_public_paths.py`, `tests/uat-evidence/UAT-12.json`, `tests/uat-evidence/UAT-13.json` |
 | **Evolution v2 (H11..H15)**: file signatures, file scopes, expert handoffs, validation receipts, bounded self-improvement | ✅ Closed | `tests/test_h11..test_h15_*.py` (58 UAT-EVO tests) |
 | **16/16 UATs** | **✅ PASS** | `tests/uat-evidence/*.json` |
-| **984/984 tests** | **✅ PASS** | `uv run pytest` in ~3 min |
+| **Full suite** | **✅ PASS** | `uv run pytest` — live count: `python scripts/project_truth.py` |
 
 ### Installation
 
@@ -102,12 +108,13 @@ These are documented honestly in `CHANGELOG.md`:
 
 - **Stress tests** (kill -9, real concurrency). The current E2E suite is *representative*, not *acceptance-aligned*. Promotion crash-recovery is covered by an injected failpoint (`SKILLGRAPH_FAILPOINT_PROMOTION`), not by real concurrency.
 - **CLI 1st-person coverage** (in-process). E2E subprocess tests cover critical paths but aren't counted by pytest-cov.
-- **No public Storage API to list all promotions** — `sg promotion list` reads `promotion_outbox` via direct SQL (read-only in the CLI layer).
+- **No public Storage API to list all promotions** — `skillgraph promotion list` reads `promotion_outbox` via direct SQL (read-only in the CLI layer).
 
 ### Documentation
 
 | File | Purpose |
 |---|---|
+| `ROADMAP.md` | **The single authority of the roadmap** (blocks B0..B9) |
 | `CURRENT.md` | Operational pointer (latest verified state, blockers, next action) |
 | `STATE.yaml` | Structured durable state (workstreams, tests, UATs, releases) |
 | `SESSION-JOURNAL.md` | Chronological log of significant decisions |
@@ -181,10 +188,10 @@ La línea **evolution-v2** (H10..H15, 100% cerrada) añade reuso tipado de conoc
 | Importación de skills (H5) | ✅ Cerrado | `tests/test_skill_importer.py` |
 | Multipropósito: Domain Packs (H6) | ✅ Cerrado | `tests/test_h6_multiproposito.py` |
 | Promoción entre bases (H7→H9, biblioteca) | ✅ Cerrado | `tests/test_h7_promocion.py` |
-| **Integración pública CLI (H8)**: `sg pack load`, `sg promotion submit/list/reconcile` con failpoints de crash | ✅ Cerrado | `tests/test_h8_public_paths.py`, `tests/uat-evidence/UAT-12.json`, `tests/uat-evidence/UAT-13.json` |
+| **Integración pública CLI (H8)**: `skillgraph pack load`, `skillgraph promotion submit/list/reconcile` con failpoints de crash | ✅ Cerrado | `tests/test_h8_public_paths.py`, `tests/uat-evidence/UAT-12.json`, `tests/uat-evidence/UAT-13.json` |
 | **Evolution v2 (H11..H15)**: firmas de fichero, scopes, handoffs expertos, recibos de validación, automejora acotada | ✅ Cerrado | `tests/test_h11..test_h15_*.py` (58 UAT-EVO tests) |
 | **16/16 UATs** | **✅ PASS** | `tests/uat-evidence/*.json` |
-| **984/984 tests** | **✅ PASS** | `uv run pytest` en ~3 min |
+| **Suite completa** | **✅ PASS** | `uv run pytest` — cifra real: `python scripts/project_truth.py` |
 
 ### Instalación
 
@@ -234,7 +241,7 @@ Documentado honestamente en `CHANGELOG.md`:
 
 - **Tests de stress** (kill -9, concurrencia real). La suite E2E actual es *representative*, no *acceptance-aligned*. La recuperación ante crash de promoción está cubierta por un failpoint inyectado (`SKILLGRAPH_FAILPOINT_PROMOTION`), no por concurrencia real.
 - **Cobertura 1st-person del CLI** (in-process). Los tests E2E subprocess cubren los caminos críticos pero no cuentan en pytest-cov.
-- **Sin API pública de Storage para listar todas las promociones** — `sg promotion list` lee `promotion_outbox` por SQL directo (solo lectura, en la capa CLI).
+- **Sin API pública de Storage para listar todas las promociones** — `skillgraph promotion list` lee `promotion_outbox` por SQL directo (solo lectura, en la capa CLI).
 
 ### Documentación
 
