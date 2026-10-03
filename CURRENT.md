@@ -1,5 +1,48 @@
 # CURRENT — puntero operativo
-> **Bloque 2026-10-03 (B0) en curso — Convergencia de verdad, SIN RELEASE.**
+> **Bloque 2026-10-03 (B1) — Cierre de stewardship.**
+> Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
+>
+> **B1 — la pregunta «¿qué declara el repo que nadie comprueba?» ya no
+> admite un workitem por contrato, para siempre.** B0 cerró la serie
+> WI-91..WI-115; B1 la convierte en un inventario **finito**, con
+> criterio de terminación: cada contrato es `GUARDED`, `NO-GUARANTEED`, o
+> `DEUDA` con el motivo por escrito. Cero deuda crítica.
+>
+> **Medido** (`.pipelinek/b1_inventory.py` + `b1_verdict.py`): 17
+> contratos sobre 17 categorías, 1122 sitios, **14 GUARDED · 2 DEUDA ·
+> 1 NO-APLICA · 0 deuda crítica**.
+>
+> **El problema que B1 nombraba ya estaba cerrado.** `promotion list`
+> llama a `storage.list_promotions()`, la API pública; lo que quedaba era
+> el README afirmándolo abierto, y el propio módulo lleva un comentario
+> que dice lo contrario. Arreglarlo era corregir una afirmación vieja.
+>
+> **Lo que B1 encontró de verdad: cuatro medidores ROTOS.** El predicado
+> de inmutabilidad miraba el primer argumento posicional de
+> `@dataclass(...)`, y el repo usa `frozen=True` como palabra clave:
+> daba **cero** dataclasses frozen donde hay 23. `capabilities` buscaba
+> `port` y casaba dentro de «comportamiento»: **875** falsos positivos.
+> Un predicado que devuelve la lista vacía no se ve raro — por eso el
+> inventario imprime las categorías sin hallazgo en vez de contarlas
+> como cumplidas.
+>
+> **El guard de B0 cazó esta misma transición.** Al mover el bloque a B1,
+> `blocks.current` pasó a B1 y `roadmap.current_workitem` se quedó en B0:
+> el guard lo puso rojo y lo dijo con las dos caras, en el commit que
+> cambiaba de bloque. Es la primera vez que el guard que creó B0 caza un
+> cambio hecho por el propio bloque, y ocurre porque la verdad se cruza
+> **en un sitio y no en dos** — que es exactamente lo que B0 compró. El
+> guard que lo hace es
+> `tests/test_b0_truth_convergence.py:76::test_el_proyecto_no_se_contradice_a_si_mismo`.
+>
+> **Sin release, y por regla**: `derive_semver.py` manda.
+>
+> ---
+>
+> <details>
+> <summary>Bloque anterior (B0)</summary>
+>
+> **Bloque 2026-10-03 (B0) cerrado — Convergencia de verdad, SIN RELEASE.**
 > Versión activa `0.22.5.dev0`; último tag `v0.22.5`.
 >
 > **B0 — el proyecto tenía cinco verdades y se contradecían entre sí.**

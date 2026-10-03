@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B0** — Convergencia de verdad
-> Versión activa `0.22.5.dev0` · último tag `v0.22.5` · 2844 tests · 16/16 UAT
+> Bloque vivo: **B1** — Cierre de stewardship
+> Versión activa `0.22.5.dev0` · último tag `v0.22.5` · 2856 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -141,6 +141,21 @@ documentación obsoleta de compatibilidad. Revisar excepciones permitidas de
 `datetime`, filesystem y SQLite. Comprobar que la separación de bounded
 contexts no sea sólo física. Revisar `Storage` como facade: no volver a una
 mega-clase, sí verificar que las délégaciones tienen límites coherentes.
+
+**RESULTADO, medido el 2026-10-03** (`.pipelinek/b1_inventory.py` +
+`.pipelinek/b1_verdict.py`): 17 contratos inventariados sobre 17 categorías,
+1122 sitios medidos, **14 `GUARDED` · 2 `DEUDA` con motivo escrito · 1
+`NO-APLICA` demostrado · 0 deuda crítica · 0 citas rotas**. Detalle y los
+seis instrumentos que hubo que arreglar:
+`evidence/sddk-b1-inventory-2026-10-03.md`.
+
+**El problema expreso que B1 nombra —el SQL directo de `promotion list`— ya
+estaba cerrado.** `cli/commands/promotion.py:358` llama a la API pública
+`storage.list_promotions()`; lo que quedaba era el README afirmándolo
+abierto, y el propio módulo lleva un comentario que dice lo contrario. El
+trabajo real de B1 fue encontrar cuatro **medidores rotos** que daban
+«cero» o «875» sobre contratos que sí existen — el detalle está en la
+evidencia—.
 
 **Stop condition.** B1 termina cuando todo contrato importante está
 `guarded`, o explícitamente no garantizado, o es deuda justificada; y quedan
