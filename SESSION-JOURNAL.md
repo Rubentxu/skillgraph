@@ -12832,6 +12832,28 @@ invariante por un fallo que se cierra dentro de la suite.
   `tests/test_wi115_state_total_truthfulness.py:113::test_el_total_declarado_es_el_total_colectado`
   — y no a ojo, que es como se explican los errores 33 y 35.
 
+- **41 — La premisa de release escrita desde la convicción y no desde la
+  herramienta.** Escribí «la regla pide PATCH -> v0.22.6» en el
+  rationale, avancé `release.tag`, añadí la entrada de `releases[]` y
+  abrí la sección `[0.22.6]` del CHANGELOG **antes** de derivar la
+  versión. En los quince workitems anteriores la herramienta se
+  consultaba primero; aquí se dio por buena la regla de memoria. Lo dijo
+  la herramienta al medir: `0/0/0/4/4`, SIN BUMP. Es
+  exactamente el defecto que WI-106 vino a cerrar —un campo de estado
+  escrito desde la conviccion y no desde la herramienta—, repetido a
+  unas pocas líneas de aquel mismo commit.
+
+- **42 — El clasificador de la serie equivocándose sobre sí mismo.** El
+  commit de corrección de 41 llevaba `fix(state)` porque «corrige», y eso
+  bastó para que la herramienta pidiera PATCH, es decir, para que un
+  commit **sin una línea de código** fabricara una release. Su contenido
+  es trazabilidad —CHANGELOG, CURRENT.md, STATE.yaml— y por contenido el
+  tipo es `docs`. Enmendado a `docs(state)`, y el tramo vuelve a
+  `0/0/0/5/0` SIN BUMP. Es el primer caso de la serie donde el commit
+  que cierra una vía decide por error si esa vía libera, y la moraleja
+  es que **el tipo se elige por lo que el commit contiene, nunca por la
+  emoción del verbo que lo describe**.
+
 ### Resultado
 
 4 tests · **3/3 mutaciones** con sonda verificada antes de contar ·
