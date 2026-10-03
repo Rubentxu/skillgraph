@@ -1254,6 +1254,36 @@ bump real frente al que dicta la regla. Vive en `scripts/` y no en
 > nadie, y su sitio natural —esta sección, que se titula «Regla de release»—
 > no la contenía.
 
+#### El campo que dice por qué se movió la versión (WI-106)
+
+`STATE.yaml` escribe `release.semver_bump`: la **causa** del bump, la
+respuesta a «por qué la versión se movió». La tabla de arriba y
+`scripts/derive_semver.py` son la respuesta a «qué habría dicho la regla».
+
+Hasta WI-106 nadie comparaba las dos. Medido: con el campo puesto a `MAJOR`
+cuando el release había sido `MINOR`, la suite de gobernanza de release daba
+**18 passed, exit 0**, y los tres checkers de la receta y el bundle de
+auditoría, también `exit 0`.
+
+El **nivel** de la versión sí estaba verificado —
+`test_el_conjunto_de_divergencias_no_cambia` vigila que la lista de
+divergencias históricas no crezca. Lo que no exigía nadie es que el campo
+dijera la verdad.
+
+Regla: **`release.semver_bump` no se escribe, se contrasta.** Si no coincide
+con lo que dice `derive_semver.py` para `release.tag`, el campo documenta una
+causa que nadie verificó. Dos cosas que hacen que el contraste sirva:
+
+1. **La expectativa sale de la herramienta, no de una constante.** Un guard que
+   compara contra su propia copia de la regla no vigila nada: hoy la copia dice
+   lo mismo y el día que la regla cambie dirá lo contrario. Por eso
+   `test_el_bump_calculado_no_es_una_constante` exige que el cálculo acierte en
+   **dos bumps distintos**, cosa que un literal no puede.
+2. **El dominio y la existencia se comprueban sobre entradas, no sobre el valor
+   de hoy.** Comprobar que `MINOR` es válido no es comprobar que el dominio
+   existe. `release.semver_bump: RELLENO` y `release.tag: v9.9.9` tienen que ser
+   rechazados.
+
 ### Salvedad 0.x: un breaking change no obliga a 1.0.0
 
 El proyecto está en **0.x**, donde SemVer no garantiza estabilidad del API
