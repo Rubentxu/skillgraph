@@ -109,9 +109,30 @@ pipeline {
         }
 
         stage("evidence") {
-            sh("ls -la " + repo + "/.pipelinek/db.sqlite")
-            sh("test -d " + repo + "/.pipelinek/control/last-run && echo 'last-run present'")
-            sh("test -d " + repo + "/.pipelinek/control/workspace && echo 'workspace tracking present'")
+            // El QUINTO contrato declarado (WI-105): AGENTS.md («CI Local
+            // Obligatorio») enumera SEIS criterios de exito que un run
+            // «debe cumplir», y hasta aqui no los comprobaba NINGUNA
+            // herramienta. Esta etapa era el unico sitio de la receta que
+            // tocaba `.pipelinek/`, y sus tres comandos no podian fallar:
+            // los tres operandos los crea el motor ANTES de la etapa.
+            //
+            // MEDIDO contra el journal real: 15 runs, 3 de ellos
+            // `RunFinished/failure`, y los tres comandos imprimian
+            // «present» en los quince.
+            //
+            // Lo que no se puede era distinguir un `SUCCESS` de una
+            // verificacion real de uno cacheado: los dos dicen
+            // `Pipeline finished with SUCCESS`. Ese es el criterio 2, y
+            // AGENTS.md lo describe porque sin `--rerun` el motor
+            // reutiliza el veredicto previo. Aqui se mide.
+            //
+            // POR QUE VERIFICA EL RUN ANTERIOR: la receta no puede
+            // verificar el suyo, porque cuando esta etapa corre el run en
+            // curso aun no tiene `RunFinished`. El motor resuelve la
+            // gallina por si solo: el `RunFinished` mas reciente es, durante
+            // un run, el run anterior. El mismo script con `--run-id` sirve
+            // para la certificacion puntual.
+            sh("cd " + repo + " && uv run python scripts/check_pipeline_receipt.py --db .pipelinek/db.sqlite --control-root .pipelinek/control 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
         }
     }
 }
