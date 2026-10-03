@@ -1,5 +1,5 @@
 > **Bloque 2026-10-03 (B4) — La mitad observada, alcanzable.**
-> Versión activa `0.24.0`; último tag `v0.24.0`.
+> Versión activa `0.24.0.dev0`; último tag `v0.24.0`.
 >
 > **B4 cerrado: lo declarado en el esquema ya se puede alcanzar.**
 > Siete commits, un `feat` y seis sin bump. B3 dejó la mitad *declarada*
@@ -24,9 +24,11 @@
 > **Lo que hay ahora:**
 >
 > ```
-> ResourceStatus, Condition     resources/status.py            frozen, slots
-> update_resource_status        platform/knowledge_repository.py  el primer UPDATE
-> get_resource_status           platform/knowledge_repository.py  lee o None
+> platform/knowledge_repository.py:116::update_resource_status
+> platform/knowledge_repository.py:170::get_resource_status
+> resources/status.py:67::Condition
+> resources/status.py:107::ResourceStatus
+> resources/bricks.py:39::Brick            <- SIN status, y R5 lo fija por AST
 > ```
 >
 > **La invariante, y por qué tiene guard propio:** `generation` es lo que
