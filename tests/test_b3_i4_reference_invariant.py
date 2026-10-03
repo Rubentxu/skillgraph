@@ -1,59 +1,52 @@
-"""B3 — el invariante I4 no comprueba lo que dice comprobar.
+"""B3 — I4 comprueba referencias que existen, y no solo capabilities.
 
-Medido antes de arreglar nada, con el registro real que construye la CLI
-(`.pipelinek/b3_i4_measure.py`):
+**LO QUE MEDIDO ANTES DE ESCRIBIR NADA** (`.pipelinek/b3_i4_measure.py`),
+con el registro real que construye la CLI:
 
 ```
 registry construido por `_load_registry` : {'code.analysis': 'packs:DomainPack/code-analysis'}
 
-caso                                       caps                      deps                        violaciones
-dep que NO existe en ninguna parte        ()                        ('skillgraph.libs.http',)  ('I4',)
-dep que SI existe (el pack del proyecto) ()                        ('packs:DomainPack/code-analysis',) ('I4',)
-dep = 'code.analysis' (que ademas es cap) ()                        ('code.analysis',)         ()
+caso                                       deps                                violaciones
+dep que NO existe en ninguna parte        ('skillgraph.libs.http',)          ('I4',)
+dep que SI existe (el pack del proyecto)  ('packs:DomainPack/code-analysis',) ('I4',)
+dep = 'code.analysis' (que ademas es cap)  ('code.analysis',)                 ()
 ```
 
-Leido de izquierda a derecha, dice tres cosas.
+Leido de izquierda a derecha: **I4 rechazaba una referencia que
+EXISTIA** —el unico pack del proyecto—, y **solo pasaba cuando el autor
+escribia como «dependencia» el nombre de una capability**.
 
-**1. I4 rechaza una referencia que EXISTE.** `packs:DomainPack/code-analysis`
-es el unico pack del proyecto de prueba, y lo rechaza. El invariante
-del blueprint es «I4: No introducir referencias INEXISTENTES»
-(`governance/graph_expansion.py:20`), o sea que lo que hay que
-comprobar es que la referencia apunte a algo que existe. El unico
-pack que existe es rechazado.
-
-**2. I4 pasa cuando el autor confunde una dependencia con una
-capability.** Es la unica forma de que I4 pase: que la «dependencia»
-se llame exactamente como una capability que el registro declare. O
-sea, el invariante mide la confusion del autor, no la existencia de la
-referencia.
-
-**3. La comprobacion esta bien escrita; lo que falta es la fuente.**
-Contraejemplo, mismo invariante con la dependencia puesta a mano:
+La comprobacion no era el problema. Contraejemplo, mismo invariante con
+la dependencia puesta a mano en el mapa:
 
 ```
 con el registry REAL (sin la dep)  -> ('I4',)
 con la dependencia A MANO          -> ()
 ```
 
-`_check_capabilities` pregunta lo correcto a un registro que por
-construccion no puede responderlo. `cli/commands/expansion.py:148`
-construye el mapa recorriendo `spec_json.spec.capabilities` de cada
-pack y **en ningun momento mira `new_dependencies`**.
+El problema era la FUENTE: `cli/commands/expansion.py:148::_load_registry`
+construia el mapa recorriendo `spec_json.capabilities` de cada pack y en
+ningun momento miraba `new_dependencies`. Un registro bien construido
+PARA I3 —que pregunta «esta capability autorizada?»— que no servia
+PARA I4 —que pregunta «esta referencia existe?»—.
 
-**POR QUE ESTE TEST FIJA EL COMPORTAMIENTO ROTO Y NO EL DESEADO.**
-Porque arreglar I4 exige decidir que es una «referencia existente», y
-esa es una decision de CONTRATO: `new_dependencies` es un
-`tuple[str, ...]` de forma libre —`cli/commands/expansion.py:228` hace
-`tuple(raw.get("new_dependencies", []))` sin validar nada— y el unico
-ejemplo que hay en el repo se llama `ghost_ref_does_not_exist`. Sin
-formato declarado no hay forma de indexar nada, asi que el arreglo
-correcto no es deducible de aqui.
+**LO QUE SE DECIDIO**, y es la razon de que este fichero afirme el
+comportamiento nuevo y no fije el roto:
 
-Fijar el comportamiento actual, con el motivo escrito, es lo que hizo
-B1 con las deudas: que el proximo que lo lea sepa que esta roto y por
-que, en vez de encontrarlo en produccion. **Si este test falla, no se
-ha roto el invariante: se ha cambiado el contrato, y eso hay que
-decidir a proposito.**
+> Dar formato a las dependencias (`namespace:Kind/name`), indexando el
+> registro por referencia. I4 pasa a ser un invariante real.
+
+El formato no es inventado: es el que ya usan `ResourceIdentity` y el
+que `_load_registry` ya producia como VALOR. Lo que faltaba era
+indexar por el.
+
+**POR QUE NO HAY RUPTURA DE DATOS.** Medido, no supuesto: las
+propuestas **no se persisten en la base**. `record_rejection`
+(`graph_expansion.py:606`) escribe un JSON de auditoria en
+`expansion_rejections/`, y las propuestas aceptadas no se guardan. El
+campo `new_dependencies` solo existe en el JSON que el usuario aporta
+en cada invocacion de la CLI. Darle formato cambia la validacion de
+entrada, no la lectura de nada almacenado.
 """
 
 from __future__ import annotations
@@ -64,9 +57,12 @@ from typing import Any
 
 import pytest
 
+from skillgraph.core.errors import ValidationError
 from skillgraph.domain.dsl import PlanBuilder, node_name
 from skillgraph.governance.graph_expansion import (
+    ExpansionRegistry,
     GraphExpansionProposal,
+    resource_ref,
     validate,
 )
 from skillgraph.platform.storage import Storage
@@ -75,11 +71,11 @@ from skillgraph.resources.bricks import Brick, ResourceIdentity
 TENANT = "t-b3i4"
 PROJECT = "p-b3i4"
 
-#: El unico DomainPack del proyecto de prueba. Existe. I4 lo rechaza igual.
+#: El unico DomainPack del proyecto de prueba. EXISTE.
 PACK_REF = "packs:DomainPack/code-analysis"
 
-#: Una referencia que no existe en ninguna parte.
-DEP_INEXISTENTE = "skillgraph.libs.http"
+#: Una referencia bien formada que no existe en ninguna parte.
+REF_INEXISTENTE = "packs:DomainPack/no-existe"
 
 
 def _pack(storage: Storage, name: str, capabilities: tuple[str, ...]) -> None:
@@ -89,16 +85,15 @@ def _pack(storage: Storage, name: str, capabilities: tuple[str, ...]) -> None:
     `spec_json = {"spec": {"capabilities": [...]}}`. **Esa forma no la
     produce nadie**: `cli/support.py:299` lee `spec_json` y se lo pasa a
     `Brick(spec=...)` tal cual, y `resources/registry.py:131` valida
-    `spec.get("capabilities")` sobre ese mismo dict. O sea, `capabilities`
-    va en la RAIZ del spec, no dentro de un `spec`.
+    `spec.get("capabilities")` sobre ese mismo dict. Con esa forma el
+    registro salia VACIO, y la conclusion habria sido «I4 rechaza todo
+    porque el registro esta vacio», que es distinto de lo que dice este
+    fichero.
 
-    Es el error de WI-106 por segunda vez en el mismo fichero, y de otra
+    Es el error de WI-106 por segunda vez en el mismo sitio y de otra
     forma: primero una copia del criterio, luego una forma inventada del
-    dato. Los dos hacen que el guard mida una realidad que no existe. Por
-    eso este fixture usa `upsert_resource` con un `Brick`: si la forma
-    real cambia, el test falla al CONSTRUIR, no al afirmar.
+    dato. Los dos hacen que el guard mida una realidad que no existe.
     """
-
     storage.upsert_resource(
         Brick(
             identity=ResourceIdentity(
@@ -115,30 +110,6 @@ def _pack(storage: Storage, name: str, capabilities: tuple[str, ...]) -> None:
     )
 
 
-def _registry_de_produccion(db: Path) -> dict[str, str]:
-    """LA FUNCION REAL, no una copia de su criterio.
-
-    La primera version de este test traia su propia `_registry_real`, que
-    reimplementaba el criterio de `cli/commands/expansion.py:148` linea a
-    linea. Y eso es el error de WI-106: **el guard comparaba contra su
-    propia copia**. No se nota mientras la copia coincida, y el dia que
-    la funcion real cambie, el guard seguira verde midiendo la copia.
-
-    Lo savioron las mutaciones M19 y M20, que cambian `_load_registry` de
-    verdad: las dos salieron NO_CAZADAS mientras todos los demas tests
-    seguian verdes. Un guard que solo mide su propia copia no puede
-    notar que la realidad se movio.
-
-    Importar la funcion real, aunque sea privada (`_load_registry`), es
-    lo que convierte este fichero en un guard. Si algum dia se decide
-    que el registro no pertenece a la CLI, habra que mover la funcion y
-    cambiar este import — y ese cambio debe notarse, no pasar desapercibido.
-    """
-    from skillgraph.cli.commands.expansion import _load_registry
-
-    return _load_registry(db, tenant_id=TENANT, project_id=PROJECT)
-
-
 def _plan() -> Any:
     return (
         PlanBuilder().add_node(node_name("n1"), expected="texto").starts_at(node_name("n1")).build()
@@ -152,7 +123,7 @@ def _proposta(*, caps: tuple[str, ...], deps: tuple[str, ...]) -> GraphExpansion
         problem_observed="medicion",
         evidence=(),
         operations=(),
-        new_dependencies=deps,
+        new_dependencies=tuple(resource_ref(d) for d in deps),
         capabilities_needed=caps,
         scope="NODE",
         attachment_point="n1",
@@ -164,135 +135,203 @@ def _proposta(*, caps: tuple[str, ...], deps: tuple[str, ...]) -> GraphExpansion
 
 
 @pytest.fixture
-def despliegue() -> dict[str, str]:
+def despliegue() -> Any:
     """Storage con UN DomainPack, y el registro que construye la CLI DE VERDAD.
 
-    El registro se pide con la funcion de produccion, no con una
-    reimplementacion: ver `_registry_de_produccion`.
+    El registro se pide importando la funcion de produccion, no
+    reimplementando su criterio: la primera version de este fichero
+    traia su propia copia, y las mutaciones M19/M20 —que cambian
+    `_load_registry` de verdad— salieron NO_CAZADAS por eso. Un guard que
+    mide su propia copia no puede notar que la realidad se movio.
     """
+    from skillgraph.cli.commands.expansion import _load_registry
+
     tmp = tempfile.TemporaryDirectory()
     db = Path(tmp.name) / "b3i4.sqlite"
     storage = Storage(db)
     _pack(storage, "code-analysis", ("code.analysis",))
     storage.close()
-    yield _registry_de_produccion(db)
+    yield _load_registry(db, tenant_id=TENANT, project_id=PROJECT)
     storage.close()
 
 
-def test_el_registro_no_tiene_ninguna_clave_que_pueda_ser_una_referencia(
-    despliegue: Any,
-) -> None:
-    """La fuente del invariante no puede contestar la pregunta que le hacen.
+class TestElRegistroTieneDosVistas:
+    """I3 y I4 son dos preguntas distintas. Un solo mapa no las contesta."""
 
-    No se afirma «que el registro este mal» —eso es conclusion—: se
-    afirma el hecho del que sale, que es que sus claves son NOMBRES DE
-    CAPABILITY y no REFERENCIAS.
+    def test_ve_las_capabilities_para_i3(self, despliegue: Any) -> None:
+        assert "code.analysis" in despliegue.capabilities
 
-    Y el discriminante es la FORMA, no un prefijo concreto. Una
-    referencia de recurso es `namespace:Kind/name` — lleva dos puntos y
-    una barra—; un nombre de capability no lleva ninguna de las dos
-    cosas. La primera version de este test miraba `startswith("t-b3i4:")`,
-    o sea el TENANT, y eso no puede fallar nunca: el namespace real es
-    `packs`, no el tenant. Un contrasalto que no puede fallar es peor
-    que no tener contrasalto, porque aparenta mirar algo.
-    """
-    registry = despliegue
-    assert registry, "el proyecto de prueba deberia tener un DomainPack"
-    for clave in registry:
-        parece_referencia = ":" in clave and "/" in clave
-        assert not parece_referencia, (
-            f"la clave {clave!r} tiene forma de referencia de recurso "
-            "(ns:Kind/name). Si el registro ha pasado a indexarse por "
-            "referencia, I4 tiene fuente de verdad: eso es el ARREGLO, y "
-            "hay que decidirlo a proposito, no dejarlo salir de un cambio."
+    def test_ve_las_referencias_para_i4(self, despliegue: Any) -> None:
+        assert PACK_REF in despliegue.references, (
+            "el registro no conoce la referencia del unico pack del "
+            "proyecto. Sin esto I4 no tiene fuente y vuelve a rechazar "
+            "lo que existe."
         )
 
+    def test_una_capability_no_figura_como_referencia(self, despliegue: Any) -> None:
+        """Y al reves: una capability no es una referencia.
 
-def test_i4_rechaza_una_referencia_que_si_existe(despliegue: Any) -> None:
-    """El invariante dice «no introducir referencias INEXISTENTES».
+        Es la confusion que hacia pasar a I4 con
+        `new_dependencies: ['code.analysis']`, y la que hacia que el
+        invariante midiera la confusion del autor en vez de la existencia
+        de la referencia.
+        """
+        assert "code.analysis" not in despliegue.references
 
-    Esta referencia EXISTE: es el unico pack del proyecto. Y la
-    asercion de abajo dice que I4 la rechaza igual.
-    """
-    registry = despliegue
-    resultado = validate(_proposta(caps=(), deps=(PACK_REF,)), plan=_plan(), registry=registry)
-    assert "I4" in resultado.violated_invariants, (
-        "I4 ha cambiado de comportamiento. Puede ser un ARREGLO —si ahora "
-        "distingue una referencia existente de una que no— o un EMPEORAMIENTO. "
-        "En los dos casos es un cambio de contrato y hay que decidirlo a "
-        "proposito, no dejar que salga de un refactor. Ver la cabecera."
+    def test_el_registro_rechaza_una_referencia_en_la_vista_de_capabilities(
+        self,
+    ) -> None:
+        """La guarda que impide volver a mezclar las dos vistas.
+
+        Sin ella, el defecto original podria volver por la otra puerta:
+        un `capabilities` que contenga tambien las referencias haria que
+        I4 volviera a «funcionar» —porque la referencia estaria en el
+        mapa— sin que I4 llegue a mirar `references`. Es la misma
+        confusion,solo que con el dict al reves.
+
+        Se mide aqui, sobre el dataclass, y no mutando `_load_registry`:
+        la sonda de esa mutacion daba un `IndentationError` en vez de un
+        cambio de comportamiento, y una sonda que rompe la sintaxis no
+        mide el defecto que dice medir.
+        """
+        with pytest.raises(ValidationError):
+            ExpansionRegistry(capabilities={"packs:DomainPack/x": "packs:DomainPack/x"})
+
+
+class TestElFormatoDeReferencia:
+    """`ns:Kind/name`, que es el que ya usa `ResourceIdentity`."""
+
+    def test_una_referencia_valida_pasa(self) -> None:
+        assert resource_ref("packs:DomainPack/code-analysis")
+
+    @pytest.mark.parametrize(
+        "mala",
+        [
+            "",
+            "   ",
+            "packs",  # sin Kind/name
+            "packs:DomainPack",  # sin /name
+            "packs:DomainPack/",  # nombre vacio
+            ":DomainPack/code",  # namespace vacio
+            "packs:/code",  # kind vacio
+            "packs:DomainPack/code/extra",  # de mas de una barra
+        ],
     )
+    def test_una_referencia_mala_no_se_puede_construir(self, mala: str) -> None:
+        """Validacion en el smart constructor, no en la validacion.
+
+        Una referencia con formato invalido no es una referencia que no
+        existe: es una referencia mal escrita, y las dos cosas merecen
+        errores distintos. Si el formato se comprueba aqui, `I4` solo ve
+        referencias que podrian existir, que es lo que el blueprint pide.
+        """
+        with pytest.raises(ValidationError):
+            resource_ref(mala)
+
+    def test_el_error_dice_que_formato_pide(self) -> None:
+        """El mensaje dice la forma, no solo «invalido».
+
+        Sin la forma, quien escribe la propuesta tiene que buscar el
+        formato en el codigo, y lo va a escribir mal otra vez.
+        """
+        with pytest.raises(ValidationError) as exc:
+            resource_ref("packs:DomainPack")
+        assert "ns:Kind/name" in str(exc.value)
 
 
-def test_i4_solo_pasa_cuando_la_dependencia_es_una_capability(
-    despliegue: Any,
-) -> None:
-    """La unica forma de que I4 pase es confundir los dos conceptos.
+class TestI4AhoraComprueba:
+    """El invariante, ya con la fuente que le faltaba."""
 
-    Y por eso I4 no es «una comprobacion que a veces pasa»: es una
-    comprobacion de la confusion del autor. El nombre del unico test
-    que el repo tiene con una dependencia real lo dice sin querer:
-    `ghost_ref_does_not_exist`.
-    """
-    registry = despliegue
-    como_capability = validate(
-        _proposta(caps=(), deps=("code.analysis",)),
-        plan=_plan(),
-        registry=registry,
-    )
-    assert "I4" not in como_capability.violated_invariants, (
-        "I4 ha cambiado: una cadena que es una capability deja de "
-        "colarse como dependencia. Es un arreglo. Hay que decidirlo."
-    )
-    como_referencia = validate(
-        _proposta(caps=(), deps=(PACK_REF,)), plan=_plan(), registry=registry
-    )
-    assert "I4" in como_referencia.violated_invariants
+    def test_i4_acepta_una_referencia_que_existe(self, despliegue: Any) -> None:
+        """La fila que antes daba I4 y ahora no.
+
+        `packs:DomainPack/code-analysis` es el unico pack del proyecto.
+        Antes se rechazaba; hoy es una referencia legitima.
+        """
+        resultado = validate(
+            _proposta(caps=(), deps=(PACK_REF,)), plan=_plan(), registry=despliegue
+        )
+        assert "I4" not in resultado.violated_invariants, (
+            "I4 sigue rechazando una referencia que EXISTE. Ha vuelto a quedarse sin fuente."
+        )
+
+    def test_i4_rechaza_una_referencia_que_no_existe(self, despliegue: Any) -> None:
+        """Y la otra mitad: que siga rechazando lo que no existe.
+
+        Sin este test, «I4 no salta nunca» pasaria. Con el, I4 solo puede
+        bajar cuando la referencia EXISTE, que es la propiedad entera.
+        """
+        resultado = validate(
+            _proposta(caps=(), deps=(REF_INEXISTENTE,)),
+            plan=_plan(),
+            registry=despliegue,
+        )
+        assert "I4" in resultado.violated_invariants
+
+    def test_i4_distingue_una_de_otra(self, despliegue: Any) -> None:
+        """Las dos mitades en un solo test, porque la propiedad es la diferencia.
+
+        Comparar contra dos registros o contra dos listas de
+        expectativas seria dos tests que pueden pasar los dos rotos.
+        """
+        buena = validate(_proposta(caps=(), deps=(PACK_REF,)), plan=_plan(), registry=despliegue)
+        mala = validate(
+            _proposta(caps=(), deps=(REF_INEXISTENTE,)),
+            plan=_plan(),
+            registry=despliegue,
+        )
+        assert ("I4" in buena.violated_invariants) is False
+        assert ("I4" in mala.violated_invariants) is True
+
+    def test_una_capability_ya_no_pasa_como_dependencia(self, despliegue: Any) -> None:
+        """La confusion que hacia pasar a I4, ya no pasa.
+
+        Antes `new_dependencies: ['code.analysis']` era la unica forma de
+        que I4 bajara, porque el registro solo tenia claves de
+        capability. Ese camino se cierra.
+        """
+        # El nombre de una capability NO es una referencia valida, y eso
+        # se decide al CONSTRUIR, no al validar. Antes esa confusion era
+        # lo unico que hacia pasar a I4; ahora ni llega a existir.
+        with pytest.raises(ValidationError):
+            resource_ref("code.analysis")
 
 
-def test_la_comprobacion_en_si_esta_bien_escrita(despliegue: Any) -> None:
-    """El defecto NO es de `_check_capabilities`.
+class TestI3NoSeRompe:
+    """El arreglo de I4 no puede costar I3."""
 
-    Con la dependencia puesta a mano en el registro, I4 deja de saltar.
-    Eso localiza el defecto en la FUENTE —el registro se indexa por
-    capability— y no en la comprobacion. Sin esta separacion, el
-    arreglo natural («arreglar `_check_capabilities`») habria retocado
-    codigo que ya funciona y no habria arreglado nada.
-    """
-    registry = despliegue
-    sin_la_dep = validate(
-        _proposta(caps=(), deps=(DEP_INEXISTENTE,)),
-        plan=_plan(),
-        registry=registry,
-    )
-    con_la_dep = validate(
-        _proposta(caps=(), deps=(DEP_INEXISTENTE,)),
-        plan=_plan(),
-        registry={**registry, DEP_INEXISTENTE: "lo-que-sea"},
-    )
-    assert "I4" in sin_la_dep.violated_invariants
-    assert "I4" not in con_la_dep.violated_invariants, (
-        "I4 dejo de bajar aun con la dependencia en el mapa: la "
-        "comprobacion cambio y el defecto esta en otro sitio. "
-        "Re-medir antes de tocar nada."
-    )
+    def test_i3_sigue_aceptando_una_capability_registrada(self, despliegue: Any) -> None:
+        resultado = validate(
+            _proposta(caps=("code.analysis",), deps=()),
+            plan=_plan(),
+            registry=despliegue,
+        )
+        assert "I3" not in resultado.violated_invariants
 
+    def test_i3_sigue_rechazando_una_capability_desconocida(self, despliegue: Any) -> None:
+        resultado = validate(
+            _proposta(caps=("telemetry.query",), deps=()),
+            plan=_plan(),
+            registry=despliegue,
+        )
+        assert "I3" in resultado.violated_invariants
 
-def test_i3_en_el_registro_real_si_funciona(despliegue: Any) -> None:
-    """La separacion: I3 es una comprobacion REAL, y la sostiene.
+    def test_las_dos_preguntas_son_independientes(self, despliegue: Any) -> None:
+        """Capability registrada + referencia inexistente: solo I4.
 
-    Conviene decirlo, porque si I3 tambien estuviese roto la conclusion
-    seria otra. I3 pregunta «esta capability autorizada?» y el registro
-    responde, porque esta indexado por capability — que es lo que I3
-    necesita. El registro esta bien construido **para I3**; lo que no
-    sirve es **para I4**.
-    """
-    registry = despliegue
-    autorizada = validate(
-        _proposta(caps=("code.analysis",), deps=()), plan=_plan(), registry=registry
-    )
-    no_autorizada = validate(
-        _proposta(caps=("telemetry.query",), deps=()), plan=_plan(), registry=registry
-    )
-    assert "I3" not in autorizada.violated_invariants
-    assert "I3" in no_autorizada.violated_invariants
+        Y capability desconocida + referencia existente: solo I3. Si
+        alguna vez saltan juntas, es que las dos vistas se han
+        mezclado, que es el defecto que se vino a arreglar.
+        """
+        a = validate(
+            _proposta(caps=("code.analysis",), deps=(REF_INEXISTENTE,)),
+            plan=_plan(),
+            registry=despliegue,
+        )
+        b = validate(
+            _proposta(caps=("telemetry.query",), deps=(PACK_REF,)),
+            plan=_plan(),
+            registry=despliegue,
+        )
+        assert a.violated_invariants == ("I4",)
+        assert b.violated_invariants == ("I3",)

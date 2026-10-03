@@ -13,6 +13,7 @@ Ver ``specs/h4-slice-1.md`` para el contrato legal (blueprint §5 §5-§6).
 from __future__ import annotations
 
 import json
+from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -24,6 +25,7 @@ from skillgraph.governance.graph_expansion import (
     AddNode,
     AddTransition,
     Authorization,
+    ExpansionRegistry,
     InvalidProposal,
     RemoveTransition,
     apply_expansion,
@@ -64,9 +66,31 @@ def _plan_with(initial: str, *nodes: WorkflowNode) -> WorkflowPlan:
 
 
 @pytest.fixture
-def empty_registry() -> dict[str, str]:
-    """Registry minimo: capability -> brick_ref."""
-    return {"compile": "brick:compile", "lint": "brick:lint"}
+def empty_registry() -> ExpansionRegistry:
+    """Un despliegue minimo: DOS capabilities y DOS referencias.
+
+    **POR QUE `ExpansionRegistry` Y NO UN DICT.** I3 y I4 son dos
+    preguntas distintas —«¿esta capability esta autorizada?» y «¿esta
+    referencia existe?»— y antes las dos se hacian al mismo
+    `Mapping[str, str]`. Medido antes de separarlas
+    (`.pipelinek/b3_i4_measure.py`): I4 rechazaba una referencia que
+    EXISTIA y solo pasaba cuando el autor escribia una capability como
+    dependencia. O sea, el invariante media la confusion del autor, no la
+    existencia de la referencia.
+
+    El nombre `empty_registry` viene del slice original y ya no
+    describe lo que hace: hay dos entradas de cada clase. Se conserva por
+    no tocar mas de lo que el cambio de contrato exige, pero el docstring
+    dice la verdad.
+    """
+    return ExpansionRegistry(
+        capabilities=MappingProxyType(
+            {"compile": "bricks:Brick/compile", "lint": "bricks:Brick/lint"}
+        ),
+        references=frozenset(
+            {"bricks:Brick/compile", "bricks:Brick/lint"},
+        ),
+    )
 
 
 @pytest.fixture
@@ -136,7 +160,7 @@ def test_authorize_auto_only_for_low_risk() -> None:
 def test_validate_accepts_clean_add_node(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
     """I1..I6 OK: nodo nuevo en lugar vacio, no toca completados."""
     proposal = propose(
@@ -161,7 +185,7 @@ def test_validate_accepts_clean_add_node(
 def test_validate_rejects_unauthorized_capabilities(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
     """I3: capability no registrada."""
     proposal = propose(
@@ -186,15 +210,23 @@ def test_validate_rejects_unauthorized_capabilities(
 def test_validate_rejects_inexistent_dependency(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
-    """I4: new_dependency sin brick_ref real."""
+    """I4: referencia bien escrita que NO existe en el despliegue.
+
+    El nombre de este caso solia ser `ghost_ref_does_not_exist`, que no
+    tiene forma de referencia. Con el formato declarado, esa cadena se
+    rechaza al CONSTRUIR la propuesta, con un error que dice cual es la
+    forma; aqui lo que se mide es la otra mitad: una referencia bien
+    escrita que sencillamente no existe. Ver
+    `tests/test_b3_i4_reference_invariant.py` para el caso de formato.
+    """
     proposal = propose(
         base_revision="rev-1",
         problem_observed="nodo extra",
         evidence=(),
         operations=(AddNode(node=_node("n")),),
-        new_dependencies=("ghost_ref_does_not_exist",),
+        new_dependencies=("bricks:Brick/ghost",),
         attachment_point="root",
         authorization=valid_authorization,
         author="bot@example.com",
@@ -211,7 +243,7 @@ def test_validate_rejects_inexistent_dependency(
 def test_validate_rejects_obsolete_base(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
     """I6: base_revision != current."""
     proposal = propose(
@@ -236,7 +268,7 @@ def test_validate_rejects_obsolete_base(
 def test_validate_warns_on_active_node_change(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
     """Quitar transicion usada por nodo ACTIVE genera warning (no rechazo)."""
     # base_plan tiene 2 nodos sin transiciones. None active -> 0 warnings.
@@ -262,7 +294,7 @@ def test_validate_warns_on_active_node_change(
 def test_validate_rejects_cycle_without_max_visits(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
     """I5: transicion ciclica sin max_visits -> violacion."""
     # Para forzar ciclo A->A necesitamos un AddTransition con source=alpha
@@ -297,7 +329,7 @@ def test_validate_rejects_cycle_without_max_visits(
 def test_apply_expansion_returns_new_plan(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
     """Apply produce plan NUEVO; el original NO muta."""
     proposal = propose(
@@ -327,7 +359,7 @@ def test_apply_expansion_returns_new_plan(
 def test_apply_expansion_returns_err_for_invalid(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
     """Apply sobre propuesta rechazada devuelve Err."""
     proposal = propose(
@@ -354,7 +386,7 @@ def test_apply_expansion_returns_err_for_invalid(
 def test_rejection_evidence_persisted(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
     tmp_path: Any,
 ) -> None:
     """record_rejection crea JSON con proposal_id + reason."""
@@ -384,7 +416,7 @@ def test_rejection_evidence_persisted(
 def test_full_pipeline_authorized_to_applied(
     base_plan: WorkflowPlan,
     valid_authorization: Authorization,
-    empty_registry: dict[str, str],
+    empty_registry: ExpansionRegistry,
 ) -> None:
     """Happy path: DISCOVER..APPLY legal completo."""
     proposal = propose(
@@ -404,8 +436,11 @@ def test_full_pipeline_authorized_to_applied(
     assert applied.is_ok()
     new_plan = applied.unwrap()
     assert "revisor" in {n.name for n in new_plan.nodes}
-    # "lint" es una capacidad legitima
-    assert "lint" in empty_registry
+    # "lint" esta autorizada: es lo que ya prueba `result.accepted is True`
+    # arriba. La asercion que habia aqui —`assert "lint" in empty_registry`—
+    # comprobaba que el FIXTURE contiene lo que el fixture acaba de definir.
+    # No miraba produccion, y con el tipo nuevo ni siquiera compila. Quitada:
+    # un contrasalto que no puede fallar es peor que no tener contrasalto.
 
 
 def test_proposal_has_stable_uuid() -> None:

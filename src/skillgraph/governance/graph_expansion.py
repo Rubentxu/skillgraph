@@ -29,16 +29,18 @@ validas (ver test `test_policy_engine_default_settings_allow_existing_proposals`
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from collections import deque
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, NewType
 
 from skillgraph.core.errors import (
     InvalidExpansionError,
     UnauthorizedExpansionError,
+    ValidationError,
 )
 from skillgraph.governance.expansion_policy import (
     DefaultPolicyEngine,
@@ -57,6 +59,64 @@ from skillgraph.runtime.engine import now_iso
 ProposalID = NewType("ProposalID", str)
 AuthorizationMode = Literal["manual_signed", "policy_approved", "auto_low_risk"]
 Scope = Literal["NODE", "TRANSITION", "SUBGRAPH"]
+
+#: Una REFERENCIA a un recurso del proyecto, con forma ``ns:Kind/name``.
+#:
+#: Ver `resource_ref`, que es el smart constructor.
+ResourceRef = NewType("ResourceRef", str)
+
+#: La FORMA de una referencia, y el unico sitio donde vive.
+#:
+#: No es un formato inventado para tapar un invariante roto: es el que ya
+#: usan `ResourceIdentity` (`resources/bricks.py`) y el que `_load_registry`
+#: ya producia como VALOR (`f"{namespace}:{kind}/{name}"`). Lo que faltaba
+#: era indexar por el, no inventar una convencion nueva.
+_REFERENCE_RE = re.compile(
+    r"^[A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$"
+)
+
+
+def resource_ref(s: str) -> ResourceRef:
+    """Smart constructor: valida y devuelve `ResourceRef` tipado.
+
+    **POR QUE ESTO EXISTE.** El invariante I4 del blueprint es «No
+    introducir referencias INEXISTENTES» (linea 20 de este modulo), y
+    hasta ahora `new_dependencies` era un `tuple[str, ...]` de forma
+    libre: la CLI hacia `tuple(raw.get("new_dependencies", []))` sin
+    validar nada. Sin formato no hay nada que indexar, y un invariante
+    sin fuente no es un invariante: es una constante.
+
+    La validacion va **aqui** y no en I4 a proposito. Una referencia mal
+    escrita y una referencia que no existe son dos cosas distintas, y
+    merecen dos errores distintos:
+
+    - mal escrita -> `ValidationError` al construir, con la forma en el
+      mensaje, para que quien escribe la propuesta la arregle sin
+      buscar el formato en el codigo;
+    - bien escrita pero inexistente -> I4, que es la pregunta del
+      blueprint.
+
+    Si el formato se comprobara dentro de I4, el invariante tendria que
+    distinguir dos fallos que el operador arregla de dos maneras, y
+    «I4 violado» dejaria de significar una sola cosa.
+
+    **POR QUE NO HAY UN `if not s` POR DELANTE.** Lo hubo, y la
+    mutacion que lo quitaba **no la cazaba ningun test**: `_REFERENCE_RE`
+    ya rechaza `""` y `"   "`, luego la guarda era codigo muerto. Se
+    quito en vez de escribirle un test, porque un test que obliga a
+    mantener una guarda que no hace nada es fabricar cobertura de codigo
+    muerto. Y el mensaje se pone mejor: para `""` ahora dice la forma
+    que se espera, que es justo lo que necesita quien la escribio mal.
+    """
+    if not _REFERENCE_RE.match(s):
+        raise ValidationError(
+            f"ResourceRef invalido: {s!r}. Se espera la forma "
+            f"'ns:Kind/name' (por ejemplo "
+            f"'packs:DomainPack/code-analysis'). Una referencia tiene que "
+            f"apuntar a un recurso del proyecto: un nombre de capability "
+            f"NO es una referencia."
+        )
+    return ResourceRef(s)
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +275,56 @@ def _make_proposal_id(
 
 
 @dataclass(frozen=True, slots=True)
+class ExpansionRegistry:
+    """Lo que el despliegue sabe, en las DOS formas que preguntan I3 e I4.
+
+    **POR QUE DOS VISTAS Y NO UN `Mapping[str, str]`.** Estaban juntas en
+    un solo diccionario, y ahi estaba el defecto. Medido antes de
+    arreglarlo (`.pipelinek/b3_i4_measure.py`):
+
+    ```
+    dep que NO existe en ninguna parte        ('skillgraph.libs.http',)  -> I4
+    dep que SI existe (el pack del proyecto)  ('packs:DomainPack/code-analysis',) -> I4
+    dep = 'code.analysis' (que ademas es cap)  ('code.analysis',)         -> pasa
+    ```
+
+    I3 pregunta «¿esta capability **autorizada**?» e I4 pregunta «¿esta
+    referencia **existe**?». Son dos preguntas sobre el mismo conjunto de
+    recursos, con **dos fuentes distintas**, y un `Mapping[str, str]` no
+    puede contestar las dos: si se indexa por capability —como hacia
+    `_load_registry`—, I3 funciona y I4 rechaza siempre; si se indexa por
+    referencia, al reves.
+
+    La consecuencia de que un solo mapa las mezclara no era un error
+    visible: era que **I4 rechazaba una referencia que existia** y solo
+    pasaba cuando el autor confundia una dependencia con una capability.
+    O sea, el invariante media la confusion del autor en vez de la
+    existencia de la referencia.
+
+    Las dos vistas son **inmutables y separadas a proposito**: un
+    `MappingProxyType` sobre una copia para `capabilities`, y un
+    `frozenset` para `references`. Un solo dict con las dos clases de
+    claves repetiria el defecto con menos ruido, que es peor.
+    """
+
+    capabilities: Mapping[str, str] = field(default_factory=dict)
+    references: frozenset[ResourceRef] = frozenset()
+
+    def __post_init__(self) -> None:
+        # La capacidad y la referencia son cosas distintas. Que una
+        # aparezca donde la otra no es lo que se vigila aqui, porque el
+        # constructor de las vistas ya las separa; lo que se vigila es
+        # que no se cuele una clave cualquiera.
+        for clave in self.capabilities:
+            if ":" in clave and "/" in clave:
+                raise ValidationError(
+                    f"ExpansionRegistry.capabilities tiene {clave!r}, que es "
+                    f"forma de REFERENCIA (ns:Kind/name), no de capability. "
+                    f"Las dos preguntas se contestan con las dos vistas."
+                )
+
+
+@dataclass(frozen=True, slots=True)
 class GraphExpansionProposal:
     """Una propuesta de cambio del plan bajo el pipeline blueprint §5 §5.
 
@@ -336,19 +446,26 @@ def _find_capable(plan: WorkflowPlan, capability: str) -> bool:
     return any(capability in n.capabilities for n in plan.nodes)
 
 
-def _ref_exists(ref: str, registry: Mapping[str, str]) -> bool:
-    return ref in registry
-
-
 def _check_capabilities(
     proposal: GraphExpansionProposal,
-    registry: Mapping[str, str],
+    registry: ExpansionRegistry,
 ) -> tuple[str, ...]:
-    """I3+I4: caps/deps no en registry. Una entrada por invariant violada."""
+    """I3+I4: capabilities no autorizadas / referencias inexistentes.
+
+    **DOS PREGUNTAS, DOS VISTAS.** Antes las dos se hacian al mismo
+    `Mapping[str, str]`, y por eso I4 no podia funcionar: el registro se
+    construia recorriendo `capabilities` de cada recurso y nunca miraba
+    las referencias. Medido: I4 rechazaba una referencia que existia y
+    solo pasaba si el autor escribia una capability como dependencia.
+
+    I3 sigue como estaba —la capability tiene que estar autorizada— y
+    I4 ahora pregunta lo que el blueprint dice que pregunte: si la
+    referencia apunta a un recurso **que existe**.
+    """
     violated: list[str] = []
-    if any(not _ref_exists(cap, registry) for cap in proposal.capabilities_needed):
+    if any(cap not in registry.capabilities for cap in proposal.capabilities_needed):
         violated.append("I3")
-    if any(not _ref_exists(dep, registry) for dep in proposal.new_dependencies):
+    if any(dep not in registry.references for dep in proposal.new_dependencies):
         violated.append("I4")
     return tuple(violated)
 
@@ -472,7 +589,7 @@ def validate(
     proposal: GraphExpansionProposal,
     *,
     plan: WorkflowPlan,
-    registry: Mapping[str, str],
+    registry: ExpansionRegistry,
     completed_nodes: frozenset[str] = frozenset(),
     active_nodes: frozenset[str] = frozenset(),
     current_revision: str | None = None,
@@ -537,7 +654,7 @@ def apply_expansion(
     proposal: GraphExpansionProposal,
     plan: WorkflowPlan,
     *,
-    registry: Mapping[str, str],
+    registry: ExpansionRegistry,
     completed_nodes: frozenset[str] = frozenset(),
     active_nodes: frozenset[str] = frozenset(),
     current_revision: str | None = None,

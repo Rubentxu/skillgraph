@@ -8,7 +8,7 @@
 >
 > ```
 > resources/workflow.py:71::WorkflowNode.capabilities        tuple[str, ...]
-> governance/graph_expansion.py:349::_check_capabilities     contra un Mapping[str, str]
+> governance/graph_expansion.py:449::_check_capabilities     dos preguntas al registro
 > knowledge/context_controller.py:139::build_capabilities    produce ('stale',)
 > runtime/http_adapter.py:168::_build_prompt                las imprime
 > alguien que las RESUELVA                                 —— NINGUNO ——
@@ -81,6 +81,57 @@
 > La decisión de si `'stale'` debe viajar en su propio campo es de B3 y
 > no se ha tomado todavía; lo que sí se ha hecho es fijarla por test
 > para que no cambie **por descuido**.
+>
+> **SEGUNDA ENTREGA: el invariante I4 no comprobaba lo que decía.**
+> Buscando el segundo consumidor de `capabilities` apareció un
+> invariante roto. Medido con el registro **real** que construye la CLI:
+>
+> ```
+> dep que NO existe en ninguna parte        -> I4
+> dep que SÍ existe (el pack del proyecto)  -> I4   <-- rechazaba lo que existe
+> dep = 'code.analysis' (que además es cap) -> pasa <-- solo pasaba al confundirse
+> ```
+>
+> **I4 rechazaba una referencia que existía** —el único pack del
+> proyecto— y **solo pasaba cuando el autor escribía como «dependencia»
+> el nombre de una capability**. Es decir, el invariante medía la
+> confusión del autor, no la existencia de la referencia.
+>
+> La comprobación no era el problema: con la dependencia puesta a mano en
+> el mapa, I4 dejaba de saltar. **El problema eran dos, y el segundo se
+> ve menos:**
+>
+> 1. **La fuente.** `cli/commands/expansion.py:151::_load_registry`
+>    construía el mapa recorriendo `spec_json.capabilities` y nunca
+>    miraba `new_dependencies`.
+> 2. **El tipo.** I3 y I4 eran dos preguntas —«¿esta capability está
+>    autorizada?» y «¿esta referencia existe?»— sobre **un solo
+>    `Mapping[str, str]`**. Un mapa no contesta dos preguntas distintas.
+>
+> **El arreglo, y la decisión que lo detrás.** `new_dependencies` pasa a
+> tener formato declarado `ns:Kind/name` con un smart constructor
+> (`governance/graph_expansion.py:79::resource_ref`), y el registro se
+> parte en **dos vistas** —`ExpansionRegistry.capabilities` para I3 y
+> `.references` para I4—. El formato no es inventado: es el que ya usan
+> `ResourceIdentity` y el que `_load_registry` ya producía como valor.
+>
+> **Y no hay ruptura de datos, medido:** las propuestas **no se
+> persisten** en la base. `record_rejection` escribe un JSON de auditoría
+> en `expansion_rejections/`, y las aceptadas no se guardan. El campo
+> solo existe en el JSON que el usuario aporta en cada invocación, así
+> que darle formato cambia la validación de entrada, no la lectura de
+> nada almacenado.
+>
+> **Un invariant se quedó sin su contrasalto al migrarlo:** el test de H4
+> acababa con `assert "lint" in empty_registry`, que comprobaba que el
+> *fixture* contenía lo que el *fixture* acababa de definir. No miraba
+> producción, y con el tipo nuevo ni compilaba. Quitado: un contrasalto
+> que no puede fallar es peor que no tener contrasalto.
+>
+> **Por qué B5 importa aquí.** El Graph Diff Gate se apoya en
+> GraphExpansion. Con I4 rechazando toda propuesta con dependencia nueva,
+> B5 nacía con el gate cerrado — no por decisión, sino porque el
+> invariante no tenía fuente.
 >
 > **Dónde están las cosas**: el contrato, en
 > `src/skillgraph/platform/ports/capabilities.py::CapabilityRegistry`;

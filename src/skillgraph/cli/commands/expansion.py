@@ -13,6 +13,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 from skillgraph.cli.support import (
     EXIT_DOMAIN,
@@ -31,11 +32,13 @@ from skillgraph.governance.graph_expansion import (
     AddNode,
     AddTransition,
     Authorization,
+    ExpansionRegistry,
     GraphExpansionProposal,
     RemoveTransition,
     apply_expansion,
     propose,
     record_rejection,
+    resource_ref,
     validate,
 )
 from skillgraph.platform.storage import Storage
@@ -145,28 +148,48 @@ def _warn_unreadable_rejections(scan: RejectionScan) -> None:
         )
 
 
-def _load_registry(project_db: Path, *, tenant_id: str, project_id: str) -> dict[str, str]:
-    """Devuelve dict capability_name -> brick_ref, leido de los resources
-    del proyecto.
+def _load_registry(project_db: Path, *, tenant_id: str, project_id: str) -> ExpansionRegistry:
+    """Lo que el proyecto sabe hacer y a que apunta, en las DOS vistas.
 
     Usa la API publica ``Storage.list_resources`` (H1). Las capabilities
-    viven en ``spec_json.spec.capabilities`` (JSON del brick).
+    viven en ``spec_json.capabilities`` (raiz del spec, no dentro de un
+    ``spec``).
+
+    **POR QUE DOS VISTAS Y POR QUE AHORA.** Antes esto devolvia un solo
+    ``dict[capability -> ref]`` y ese unico mapa contestaba las dos
+    preguntas de los invariantes. No podia: I3 pregunta si una capability
+    esta autorizada e I4 si una referencia existe. Medido antes de
+    arreglarlo (``.pipelinek/b3_i4_measure.py``)::
+
+        dep que NO existe en ninguna parte        -> I4
+        dep que SI existe (el pack del proyecto)  -> I4   <-- rechazaba lo que existe
+        dep = 'code.analysis' (que ademas es cap)  -> pasa <-- solo pasaba al confundirse
+
+    O sea, el invariante I4 media la confusion del autor, no la
+    existencia de la referencia. El arreglo no es «anadir dependencias
+    al mapa»: es dejar de hacer que un solo mapa conteste dos preguntas
+    distintas, y darle a I4 la vista que necesita.
     """
     storage = Storage(project_db)
     try:
         rows = storage.list_resources(tenant_id=tenant_id, project_id=project_id)
     finally:
         storage.close()
-    out: dict[str, str] = {}
+    capabilities: dict[str, str] = {}
+    references: set[str] = set()
     for r in rows:
+        ref = f"{r.namespace}:{r.kind}/{r.name}"
+        references.add(ref)
         try:
             spec = json.loads(r.spec_json or "{}")
         except (ValueError, TypeError):
             continue
-        caps = (spec or {}).get("capabilities", []) or []
-        for cap in caps:
-            out[cap] = f"{r.namespace}:{r.kind}/{r.name}"
-    return out
+        for cap in (spec or {}).get("capabilities", []) or []:
+            capabilities[cap] = ref
+    return ExpansionRegistry(
+        capabilities=MappingProxyType(dict(capabilities)),
+        references=frozenset(references),
+    )
 
 
 def _ops_from_dict(ops_json: list[dict[str, object]]) -> tuple[object, ...]:
@@ -225,7 +248,7 @@ def _load_proposal_json(path: Path) -> GraphExpansionProposal:
         problem_observed=raw["problem_observed"],
         evidence=tuple(raw.get("evidence", [])),
         operations=_ops_from_dict(raw["operations"]),
-        new_dependencies=tuple(raw.get("new_dependencies", [])),
+        new_dependencies=tuple(resource_ref(d) for d in raw.get("new_dependencies", [])),
         capabilities_needed=tuple(raw.get("capabilities_needed", [])),
         scope=raw.get("scope", "NODE"),
         attachment_point=raw["attachment_point"],
