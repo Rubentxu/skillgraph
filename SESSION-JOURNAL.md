@@ -12291,3 +12291,27 @@ con dos tests; se corrigió la sonda y se añadió M6b para la herencia.
     WI-106 del reves: alli la cifra de tests escrita a mano no cuadraba
     con la del run; aqui es la version declarada la que no cuadraba con
     la del paquete. En los dos casos la cifra mandada es la del run.
+
+23. **La etapa `evidence` no puede recuperarse a si misma, y nadie lo
+    habia visto en seis runs.** La etapa verifica el run ANTERIOR, que
+    es correcto: cuando corre, el run en curso aun no tiene
+    `RunFinished`. Lo que no estaba escrito en ninguna parte es la
+    consecuencia: la etapa exige que el run medido termine en `success`,
+    un run solo termina en `success` si TODAS sus etapas pasaron, y la
+    etapa `evidence` es una de esas etapas. Mientras falle una vez,
+    ningun run puede volver a terminar en `success`, y sin un `success`
+    anterior la etapa no puede pasar. Es un deadlock, y no por un
+    defecto del codigo: los siete pasos de codigo estan verdes en los
+    cinco ultimos runs, con 2754 passed y 0 skipped.
+
+    Salio porque el primer run de certificacion fallo por otra cosa (el
+    error 22), y un fallo cualquiera deja la cadena envenenada para
+    siempre. Sin ese fallo inicial, el bloque entero habria terminado
+    con `Pipeline finished with SUCCESS` y nadie se habria enterado de
+    que la propiedad no existe. Un guard que solo se ve cuando ya no
+    puede volver a pasar es un guard que no se puede probar.
+
+    Lo que se certifica, entonces, es leyendo las ETAPAS de los cinco
+    ultimos runs por `run_id` y `occurred_at`, no el veredicto del run.
+    El veredicto no dice nada sobre su propio codigo, y es lo primero
+    que uno mira.

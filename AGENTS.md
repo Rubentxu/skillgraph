@@ -990,6 +990,36 @@ Dos detalles que no son obvios, los dos MEDIDOS:
   reciente» es el run anterior. El huevo y la gallina es real, y lo
   resuelve el propio motor sin trucos.
 
+Y una consecuencia de lo anterior que **no** es evidente, y que salió
+medida en WI-109 con seis runs:
+
+> **La etapa `evidence` no puede recuperarse a sí misma.** Exige que el
+> run medido termine en `success`; un run sólo termina en `success` si
+> **todas** sus etapas pasaron; y `evidence` es una de esas etapas.
+> Mientras falle una vez, ningún run vuelve a terminar en `success`, y sin
+> un `success` anterior `evidence` no puede pasar. Un fallo cualquiera
+> —incluido uno ya corregido— deja la cadena envenenada para siempre.
+
+Lo que significa en la práctica, y hay que decirlo aunque suene mal:
+
+- **El veredicto de un run no dice nada sobre su propio código.** Hay que
+  leer las ETAPAS. En WI-109 hubo cinco runs consecutivos con los siete
+  pasos de código en `success` y `2754 passed`, y veredicto `FAILURE`.
+- **Un fallo inicial de cualquier clase es irrecuperable desde la
+  receta.** Por eso el primer run de un bloque debe salir verde: no sólo
+  certifica, es lo que deja la cadena limpia para los siguientes.
+- **Para certificar hay que leer por `run_id` Y por `occurred_at`.** El
+  `run_id` se reutiliza entre replays, y «el más reciente por `sequence`»
+  puede ser un run de ayer: en WI-109 eso dio un `OK, 8/8 etapas` sobre
+  un run del día anterior.
+
+**Arreglo pendiente, no aplicado** (fuera del alcance de WI-109, y tocar
+la receta invalida las certificaciones anteriores): que el criterio sea
+*«los siete pasos de código pasaron»* en vez de *«el run terminó en
+`success`»*. Lo segundo es lo que la etapa mide de verdad, por
+indirección, y depender de un run que no puede controlar es exactamente
+lo que hace la etapa irrecuperable.
+
 ### Comando de validación rápida
 
 ```bash

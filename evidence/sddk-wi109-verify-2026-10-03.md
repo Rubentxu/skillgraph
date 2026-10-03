@@ -365,20 +365,67 @@ octava falla porque **mide el run 3**, que había fallado.
 ### LA PROPIEDAD QUE ESTO DESTAPA
 
 La etapa `evidence` verifica el run **anterior**, porque el en curso aún
-no tiene `RunFinished` que leer. Consecuencia medida en este bloque:
+no tiene `RunFinished` que leer. Está escrito en `.pipeline.kts:130-134`
+y el motivo es correcto. Lo que **no** está escrito es la consecuencia:
 
 > **Un fallo en la etapa `evidence` se propaga al run siguiente, y un
 > código verde puede acabar en `Pipeline finished with FAILURE` hasta
 > dos runs después.**
 
-No es un defecto del bloque ni del guard: es cómo está diseñado, y el
-propio mensaje lo avisa («el `run_id` se reutiliza entre replays»). Pero
-tiene un coste que no estaba escrito en ningún sitio: **el veredicto
-`FAILURE` de un run no dice nada sobre su propio código**, y leerlo como
-si lo dijera es el error. Hay que leer las etapas, no el veredicto.
+Medido aquí, run a run:
 
-Es también la razón por la que hacen falta dos runs para certificar un
-estado: el primero mide el estado anterior, y el segundo mide al primero.
+| run | 7 etapas de código | `evidence` | veredicto |
+|---|---|---|---|
+| 1 `e722fe84` | ✗ (`package_version`) | ✗ | FAILURE |
+| 2 `16251236` | ✓ `2754 passed` | ✗ (mide el 1) | FAILURE |
+| 3 `da0203d9` | ✓ (lectura con `run_id` reciclado) | ✗ (mide el 2) | FAILURE |
+| 4 `a6c81d08` | ✓ `2754 passed` | ✗ (mide el 3) | FAILURE |
+| 5 `234d7817` | ✓ `2754 passed` | ✗ (mide el 4) | FAILURE |
+| 6 `b774ad14` | ✓ `2754 passed` | ✗ (mide el 5) | FAILURE |
+
+**Y de aquí sale el deadlock**, que es la parte que no estaba escrita
+en ninguna parte:
+
+1. La etapa `evidence` exige que el run medido termine en `success`.
+2. Un run sólo termina en `success` si **todas** sus etapas pasaron.
+3. La etapa `evidence` **es** una de esas etapas.
+
+⇒ Mientras `evidence` falle una vez, ningún run puede volver a terminar
+en `success`, y sin un `success` anterior `evidence` no puede pasar.
+**El estado es irrecuperable desde la propia receta**, y no por un
+defecto del código: los siete pasos de código están verdes en los cinco
+últimos runs (`2754 passed`, 0 skipped, cobertura y lint OK).
+
+El último run que terminó en `success` fue `8d6a9594` (03:48, cierre de
+WI-108). Desde entonces, seis runs. Ninguno ha tenido las 8 etapas.
+
+**Lo que se certifica, y cómo.** No con el veredicto del run, que
+últimamente no dice nada sobre su propio código, sino leyendo las etapas
+de los cinco últimos runs por `run_id` **y `occurred_at`**:
+
+```
+discover-repo  success        unit-tests     2754 passed, 0 skipped
+sync-deps      success        coverage-floors  todo modulo cumple su suelo
+package-build  success        ci-parity      OK
+lint           All checks passed!
+```
+
+Esos siete pasos son el estado real, y son verdes. Lo que no es
+alcanzable, y se dice, es un run con `Pipeline finished with SUCCESS`
+mientras la receta tenga esta forma.
+
+**Lo que lo arreglaría** (no se hace aquí: es un cambio en
+`.pipeline.kts`, fuera del alcance de WI-109, y tocar la receta
+invalida las certificaciones anteriores). Dos vías, ambas con
+coste: (a) que `evidence` mida su propio run diferido al final, que el
+motor no permite; (b) que el criterio sea *«los siete pasos de código
+pasaron»* y no *«el run terminó en success»*, que es lo que la etapa
+mide de verdad y lo que mide por indirección. La segunda es la
+correcta, y hace que la etapa deje de depender de un run que no puede
+controlar.
+
+Se registra como deuda con nombre. No se abre frente.
+
 
 ### Run 5
 
