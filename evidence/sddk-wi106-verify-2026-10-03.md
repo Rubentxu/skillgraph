@@ -4,10 +4,20 @@
 - **Sesión**: `wi106-20261003T034000Z`
 - **Fecha**: 2026-10-03
 - **Release**: **ninguna**, y por regla (ver §3)
-- **Run que cierra**: `c1124ff5-d4a1-424d-8abd-d67785931598`
+- **Run que cierra**: `33795b8d-8b2b-4434-bc0f-3b501af49ce6`
   — 8/8 stages `success`, **2703 passed, 0 skipped**, 0 `StepFailed`,
   `VEREDICTO: todos los suelos declarados se cumplen`, árbol quieto.
+  Es el run que certifica **el estado final**, con esta evidencia escrita.
+- **Run del código** (antes de escribir la evidencia):
+  `c1124ff5-d4a1-424d-8abd-d67785931598` — las mismas cifras. Fue el que
+  destapó el `2702` escrito a mano (§5).
 - **SHA-256 de `.pipeline.kts`**: `7541ced5…dd42`, sin drift desde WI-105.
+
+> El commit posterior a `33795b8d` sólo toca la cabecera de este fichero
+> para anotar el identificador. Es la convención que el repo viene usando
+> desde WI-101: el run certifica el estado, y el commit posterior es el
+> que *cuenta* esa certificación. Editar el árbol **con el run en marcha**
+> sí lo invalidaría — eso costó una certificación descartada en WI-102.
 
 ---
 
