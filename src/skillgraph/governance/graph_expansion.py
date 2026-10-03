@@ -67,6 +67,12 @@ Scope = Literal["NODE", "TRANSITION", "SUBGRAPH"]
 class ExpansionOnObsoleteRevisionError(InvalidExpansionError):
     """I6: la base_revision declarada ya no es la actual del plan."""
 
+    # WI-109: sin este `code` heredaba `sg_invalid_expansion` de su
+    # padre, y ambos salian con el mismo identificador. "La expansion es
+    # invalida" y "la expansion es invalida porque apuntaba a una
+    # revision vieja" son correcciones distintas para quien lee el error.
+    code = "sg_expansion_on_obsolete_revision"
+
 
 @dataclass(frozen=True, slots=True)
 class InvalidProposal:

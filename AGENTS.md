@@ -48,6 +48,45 @@ forzar `(*xs, x)` en vez de `xs + (x,)`.
 - Cada excepción lleva un `code` estable (`sg_*`) usado por la CLI
   para traducir a exit codes.
 
+**Cómo se comprueba (WI-109).** Las tres viñetas anteriores eran
+declaración sin instrumento, y la medición encontró que la tercera
+era falsa: el `code` se imprimía pero no traducía, y `main()` hacía
+`except SkillGraphError -> EXIT_DOMAIN` para todo.
+
+| propiedad | quién la mide | dónde |
+|---|---|---|
+| el `code` es la clave con la que se traduce a exit code | `exit_para(exc)` en `src/skillgraph/cli/exit_codes.py` | puro sobre `exc.code`; el módulo no importa nada (ADR-0016) |
+| `main()` cablea la traducción y no colapsa a 10 | `tests/test_wi109_code_to_exit.py::test_main_usa_la_traduccion_y_no_el_catch_all_a_pelo` | por AST: un `return EXIT_DOMAIN` a pelo no cabe |
+| cada error declara su `code` y no hay colisiones | `test_cada_error_de_dominio_declara_su_propio_code`, `test_ningun_code_comparte_clase` | por import real, sobre el `code` efectivo |
+| la entrada de usuario malformada no sale como `Traceback` | `test_recipe_json_malformada_no_escapa_como_traceback` | `subprocess`, con proyecto en `tmp_path` |
+| ningún `json.loads` de la CLI queda sin `try` | `test_todo_parseo_de_entrada_de_usuario_esta_protegido` | por AST sobre `src/skillgraph/cli/` |
+
+Dos propiedades que la regla daba por ciertas y que la medición
+desmentía, ahora vigiladas porque no se dan por solas:
+
+- **Un `code` compartido rompe la traducción.** Si dos errores
+  comparten `code`, no pueden salir con exit codes distintos, y el
+  `code` deja de ser clave. Por eso toda clase de §1.2 declara el
+  suyo; antes tres compartían `sg_error` y dos
+  `sg_invalid_expansion`.
+- **La traducción es una tabla, no un `except` por comando.** Añadir
+  un `code` con exit code propio es un cambio de contrato externo
+  (release MINOR). La tabla vive en `exit_codes.py` porque
+  `parser.py` la consume sin arrastrar `Storage`: una traducción en
+  `runner.py` sería inalcanzable desde ahí y devolvería a la colisión
+  con el 2 de `argparse` que ADR-0016 resolvió.
+
+**Lo que NO se comprueba, y sigue siendo deuda.** La prohibición
+*literal* de `raise ValueError`/`raise Exception` se cumple hoy (`grep`
+sobre `src/` → 0) y no tiene guard: no hay nada que vigilar mientras
+sea cierto. Lo que el dominio lanza de verdad son otros builtins —
+`TypeError` ×6, `KeyError` ×5, `RuntimeError` ×2,
+`NotImplementedError` ×1, medido por AST— casi todos en invariantes
+internas de adaptadores (`unwrap()`, `dto.py`) y no en el camino de
+error que ve el usuario. Convertirlos es otro workitem; aquí sólo se
+registra, porque un guard que declara exceptions en una lista es la
+misma lista un nivel más abajo.
+
 ### 1.3 Sin I/O oculto
 
 - Las funciones puras (e.g. `Handoff.context_hash`,

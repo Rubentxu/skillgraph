@@ -15,8 +15,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from skillgraph.cli.support import EXIT_DOMAIN, EXIT_OK, resolve_project
-from skillgraph.core.errors import SkillGraphError
+from skillgraph.cli.support import EXIT_OK, exit_para, resolve_project
+from skillgraph.core.errors import ParseError, SkillGraphError
 from skillgraph.core.recipe import ContextRecipe
 from skillgraph.knowledge.context_controller import (
     ContextController,
@@ -102,16 +102,27 @@ def cmd_knowledge_compile(args: argparse.Namespace) -> int:
 
     with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
         ctl = KnowledgeController(knowledge=storage, tenant_id=tenant_id, project_id=project_id)
-        recipe_raw = (
-            json.loads(args.recipe)
-            if args.recipe.startswith("{")
-            else {
-                "obligatory": [{"kind": "source", "value": args.recipe}],
-                "freshness_policy": "strict" if args.strict else "best_effort",
-                "token_budget": args.token_budget,
-                "overflow_strategy": args.overflow,
-            }
-        )
+        # WI-109: la recipe es ENTRADA DE USUARIO y va como JSON literal.
+        # Este `json.loads` estaba fuera del `try`, y `JSONDecodeError` no
+        # es `SkillGraphError`, asi que un `{` mal cerrado salia como
+        # Traceback con rc=1 de Python en vez de como error de dominio.
+        try:
+            recipe_raw = (
+                json.loads(args.recipe)
+                if args.recipe.startswith("{")
+                else {
+                    "obligatory": [{"kind": "source", "value": args.recipe}],
+                    "freshness_policy": "strict" if args.strict else "best_effort",
+                    "token_budget": args.token_budget,
+                    "overflow_strategy": args.overflow,
+                }
+            )
+        except json.JSONDecodeError as exc:
+            # Conversion inmediata a un error de dominio tipado: la
+            # frontera con `json` no es nuestra, pero el significado si.
+            raise ParseError(
+                f"recipe JSON invalido: {exc}. Pasa un source_id o un JSON literal completo."
+            ) from exc
         recipe = ContextRecipe.from_dict(recipe_ref=args.recipe, raw=recipe_raw)
         ctx = ContextController(knowledge=ctl)
         try:
@@ -122,12 +133,11 @@ def cmd_knowledge_compile(args: argparse.Namespace) -> int:
                 source_revision=args.revision or "HEAD",
             )
         except SkillGraphError as exc:
+            # WI-109: el `code` decide el exit code. Estas tres ramas
+            # devolvian EXIT_DOMAIN las tres, y la ultima la alcanzaba
+            # todo lo demas: no distinguian nada, solo parecían hacerlo.
             print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-            if exc.code in {"sg_stale_knowledge_error"}:
-                return EXIT_DOMAIN
-            if exc.code in {"sg_missing_obligatory", "sg_token_budget_exceeded"}:
-                return EXIT_DOMAIN
-            return EXIT_DOMAIN
+            return exit_para(exc)
         print(json.dumps(handoff.to_dict(), indent=2, ensure_ascii=False))
         print(f"--- context_hash: {handoff.context_hash}")
         return EXIT_OK

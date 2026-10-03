@@ -81,6 +81,7 @@ from skillgraph.cli.support import (
     ProjectResolver,
     _build_registry_for_project,
     _open_project_storage,
+    exit_para,
     resolve_project,
 )
 from skillgraph.core.errors import (
@@ -246,7 +247,13 @@ def main(argv: list[str] | None = None) -> int:
         return handler(args)
     except SkillGraphError as exc:
         print(f"ERROR ({exc.code}): {exc}", file=sys.stderr)
-        return EXIT_DOMAIN
+        # WI-109: el `code` decide el exit code, no el tipo de la excepcion.
+        # Antes este `return EXIT_DOMAIN` colapsaba TODO error de dominio a
+        # 10, y los codigos 11/12 solo se alcanzaban porque cada comando
+        # repetia su propio `except ParseError`. La regla de AGENTS.md 1.2
+        # ("cada excepcion lleva un code... usado por la CLI para traducir
+        # a exit codes") no era cierta; ahora la cumple `exit_para`.
+        return exit_para(exc)
     except FileNotFoundError as exc:
         # Caso comun: el proyecto pasado a _open_known_project no existe.
         # Mensaje legible + exit code canonico (EXIT_PROJECT_NOT_FOUND = 4).

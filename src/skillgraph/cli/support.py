@@ -49,8 +49,9 @@ from skillgraph.cli.exit_codes import (
     EXIT_RUN_INCOMPLETE as EXIT_RUN_INCOMPLETE,
     EXIT_USAGE as EXIT_USAGE,
     EXIT_VALIDATION as EXIT_VALIDATION,
+    exit_para as exit_para,
 )
-from skillgraph.core.errors import SkillGraphError
+from skillgraph.core.errors import ParseError, SkillGraphError
 from skillgraph.domain.pack_loader import declare_types_from_pack
 from skillgraph.platform.paths import (
     DEFAULT_TENANT,
@@ -167,7 +168,14 @@ def _load_plan_from_storage(project_dir: Path) -> WorkflowPlan:
         sys.exit(EXIT_PLAN_NOT_FOUND)
     import json as _json
 
-    raw = _json.loads(path.read_text())
+    # WI-109: un `plan.json` truncado es un artefacto corrupto, no una
+    # excepcion de la stdlib que deba salir como Traceback. Se traduce a
+    # `ParseError`, que es un error de dominio con `code` `sg_parse` y por
+    # tanto con exit code 11 en vez del 1 de Python.
+    try:
+        raw = _json.loads(path.read_text())
+    except _json.JSONDecodeError as exc:
+        raise ParseError(f"plan.json ilegible en {path}: {exc}") from exc
     nodes = tuple(
         WorkflowNode(
             name=n["name"],

@@ -73,6 +73,12 @@ class SelfCertificationBlockedError(SkillGraphError):
     de politica de validacion sin aprobacion humana explicita.
     """
 
+    # WI-109: sin este `code` heredaba `sg_error` de la raiz, que es el
+    # code que comparten todas las clases que no declaran el suyo. Un
+    # `code` compartido no identifica un error, y 1.2 exige que lo
+    # identifique para poder traducirlo a un exit code propio.
+    code = "sg_self_certification_blocked"
+
     def __init__(self, *, candidate_id: str, reason: str) -> None:
         self.candidate_id = candidate_id
         self.reason = reason

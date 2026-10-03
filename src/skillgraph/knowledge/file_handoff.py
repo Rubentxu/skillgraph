@@ -58,6 +58,11 @@ class HandoffBlockedError(SkillGraphError):
     programar la adquisicion autorizada.
     """
 
+    # WI-109: sin este `code` heredaba `sg_error` de la raiz, compartido
+    # con `SelfCertificationBlockedError` y con la propia raiz. Dos
+    # errores que el usuario deberia poder distinguir compartian clave.
+    code = "sg_handoff_blocked"
+
     def __init__(
         self,
         *,
