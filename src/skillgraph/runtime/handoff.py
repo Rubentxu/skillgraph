@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 from skillgraph.core.errors import ValidationError
@@ -104,11 +106,20 @@ class HandoffKnowledge:
 
 @dataclass(frozen=True, slots=True)
 class HandoffExecution:
-    """Donde corre y con que limites."""
+    """Donde corre y con que limites.
+
+    WI-111: `budget` es un `Mapping` inmutable, no un `dict`. `frozen=True`
+    congela el ENLACE del atributo, no su VALOR, asi que un `dict` aqui
+    dejaba la estructura mutable por dentro: el Adapter recibia el handoff
+    vivo y podia meter claves entre el instante en que el Core calcula y
+    persiste `context_hash` y el instante en que los eventos lo llevan. La
+    fila acababa describiendo el handoff de antes y los eventos el de
+    despues, para la misma node_execution.
+    """
 
     workspace_ref: str
     source_revision: str
-    budget: dict[str, int]
+    budget: Mapping[str, int]
 
     def __post_init__(self) -> None:
         from skillgraph.core.errors import ValidationError
@@ -117,8 +128,11 @@ class HandoffExecution:
             raise ValidationError("workspace_ref vacio")
         if not self.source_revision:
             raise ValidationError("source_revision vacio")
-        if not isinstance(self.budget, dict):
-            raise ValidationError("budget debe ser dict")
+        if not isinstance(self.budget, Mapping):
+            raise ValidationError("budget debe ser un mapping")
+        # Copia defensiva: el llamante conserva su dict y no puede alterar
+        # el handoff a posteriori.
+        object.__setattr__(self, "budget", MappingProxyType(dict(self.budget)))
 
     def validate(self) -> None:
         return

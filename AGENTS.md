@@ -428,6 +428,62 @@ Para cada `UAT-*` del blueprint:
 - **Handoff**: inmutable + SHA-256 sobre serialización estable
   (capacidades y budget ordenados). El Adapter recibe el hash
   firmado; nunca lo recalcula.
+
+### Cómo se comprueba (WI-111)
+
+Las tres mitades de esa viñeta se sostendrán por separado, porque
+antes de WI-111 **ninguna** se sostenía. `frozen=True` congela el
+*enlace* del atributo, no su *valor*: con `budget: dict[str, int]`
+la estructura era mutable por dentro.
+
+| propiedad | quién la mide | cómo |
+|---|---|---|
+| `budget` no es un dict mutable | `TestElBudgetNoEsUnDictMutable` | `MappingProxyType` sobre una **copia**; escribir lanza `TypeError` |
+| el llamante no puede alterar el handoff a posteriori | `test_el_valor_recibido_no_se_aliasa_al_llamante` | mutar el dict externo no toca el handoff |
+| el hash lo calcula el Core **una vez**, al firmarlo | `test_el_hash_no_se_calcula_una_segunda_vez` | contador de llamadas a `context_hash`, por origen |
+| la fila y los eventos no describen handoffs distintos | `TestElHashNoSeRecalculaDespuesDelInvoke` | **se ejecuta un nodo y se lee de disco** |
+
+**El guard no lee el código: ejecuta un nodo.** Un guard que comprobara
+`frozen=True` por AST mediría la *regla*, no el *defecto*: el
+defecto estaba en la distancia entre el instante en que el Core firma
+el hash y el instante en que el Adapter recibe el handoff, y esa
+distancia no se ve en el texto. Se mide leyendo `node_executions` y
+`runtime_events` después de un `reconcile_run` de verdad.
+
+Medido antes de arreglar nada:
+
+```
+fila node_executions.context_hash : 0063e7dfd167afc6...
+evento NodeCompleted               : 951a2d3a16cf7ea8...
+evento EvidenceProduced            : 951a2d3a16cf7ea8...
+hash que el Adapter vio AL ENTRAR  : 0063e7dfd167afc6...
+budget en handoff_json persistido  : {'max_nodes': 1}
+```
+
+La fila describe el handoff de **antes** y los eventos el de
+**después**, para la misma `node_execution`. El `handoff_json`
+persistido no tiene la clave que el Adapter inyecto: la fila precede
+al Adapter, y por eso es la firma.
+
+**Dos cosas que el guard tiene que evitar, y las dos costaron una
+mutacion cada una:**
+
+- **No comparar con `==` para exigir un tipo.** Un
+  `MappingProxyType` **es igual** a un `dict`: un test que miraba el
+  valor pasaba con el mapping vivo devuelto. Lo que discrimina es el
+  tipo, y sobre todo que `json.dumps` lo acepte.
+- **No contar llamadas sin distinguir el origen.** La lectura que hace
+  el propio Adapter no es una recalculación del motor. Se cuenta por
+  origen, o el test exige 1 y obtiene 2 por una razón que no es la
+  que vigila.
+
+Mutaciones: **5/5** cazadas, con sonda por mutación
+(`.pipelinek/wi111_mutate.py`). M5 se reescribió dos veces: la
+primera quitaba el `sorted()`, que resultó **inocua** — quitar el
+orden no rompe la copia— y la sonda apuntaba a un test que comparaba
+dos handoffs distintos en vez de re-leer el que mutó, un test que no
+podía fallar nunca.
+
 - **Adapter**: `Protocol` para invertir dependencia; `FakeAgentAdapter`
   lee fixtures desde disco. **No** se ejecuta código Python del
   Domain Pack al importar (UAT-14).

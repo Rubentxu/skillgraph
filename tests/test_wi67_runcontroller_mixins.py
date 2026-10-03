@@ -66,6 +66,7 @@ EXPECTED_MIXIN_MEMBERS: dict[str, frozenset[str]] = {
             "_invoke_node_adapter",
             "_settle_node_outcome",
             "_open_node_execution",
+            "_open_running_node",
             "_finalize_node_success",
             "_fail_node_with",
             "_mark_node_failed",
@@ -139,7 +140,7 @@ class TestClustersDisjoint:
             for name in _defined(mixin):
                 assert name not in seen, f"{name} esta en {seen.get(name)} y {mixin.__name__}"
                 seen[name] = mixin.__name__
-        assert len(seen) == 22, f"esperados 22 metodos movidos, hay {len(seen)}"
+        assert len(seen) == 23, f"esperados 23 metodos movidos, hay {len(seen)}"
 
     def test_every_moved_method_is_reachable(self) -> None:
         reachable = set(ALL_MOVED)

@@ -83,6 +83,14 @@ class NodeExecutionDelegations:
         Orquestador de 9 pasos lineales, agrupados en cuatro fases
         nombradas (WI-66) cuyo nombre dice que invariante protege cada
         paso. El orden ENTRE fases no es negociable: sostiene H9/H10.
+
+        WI-111: `context_hash` se calcula UNA vez, dentro de
+        `_compile_node_handoff`, al persistirlo; desde ahi solo viaja.
+        Antes se recalculaba despues de que el Adapter hubiera tenido el
+        handoff en la mano, asi que un Adapter podia escribir en el y
+        dejar la fila describiendo un handoff distinto del que llevaba
+        los eventos. `AGENTS.md` §8 dice que el Adapter "recibe el hash
+        firmado; nunca lo recalcula".
         """
         guard = self._node_guard(
             tenant_id=tenant_id,
@@ -98,31 +106,25 @@ class NodeExecutionDelegations:
         # Permitimos como maximo un reintento tras fallo.
         if attempt > MAX_NODE_ATTEMPTS:
             return False
-        node = plan.node(node_name)
-        events, node_execution_id = self._open_node_execution(
+        running = self._open_running_node(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
+            plan=plan,
             node_name=node_name,
             attempt=attempt,
-        )
-        running = _NodeExecution(
-            attempt=attempt,
-            node=node,
-            node_name=node_name,
-            events=events,
-            node_execution_id=node_execution_id,
         )
 
-        handoff = self._compile_node_handoff(
+        compilado = self._compile_node_handoff(
             tenant_id=tenant_id,
             project_id=project_id,
             run_id=run_id,
             plan=plan,
             running=running,
         )
-        if handoff is None:
+        if compilado is None:
             return False
+        handoff, context_hash = compilado
 
         result = self._invoke_node_adapter(
             tenant_id=tenant_id,
@@ -141,7 +143,40 @@ class NodeExecutionDelegations:
             plan=plan,
             running=running,
             result=result,
-            context_hash=handoff.context_hash,
+            context_hash=context_hash,
+        )
+
+    def _open_running_node(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        run_id: str,
+        plan: WorkflowPlan,
+        node_name: str,
+        attempt: int,
+    ) -> _NodeExecution:
+        """Abre la NodeExecution y agrupa lo que el nodo en curso necesita.
+
+        Fases 0 y 1 de WI-66 juntas: resolver el nodo del plan, abrir la
+        fila de `node_executions` y devolver el `_NodeExecution` que las
+        fases siguientes van pasando de una en una. Se extrajo en WI-111
+        para que `_execute_one` siga leyendo como la lista de fases que
+        es, y no como un alta de datos.
+        """
+        events, node_execution_id = self._open_node_execution(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            node_name=node_name,
+            attempt=attempt,
+        )
+        return _NodeExecution(
+            attempt=attempt,
+            node=plan.node(node_name),
+            node_name=node_name,
+            events=events,
+            node_execution_id=node_execution_id,
         )
 
     def _node_guard(
@@ -186,11 +221,17 @@ class NodeExecutionDelegations:
         run_id: str,
         plan: WorkflowPlan,
         running: _NodeExecution,
-    ) -> Handoff | None:
+    ) -> tuple[Handoff, str] | None:
         """Fase 2: compila el Handoff y persiste su hash.
 
-        Devuelve `None` si el nodo quedo FAILED. Es la traduccion de
-        `return self._fail_node_with(...)`, que devuelve siempre False.
+        Devuelve `(handoff, context_hash)`, o `None` si el nodo quedo
+        FAILED. Es la traduccion de `return self._fail_node_with(...)`,
+        que devuelve siempre False.
+
+        WI-111: devuelve tambien el hash que acaba de persistir, para que
+        el llamante no tenga que volver a calcularlo. El hash es la
+        FIRMA de este handoff, y recalcularlo despues de haberlo dado al
+        Adapter es justo lo que `AGENTS.md` §8 prohibe.
 
         H9-context-in-run: los errores tipados de compilacion de
         contexto (Stale, MissingObligatory, TokenBudget) marcan el nodo
@@ -243,7 +284,7 @@ class NodeExecutionDelegations:
             context_hash=context_hash,
             handoff_json=json.dumps(handoff.to_dict(), sort_keys=False),
         )
-        return handoff
+        return handoff, context_hash
 
     def _invoke_node_adapter(
         self,
