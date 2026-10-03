@@ -235,31 +235,72 @@ class TestUnRunConSkippedEsUnIncumplimiento:
     """El criterio que no existia. Mismo run, misma forma, distinto veredicto."""
 
     def test_tres_skipped_son_un_incumplimiento(self, tmp_path: Path) -> None:
-        informe = _informe("pytest: 2715 passed, 3 skipped in 240.06s (0:04:00)")
+        """Un skip por encima de los declarados es un incumplimiento.
+
+        **LA REGLA CAMBIO EN B2, y el cambio va en la direccion correcta.**
+        Antes, CUALQUIER skip hacia fallar el run — y eso hacia que la
+        lista `SKIPS_PLATAFORMA` no sirviera para nada, porque un skip
+        correctamente declarado hacia rojo igual. El mensaje del propio
+        criterio decia lo contrario: «los skips de plataforma estan
+        declarados en SKIPS_PLATAFORMA; este no lo es», o sea, la
+        intencion era tolerar los declarados y rechazar los que no.
+
+        B2 anadio una UAT opt-in (3 skips declarados) y el run salio con
+        `2871 passed, 3 skipped` puts red un run sin un solo skip
+        escondido. La regla ahora tiene tres estados, y este test mide
+        el que importa: **uno mas de los declarados, incumple.**
+        """
+        declarados = cpr._salteados_declarados()
+        informe = _informe(f"pytest: 2715 passed, {declarados + 1} skipped in 240.06s")
         problemas = cpr.evaluar(informe, _control(tmp_path))
         assert "sg_pipeline_tests_skipped" in _codigos(problemas), (
-            "un run que escondio tres tests cumple los criterios que declara "
-            f"AGENTS.md. Problemas: {[p.codigo for p in problemas]}"
+            "un run con un skip mas de los declarados cumple los criterios "
+            f"que declara AGENTS.md. Problemas: {[p.codigo for p in problemas]}"
         )
+
+    def test_los_skips_declarados_no_hacen_rojo_el_run(self, tmp_path: Path) -> None:
+        """El contrasalto del anterior: los DECLARADOS si se toleran.
+
+        Sin este test, la primera forma de arreglar el criterio anterior —
+        borrar `SKIPS_PLATAFORMA` de la cuenta — tambien pasaria en
+        verde, y el guard habria pasado de «rechaza cualquier skip» a
+        «rechaza todos», que es peor: dejaria de poder declarar nada.
+        """
+        declarados = cpr._salteados_declarados()
+        informe = _informe(f"pytest: 2715 passed, {declarados} skipped in 240.06s")
+        assert "sg_pipeline_tests_skipped" not in _codigos(
+            cpr.evaluar(informe, _control(tmp_path))
+        ), "un skip correctamente declarado pone rojo el run: la lista no sirve de nada"
 
     def test_el_mensaje_dice_cuantos(self, tmp_path: Path) -> None:
         """Un guard que dice «skipped» sin decir cuantos obliga a mirar a mano.
 
         Es la leccion de WI-104: exigir el CODIGO del problema, no solo que
-        la lista no este vacia.
+        la lista no este vacia. Y ahora el mensaje dice tambien cuantos son
+        los DECLARADOS, para que se vea si la lista y el run divergen.
         """
-        informe = _informe("pytest: 2715 passed, 3 skipped in 240.06s (0:04:00)")
+        declarados = cpr._salteados_declarados()
+        informe = _informe(f"pytest: 2715 passed, {declarados + 1} skipped in 240.06s")
         problemas = cpr.evaluar(informe, _control(tmp_path))
         joined = " ".join(p.mensaje for p in problemas if p.codigo == "sg_pipeline_tests_skipped")
-        assert "3" in joined, joined
+        assert str(declarados + 1) in joined, joined
+        assert str(declarados) in joined, (
+            f"el mensaje no dice cuantos skips estan DECLARADOS ({declarados}), "
+            f"asi que no se puede ver si la lista y el run divergen: {joined}"
+        )
 
-    @pytest.mark.parametrize("n", [1, 2, 3, 17, 2718])
-    def test_cualquier_numero_distinto_de_cero_muerde(self, tmp_path: Path, n: int) -> None:
+    @pytest.mark.parametrize("n", [1, 2, 4, 17, 2718])
+    def test_cualquier_numero_distinto_del_declarado_muerde(self, tmp_path: Path, n: int) -> None:
         """El dominio se comprueba sobre entradas, no sobre el valor de hoy.
 
-        Que hoy haya 0 skips no es que el dominio exista, asi que se le
-        llama con numeros que hoy no aparecen.
+        Los numeros se toman relativos a los DECLARADOS, no a un literal:
+        un parametrize con `3` escrito a mano empezaria a mentir el dia
+        que se declarara un cuarto skip, y el test pasaria por el motivo
+        equivocado —de nuevo el error 32 de WI-113, donde la sonda
+        apuntaba a un texto que ya no existia—.
         """
+        declarados = cpr._salteados_declarados()
+        n = n if n != declarados else declarados + 7
         informe = _informe(f"pytest: 2718-{n} passed, {n} skipped in 240.06s")
         assert "sg_pipeline_tests_skipped" in _codigos(cpr.evaluar(informe, _control(tmp_path)))
 

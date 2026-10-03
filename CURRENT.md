@@ -1,4 +1,82 @@
 # CURRENT — puntero operativo
+> **Bloque 2026-10-03 (B2) — Runtime real, no representativo.**
+> Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
+>
+> **B2 — el repositorio admitía que ciertos escenarios eran
+> *representativos*. Esto los atraviesa, y encontró tres defectos reales.**
+>
+> **Medido antes de escribir nada:** **cero `SIGKILL` en todo `tests/`**,
+> y cero ficheros SQLite escritos por dos programas a la vez. Toda la
+> superficie de crash eran **failpoints** y toda la de concurrencia,
+> **threads**. Y no es lo que parece:
+>
+> - Un **failpoint** hace que el proceso lance. Al lanzar, Python
+>   desenrolla la pila, ejecuta los `finally`, cierra la conexión y
+>   SQLite consolida el journal por rollback. Es un cierre **ordenado**.
+> - Un **thread** comparte el GIL: dos hilos no se ejecutan a la vez,
+>   luego el test mide una interleaving que el sistema real no tiene.
+>
+> **Crash real, con `SIGKILL` desde dentro.** El hijo se mata a sí mismo
+> justo después de la escritura que interesa —así el punto del corte es
+> determinista— y el padre solo mira el disco:
+>
+> | escenario | corte | filas después |
+> |---|---|---|
+> | escribir sin commit | `INSERT` sin confirmar | **0** |
+> | transacción abierta | `BEGIN` + 2 filas | **0** |
+> | commit y muerte | `commit` hecho | **1** |
+>
+> La segunda fila es la que **ningún failpoint puede demostrar**: un
+> rollback deja la base tan limpia como un commit. Solo apagando el
+> proceso se ve que lo no confirmado desaparece entero. 10 tests,
+> mutaciones 4/4.
+>
+> **Concurrencia real, y aquí estaba lo bueno.** Ocho procesos, diez
+> escrituras cada uno, el `Storage` de verdad. **80 de 80, cero
+> perdidas** — después de arreglar tres defectos que no estaban en el
+> runtime sino **en la apertura de la base**:
+>
+> 1. `PRAGMA journal_mode = WAL` sin `busy_timeout` mataba procesos al
+>    construirse: **70 de 80 eventos, diez escrituras perdidas sin dejar
+>    rastro**. El PRAGMA es idempotente, pero toma un lock de escritura
+>    para averiguarlo.
+> 2. `_migrate` era un *check-then-act*: ocho procesos abriendo una base
+>    nueva veían todos `schema_version` vacía y los ocho insertaban.
+>    Ahora `INSERT OR IGNORE` y el `SELECT` desaparece — la constraint
+>    resuelve la carrera, que es lo que manda `AGENTS.md §8`.
+> 3. El `busy_timeout` no cubría el bloqueo **dentro** de la conversión
+>    del journal. Reintento acotado, y si el segundo intento falla la
+>    excepción sube: nunca `except: pass`, que dejaría la base en
+>    `delete` sin que nadie lo supiera.
+>
+> **Un cuarto defecto, en el instrumento de B0.** La UAT real es opt-in
+> por credencial, así que la suite la salta. El criterio de la receta
+> contaba **todos** los skips, de modo que un skip correctamente
+> **declarado** ponía rojo el run: la lista `SKIPS_PLATAFORMA` no
+> servía para nada. La regla ahora tiene tres estados — 0 skips es
+> limpio, los declarados se toleran, cualquier otro número incumple— y
+> se cuenta por AST sobre la lista, con la misma convención que el guard
+> de WI-108.
+>
+> **Proveedor real: NO CERTIFICADO.** La UAT existe y es opt-in
+> (`tests/test_uat_real_provider.py`), pero **no se ejecutó**: necesita
+> credenciales que este entorno no tiene. Declararlo es lo que WI-91
+> hizo con el addendum de H9. Con eso, la frase del H7 —«escenario real
+> completo»— **todavía no puede marcarse como probada literalmente**.
+>
+> **Dónde están los arreglos**, por si hay que volver a ellos: el
+> `INSERT OR IGNORE` que cerró la carrera de la migración, en
+> `src/skillgraph/platform/storage.py:465::_migrate`; y el
+> `busy_timeout` que evita que el `PRAGMA journal_mode = WAL` mate un
+> proceso al construirse, en la clase `Storage` de ese mismo fichero.
+>
+> **Sin release, y por regla**: `derive_semver.py` manda.
+>
+> ---
+>
+> <details>
+> <summary>Bloque anterior (B1)</summary>
+>
 > **Bloque 2026-10-03 (B1) — Cierre de stewardship.**
 > Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
 >

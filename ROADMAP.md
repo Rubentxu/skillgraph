@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B1** — Cierre de stewardship
-> Versión activa `0.22.5.dev0` · último tag `v0.22.5` · 2856 tests · 16/16 UAT
+> Bloque vivo: **B2** — Runtime real, no representativo
+> Versión activa `0.22.5.dev0` · último tag `v0.22.5` · 2875 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -187,6 +187,56 @@ reconcile → exactamente-una-vez*.
 **Concurrencia real.** Procesos separados, SQLite real, locks reales: `run/run`,
 `promotion/promotion`, `reconcile/reconcile`, `read/write`, `cancel/commit`.
 No threads dentro del mismo intérprete.
+
+**RESULTADO, medido el 2026-10-03** (`.pipelinek/b2_crash_child.py`,
+`.pipelinek/b2_concurrency_child.py`): **crash real CERTIFICADO** y
+**concurrencia real CERTIFICADA — con tres defectos de producción
+encontrados por el camino**. Detalle completo en
+`evidence/sddk-b2-2026-10-03.md`.
+
+Lo medido ANTES: **cero `SIGKILL` en todo `tests/`** y cero ficheros SQLite
+escritos por dos programas a la vez. Toda la superficie de crash eran
+failpoints —que lanzan y Python cierra ordenadamente— y toda la de
+concurrencia, threads —que el GIL serializa—.
+
+**Crash real** (`SIGKILL` desde dentro del proceso, comprobado sobre el
+disco): escribir sin commit → **0 filas** · transacción abierta con dos
+filas → **0 filas** · commit y muerte inmediata → **1 fila**.
+`integrity_check ok` en los tres. La que importa es la segunda: un
+failpoint que hace rollback deja la base tan limpia como un commit, así
+que solo apagando el proceso se ve que lo no confirmado desaparece
+**entero**. 10 tests, mutaciones 4/4 con 0 sondas inválidas.
+
+**Concurrencia real** (8 procesos, 10 escrituras cada uno, `Storage`
+real): **80 de 80 escrituras, cero perdidas**, con tres defectos
+arreglados en `platform/storage.py`, **ninguno en el runtime**:
+
+1. `PRAGMA journal_mode = WAL` sin `busy_timeout` mataba procesos al
+   construirse — **70 de 80 eventos, diez escrituras perdidas sin dejar
+   rastro**.
+2. `_migrate` era un *check-then-act* (`SELECT` y, si vacío, `INSERT`) y
+   ocho procesos abriendo una base nueva se volcaban en
+   `UNIQUE(schema_version.version)`. Resuelto con `INSERT OR IGNORE` y
+   borrando el `SELECT`: la constraint resuelve la carrera, que es lo que
+   manda `AGENTS.md §8`.
+3. El `busy_timeout` no cubría el bloqueo **dentro** de la conversión del
+   journal. Resuelto con un reintento acotado que, si falla, deja subir la
+   excepción — nunca `except: pass`, que dejaría la base en `delete` sin
+   que nadie lo supiera.
+
+**Proveedor real: NO CERTIFICADO, y se dice.** La UAT existe, es opt-in y
+está construida (`tests/test_uat_real_provider.py`), pero **no se ejecutó**:
+requiere credenciales que este entorno no tiene. Declararlo es el mismo
+trabajo que WI-91 hizo con el addendum de H9 — sustituir una afirmación
+falsa por otra que nadie ha medido sería el mismo defecto al revés—.
+
+**Lo que el gate de B2 NO puede marcarse todavía.** El bloque pide cinco
+pares de concurrencia —`run/run`, `promotion/promotion`, `reconcile/
+reconcile`, `read/write`, `cancel/commit`— y aquí se cubren
+**escritura/escritura** y **lectura/escritura** a nivel de `Storage`. Los
+pares a nivel de *run* y *promotion* necesitan el harness de la CLI y
+quedan pendientes. La frase del H7 **todavía no puede marcarse como
+probada literalmente**: dos de sus tres patas están, la tercera no.
 
 **Gate B2.** La frase original del H7 —*«escenario real completo con
 trazabilidad, aislamiento y recuperación»*— se marca **probada literalmente**,

@@ -61,6 +61,7 @@ hacer la receta inejecutable donde no puede ser ejecutable.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sqlite3
@@ -70,6 +71,7 @@ from pathlib import Path
 from typing import Final
 
 ROOT: Final = Path(__file__).resolve().parent.parent
+REPO_ROOT: Final = ROOT
 
 #: Resumen de pytest tal y como lo emite `scripts/coverage.sh`: la línea
 #: que separa una ejecución real de un veredicto cacheado. `N passed in Xs`.
@@ -288,6 +290,54 @@ def _control_incompleto(control: Path) -> tuple[str, ...]:
     return tuple(n for n in CONTROL_ROOT if not (control / n).is_dir())
 
 
+def _salteados_declarados() -> int:
+    """Cuantos skips el repo ha declarado, y por tanto tolera.
+
+    **POR QUE EXISTE, MEDIDO en B2.** `SKIPS_PLATAFORMA` se introdujo
+    para que un skip *declarado* no fuera un fallo escondido, y el
+    criterio de abajo decia lo que el propio mensaje del incumplimiento
+    decia: «los skips de plataforma estan declarados en
+    `SKIPS_PLATAFORMA`; este no lo es». O sea: la intencion declarada es
+    tolerar los declarados y rechazar los que no. El codigo, sin
+    embargo, contaba TODOS los skips, de modo que un skip correctamente
+    declarado hacia fallar el run igual: la lista no servia para nada.
+
+    B2 lo toco al anadir la UAT real, que es opt-in por credencial y
+    esta declarada. El run salia con `2871 passed, 3 skipped` y el
+    criterio ponia rojo un run que no tenia ni un skip escondido.
+
+    El numero sale de los ficheros declarados, contados por AST con la
+    misma funcion que usa el guard de WI-108, de modo que las dos
+    medidas no pueden divergir: si un `skipif` se declara y el codigo no
+    lo encuentra, o al reves, el total sale descuadrado y el criterio
+    vuelve a poner rojo.
+    """
+    total = 0
+    for relativo in SKIPS_PLATAFORMA:
+        ruta = REPO_ROOT / relativo
+        if not ruta.exists():
+            continue
+        try:
+            arbol = ast.parse(ruta.read_text(encoding="utf-8"))
+        except SyntaxError:  # pragma: no cover
+            continue
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Call):
+                continue
+            func = nodo.func
+            nombre = (
+                func.attr
+                if isinstance(func, ast.Attribute)
+                else getattr(func, "id", "")
+            )
+            # `pytest.mark.skipif(...)` es un `skipif` de plataforma; un
+            # `skip(...)` en cuerpo es ejecucion. Los dos cuentan, porque
+            # los dos son tests que no se ejecutan.
+            if nombre in {"skipif", "skip"}:
+                total += 1
+    return total
+
+
 def resumen_sin_skips(resumen: str | None) -> bool:
     """¿Este resumen de pytest declara cero tests sin ejecutar?
 
@@ -402,18 +452,43 @@ def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
         )
 
     salteados = _conteo_salteados(informe.resumen_pytest)
-    if salteados:
+    declarados = _salteados_declarados()
+    # TRES estados, no dos. `0 != 3` haria fallar un run LIMPIO —el
+    # mejor caso posible— porque la lista declara tres skips que en ese
+    # repo todavia no se han materializado. La regla es:
+    #
+    #   0 skips                  -> limpio, cumple siempre
+    #   skips == los declarados  -> cumple (son los conocidos)
+    #   cualquier otro numero     -> incumple
+    #
+    # El tercer caso incluye `mas que los declarados` —un skip nuevo y
+    # escondido, que es el defecto que este criterio existe para cazar—
+    # y `menos que los declarados` —alguien borro un skip declarado,
+    # que es la otra forma de que un test deje de ejecutarse—. En cuanto
+    # el numero no es el que la lista dice, lista y run han divergido.
+    if salteados and salteados != declarados:
+        if salteados > declarados:
+            detalle = (
+                f"{salteados - declarados} de ellos NO estan declarados en "
+                "SKIPS_PLATAFORMA"
+            )
+        else:
+            detalle = (
+                f"la lista declarada espera {declarados} y el run trae "
+                f"{salteados}: alguien borro un skip declarado, que es la "
+                "otra forma de que un test deje de ejecutarse"
+            )
         problemas.append(
             Problema(
                 "sg_pipeline_tests_skipped",
-                f"el run {rid} ejecuto la suite con {salteados} "
-                "test(s) sin ejecutar (skipped o xfailed) en "
-                f"{informe.resumen_pytest!r}. AGENTS.md 6.2 prohibe "
-                "pytest.skip para esconder fallos y dice que un skip por "
-                "falta de artefacto es el mismo defecto con otra forma: un "
-                "test que no se ejecuta no mide nada y el run pasa en verde "
-                "igual. Los skips de plataforma estan declarados en "
-                "SKIPS_PLATAFORMA; este no lo es",
+                f"el run {rid} ejecuto la suite con {salteados} test(s) sin "
+                f"ejecutar (skipped o xfailed) en {informe.resumen_pytest!r}; "
+                f"{detalle}. AGENTS.md 6.2 prohibe pytest.skip para esconder "
+                "fallos y dice que un skip por falta de artefacto es el "
+                "mismo defecto con otra forma: un test que no se ejecuta no "
+                "mide nada y el run pasa en verde igual. Los skips de "
+                f"plataforma estan declarados en SKIPS_PLATAFORMA "
+                f"({declarados} en este repo).",
             )
         )
 
