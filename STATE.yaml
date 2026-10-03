@@ -558,8 +558,8 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 2677   # re-medido 2026-10-03 (bloque WI-103) en la CI canonica run 9db8a440: 2677 passed, 0 skipped. +4 sobre 2672+1skip = el gate de `main` como hotspot deja de depender de un informe fechado: 1 sobre el arbol real, 1 contraejemplo que pone un main con cc>=20 y exige que la medicion lo vea, 1 que exige por AST que el helper no pueda saltarse, 1 que comprueba que no escribe en audits/.
-  passed: 2677
+  total: 2684   # bloque WI-104: +7 sobre 2677 = 6 contraejemplos del verificador de citas (anclaje, desalineacion, simbolo ausente, simbolo en otro fichero, prosa de docstring, mensaje que dice donde esta) y 1 que verifica el bloque vivo de CURRENT.md. El conteo lo confirma el pre-commit, que corre la suite entera.
+  passed: 2684
   duration_s: 231.72   # MEDIDO en la CI canonica de WI-103 (stage unit-tests, recipe de cobertura), run 9db8a440. pytest a pelo son ~130 s: el delta es el coste de instrumentar los subprocesos.
   package_version: "0.20.5.dev0"   # trabajo post-release v0.20.5 (AGENTS 12). Este bloque sigue en local y SIN PUSH.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
@@ -1143,6 +1143,10 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.20.5
+      fecha: 2026-10-03
+      sha: "5ffd1ab402c141c4847155b36795bad88717db03"
+      nota: "WI-104: la cita de CURRENT.md no decia a que apuntaba. El guard aceptaba cualquier linea que existiera —resolubilidad, no verdad— y por eso dio por buenas las lineas 352 y 479 que yo escribi en WI-102 cuando las reales eran 421 y 589; 352 y 479 son prosa dentro de un docstring y 421 y 589 son lineas def. Medido con 5 casos: el predicado anterior acepta las dos falsas, el de sitio de definicion las separa con cero errores. El formato pasa a ruta/fichero.py:LINEA::simbolo, que es lo que hace la afirmacion falsable: con solo el numero no hay manera de distinguir «he abierto el fichero» de «he escrito un numero que me sonaba». El simbolo se resuelve en el AST del fichero que la cita nombra y LINEA tiene que caer dentro de su definicion; cuando la cita envejece el error dice donde esta el simbolo ahora. Mutaciones 6/6, incluida M6 sobre el CURRENT.md real, pero la primera pasada dio 3/6 porque tres contraejemplos pasaban por el motivo equivocado. 2684 passed, 0 skipped."
     - tag: v0.20.4
       fecha: 2026-10-03
       sha: "a883fd39496e523de2d124f8b56da9ebe79f01fd"
