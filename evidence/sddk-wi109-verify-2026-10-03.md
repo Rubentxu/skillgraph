@@ -325,9 +325,64 @@ skipped, los cinco contratos exigibles en verde. Lo que sigue es la
 etapa que verifica el estado final, y necesita un run que encuentre
 delante.
 
-### Run 3
+### Run 3 — `da0203d9-cd58-4c44-99a3-bec852ae076e` (código VERDE, veredicto FAILURE)
 
-_(verificado por `run_id` al terminar)_
+```
+pytest: 43 failed, 2696 passed, 15 errors in 233.67s
+```
+
+**Estos 43 fallos no son de WI-109 y no se reproducen.** La suite a
+pelsobre el árbol en verde:
+
+```
+2754 passed in 145.96s
+```
+
+**La causa es la reutilización del `run_id`**, y es un modo de fallo ya
+documentado que se repitió en este bloque. «El más reciente por
+`sequence`» no es «el más reciente por fecha»: `a6bce788` (2026-10-02
+21:52, `2636 passed`) apareció como último y su verificador dio `OK,
+8/8`. Era un run de ayer. Sólo filtrando por `occurred_at` de hoy se
+encuentra el run real.
+
+**Se necesita un filtro de fecha al leer el journal.** Es la tercera vez
+que la serie se tropieza con esto (SESSION-JOURNAL 15/16) y aquí costó
+dos runs enteros de 4 minutos cada uno.
+
+### Run 4 — `a6c81d08-7d76-4256-a48f-b7ab146a973d` (código VERDE, veredicto FAILURE)
+
+```
+discover-repo  success      coverage-floors  success
+sync-deps      success      package-build    success
+unit-tests     success      ci-parity        success
+                            lint             success
+                            evidence         FALLO
+```
+
+Siete etapas de código en `success`, `2754 passed in 254.51s`, y la
+octava falla porque **mide el run 3**, que había fallado.
+
+### LA PROPIEDAD QUE ESTO DESTAPA
+
+La etapa `evidence` verifica el run **anterior**, porque el en curso aún
+no tiene `RunFinished` que leer. Consecuencia medida en este bloque:
+
+> **Un fallo en la etapa `evidence` se propaga al run siguiente, y un
+> código verde puede acabar en `Pipeline finished with FAILURE` hasta
+> dos runs después.**
+
+No es un defecto del bloque ni del guard: es cómo está diseñado, y el
+propio mensaje lo avisa («el `run_id` se reutiliza entre replays»). Pero
+tiene un coste que no estaba escrito en ningún sitio: **el veredicto
+`FAILURE` de un run no dice nada sobre su propio código**, y leerlo como
+si lo dijera es el error. Hay que leer las etapas, no el veredicto.
+
+Es también la razón por la que hacen falta dos runs para certificar un
+estado: el primero mide el estado anterior, y el segundo mide al primero.
+
+### Run 5
+
+_(verificado por `run_id` + `occurred_at` al terminar)_
 
 
 ## 10. Límites declarados
