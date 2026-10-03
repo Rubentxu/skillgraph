@@ -12141,3 +12141,13 @@ salidas tienen nombre y se distinguen:
     paquete nuevo al 0 % da verde» es un titular; con el paquete sin
     versionar, la suite daba 1 failed, y escribir solo lo primero habría
     sido escribir la mitad del dato. La medición va con su contrafactual.
+
+17. **Contar los caracteres del subject a ojo, cuatro veces seguidas.** En
+    este bloque, cuatro commits pasaron de 72 (75, 74, 75, 81) y hubo que
+    enmendar los cuatro. El cuarto lo demostro de la manera mas redonda
+    posible: el commit que anota este error como «tres veces» es el que
+    lo repite. El protocolo de `/home/rubentxu/AGENTS.md` pone el
+    límite en 72 y el barrito de control es `awk '{print length($0)}'`
+    **antes** de confirmar, no después de enmendar. Es un hábito, no un
+    accidente: la cifra se estimaba mentalmente en vez de medirse, que es
+    exactamente lo que este bloque va contando en todas partes.

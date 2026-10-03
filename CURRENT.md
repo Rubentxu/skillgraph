@@ -1,7 +1,7 @@
 # CURRENT — puntero operativo
 
-> **Bloque 2026-10-03 (decimonovena tanda) — WI-107, en curso de cierre.**
-> Versión activa `0.21.0.dev0`; último tag `v0.21.0`. 2718 passed, **0 skipped**.
+> **Bloque 2026-10-03 (decimonovena tanda) cerrado — WI-107, release `v0.21.1`.**
+> Versión activa `0.21.1.dev0`; último tag `v0.21.1`. 2718 passed, **0 skipped**.
 >
 > **WI-107 — la lista que se salva cambiando de eje no deja de ser una lista.**
 > Novena vía de la serie «qué declara el repo que nada comprueba», y la
@@ -65,7 +65,12 @@
 > que pierde el parametrize de WI-94, que pasa de ocho paquetes a uno).
 > Mutaciones 8/8. Run canónico `332e09e6` verificado por `run_id`.
 >
-> **Sin push**: 147 commits sin publicar, `origin/main` en `0ebbd58`.
+> **Release `v0.21.1`**: PATCH derivado con `scripts/derive_semver.py`
+> (`b/f/x/n/d 0/0/2/10/0`). Commit de release `3f28ba0`, etiqueta anotada
+> sobre él, post-release `91f901d` con el sha real en `release.releases[0]`
+> y la versión activa de vuelta a `.dev0`.
+>
+> **Sin push**: 150 commits sin publicar, `origin/main` en `0ebbd58`.
 
 ---
 ---
