@@ -682,3 +682,222 @@ class TestElNucleoNoImportaAdapters:
                     "ya conoce una capability definida en un test, que es "
                     "justo lo que este gate tiene que demostrar que NO pasa."
                 )
+
+
+class TestLaSenalDeFrescuraPorElCaminoQueSiLlega:
+    """La otra mitad de la misma pregunta, y SI depende de una decision.
+
+    `TestElHandoffQueElAdapterRecibe` fija que `stale` **no** llega al
+    Adapter por el camino del runtime. Este fija que **si** llega por el
+    camino de la CLI, que es el otro productor del mismo campo.
+
+    MEDIDO con Storage real (`.pipelinek/b3_stale_measure.py`):
+
+    ```
+    best_effort : caps=('stale',)  hash=e1f384db63feab26...
+    strict      : StaleKnowledgeError  (no hay handoff)
+    ```
+
+    Y lo que ve el operador es literalmente esto:
+
+    ```
+    ## Capabilities
+    -stale
+    ```
+
+    O sea, la palabra `stale` —un estado de frescura, un valor de
+    `FreshnessState`— viaja en un campo llamado `capabilities`, entra en
+    el hash firmado y se imprime bajo un encabezado que dice
+    Capabilities. **Ninguno de los tres consumidores lo distingue de una
+    capability.**
+
+    Este test fija el comportamiento ACTUAL, con su motivo, en vez de
+    afirmar el deseado: cual es el deseado depende de si mover `stale`
+    a su propio campo es aceptable, y eso cambia el hash firmado de todo
+    handoff que hoy lo lleva. Moverlo NO pierde informacion
+    (`knowledge.included` ya lleva el recurso con su `stale`), pero
+    cambia `context_hash`, que es ruptura de datos y es materia de B8.
+    """
+
+    def _proyecto_con_claim_stale(self) -> Any:
+        """Source + Entity + Claim REALES, con la Claim marcada stale.
+
+        No un doble. La primera version de la medicion sustituyo el
+        `KnowledgeController` por un doble con un `_resolve_selectors`
+        inventado, devolvio `capabilities=()` en las dos policies, y aun
+        asi escribio una conclusion. El metodo que `compile_handoff`
+        llama de verdad es `_resolve_one_selector` y sus tres ramas, y el
+        doble no implementaba ninguna. Un instrumento que no produce el
+        caso no mide el caso, y lo que no sale de la ejecucion no es un
+        dato.
+        """
+        from skillgraph.knowledge.graph import Claim, Entity, Source
+        from skillgraph.knowledge.knowledge_controller import KnowledgeController
+
+        tmp = tempfile.TemporaryDirectory()
+        self._tmp = tmp
+        storage = Storage(Path(tmp.name) / "stale.sqlite")
+        storage.register_source(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            source=Source(
+                source_id="src-b3",
+                kind="local_file",
+                content_hash="b3stale",
+                locator={"path": "src/stale.py"},
+                git_commit_sha=None,
+                git_tree_sha=None,
+                working_tree_status=None,
+                checked_at="2026-01-01T00:00:00Z",
+                freshness="fresh",
+            ),
+        )
+        storage.upsert_entity(
+            tenant_id=TENANT,
+            project_id=PROJECT,
+            entity=Entity(entity_id="ent-b3", kind="file", stable_key="src/stale.py"),
+        )
+        claim_id = KnowledgeController(
+            knowledge=storage, tenant_id=TENANT, project_id=PROJECT
+        ).record_claim(
+            claim=Claim(
+                claim_id="",
+                subject_entity_id="ent-b3",
+                predicate="line_count",
+                object_literal=42,
+                source_id="src-b3",
+                evidence_ids=(),
+                extraction_method="manual",
+                extractor_version="b3-test/0.1",
+                checked_at_revision="rev-1",
+            )
+        )
+        storage.mark_claims_stale(tenant_id=TENANT, project_id=PROJECT, claim_ids=(claim_id,))
+        return storage
+
+    def _handoff(self, storage: Any, policy: str) -> Any:
+        from skillgraph.core.recipe import ContextRecipe, ObligatorySelector
+        from skillgraph.knowledge.context_controller import ContextController
+        from skillgraph.knowledge.knowledge_controller import KnowledgeController
+
+        ctx = ContextController(
+            knowledge=KnowledgeController(knowledge=storage, tenant_id=TENANT, project_id=PROJECT)
+        )
+        return ctx.compile_handoff(
+            recipe=ContextRecipe(
+                recipe_ref="recipe-b3/v1",
+                obligatory=(ObligatorySelector(kind="entity", value="ent-b3", label="la entidad"),),
+                freshness_policy=policy,
+            ),
+            run_id="r-b3",
+            node_execution_id="ne-b3",
+            definition_kind="ActionNode",
+            definition_name="n1",
+        )
+
+    def test_la_claim_stale_produce_el_marcador(self) -> None:
+        """Con `best_effort` y contenido stale, `capabilities` lo lleva."""
+        storage = self._proyecto_con_claim_stale()
+        assert "stale" in self._handoff(storage, "best_effort").capabilities
+        storage.close()
+
+    def test_strict_falla_antes_y_no_llega_a_capabilities(self) -> None:
+        """Con `strict`, ni hay handoff: la Claim stale revienta antes.
+
+        Importa porque delimita el marcador: solo existe cuando la
+        frescura ya se ha relajado a proposito.
+        """
+        from skillgraph.core.errors import StaleKnowledgeError
+
+        storage = self._proyecto_con_claim_stale()
+        with pytest.raises(StaleKnowledgeError):
+            self._handoff(storage, "strict")
+        storage.close()
+
+    def test_el_marcador_entra_en_el_hash_firmado(self) -> None:
+        """Y por tanto moverlo cambia `context_hash`.
+
+        Es la razon por la que la decision NO es cosmetica: no es «poner
+        el marcador en un sitio mas bonito», es «cambiar el hash de todo
+        handoff que hoy lo lleva». Lo que NO se pierde es informacion:
+        `knowledge.included` ya lleva el recurso con su `stale`.
+        """
+        storage = self._proyecto_con_claim_stale()
+        h = self._handoff(storage, "best_effort")
+        assert h.capabilities == ("stale",)
+        assert "stale" in str(h.to_dict()["capabilities"])
+        storage.close()
+
+    def test_el_prompt_lo_imprime_bajo_un_encabezado_que_dice_capabilities(
+        self,
+    ) -> None:
+        """El efecto visible, y el que un Adapter real leeria.
+
+        No se afirma que el LLM lo interprete mal: eso haria falta un
+        proveedor real, y B2 dejo escrito que esa pata NO se certifico.
+        Lo que se afirma es lo comprobable — que la palabra llega, y bajo
+        que encabezado —, y el mensaje de fallo dice que este es un
+        cambio de contrato si alguien lo mueve.
+        """
+        from skillgraph.runtime.http_adapter import _build_prompt
+
+        storage = self._proyecto_con_claim_stale()
+        h = self._handoff(storage, "best_effort")
+        prompt = _build_prompt(h)
+        assert "## Capabilities" in prompt
+        assert "- stale" in prompt, (
+            "el marcador ya no se imprime como una capability. Es un "
+            "cambio de CONTRACTO —mueve el hash firmado de todo handoff "
+            "que hoy lo lleva—, y hay que decidirlo a proposito, no "
+            "dejarlo salir de un refactor. Ver la cabecera."
+        )
+        storage.close()
+
+
+class TestElMarcadorSoloSaleDondeToca:
+    """La guarda de `best_effort`, que es lo que delimita el marcador.
+
+    **POR QUE ESTE TEST ESTA EN B3 Y NO EN `test_context_controller.py`.**
+    Porque hay un test ahi que ya lo afirma —`test_stale_in_strict_returns_empty`—
+    y aun asi la mutacion que quita la guarda NO la cazaba el gate de B3:
+    el harness solo corre los ficheros de este bloque, asi que un test
+    que vive en otro sitio no mide nada aqui.
+
+    Un guard que depende de que OTRO fichero se mantenga como esta no es
+    un guard: es el nombre de un test ajeno escrito en un docstring. Si la
+    propiedad es de B3, su test vive en B3.
+    """
+
+    def test_strict_no_emite_el_marcador_aunque_haya_contenido_stale(self) -> None:
+        from skillgraph.knowledge.context_controller import (
+            CompiledResource,
+            build_capabilities,
+        )
+
+        stale = CompiledResource(
+            resource_kind="claim",
+            resource_namespace="claim:c1",
+            resource_name="c1",
+            body={"stale": True, "claim_id": "c1"},
+        )
+        assert build_capabilities((stale,), policy="best_effort") == ("stale",)
+        assert build_capabilities((stale,), policy="strict") == (), (
+            "el marcador se emite aunque la policy sea strict. Eso lo hace "
+            "aparecer donde no toca, y quien lo lea no puede distinguir "
+            "«se relajo la frescura» de «el marcador no aplica»."
+        )
+
+    def test_sin_contenido_stale_no_hay_marcador_en_ninguna_policy(self) -> None:
+        from skillgraph.knowledge.context_controller import (
+            CompiledResource,
+            build_capabilities,
+        )
+
+        fresco = CompiledResource(
+            resource_kind="claim",
+            resource_namespace="claim:c2",
+            resource_name="c2",
+            body={"stale": False, "claim_id": "c2"},
+        )
+        assert build_capabilities((fresco,), policy="best_effort") == ()
+        assert build_capabilities((fresco,), policy="strict") == ()

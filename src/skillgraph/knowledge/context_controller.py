@@ -145,6 +145,29 @@ def build_capabilities(
 
     Si policy=='best_effort' y algun included tiene body['stale']=True
     -> ('stale',). En caso contrario -> tuple vacio.
+
+    ── LO QUE DEVUELVE NO ES SIEMPRE UNA CAPABILITY. ──
+
+    `'stale'` es un valor de `FreshnessState`
+    (`core/runtime_types.py::FreshnessState`), no un tipo de capacidad.
+    Sale de aqui, entra en el hash firmado de `Handoff`, y el Adapter lo
+    imprime bajo un encabezado que dice «## Capabilities». Medido con
+    Storage real (`.pipelinek/b3_stale_measure.py`):
+
+        best_effort -> capabilities=('stale',)
+        strict      -> StaleKnowledgeError (el handoff ni se construye)
+
+    **DECIDIDO EL 2026-10-03: se queda asi, y es deuda declarada, no
+    descuido.** Sacarlo de `capabilities` cambia `context_hash` de todo
+    handoff que hoy lo lleva, y el hash firmado es ruptura de datos:
+    materia de B8. El estado de frescura YA viaja por otra via
+    (`HandoffKnowledge.included` lleva el recurso con su `stale`), asi
+    que moverlo no perderia informacion — solo moveria el hash.
+
+    El guard que vigila el comportamiento actual, en las dos
+    direcciones, es
+    `tests/test_b3_capability_kernel.py::TestLaSenalDeFrescuraPorElCaminoQueSiLlega`
+    (y su hermano, que fija que por el camino del runtime NO llega).
     """
     if policy != "best_effort":
         return ()

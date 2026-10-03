@@ -165,6 +165,40 @@ def _build_prompt(handoff: Handoff) -> str:
     parts.append(f"- budget: {handoff.execution.budget}")
     parts.append("")
     parts.append("## Capabilities")
+    # ── DEUDA CONOCIDA, DECIDIDA, MEDIDA. NO ES UN OLVIDO. ──
+    #
+    # `handoff.capabilities` puede contener `'stale'`, que NO es una
+    # capability: es un valor de `FreshnessState`
+    # (`core/runtime_types.py::FreshnessState`), o sea un estado de
+    # frescura. Medido con Storage real y una Claim real
+    # (`.pipelinek/b3_stale_measure.py`):
+    #
+    #     best_effort -> capabilities=('stale',)
+    #     strict      -> StaleKnowledgeError (no hay handoff)
+    #
+    # O sea que este prompt puede emitir, literalmente:
+    #
+    #     ## Capabilities
+    #     - stale
+    #
+    # que le dice al modelo que TIENE una capacidad llamada `stale`.
+    # Eso es una afirmacion falsa en el prompt, y es lo que B3 vino a
+    # arreglar en `graph_expansion`; aqui sigue en pie.
+    #
+    # LA DECISION (2026-10-03): se deja como esta. Sacarlo de
+    # `capabilities` cambia `context_hash` de todo handoff que hoy lo
+    # lleva, y el hash firmado es ruptura de datos, materia de B8. La
+    # deuda queda escrita, no cerrada: es el mismo veredicto que B1 dio
+    # a sus dos deudas, con el motivo por escrito.
+    #
+    # LO QUE NO SE AFIRMA: que el modelo lo interprete mal. Eso haria
+    # falta un proveedor real, y B2 dejo escrito que la UAT con
+    # proveedor NO se certifico. Lo que se afirma es lo comprobable: la
+    # palabra llega, y llega bajo este encabezado.
+    #
+    # Si algun dia se mueve, el guard que lo vigila es
+    # `tests/test_b3_capability_kernel.py::TestLaSenalDeFrescuraPorEl
+    # CaminoQueSiLlega`, y su fallo dice que es un cambio de contrato.
     for cap in handoff.capabilities:
         parts.append(f"- {cap}")
     parts.append("")
