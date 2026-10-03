@@ -21,7 +21,7 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from skillgraph.core.errors import ValidationError
+from skillgraph.core.errors import IdempotencyError, ValidationError
 
 # Re-exports: los componentes extraidos en WI-56 (ADR-0016 cortes 2-5)
 # y sus mappers siguen importando estos DTOs **desde** `storage` en vez
@@ -523,31 +523,47 @@ class Storage(
 
         NO llama `cur.connection.commit()` ni `with self._conn:`. El
         caller controla la transaccion.
+
+        **WI-114: aqui es donde se traduce el error del adapter.** El
+        `UNIQUE(event_id)` de la tabla es lo que detecta el duplicado —
+        la idempotencia vive en el constraint, no en codigo — pero el
+        QUE sale de aqui lo decide este metodo, y no cada llamador. Un
+        `sqlite3.IntegrityError` que escapara no es `SkillGraphError`,
+        luego atraviesa el `except` que traduce a exit code y le llega
+        al usuario como Traceback. Los cinco caminos de escritura que
+        llamaban a este helper se ocupaban de traducirlo cada uno por su
+        cuenta, y esa era una convencion, no una garantia: bastaba un
+        llamador nuevo sin `try` para que la frontera se abriera.
         """
         import json as _json
 
-        cur.execute(
-            """
-            INSERT INTO runtime_events
-                (event_id, tenant_id, project_id, event_kind, run_id,
-                 resource_ref, causation_id, correlation_id,
-                 payload_json, timestamp, schema_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                event.event_id,
-                event.tenant_id,
-                event.project_id,
-                event.event_kind,
-                event.run_id,
-                event.resource_ref,
-                event.causation_id,
-                event.correlation_id,
-                _json.dumps(dict(event.payload), ensure_ascii=False),
-                event.timestamp,
-                event.schema_version,
-            ),
-        )
+        try:
+            cur.execute(
+                """
+                INSERT INTO runtime_events
+                    (event_id, tenant_id, project_id, event_kind, run_id,
+                     resource_ref, causation_id, correlation_id,
+                     payload_json, timestamp, schema_version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.event_id,
+                    event.tenant_id,
+                    event.project_id,
+                    event.event_kind,
+                    event.run_id,
+                    event.resource_ref,
+                    event.causation_id,
+                    event.correlation_id,
+                    _json.dumps(dict(event.payload), ensure_ascii=False),
+                    event.timestamp,
+                    event.schema_version,
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise IdempotencyError(
+                f"evento duplicado: UNIQUE(event_id) violada para {event.event_id!r}"
+            ) from exc
 
     def _atomic_state_and_event(
         self,
@@ -566,8 +582,15 @@ class Storage(
         ``docs/architecture/h9-plan-b-atomicity-characterization.md``
         §3 (grieta H9-Plan-B) y §5 (estrategia).
 
-        Re-raise como ``IdempotencyError`` cuando el UNIQUE sobre
-        ``runtime_events.event_id`` se viola (UAT-07, replay-safe).
+        Un ``event_id`` duplicado sale como ``IdempotencyError``
+        (UAT-07, replay-safe). **WI-114:** la traduccion la hace
+        ``_insert_event_in_tx``, que es donde ocurre el INSERT, y este
+        metodo solo se asegura el ROLLBACK. Antes de WI-114 este
+        docstring decia «Re-raise como ``IdempotencyError``» y aqui no se
+        traducia nada: lo hacia cada uno de los cinco llamadores, por
+        convencion y sin ningun guard. Un docstring que promete una
+        garantia que su cuerpo no da es una promesa que el codigo no
+        cumple.
         """
         try:
             self._conn.execute("BEGIN")

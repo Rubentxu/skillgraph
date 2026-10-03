@@ -494,8 +494,10 @@ class SqliteRunRepository:
                 event=event,
                 exec_sql=(sql, params),
             )
-        except sqlite3.IntegrityError as exc:
-            raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
+        except IdempotencyError as exc:
+            raise IdempotencyError(
+                f"evento duplicado en start_node_execution_atomically: {event.event_id}"
+            ) from exc
 
     def update_node_execution_handoff(
         self,
@@ -549,7 +551,7 @@ class SqliteRunRepository:
             self._storage._insert_event_in_tx(cur, event_completed)
             self._storage._insert_event_in_tx(cur, event_evidence)
             self._conn.execute("COMMIT")
-        except sqlite3.IntegrityError as exc:
+        except IdempotencyError as exc:
             with suppress(sqlite3.Error):
                 self._conn.execute("ROLLBACK")
             raise IdempotencyError(
@@ -589,8 +591,10 @@ class SqliteRunRepository:
                 event=event,
                 exec_sql=(sql, params),
             )
-        except sqlite3.IntegrityError as exc:
-            raise IdempotencyError(f"evento duplicado: {event.event_id}") from exc
+        except IdempotencyError as exc:
+            raise IdempotencyError(
+                f"evento duplicado en mark_node_failed_atomically: {event.event_id}"
+            ) from exc
 
     def create_run(
         self,
@@ -695,7 +699,7 @@ class SqliteRunRepository:
                 event=event,
                 exec_sql=(sql, params),
             )
-        except sqlite3.IntegrityError as exc:
+        except IdempotencyError as exc:
             raise IdempotencyError(
                 f"evento duplicado en create_run_atomically: {event.event_id}"
             ) from exc
@@ -749,7 +753,7 @@ class SqliteRunRepository:
                 event=event,
                 exec_sql=(sql, params),
             )
-        except sqlite3.IntegrityError as exc:
+        except IdempotencyError as exc:
             raise IdempotencyError(
                 f"evento duplicado en transition_run_state_atomically: {event.event_id}"
             ) from exc
