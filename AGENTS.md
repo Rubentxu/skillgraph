@@ -1424,3 +1424,80 @@ package metadata defectuosa (`__version__ = "0.7.0.dev0"`). La
 release correctiva es `v0.14.1`. SemVer no contempla reescritura
 retroactiva de versiones publicadas, y la provenance histórica
 debe preservarse como está.
+
+
+### La lista que se salva cambiando de eje no deja de ser una lista (WI-107)
+
+Novena vía de la serie «qué declara el repo que nada comprueba», y la
+tercera vez que la **misma idea** se salva de sí misma cambiando de forma.
+
+`AGENTS.md §6.3` declara suelos de cobertura por módulo. La historia del
+guard que los comprueba son tres listas, cada una creyendo que era la
+última:
+
+| | La lista | Lo que dejaba fuera |
+|---|---|---|
+| WI-93 | 21 módulos escritos a mano | todo menos `runtime/` |
+| WI-94 | 8 prefijos de paquete escritos a mano | un paquete **nuevo** |
+| WI-107 | ninguna | — |
+
+El docstring de WI-94 afirmaba, con toda la razón que da un docstring
+recién escrito:
+
+> «Una sola fuente, sin lista que mantener, y por eso no se puede olvidar
+> uno.»
+
+Es falso. El suelo pasó a declararse por paquete, y el **conjunto de
+paquetes** seguía siendo un diccionario escrito a mano. Medido el
+2026-10-03, con un paquete nuevo cuyo módulo nadie importa y que ya está
+versionado en git:
+
+```
+pytest                    2709 passed in 234.75s
+check_coverage_floors.py  exit 0, «todos los suelos se cumplen»
+cobertura de oracular.py  0 %  (18 sentencias, 10 ramas, 0 cubiertas)
+suelo global              94.85 %   (fail_under = 80)
+```
+
+El paquete se midió **dos veces** y la segunda es la que se cita, porque
+la primera daba un resultado que no era el que se iba a escribir. Con el
+paquete sin versionar, la suite daba `1 failed`:
+`sg_build_sdist_no_versionado` (WI-97) lo delata, porque un sdist no
+puede llevar lo que git no versiona. Ese guard lo ve, pero por **otra**
+propiedad y con **otro** mensaje, y un paquete nuevo se versiona: no es el
+contrato de §6.3, es otra puerta que se abre por casualidad. La versión
+sin versionar habria producido una afirmación más fuerte y falsa —«el repo
+entero es ciego ante un paquete sin suelo»— y esa es la que no se escribe.
+
+**La regla que sale de aquí.** Una lista se puede eliminar, o se puede
+declarar y vigilar. Lo que no se puede es creer que al cambiarle el eje
+deja de ser una lista:
+
+* Si el dato **se deduce del árbol**, no se escribe. `SUELO_POR_DEFECTO =
+  90` alcanza a todo módulo que cuelgue de un subdirectorio de
+  `src/skillgraph/`, paquete nuevo incluido. Lo único escrito son las
+  **desviaciones**, que son datos: `cli/` al 70 % y `platform/paths.py`
+  al 60 %. De ocho entradas quedan dos, y las dos son el contrato diciendo
+  algo que el código no puede deducir.
+* Si el dato **no se deduce** (un suelo distinto, una excepción), se
+  declara, y declararlo incluye vigilar que lo declarado exista. Por eso la
+  aserción de WI-94 cambió de objeto en vez de desaparecer: vigilaba que
+  los ocho paquetes declarados tuvieran módulos, y con suelo por defecto
+  eso es tautológico —los paquetes se derivan del árbol—, mientras que lo
+  que sí puede quedarse viejo es la desviación.
+
+Y el guard del documento: `§6.3` **no enumera módulos**. La enumeración
+anterior («errors, bricks, parser, registry, storage, runtime, handoff,
+agent, workflow, runcontroller») era una fuente de verdad más, y ya estaba
+vieja: `runtime` no es un módulo sino un paquete, `runtime.py` no existe, y
+nueve de los diez vivían fuera de `core/`.
+
+**La mutación que no cazaba, y por qué el harness cambió.** Primera pasada
+del harness: 6/8, con `m2` sobrevivida. Segunda pasada del **mismo**
+código: 7/8, con `m2` cazada. Una mutación que a veces sobrevive no es un
+guard que no muerde: es un experimento que no sabe qué midió. Con
+`PYTHONDONTWRITEBYTECODE=1` y una **sonda por mutación** —una expresión que
+tiene que cambiar de valor con el código ya mutado— las tres salidas
+quedan separadas y con nombre: *cazada*, *inválida* (la sonda no cambió, la
+mutación no degradaba nada) y *el entorno no vio la mutación*. 8/8 en tres
+pasadas consecutivas.

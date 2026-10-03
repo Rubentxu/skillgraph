@@ -12055,3 +12055,89 @@ que no existe; esconderlo sería mentir sobre la cobertura.
     versión de este bloque comparaba contra la herramienta y estaba en
     verde, y aun así cuatro mutaciones la atravesaban. Estar verde no es
     estar verificado, y la diferencia se ve exactamente en las mutaciones.
+
+---
+
+## 2026-10-03 — WI-107: la lista de paquetes, y por qué la suite verde no era el fallo
+
+Novena vía de la serie «qué declara el repo que nada comprueba», y la
+tercera vez que la misma idea se salva de sí misma cambiando de eje.
+
+`AGENTS.md §6.3` declara suelos de cobertura por módulo. WI-93 lo
+implementó con una lista de 21 módulos; WI-94 la cambió por un suelo por
+prefijo de paquete, con ocho entradas escritas a mano, y su docstring
+afirmaba que con eso «no se puede olvidar uno».
+
+### Lo que se midió, y por qué se midió dos veces
+
+Con un paquete nuevo (`telepatia/`), con código que nadie importa y
+**sin** versionar, la suite dio `1 failed, 2708 passed`. El rojo era
+`sg_build_sdist_no_versionado` (WI-97): un sdist no puede llevar lo que
+git no versiona, y el paquete no estaba en el índice.
+
+Ese resultado era más fuerte que el que se iba a escribir, y era
+**falso** para la afirmación que se quería hacer. Con el paquete versionado
+—`git add`, que es lo que lee `git ls-files`— el caso es el real:
+
+```
+pytest                    2709 passed in 234.75s
+check_coverage_floors.py  exit 0, «todos los suelos se cumplen»
+cobertura de oracular.py  0 %  (18 sentencias, 10 ramas, 0 cubiertas)
+suelo global              94.85 %   (fail_under = 80)
+```
+
+El `+6` respecto a 2703 se midió por diferencia de la lista de tests
+colectados, no estimado: son los seis tests parametrizados de
+`tests/test_wi47_broad_except_guard.py`, que **sí** derivan del árbol. Es
+decir, el repo ya tenía guards que descubren ficheros nuevos; este era
+uno de los que no.
+
+### Un test que pasaba por la rama equivocada
+
+El primer `test_la_seccion_63_no_nombra_ficheros_que_no_existen` buscaba
+`[A-Za-z_]+\.py` en `§6.3`, y pasó en verde. Motivo: `§6.3` escribe los
+módulos **sin** extensión —«errors, bricks, parser, …»—, y el único con
+punto es `paths.py`, que se excluía a propósito. El extractor no
+encontraba nada, y un test que no encuentra lo que busca no mide nada.
+
+Es la trampa de WI-104 del revés: allí tres contraejemplos pasaron por la
+rama incorrecta; aquí el test entero pasaba por ella. Se sustituyó por un
+predicado puro `_modulos_enumerados()` **probado primero** contra un texto
+escrito en la forma real de `§6.3`, más un segundo predicado
+`_existe_como_fichero()` que distingue un módulo de un paquete.
+
+### La mutación que a veces sobrevivía
+
+Primera pasada del harness: 6/8, `m2` sobrevivida. Segunda pasada del
+**mismo** código: 7/8, `m2` cazada.
+
+Una mutación que a veces sobrevive no es un guard que no muerde: es un
+experimento que no sabe qué midió. Se sospechó del `.pyc` de `scripts/`
+(validado por mtime en segundos, y dos mutaciones consecutive caen en el
+mismo segundo), se añadió `PYTHONDONTWRITEBYTECODE=1`, y sobre todo se
+instrumentó el harness con una **sonda por mutación**: una expresión que
+tiene que cambiar de valor con el código ya mutado. Con eso las tres
+salidas tienen nombre y se distinguen:
+
+* **cazada** — el código cambió, la sonda lo vio, los tests rojo.
+* **inválida** — la sonda no cambió: la mutación no degrada la propiedad.
+  M5 en su primera versión quitaba una cabecera de texto y no la
+  aserción; el harness viejo la contaba como «el guard no muerde», que
+  era una acusación falsa.
+* **el entorno no vio la mutación** — la sonda se evalúa sobre el código
+  viejo, y sin esa categoría el harness acusa al guard de lo que hizo el
+  entorno.
+
+8/8 en tres pasadas consecutivas, árbol restaurado byte a byte en las tres.
+
+### Errores propios de esta sesión, para no repetirlos
+
+15. **Un harness que solo distingue «rojo» de «verde» acusa al guard de
+    todo.** El harness viejo tenía dos salidas. Con una flake, la salida
+    Verde podía significar tres cosas distintas, y una de ellas no era culpa
+    del guard. La salida tiene que ser tan rica como el modo de fallo que
+    distingue.
+16. **Dejar el resultado de una medición sin la verdad al lado.** «Un
+    paquete nuevo al 0 % da verde» es un titular; con el paquete sin
+    versionar, la suite daba 1 failed, y escribir solo lo primero habría
+    sido escribir la mitad del dato. La medición va con su contrafactual.
