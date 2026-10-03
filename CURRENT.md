@@ -1,6 +1,43 @@
 > **Bloque 2026-10-03 (B3) — Core extensible de verdad.**
 > Versión activa `0.22.5.dev0`; último tag `v0.22.5`. Sin release.
 >
+> **B3 cerrado: el puerto tiene consumidor y un adapter de producción.**
+> Siete entregas. Las seis dejaron contrato, invariantes y procedencia; la
+> séptima cierra los dos huecos que quedaban, y los dos eran el mismo hueco
+> un nivel más arriba:
+>
+> ```
+> sg.knowledge.query   knowledge/knowledge_query.py    adapter REAL, contra el Protocol
+> CapabilityController runtime/capability_controller.py  el kernel: nombre -> ejecucion
+> RunController(capabilities=…)                          la costura que lo hace alcanzable
+> ```
+>
+> **Lo que estaba medido al empezar esta entrega:** dieciséis construcciones
+> de `CapabilityRegistry` en el árbol, **las dieciséis en tests**, y cero
+> módulos bajo `src/` que importaran el puerto. El gate del roadmap se
+> cumplía **en vacío**: se podía añadir una capability sin tocar el core
+> porque el core no la veía nunca.
+>
+> **La política de la costura, y por qué no rompe nada:** el registro se
+> inyecta y su ausencia **es** la política. Sin registro —el default— un
+> plan que declara `'stale'` sigue ejecutándose igual, porque `'stale'` es
+> un `FreshnessState` y no una capability. Con registro, lo que el plan
+> declara tiene que existir, o el nodo queda `FAILED` con
+> `CapabilityNotFound` **sin gastar una llamada al adapter**: la
+> verificación va dentro del `try` de `_compile_node_handoff`, que corre
+> antes de `_invoke_node_adapter`. Esa propiedad no se ve en la fila del
+> nodo, y un plan que paga una llamada de red y luego falla parece
+> funcional.
+>
+> **Lo que NO se hace, por decisión:** las capabilities no se invocan
+> durante la ejecución, solo se verifican. `Handoff.capabilities` sigue
+> siendo `tuple[str, ...]` porque `runtime/handoff.py:195` lo mete en el
+> hash firmado, y moverlo es ruptura de datos: **B8**.
+>
+> **Mutaciones 6/6**, 0 sondas inválidas, árbol restaurado y verificado por
+> `git diff`. El harness está **versionado** en `scripts/`, no en
+> `.pipelinek/`, y la razón está más abajo.
+>
 > **B3 — el hueco estaba medido antes de escribir una línea.** En el
 > árbol real, las capabilities se declaraban, se transportaban, se
 > serializaban, se imprimían y se validaban contra un registro de
@@ -202,7 +239,7 @@
 > original tenía esta forma exacta; solo se ha movido de sitio.
 >
 > La costura ya existe como precedente:
-> `runtime/runcontroller.py:97::RunController.__init__` recibe
+> `runtime/runcontroller.py:106::RunController.__init__` recibe
 > `adapter: AgentAdapter` inyectado por palabra clave, y un
 > `CapabilityRegistry` cabría en esa misma firma. **Si se abre, y con qué
 > forma, está sin decidir** — es decisión de contrato, no un arreglo
