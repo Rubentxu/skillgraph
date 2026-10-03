@@ -34,8 +34,7 @@ import uuid
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Literal, NewType
+from typing import TYPE_CHECKING, Literal, NewType
 
 from skillgraph.core.errors import (
     InvalidExpansionError,
@@ -213,7 +212,20 @@ class RemoveTransition:
     outcome: str
 
 
+# B5: `record_rejection` se mudó a `expansion_audit.py` —persistir un
+# rechazo es escribir un registro de auditoria, no expandir un grafo— y
+# este modulo estaba al 98 % de su presupuesto de LoC. Se reexporta
+# aqui para que su ruta de importacion no cambie: mover el codigo no
+# puede romper a quien lo importaba.
+from skillgraph.governance.expansion_audit import record_rejection  # noqa: E402
+
 # PatchOp es ADT cerrado: NO incluimos RemoveNode (preserva invariante I1).
+#
+# B5: el union vive en `graph_diff.py` porque es alli donde se CONSUME.
+# El import va en TYPE_CHECKING porque `graph_diff` importa de este
+# modulo dentro de sus funciones, y a nivel de modulo cerraria el ciclo.
+if TYPE_CHECKING:
+    from skillgraph.governance.graph_diff import GraphDiff, PatchOp
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +358,8 @@ class GraphExpansionProposal:
     base_revision: str
     problem_observed: str
     evidence: tuple[str, ...]
-    operations: tuple[object, ...]  # PatchOp: AddNode | AddTransition | RemoveTransition
+    # B5: era `tuple[object, ...]`, que no restringe nada. Ver graph_diff.
+    operations: tuple[PatchOp, ...]
     new_dependencies: tuple[str, ...]
     capabilities_needed: tuple[str, ...]
     scope: Scope
@@ -650,6 +663,23 @@ def _cycle_source_nodes(
     return tuple(in_cycle)
 
 
+def _rechazar(
+    proposal: GraphExpansionProposal, reason: str, invariantes: tuple[str, ...]
+) -> ExpansionResult:
+    """Construye el `ExpansionResult` de error en un solo sitio: lo
+    usaban dos ramas, y dos formas de decirlo es como un `reason` se
+    queda viejo en una y no en la otra."""
+    return ExpansionResult(
+        _Err(
+            error=InvalidProposal(
+                reason=reason,
+                violated_invariants=invariantes,
+                proposal_id=proposal.proposal_id,
+            )
+        )
+    )
+
+
 def apply_expansion(
     proposal: GraphExpansionProposal,
     plan: WorkflowPlan,
@@ -658,12 +688,24 @@ def apply_expansion(
     completed_nodes: frozenset[str] = frozenset(),
     active_nodes: frozenset[str] = frozenset(),
     current_revision: str | None = None,
+    diff: GraphDiff | None = None,
 ) -> ExpansionResult:
     """Aplica una propuesta y devuelve un plan NUEVO.
 
     NO muta ``plan``. Si la validacion falla, devuelve ``ExpansionResult``
     con error tipado en ``unwrap_err()``.
+
+    **B5 — ``diff`` es una ETAPA DEL GATE**, no un adorno: que exista
+    una funcion que calcula diffs las haria DISPONIBLES, no las pondria
+    en la secuencia. El porque esta entero en
+    ``graph_diff.py::el_diff_corresponde``.
     """
+    if diff is not None:
+        from skillgraph.governance.graph_diff import el_diff_corresponde
+
+        if (error := el_diff_corresponde(diff, proposal, plan)) is not None:
+            return _rechazar(proposal, error, ("B5-DIFF",))
+
     result = validate(
         proposal,
         plan=plan,
@@ -673,12 +715,7 @@ def apply_expansion(
         current_revision=current_revision,
     )
     if not result.accepted:
-        err = InvalidProposal(
-            reason=result.reason,
-            violated_invariants=result.violated_invariants,
-            proposal_id=proposal.proposal_id,
-        )
-        return ExpansionResult(_Err(error=err))
+        return _rechazar(proposal, result.reason, result.violated_invariants)
 
     # Construir el nuevo plan (inmutablemente).
     new_nodes: list[WorkflowNode] = list(plan.nodes)
@@ -718,45 +755,6 @@ def apply_expansion(
         return ExpansionResult(_Err(error=err))
 
     return ExpansionResult(_Ok(value=new_plan))
-
-
-def record_rejection(
-    proposal: GraphExpansionProposal,
-    *,
-    reason: str,
-    rejected_by: str,
-    project_dir: Path,
-    violated_invariants: tuple[str, ...] = (),
-) -> Path:
-    """Persiste evidencia de rechazo (UAT-09).
-
-    Crea un archivo ``expansion_rejections/<proposal_id>.json`` dentro
-    del directorio del proyecto. Devuelve la ruta del archivo.
-
-    ``violated_invariants`` es opcional: si la rechazo viene del
-    validador (I1..I6), se persiste para audit. Los rechazos por
-    autorizacion (I0) o por error de carga no llevan invariantes.
-    """
-    target_dir = project_dir / "expansion_rejections"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / f"{proposal.proposal_id}.json"
-    payload = {
-        "proposal_id": proposal.proposal_id,
-        "author": proposal.author,
-        "created_at": proposal.created_at,
-        "problem_observed": proposal.problem_observed,
-        "operations_count": len(proposal.operations),
-        "capabilities_needed": list(proposal.capabilities_needed),
-        "new_dependencies": list(proposal.new_dependencies),
-        "attachment_point": proposal.attachment_point,
-        "authorization_mode": proposal.authorization.mode,
-        "rejected_by": rejected_by,
-        "rejected_at": now_iso(),
-        "reason": reason,
-        "violated_invariants": list(violated_invariants),
-    }
-    target.write_text(json.dumps(payload, indent=2, sort_keys=True))
-    return target
 
 
 __all__ = [

@@ -1,5 +1,73 @@
-> **Bloque 2026-10-03 (B4) — La mitad observada, alcanzable.**
+> **Bloque 2026-10-03 (B5) — El diff del grafo deja de ser un parche sin comparar.**
 > Versión activa `0.24.0.dev0`; último tag `v0.24.0`.
+>
+> **B5: la secuencia del gate tenía un hueco con nombre.** El roadmap exige
+> `Proposal → Diff → Policy → Decision → Evidence → Apply`, y medido sobre el
+> árbol real (`scripts/measure_b5_graph_diff.py`, versionado en `scripts/`):
+> **6 de 6 preguntas abiertas**. La que lo resumía era una línea —
+>
+> ```
+> platform/…/graph_expansion.py::GraphExpansionProposal.operations   tuple[object, ...]
+> ```
+>
+> Un saco de operaciones sin tipar. Las tres clases ya existían y el comentario
+> del propio código decía *«PatchOp es ADT cerrado»* desde antes de que
+> existiera un `PatchOp` que cerrara nada. Sin él, nada que quisiera preguntarle
+> al parche qué invalida tenía por dónde mirar, y el `Diff` no podía ser una
+> etapa porque no había nada que comparar.
+>
+> **Lo que sostiene el bloque, y es el hallazgo:** `required_capabilities` es lo
+> que las operaciones **producen**; `declared_capabilities` es lo que la propuesta
+> **dice**. Dos campos separados, y que discrepen no es un defecto del diff: es
+> el resultado. Un diff que devolviera la declaración sería un eco con mejor
+> tipografía, y un gate que comprueba ecos no mira nada.
+>
+> ```
+> governance/graph_diff.py::GraphDiff          las 7 respuestas del roadmap
+> governance/graph_diff.py::diff_graph         calcula comparando plan vs propuesta
+> governance/graph_diff.py::base_fingerprint   SHA-256 del plan (R6 sin esto no se cumple)
+> governance/graph_expansion.py::apply_expansion   rechaza el diff que no sea suyo
+> governance/expansion_audit.py::record_rejection   mudado, reexportado
+> ```
+>
+> **La huella no es adorno.** Sin ella, con el parche vacío el diff sale vacío
+> sea cual sea el grafo, luego un diff de otro plan pasaba por suyo siempre que
+> coincidiera la revisión — y dos estados pueden compartir revisión. Se midió
+> al escribir el primer test de R6, que fallaba por eso.
+>
+> **La extracción se decidió con una medición, no con un gusto.** Al integrar el
+> diff, `graph_expansion.py` pasó de 787 a **901** LoC y el guard de god file lo
+> puso rojo. La salida no fue recortar prosa: `record_rejection` se mudó a
+> `expansion_audit.py` —persistir un rechazo es escribir un registro de
+> auditoría, no expandir un grafo— y se reexportó para que su ruta de importación
+> no cambie. Queda en 785.
+>
+> **28 tests, mutaciones 8/8, 0 sondas inválidas.** Y tres sondas
+> encontraron agujeros **reales** en la red, no sondas malas:
+>
+> - **M5 no fue cazada dos veces.** La primera quitaba el `sorted()` de
+>   `to_dict` y no podía fallar: el constructor ya entregaba tuplas ordenadas,
+>   luego la propiedad era **vacua**. La segunda lo quitaba del constructor y
+>   tampoco — y ese es el hallazgo: la garantía está puesta **dos veces**, así
+>   que no se rompe quitando una. Es la misma clase que la M6 de B4, segunda vez.
+> - **M7** puso `reversible=True` fijo y nadie la cazó porque **ningún test**
+>   afirmaba que la séptima pregunta dependiera del plan de rollback.
+> - **M8** puso `esperado = diff`, con lo que la comparación se vuelve
+>   `diff != diff`. No la cazó nadie porque la huella salta **antes** y los tests
+>   de R6 usaban un diff bien calculado: la capa de recálculo no se ejecutaba
+>   nunca. Un guard que solo se ejercita por el camino bueno no sabe si el malo
+>   está cerrado.
+>
+> **Y un error propio del harness, de la misma clase que caza:** la sonda de dos
+> sitios se aplicaba a medias porque el bucle usaba la primera sustitución y
+> descartaba la segunda. Una sonda aplicada a medias se contaría como victoria.
+>
+> **Fuera de alcance y registrado:** las **cuatro vistas** del roadmap. El
+> medidor las sigue dando por abiertas, y por eso **no bajan el veredicto**:
+> son deuda, no un olvido. Construirlas sin el diff sería construirlas sin
+> criterio.
+>
+> ---
 >
 > **B4 cerrado: lo declarado en el esquema ya se puede alcanzar.**
 > Siete commits, un `feat` y seis sin bump. B3 dejó la mitad *declarada*
