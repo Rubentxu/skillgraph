@@ -182,6 +182,32 @@
 > B5 nacía con el gate cerrado — no por decisión, sino porque el
 > invariante no tenía fuente.
 >
+> **Y el hueco se repite un nivel más arriba, medido.** El gate demuestra
+> que **el contrato se puede cumplir** —una capability inventada en un
+> test se registra, se resuelve y se invoca—, pero no que **el runtime lo
+> pueda alcanzar**. `.pipelinek/b3_wiring_measure.py`, con el criterio
+> declarado antes de mirar:
+>
+> ```
+> imports_produccion               : []
+> construcciones de Registry en src : []
+> ficheros que importan el puerto   : tests/test_b3_capability_kernel.py
+> veredicto                         : INALCANZABLE_DESDE_PRODUCCION
+> ```
+>
+> Dieciséis construcciones de `CapabilityRegistry` en el árbol. Las
+> dieciséis están en el test. El criterio de B3 —«añadir una capability
+> sin modificar `RunController`»— se cumple hoy de forma **vacua**: se
+> puede añadir una sin tocar el core porque el core no la ve. El hueco
+> original tenía esta forma exacta; solo se ha movido de sitio.
+>
+> La costura ya existe como precedente:
+> `runtime/runcontroller.py:97::RunController.__init__` recibe
+> `adapter: AgentAdapter` inyectado por palabra clave, y un
+> `CapabilityRegistry` cabría en esa misma firma. **Si se abre, y con qué
+> forma, está sin decidir** — es decisión de contrato, no un arreglo
+> pendiente.
+>
 > **Dónde están las cosas**: el contrato, en
 > `src/skillgraph/platform/ports/capabilities.py::CapabilityRegistry`;
 > el gate, en `tests/test_b3_capability_kernel.py`; el invariante I4, en
