@@ -1,4 +1,66 @@
 # CURRENT — puntero operativo
+> **Bloque 2026-10-03 (vigésima cuarta tanda) en curso — WI-112, release `v0.22.3`.**
+> Versión activa `0.22.2.dev0`; último tag `v0.22.2`.
+>
+> **WI-112 — el reloj tenía diez puntos de definición y declaraba uno.**
+> Decimocuarta vía de la serie «qué declara el repo que nada comprueba».
+>
+> `AGENTS.md §1.3` decía que el reloj «se inyecta (default factory con
+> `datetime.now(UTC)`) y se puede mockear», y `runtime/engine.py`
+> declaraba que `now_iso()` era el **«único punto de definición»**
+> (`src/skillgraph/runtime/engine.py:41::now_iso`). **Ninguna de las dos
+> se sostenía.**
+>
+> **Medido por AST**, no por cadena: **10** llamadas a `datetime.now`
+> en el núcleo, en **tres** formatos — `isoformat()` 5,
+> `replace(microsecond=0)` 2, `strftime` 3. Dos instantes del mismo
+> segundo podían serializarse a dos strings que no comparaban entre sí.
+>
+> Y `RuntimeEvent` traía su propia copia:
+> `field(default_factory=lambda: datetime.now(UTC).isoformat())`. Una
+> lambda que captura el reloj real **no tiene por dónde inyectarle
+> otro**: «se puede mockear» era cierto solo con monkeypatch.
+>
+> **El guard mide la propiedad, no el nombre**: «no hay una segunda
+> lectura del reloj», no «existe una función llamada `now_iso`». RASTREA
+> POR AST porque el docstring del propio `now_iso` menciona
+> `datetime.now`, y un rastreo por cadena contaría la prosa. Hay dos
+> tests que rompen si el rastreo pasa a buscar texto: uno con un
+> docstring inventado y otro con el caso real del repo.
+>
+> **`strftime` se queda** en `backups`, `improvement` y `receipts`:
+> producen `2026-10-03T09:00:00Z`, que es un **nombre de fichero**, no
+> un instante de evento. La lista está en el guard, no en producción,
+> porque es una excepción y no una regla, y se vigila en las dos
+> direcciones.
+>
+> **El default factory se queda.** `AGENTS.md §1.3` lo pide, así que
+> hacerlo obligatorio iba contra la regla — y rompía **37 tests** sin
+> añadir capacidad. La inyección real es `now_iso(clock=...)` y
+> `EventBuilder._emit(timestamp=...)`.
+>
+> **17 tests, 5/5 mutaciones**, mypy 143 antes y 143 después.
+>
+> **Dos cosas que pasaron en este bloque y que no eran suyas.**
+> Un `Disk quota exceeded` de `/tmp` (38 GB de un tmpfs con cuota de
+> 38,5, ocupado en 26 GB por trabajo ajeno). Y, al esquivarlo poniendo
+> el sandbox **dentro** del repo, WI-89 felló diciendo que el sandbox
+> escribía dentro del repositorio: **tenía razón**. Movido fuera, sin
+> tocar el guard.
+>
+> **Y una prueba intermitente destapada por el formato único.**
+> `test_wi56` comparaba dos llamadas al reloj real: falló 2 de 22.
+> Medido, **4 de cada 2000** pares de `now_iso` separados por 2 ms
+> cruzan un segundo. Con microsegundos nunca habría pasado — la
+> unificación cambió la **probabilidad**, no la extensión. Se normaliza
+> el instante, con un contrasalto que exige que la normalización no se
+> coma el resto del registro.
+
+---
+
+<details>
+<summary>Bloque anterior (WI-111)</summary>
+
 > **Bloque 2026-10-03 (vigésima tercera tanda) en curso — WI-111, release `v0.22.2`.**
 > Versión activa `0.22.2.dev0`; último tag `v0.22.2`.
 >
@@ -56,6 +118,8 @@
 > `_open_running_node` — 74 → 83 → 76 — y el de WI-67, la lista de
 > métodos movidos, pasó de 22 a 23. **Un umbral que se sube para que el
 > código pase no comprueba nada.**
+
+</details>
 
 ---
 

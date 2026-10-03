@@ -14,6 +14,73 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.22.3] - 2026-10-03 — el reloj tenía diez puntos de definición
+
+**PATCH**: derivado con `scripts/derive_semver.py` sobre el historial.
+
+Decimocuarta vía de la serie «qué declara el repo que nada comprueba»,
+y la primera que toca cómo el repo **mide el paso del tiempo**.
+
+`AGENTS.md §1.3` decía que el reloj «se inyecta (default factory con
+`datetime.now(UTC)`) y se puede mockear», y `runtime/engine.py`
+declaraba que `now_iso()` era el **«único punto de definición»**.
+Ninguna se sostenía.
+
+Medido por AST antes de tocar nada: **10** llamadas a `datetime.now`
+en el núcleo, en **tres** formatos.
+
+| formato | nº | ejemplo |
+|---|---|---|
+| `isoformat()` | 5 | `2026-10-03T09:00:00.123456+00:00` |
+| `replace(microsecond=0)` | 2 | `2026-10-03T09:00:00+00:00` |
+| `strftime(...)` | 3 | `2026-10-03T09:00:00Z` |
+
+Y `RuntimeEvent` traía su propia copia:
+`field(default_factory=lambda: datetime.now(UTC).isoformat())`. Una
+lambda que captura el reloj real **no tiene por dónde inyectarle
+otro**.
+
+### Cambios
+
+- **`now_iso(clock=None)`** es la única lectura del reloj del núcleo, y
+  acepta un reloj inyectado. Se pasa explícito y no por un global porque
+  `AGENTS.md §1.4` prohíbe el estado global mutable.
+- **`RuntimeEvent.timestamp`** usa `default_factory=now_iso` y hereda el
+  formato único.
+- **`event_store`, `catalog`, `expansion`, `promotion` y `backups`**
+  delegan en el helper.
+
+**`strftime` se queda** en `backups`, `improvement` y `receipts`:
+producen `2026-10-03T09:00:00Z`, que es un **nombre de fichero**, no un
+instante de evento. La lista está en el guard, no en producción, porque
+es una excepción y no una regla, y se vigila en las dos direcciones.
+
+**El default factory se queda**: `AGENTS.md §1.3` lo pide, y hacerlo
+obligatorio rompía 37 tests sin añadir capacidad.
+
+### El guard mide la propiedad, no el nombre
+
+«No hay una segunda lectura del reloj», no «existe una función llamada
+`now_iso`». RASTREA POR AST porque el docstring del propio `now_iso`
+menciona `datetime.now`, y un rastreo por cadena contaría la prosa.
+
+### Dos cosas que el bloque encontró por el camino
+
+Un `Disk quota exceeded` de `/tmp` — 38 GB de un tmpfs con cuota de
+38,5, ocupado en 26 GB por trabajo ajeno. Y al esquivarlo poniendo el
+sandbox **dentro** del repo, el guard de **WI-89** falló diciendo que
+el sandbox escribía dentro del repositorio: **tenía razón**. Se movió
+fuera, sin tocar el guard.
+
+Y una **prueba intermitente** destapada por el formato único:
+`test_wi56` comparaba dos llamadas al reloj real y falló 2 de 22 veces.
+Medido: **4 de cada 2000** pares de `now_iso` separados por 2 ms cruzan
+un segundo. Con microsegundos nunca habría pasado — la unificación
+cambió la **probabilidad**, no la extensión.
+
+17 tests, **5/5 mutaciones** con sonda por mutación, mypy 143 antes y
+143 después.
+
 ## [0.22.2] - 2026-10-03 — la inmutabilidad que era de fachada
 
 **PATCH**: derivado con `scripts/derive_semver.py` sobre el historial.
