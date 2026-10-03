@@ -1,6 +1,6 @@
 # CURRENT — puntero operativo
 > **Bloque 2026-10-03 (vigésima cuarta tanda) en curso — WI-112, release `v0.22.3`.**
-> Versión activa `0.22.2.dev0`; último tag `v0.22.2`.
+> Versión activa `0.22.3.dev0`; último tag `v0.22.3`.
 >
 > **WI-112 — el reloj tenía diez puntos de definición y declaraba uno.**
 > Decimocuarta vía de la serie «qué declara el repo que nada comprueba».
