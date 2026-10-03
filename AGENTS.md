@@ -991,34 +991,60 @@ Dos detalles que no son obvios, los dos MEDIDOS:
   resuelve el propio motor sin trucos.
 
 Y una consecuencia de lo anterior que **no** es evidente, y que salió
-medida en WI-109 con seis runs:
+medida en WI-109 con seis runs y se **resolvió en WI-110**:
 
-> **La etapa `evidence` no puede recuperarse a sí misma.** Exige que el
-> run medido termine en `success`; un run sólo termina en `success` si
-> **todas** sus etapas pasaron; y `evidence` es una de esas etapas.
-> Mientras falle una vez, ningún run vuelve a terminar en `success`, y sin
-> un `success` anterior `evidence` no puede pasar. Un fallo cualquiera
-> —incluido uno ya corregido— deja la cadena envenenada para siempre.
+> **La etapa `evidence` se verifica a sí misma.** Exige que el run medido
+> termine en `success`; un run sólo termina en `success` si **todas** sus
+> etapas pasaron; y `evidence` es una de esas etapas. Sin exculpación,
+> un fallo cualquiera —incluido uno ya corregido— dejaba la cadena
+> envenenada para siempre.
 
-Lo que significa en la práctica, y hay que decirlo aunque suene mal:
+Medido: `8d6a9594` fue el último run con las 8 etapas en `success`, y los
+cinco siguientes tuvieron las **siete etapas de código** en `success` y
+ninguno se recuperó. Un fallo ya corregido no devuelve la cadena a
+verde, porque el fallo dejó de estar en el código pero seguía en el
+veredicto.
 
-- **El veredicto de un run no dice nada sobre su propio código.** Hay que
-  leer las ETAPAS. En WI-109 hubo cinco runs consecutivos con los siete
-  pasos de código en `success` y `2754 passed`, y veredicto `FAILURE`.
-- **Un fallo inicial de cualquier clase es irrecuperable desde la
-  receta.** Por eso el primer run de un bloque debe salir verde: no sólo
-  certifica, es lo que deja la cadena limpia para los siguientes.
+**Cómo se exculpa, y por qué es mínima** (WI-110):
+
+- La exculpación vive en `scripts/check_pipeline_receipt.py::evaluar()`,
+  **no** en la etapa. Por eso `.pipeline.kts` no cambia, su SHA-256 sigue
+  siendo `7541ced5…`, y las certificaciones de WI-101 a WI-109 siguen
+  valiendo: cada run se certifica con el verificador de su momento.
+- Requiere **las tres** condiciones: un solo `StepFailed`, su **nombre**
+  conocido, y que el nombre empiece por `evidence`. Con dos pasos
+  rotos, sin nombre, o con cualquier otra etapa, se rechaza igual.
+- El **nombre** es el cambio de fondo. Antes `step_failed` era un
+  contador, y un contador no sabe quién falló: por eso no había base
+  para exculpar. `InformeRun.paso_fallido` lo lleva desde el journal.
+- **El veredicto del run nunca se exculpa.** Un run abortado sin un solo
+  `StepFailed` se rechaza igual, y eso lo fija
+  `test_un_run_abortado_sigue_sin_pasar`.
+
+Lo que **no** arregla: un run con las siete etapas de código verdes y
+`evidence` en rojo sigue terminando en `FAILURE` por construcción, porque
+la etapa que lo evalúa es una de las ocho. Lo que cambia es que **el
+siguiente run ya no hereda el fallo**: el primer run verde tras el
+arreglo llega uno después, no en el mismo.
+
+**Las tres consecuencias que dejó la medición de WI-109 y WI-110**, porque
+son las que hacen perder una tarde a quien no las sepa:
+
+- **El veredicto de un run no describe su propio código.** Hay que leer
+  las ETAPAS. Cinco runs seguidos con las siete etapas verdes y
+  `FAILURE`.
 - **Para certificar hay que leer por `run_id` Y por `occurred_at`.** El
   `run_id` se reutiliza entre replays, y «el más reciente por `sequence`»
   puede ser un run de ayer: en WI-109 eso dio un `OK, 8/8 etapas` sobre
   un run del día anterior.
+- **Si un run sale en `FAILURE`, hay que mirar si falló `evidence` antes
+  que suspectar del código.** Desde WI-110 el caso es distinguible: el
+  mensaje nombra el último paso que falló.
 
-**Arreglo pendiente, no aplicado** (fuera del alcance de WI-109, y tocar
-la receta invalida las certificaciones anteriores): que el criterio sea
-*«los siete pasos de código pasaron»* en vez de *«el run terminó en
-`success`»*. Lo segundo es lo que la etapa mide de verdad, por
-indirección, y depender de un run que no puede controlar es exactamente
-lo que hace la etapa irrecuperable.
+Guard: `tests/test_wi110_evidence_recoverable.py`, con **más** tests para
+la mitad peligrosa —la que perdona de más— que para la que arregla: seis
+etapas distintas que tienen que seguir sin pasar, dos pasos rotos que no
+se exculpan, y un `StepFailed` sin nombre que se rechaza.
 
 ### Comando de validación rápida
 

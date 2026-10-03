@@ -106,6 +106,24 @@ SKIPS_PLATAFORMA: Final[dict[str, str]] = {
     "tests/test_evidence_lock.py": "idem: el test toma el lock con fcntl",
 }
 
+#: La etapa que se verifica A SI MISMA.
+#:
+#: `evidence` mide el run ANTERIOR (motivo en `.pipeline.kts`: cuando la
+#: etapa corre, el run en curso aun no tiene `RunFinished`). Eso significa
+#: que el paso `evidence/sh-0` aparece como `StepFailed` dentro del run que
+#: fallo por la etapa de evidencia, y `evaluar()` lo rechazaba por el
+#: MISMO criterio con el que rechaza un fallo de codigo.
+#:
+#: MEDIDO en WI-110, sobre el journal real: `8d6a9594` fue el ultimo run
+#: con las 8 etapas en `success`. Los cinco siguientes tuvieron las SIETE
+#: etapas de codigo en `success` y todos Ugaron en `failure`. Un fallo
+#: corregido hace seis runs no devuelve la cadena a verde, porque el
+#: fallo ya no esta en el codigo pero sigue en el veredicto.
+#:
+#: Vive aqui y no dentro de `evaluar()` para que el guard pueda exigir
+#: que las dos copias no diverjan. Mismo patron que `SKIPS_PLATAFORMA`.
+ETAPA_AUTOEVALUADA: Final[str] = "evidence"
+
 #: Los cuatro paths que AGENTS.md declara obligatorios en el control root.
 CONTROL_ROOT: Final = ("last-run", "retry-control", "wait-until-control", "workspace")
 
@@ -130,6 +148,23 @@ class InformeRun:
     step_failed: int
     outcome: str | None
     resumen_pytest: str | None
+    #: Nombre del ULTIMO paso que fallo (`evidence/sh-0`, `lint/sh-0`...).
+    #:
+    #: MEDIDO en WI-110: sin este campo, `step_failed` es un contador y un
+    #: contador no sabe quien fallo, asi que el verificador no podia
+    #: distinguir un fallo de codigo de un fallo de la etapa que se
+    #: verifica a si misma. Los dos caian en el mismo criterio, y por eso
+    #: un fallo ya corregido dejaba la cadena envenenada para siempre.
+    #:
+    #: `None` significa "no se sabe": con `None` NO se exculpa nada, que es
+    #: lo seguro. Perdonar sin saber seria peor que no perdonar.
+    #:
+    #: Tiene valor por DEFECTO (`None`) a proposito: `tests/test_wi108_
+    #: zero_skips.py` construye `InformeRun` con campos sueltos, y un campo
+    #: nuevo sin defecto los revienta a todos. El defecto tambien documenta
+    #: que el campo es OBLIGATORIO en el uso real: lo rellena el
+    #: acumulador, no el que llama.
+    paso_fallido: str | None = None
 
 
 def _evento(payload: str) -> dict:
@@ -174,6 +209,7 @@ def informes(db: Path) -> tuple[InformeRun, ...]:
             "etapas_ok": 0,
             "etapas": 0,
             "fallos": 0,
+            "paso_fallido": None,
             "outcome": None,
             "resumen": None,
         }
@@ -201,6 +237,13 @@ def informes(db: Path) -> tuple[InformeRun, ...]:
                 estado["etapas_ok"] = int(estado["etapas_ok"]) + 1
         elif kind == "StepFailed":
             estado["fallos"] = int(estado["fallos"]) + 1
+            # WI-110: el NOMBRE, no solo el numero. Es lo que permite
+            # distinguir un fallo de codigo de un fallo de la etapa que
+            # se verifica a si misma. Se guarda el ULTIMO porque con
+            # varios fallos no se exculpa nada y el nombre da igual.
+            nombre_paso = evento.get("stepName")
+            if isinstance(nombre_paso, str) and nombre_paso:
+                estado["paso_fallido"] = nombre_paso
         elif kind == "RunFinished":
             estado["outcome"] = evento.get("outcome")
 
@@ -214,6 +257,7 @@ def informes(db: Path) -> tuple[InformeRun, ...]:
             step_failed=int(acumulado[run_id]["fallos"]),
             outcome=acumulado[run_id]["outcome"],  # type: ignore[arg-type]
             resumen_pytest=acumulado[run_id]["resumen"],  # type: ignore[arg-type]
+            paso_fallido=acumulado[run_id]["paso_fallido"],  # type: ignore[arg-type]
         )
         for run_id in orden
     )
@@ -277,7 +321,41 @@ def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
     problemas: list[Problema] = []
     rid = informe.run_id[:8]
 
-    if informe.outcome != "success":
+    # --- La etapa que se verifica a si misma (WI-110) ----------------------
+    #
+    # `evidence` mide el run ANTERIOR, asi que su propio paso aparece
+    # como StepFailed dentro del run que fallo por ella. Contarlo como si
+    # fuera un fallo de codigo hacia que la cadena no pudiera volver a
+    # verde: MEDIDO, cinco runs seguidos con las siete etapas de codigo
+    # en `success` y todos en `failure`.
+    #
+    # La exculparion es MINIMA y por eso se leen las tres condiciones:
+    #
+    #   1. UN solo paso roto. Con dos, hay un fallo de codigo mas alla de
+    #      la etapa, y perdonar la mitad de un fallo es dejar de vigilar.
+    #   2. Se sabe el NOMBRE del paso, y es el de la etapa autoevaluada.
+    #      Sin nombre no hay base: se falla por DEFAULT, que es lo seguro.
+    #   3. El paso tiene que ser de la etapa autoevaluada Y de su unico
+    #      paso. El motor lo nombra `evidence/sh-0`.
+    #
+    #      MEDIDO: con `startswith(ETAPA_AUTOEVALUADA)` —sin la barra—
+    #      una etapa llamada `evidence-hack` tambien pasaba, y lo cazó
+    #      `test_cualquier_otra_etapa_rota_sigue_sin_pasar`. La barra es
+    #      lo que separa la etapa de un nombre que solo se le parece.
+    #      La primera version de este comentario daba el `startswith` por
+    #      bueno y describia el hueco como si fuera aceptable: no lo era.
+    #      Un comentario que describe un hueco sin cerrarlo es una
+    #      promesa que el codigo no cumple.
+    #
+    # Lo que NO se exculpa nunca: el veredicto del run. Un run abortado
+    # sin un solo StepFailed se rechaza igual, y eso lo fija
+    # `test_un_run_abortado_sigue_sin_pasar`.
+    paso = informe.paso_fallido
+    solo_autoevaluada = (
+        informe.step_failed == 1 and paso is not None and paso.startswith(f"{ETAPA_AUTOEVALUADA}/")
+    )
+
+    if not solo_autoevaluada and informe.outcome != "success":
         problemas.append(
             Problema(
                 "sg_pipeline_run_failure",
@@ -285,14 +363,13 @@ def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
             )
         )
 
-    if informe.step_failed:
+    if not solo_autoevaluada and informe.step_failed:
         problemas.append(
             Problema(
                 "sg_pipeline_step_failed",
-                f"el run {rid} registra {informe.step_failed} StepFailed; "
-                "el criterio 5 exige cero en la ejecucion. Ojo: el run_id "
-                "se reutiliza entre replays, asi que un StepFailed puede "
-                "ser de una ejecucion anterior del mismo identificador",
+                f"el run {rid} registra {informe.step_failed} StepFailed"
+                + (f" (ultimo: {paso})" if paso else "")
+                + "; el criterio 5 exige cero en la ejecucion",
             )
         )
 
