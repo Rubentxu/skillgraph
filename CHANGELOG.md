@@ -14,6 +14,96 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.24.0] - 2026-10-03 — la mitad observada de un recurso, alcanzable
+
+**El bloque B4, cerrado.** Siete commits, un `feat` y seis sin bump. La
+mitad de la separación CRD-like que B3 dejó sin tocar —la que se
+*observa*— estaba declarada en el esquema y no se podía alcanzar.
+
+SemVer derivado con `scripts/derive_semver.py`: `b/f/x/n/d 0/1/0/3/0`
+desde `v0.23.0`, la regla pide **MINOR**. Ningún commit con marcador de
+ruptura.
+
+### Lo que estaba medido, y por qué el hueco era real
+
+La tabla `resources` declara `spec_json`, `status_json`, `generation` y
+`resource_version`, y el `INSERT` los rellena todos. Pero medido, antes de
+escribir nada (`scripts/measure_b4_observed_state.py`):
+
+- **1 `INSERT` y 0 `UPDATE`** en toda la tabla `resources` bajo `src/`;
+- **cero** ocurrencias de `conditions` en todo `src/`;
+- `generation` declarada y nunca escrita;
+- y en una ejecución real: `status_json='{}'`, `generation=1`,
+  `resource_version=1`.
+
+`status_json` estaba declarada `NOT NULL DEFAULT '{}'` y nadie la
+actualizaba nunca: cada recurso nacía sin observar y moría sin observar,
+y el `NOT NULL` lo hacía parecer un estado. Es el mismo hueco con el que
+abrió B3, en la otra mitad: lo declarado era alcanzable en el papel y
+inalcanzable en ejecución.
+
+### Added
+
+- **`ResourceStatus` y `Condition`** (`resources/status.py`), `frozen` y
+  con `slots`. `Condition.type` es un `Literal` cerrado, y **repetir un
+  `type` es error**: `Ready=True` y `Ready=False` a la vez no son un
+  status, son un status que ya no sabe qué observa, y se persistiría sin
+  que nada fallara.
+- **`Storage.update_resource_status`**, el primer `UPDATE` de la tabla
+  `resources`, y **`Storage.get_resource_status`** para leerlo de vuelta.
+  Antes eran unreachable: la columna existía y nadie la escribía.
+
+### La invariante, y por qué tiene guard propio
+
+`generation` es lo que el **spec** declara; `resource_version` es lo que
+el **almacenamiento** lleva. Escribir el status sube `resource_version` y
+**no** sube `generation`. La sonda M3 quita precisamente el `generation`
+del `UPDATE`, y lo que se midió al cazarla es lo importante: el sistema
+sigue funcionando **exactamente igual**. Nada falla, nada se rompe, la
+separación desired/observed se vuelve decorativa. Es el defecto que no se
+nota, y por eso necesita un guard que lo nombre en vez de confiar en que
+alguien lo note.
+
+`observed_generation` se **lee de la fila**, no se declara en el status. Si
+lo declarara, mentiría en cuanto el spec cambiara por debajo — y sin
+ningún error: sería el status más fiable del mundo y el menos cierto.
+
+### Lo que NO se hizo, y por qué está en un guard
+
+**`status` no vive en `Brick`.** Es la decisión que el bloque entero
+sostiene, y R5 la fija por AST porque *«Brick no gana status»* no se
+deduce de un valor: se deduce de la forma. Si el tipo declarado llevara el
+status, un pack declararía el estado de su propio recurso, y la mitad
+observada dejaría de estar observada: no habría forma de distinguir
+`observed` de `human-asserted`. La separación es de **tipo**, no de
+convención — y una convención es exactamente lo que el próximo fichero salta por encima.
+
+### Changed
+
+- Guardas de superficie de `Storage`: 65 → 67 métodos de delegación y
+  72 → 74 públicos, con el motivo al lado de cada número. Documentado
+  también **lo que no miden**: una cuenta ve *cuántos* métodos hay, no
+  *cuáles*. Renombrar `get_resource_status` deja las tres guardas en
+  verde — medido — y lo cazan los tests que lo llaman por nombre.
+
+### Fixed
+
+- Un docstring sin cerrar en `tests/test_wi65_storage_facade_delegations.py`
+  se había comido el cuerpo de un test y lo dejaba vacío. Un guard que no
+  se ejecuta no falla nunca, y por eso pasa en verde.
+
+### Verificación
+
+- **19 tests** nuevos en `tests/test_b4_observed_state.py`, uno de los
+  cuales ejecuta el instrumento que abrió el bloque y exige que ya no
+  reporte el hueco.
+- **8/8 sondas de mutación cazadas**, 0 sondas inválidas, árbol
+  restaurado byte a byte verificado por `git diff`.
+- **Certificación**: 2991 passed, 3 skipped (los declarados), 2 failed —
+  y los 2 fallos eran `tests.total` desactualizado y su gemelo de
+  convergencia, los dos diciendo lo mismo. Se corrigieron con la cifra
+  medida, no estimada.
+
 ## [0.23.0] - 2026-10-03 — el puerto de capabilities, alcanzable y con un adapter real
 
 **El bloque B3, cerrado.** Siete entregas. Las seis dejaron el contrato,

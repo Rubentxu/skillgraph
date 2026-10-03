@@ -1,3 +1,80 @@
+> **Bloque 2026-10-03 (B4) — La mitad observada, alcanzable.**
+> Versión activa `0.24.0`; último tag `v0.24.0`.
+>
+> **B4 cerrado: lo declarado en el esquema ya se puede alcanzar.**
+> Siete commits, un `feat` y seis sin bump. B3 dejó la mitad *declarada*
+> de la separación CRD-like; B4 es la mitad *observada*, y estaba en el
+> mismo estado: escrita en el esquema, inalcanzable en ejecución.
+>
+> **Lo que estaba medido al empezar** (`scripts/measure_b4_observed_state.py`,
+> que sale 1 con el hueco abierto y 0 cuando ya no está):
+>
+> ```
+> 1 INSERT y 0 UPDATE en `resources`    status_json = '{}' para siempre
+> `conditions` en todo `src/`           cero
+> `generation` escrita                  nunca
+> ejecución real: status_json='{}' generation=1 resource_version=1
+> ```
+>
+> `status_json` está declarada `NOT NULL DEFAULT '{}'` y nadie la
+> actualizaba: cada recurso nacía sin observar y moría sin observar, y
+> el `NOT NULL` lo hacía **parecer** un estado. Es el hueco con el que
+> abrió B3, un nivel más abajo.
+>
+> **Lo que hay ahora:**
+>
+> ```
+> ResourceStatus, Condition     resources/status.py            frozen, slots
+> update_resource_status        platform/knowledge_repository.py  el primer UPDATE
+> get_resource_status           platform/knowledge_repository.py  lee o None
+> ```
+>
+> **La invariante, y por qué tiene guard propio:** `generation` es lo que
+> el **spec** declara; `resource_version` es lo que el **almacenamiento**
+> lleva. Escribir status sube `resource_version` y **no** `generation`.
+> La sonda M3 quita el `generation` del `UPDATE` y lo que se midió al
+> cazarla es lo importante: **el sistema sigue funcionando exactamente
+> igual**. Nada falla y nada se rompe — la separación desired/observed se
+> vuelve decorativa. Es el defecto que no se nota, y por eso necesita un
+> guard que lo nombre en vez de confiar en que alguien lo note.
+>
+> `observed_generation` se **lee de la fila**, no se declara. Si lo
+> declarara, mentiría en cuanto el spec cambiara por debajo, y sin ningún
+> error: sería el status más fiable del mundo y el menos cierto.
+>
+> **Lo que NO se hizo, y por qué está en un guard:** `status` **no vive
+> en `Brick`**. Si el tipo declarado llevara el status, un pack declararía
+> el estado de su propio recurso y la mitad observada dejaría de estar
+> observada: no habría forma de distinguir `observed` de
+> `human-asserted`. La separación es de **tipo**, no de convención. R5 la
+> fija por AST porque *«Brick no gana status»* no se deduce de un valor,
+> se deduce de la forma.
+>
+> **19 tests** nuevos, uno de los cuales ejecuta el instrumento que abrió
+> el bloque y exige que ya no reporte el hueco. **Mutaciones 8/8**, 0
+> sondas inválidas, árbol restaurado byte a byte verificado por
+> `git diff`.
+>
+> **Certificación**: 2991 passed, 3 skipped (los declarados) y **2
+> failed** — y los 2 eran `tests.total` desactualizado y su gemelo de
+> convergencia de B0, diciendo lo mismo. La cifra se escribió **después**
+> del run, que es la regla, y el guard de WI-115 la cazó: es la primera
+> vez que ese guard muerde en esta sesión, y lo hizo porque el recuento
+> viene del árbol y no de una copia.
+>
+> **El `+22` no es todo mío, y está desglosado**: 19 de B4, 1 del
+> renombrado de un test, y **3 de `test_wi47_broad_except_guard.py`**, que
+> *parametriza sobre la lista de módulos* y por eso generó tres casos
+> más al aparecer `resources/status.py`. Un guard que deriva sus casos del
+> árbol se entera solo de que añadiste un módulo. Antes de atribuir la
+> diferencia a B3 se comprobó en un worktree que el 2974 de B3 era
+> **veraz**: 2974 colectados.
+>
+> ---
+>
+> <details>
+> <summary>Bloque anterior (B3)</summary>
+>
 > **Bloque 2026-10-03 (B3) — Core extensible de verdad.**
 > Versión activa `0.23.0.dev0`; último tag `v0.23.0`.
 >
@@ -256,9 +333,14 @@
 > `.pipelinek/b3_stale_measure.py` y `.pipelinek/b3_provenance_measure.py`;
 > y las 30 mutaciones, en `.pipelinek/b3_mutate.py`.
 >
-> **Sin release, y por regla**: `derive_semver.py` manda.
+> **Con release `v0.23.0`**: `derive_semver.py` pidió MINOR (`0/5/2/20/0`)
+> al cierre. La línea de abajo decía «Sin release» porque se escribió
+> durante el bloque, antes de emitir la etiqueta; se corrige porque
+> dejada así afirma algo falso de B3.
 >
 > ---
+>
+> </details>
 >
 > <details>
 > <summary>Bloque anterior (B2)</summary>
