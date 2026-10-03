@@ -41,6 +41,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
@@ -308,3 +309,149 @@ class TestLasDivergenciasEstanRegistradas:
             "DIVERGENCIA_ESPERADA, o explica como se resolvieron sin "
             "reescribir una etiqueta publicada"
         )
+
+
+# --- 8. La declaracion del bump en STATE.yaml (WI-106) --------------------
+#
+# `STATE.yaml` dice POR QUE se movio la version: `release.semver_bump`.
+# `scripts/derive_semver.py` la CALCULA. Hasta WI-106 nadie los comparaba.
+#
+# MEDIDO (.pipelinek/wi106_measure2.sh, STATE.yaml restaurado byte a byte
+# con sha verificado): con el campo puesto a MAJOR cuando el release fue
+# MINOR, la suite de gobernanza de release daba **18 passed, exit 0**, y los
+# tres checkers de la receta y el bundle de auditoria, tambien exit 0. Una
+# afirmacion falsa sobre la causa de un bump, invisible para todo el repo.
+#
+# Por que solo el ULTIMO release y no todos: los historicos ya estan
+# cubiertos por `TestLasDivergenciasHistoricasEstanRegistradas`, que vigila
+# que la lista de divergencias no crezca. Anadir una comprobacion por cada
+# etiqueta publicada seria trabajo sin propiedad nueva; y exigir que el campo
+# refleje una etiqueta vieja anadiria una lista que mantener, que es
+# justamente la trampa que el propio repo ya se prohibio en WI-99 y WI-102.
+#
+# El campo se compara con la HERRAMIENTA, no con una constante escrita a
+# mano: si la regla cambia, el campo se vuelve a contrastar sin tocar el test.
+
+
+def _bump_declarado() -> str:
+    """`release.semver_bump` tal y como esta escrito hoy en `STATE.yaml`."""
+    import yaml
+
+    estado = yaml.safe_load((ROOT / "STATE.yaml").read_text(encoding="utf-8"))
+    return str(estado["release"]["semver_bump"])
+
+
+def _tag_declarado() -> str:
+    import yaml
+
+    estado = yaml.safe_load((ROOT / "STATE.yaml").read_text(encoding="utf-8"))
+    return str(estado["release"]["tag"])
+
+
+def _bump_calculado(tag: str) -> str:
+    """Lo que la regla dice para `tag`. El instrumento, no una copia."""
+    import derive_semver as ds
+
+    return ds.bump_esperado(ds.tags(), tag)
+
+
+#: El dominio del campo. Vive aqui y no en el cuerpo de un test para poder
+#: llamar a la predicado con lo que sea: comprobar que el valor de HOY es
+#: valido no es comprobar el dominio (la mutacion M3 lo demonstro).
+BUMPS_VALIDOS: Final = frozenset({"MAJOR", "MINOR", "PATCH"})
+
+
+def _bump_valido(valor: str) -> bool:
+    """`valor` nombra un bump. Puro: no lee disco ni estado."""
+    return valor in BUMPS_VALIDOS
+
+
+def _etiqueta_existe(tag: str, tags_: Sequence[str]) -> bool:
+    """`tag` es una de las etiquetas. Puro, como las otras dos.
+
+    Existe aparte por lo mismo que `_bump_valido`: comprobar que la
+    etiqueta de HOY esta en git no es comprobar que la predicado funciona.
+    Con la comprobacion dentro del test y sobre el valor real, anularla no
+    se notaba (mutacion M4 de la primera pasada).
+    """
+    return tag in tags_
+
+
+class TestLaDeclaracionDelBumpCoincideConLaHerramienta:
+    def test_el_bump_declarado_es_el_que_calcula_la_regla(self) -> None:
+        tag = _tag_declarado()
+        declarado = _bump_declarado()
+        calculado = _bump_calculado(tag)
+
+        assert declarado == calculado, (
+            f"STATE.yaml dice que {tag} fue un {declarado}, y "
+            f"scripts/derive_semver.py calcula {calculado or 'SIN RELEASE'}. "
+            "El campo documenta la CAUSA del bump: si no coincide con la "
+            "regla, documenta una causa que nadie verifico. Corrige el "
+            "campo, o explica el motivo por el que la regla no aplica."
+        )
+
+    def test_el_campo_no_es_una_etiqueta_vacia(self) -> None:
+        """El dominio se comprueba sobre ENTRADAS, no sobre el valor de hoy.
+
+        La primera version hacia `assert declarado in {MAJOR, MINOR, PATCH}`
+        sobre el valor que hay en `STATE.yaml`. Eso no comprueba el
+        dominio: comprueba que hoy el valor es valido, que es distinto. Y
+        con la comprobacion neutralizada (`assert True or ...`) el test
+        seguia verde — la mutacion M3 sobrevivio y por eso la predicado
+        esta aparte, como una funcion, para poder llamarla con lo que sea.
+        """
+        assert _bump_valido(_bump_declarado())
+        assert not _bump_valido("RELLENO")
+        assert not _bump_valido("")
+        assert not _bump_valido("minor")
+
+    def test_el_bump_calculado_no_es_una_constante(self) -> None:
+        """La expectativa tiene que salir de la herramienta, no de una copia.
+
+        Este es el guard que mas tentador es relajar: sustituir
+        `_bump_calculado(tag)` por un literal. Pasa verde HOY, porque la
+        copia dice lo mismo que la verdad — y por eso el test principal no
+        lo pilla (la mutacion M2 sobrevivio a la primera version).
+
+        Un guard que compara contra su propia copia de la regla no vigila
+        nada: certifica que el estado coincide consigo mismo, y la copia se
+        queda vieja el dia que la regla cambie. Para distinguir una cosa de
+        la otra hace falta mas de un valor: se exige que el calculo acierte
+        en DOS bumps DISTINTOS, y que la herramienta los tenga. Con un
+        literal solo puede acertar en uno.
+        """
+        import derive_semver as ds
+
+        tags_ = ds.tags()
+        verdaderas = {t: ds.bump_esperado(tags_, t) for t in tags_}
+        con_bump = {t: v for t, v in verdaderas.items() if v}
+        distintos = {v for v in con_bump.values()}
+        assert len(distintos) >= 2, (
+            "el repo no tiene dos bumps distintos con los que distinguir un "
+            f"calculo de una constante: {sorted(distintos)}"
+        )
+
+        acertados = {t for t, v in con_bump.items() if _bump_calculado(t) == v}
+        assert len({con_bump[t] for t in acertados}) >= 2, (
+            "el calculo solo acierta en un unico valor de bump: eso es lo "
+            "que hace una constante escrita a mano, no una regla. "
+            "Que lo calcule `scripts/derive_semver.py`, no este fichero"
+        )
+
+    def test_la_etiqueta_declarada_existe_en_git(self) -> None:
+        """El campo se pronuncia sobre una release, no sobre un texto.
+
+        Propiedad distinta de las otras dos, y la que mas se olvida: sin
+        esto, `release.tag: v9.9.9` pasaria el campo por bueno con tal de
+        que el bump case en el dominio.
+        """
+        import derive_semver as ds
+
+        tags_ = ds.tags()
+        assert _etiqueta_existe(_tag_declarado(), tags_), (
+            f"{_tag_declarado()} no es una etiqueta de git: el estado declara "
+            "una release que no existe"
+        )
+        # El contraejemplo: una etiqueta inventada NO puede pasar por buena.
+        assert not _etiqueta_existe("v9.9.9", tags_)
