@@ -1,6 +1,6 @@
 # CURRENT — puntero operativo
-> **Bloque 2026-10-03 (vigésima séptima tanda) en curso — WI-115, release `v0.22.6`.**
-> Versión activa `0.22.6.dev0`; último tag `v0.22.6`.
+> **Bloque 2026-10-03 (vigésima séptima tanda) en curso — WI-115, SIN RELEASE.**
+> Versión activa `0.22.5.dev0`; último tag `v0.22.5`.
 >
 > **WI-115 — el estado declara una cifra y nadie comprueba que sea cierta.**
 > Decimoséptima vía de la serie «qué declara el repo que nada comprueba».
@@ -53,6 +53,15 @@
 > poder medirse**, no pasar. Está cazada. M3 no apuntaba al principio
 > —ocho espacios de indentación donde el texto real tiene cuatro— y eso
 > se comprobó **antes** de mutar, que es lo único que hace falta.
+>
+> **SIN RELEASE, Y POR REGLA.** Desde `v0.22.5` hasta HEAD hay
+> `b/f/x/n/d 0/0/0/4/4`: la herramienta dice *«la regla dice SIN BUMP: no
+> hay release que emitir, se acumula»*. Segundo bloque de la serie que no
+> libera, después de WI-106, y es la regla siguiendo. `release.tag` sigue
+> en `v0.22.5` porque describe la última release real, no el workitem en
+> curso. La primera versión de este bloque **sí** decía «PATCH →
+> v0.22.6» y tenía su sección de changelog: se corrige al medir, que es
+> exactamente para lo que está la herramienta.
 >
 > ---
 >

@@ -14,9 +14,17 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
-## [0.22.6] - 2026-10-03 — el estado declara una cifra y nadie la comprueba
+## Sin release — WI-115 (2026-10-03) — el estado declara una cifra y nadie la comprueba
 
-**PATCH**: derivado con `scripts/derive_semver.py` sobre el historial.
+**SIN RELEASE, Y POR REGLA.** Desde `v0.22.5` hasta HEAD hay
+`b/f/x/n/d 0/0/0/4/4`: la herramienta dice literalmente *«la regla dice
+SIN BUMP: no hay release que emitir, se acumula»*, y `AGENTS.md §12` es
+explícito en que si la regla dice sin bump **no se emite etiqueta**.
+
+Es el **segundo** bloque de la serie que no libera, después de WI-106, y
+es la regla siguiendo, no la regla saltándose. `release.tag` sigue en
+`v0.22.5` porque ese par describe la última release real, no el workitem
+en curso.
 
 **Decimoséptima** vía de la serie «qué declara el repo que nada
 comprueba», y la más autoconsciente: el workitem salió de una línea que
