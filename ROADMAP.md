@@ -30,7 +30,7 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B6** — Agent-first determinista
+> Bloque vivo: **B7** — UX operacional
 > Versión activa `0.25.0.dev0` · último tag `v0.25.0` · 3053 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
@@ -376,6 +376,25 @@ La UX que importa no es conversar con SkillGraph, es **entender qué está
 haciendo el sistema y gobernarlo**. Un operador abre un run y ve: nodo actual,
 handoff, evidence, capabilities, decisions, graph diff, coste/budget y
 timeline. Esto convierte SkillGraph de framework en producto operativo.
+
+**Gate B7.** Los diez widgets existen **sobre las mismas APIs y query models**,
+y cada uno escala de summary card a panel a full-screen.
+
+**Bloque vivo. Medido antes de escribir nada**
+(`scripts/measure_b7_operational_ux.py`): **3 de 3 preguntas abiertas**. Y el
+hueco no era que faltara una TUI, sino la pieza de la que la TUI depende: cero
+declaraciones de `--format` en siete módulos de comando, y ningún símbolo en
+`src/` que expusiera render. La palabra «las mismas» del gate no tenía a qué
+referirse.
+
+**Cerrado:** `src/skillgraph/presentation/` con `TableView` y `DetailView` como
+superficie de render, las diez proyecciones puras en `widgets.py`, y
+`--format {text,json}` en `runs list` y `runs show` sobre un único `_emit`.
+
+**Abierto, y no baja el veredicto:** que la TUI sea usable de verdad (P4). Depende
+de un terminal y de una interacción humana que el CI no tiene. Lo que sí es
+comprobable sin humano —la pieza de abajo— es lo que este bloque mide; que la
+TUI sea usable se mide cuando haya alguien usándola.
 
 ---
 

@@ -53,6 +53,33 @@ class _UsageParser(argparse.ArgumentParser):
         self.exit(EXIT_USAGE, f"{self.prog}: error: {message}\n")
 
 
+def _add_format(parser: argparse.ArgumentParser, help_text: str) -> None:
+    """Anade `--format {text,json}` a un comando de SOLO LECTURA (B7).
+
+    Por que existe: medido antes de escribir nada
+    (`scripts/measure_b7_operational_ux.py`), CERO de los siete modulos de
+    comando declaraban una via de salida estructurada, y toda la salida
+    eran cadenas formateadas dentro de cada `print`. Eso obliga a que
+    cualquier consumidor que no sea una persona —una TUI, un agente, un
+    script— PARSEE COLUMNAS, y el ancho de columna no es un contrato: en
+    cuanto una columna crece, el parseo se rompe en silencio.
+
+    Se declara SOLO en comandos de lectura a proposito. En un comando que
+    muta, el JSON no es una representacion: es otro modo de hacer la
+    operacion, y por eso necesita su propio contrato y sus propias
+    pruebas, no una bandera.
+
+    `default="text"` porque la CLI **sigue siendo primera clase** para
+    una persona: añadir esta bandera no degrada nada, da una segunda via.
+    """
+    parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help=help_text,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = _UsageParser(
         prog="skillgraph",
@@ -383,6 +410,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=20,
         help="Numero maximo de Runs a listar (default 20).",
     )
+    _add_format(rl, "Salida: texto para una persona, o JSON estructurado.")
 
     # sg runs show <project> <run-id>
     rs = rn_sub.add_parser(
@@ -391,6 +419,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rs.add_argument("project", help="Proyecto destino.")
     rs.add_argument("run_id", help="Run ID a inspeccionar.")
+    _add_format(rs, "Salida: texto para una persona, o JSON estructurado.")
 
     # sg runs logs <project> <run-id> [--limit N]
     rl2 = rn_sub.add_parser(

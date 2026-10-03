@@ -1,3 +1,79 @@
+> **Bloque 2026-10-04 (B7) — Las vistas que CLI y TUI compartirian.**
+> Versión activa `0.26.0.dev0`; último tag `v0.26.0`.
+>
+> **B7: el hueco no era que faltara una TUI, era que faltaba la pieza de la
+> que la TUI depende.** El gate pide diez widgets vivos «sobre **las mismas**
+> APIs y query models». Medido antes de escribir nada
+> (`scripts/measure_b7_operational_ux.py`): **3 de 3 preguntas abiertas**, y
+> lo que encuentra es lo de abajo — cero declaraciones de `--format` en siete
+> módulos de comando, y ningún símbolo en `src/` que expusiera render. La
+> palabra cargada del gate no tenía a qué referirse, y por eso el bloque se
+> mide por la pieza de abajo, que el CI puede comprobar sin humano.
+>
+> ```
+> presentation/views.py:89::TableView        una tabla, con texto y JSON
+> presentation/views.py:175::DetailView      un panel, con texto y JSON
+> presentation/views.py:206::to_key_value     el contrato antiguo de runs show
+> presentation/widgets.py:49::run_view        de las diez proyecciones
+> cli/commands/runs.py:43::_emit              la eleccion, en un solo sitio
+> ```
+> `--format` se declara con un helper `_add_format` en el parser de la CLI,
+> y **no se cita aqui** por una razon que conviene saber: el guard de WI-92
+> indexa los modulos por NOMBRE de fichero, no por ruta, y `parser.py` existe
+> dos veces —en `cli/` y en `resources/`—, luego toda forma de esa cita cae
+> en «ambiguo». No se forzo el guard para poder citar: declara la ambiguedad
+> en vez de adivinarla, que es lo correcto. Queda como deuda, no como
+> hueco de este bloque.
+>
+> **Tres decisiones, y las tres son el bloque.**
+>
+> 1. **Las vistas no leen disco.** Se construyen desde lo que el dominio ya
+>    devolvió, porque una vista que consulta sería una segunda vía de
+>    consulta — el duplicado que este bloque existe para impedir. Se comprueba
+>    por AST: cero imports de `sqlite3` y de `Storage` en el paquete.
+> 2. **Una sola vista, dos representaciones, leyendo los mismos campos**, para
+>    que no puedan divergir. Y aquí se distinguirá algo que la primera versión
+>    del test confundía: «mismos campos» **no** es «mismo renderizado». Un
+>    vacío se imprime como `-` en texto — que es el contrato antiguo — y como
+>    `[]` en JSON, que es lo que una máquina necesita para no tener que
+>    adivinar si es vacío o la cadena `-`. Exigir que coincidieran habría
+>    obligado a romper uno de los dos.
+> 3. **B7 añade representaciones, no sustituye.** Sin `--format`, `runs show`
+>    sigue siendo `clave=valor`, porque hay callers que lo leen con
+>    `cut -d= -f2` y su docstring lo promete.
+>
+> **Y la tercera estaba rota, medido contra.** El guard que la vigila no es
+> teórico: la primera versión de `_emit` pasaba `vacio=` a toda vista.
+> `TableView` lo acepta, `DetailView` no — y `runs show`, que es el camino de
+> **texto**, el de por defecto, el que se usa siempre que nadie pasa
+> `--format`, salía con `TypeError`. Un test que mira la vista no lo ve: hay
+> que **ejecutar el comando**. Por eso `TestB7NoRompeElContratoExterno` va por
+> `subprocess` y no contra la vista.
+>
+> **Contra-saltos 3/3, cada uno con su propia causa** — y M3 la cazó un guard
+> **nuevo** (`test_list_sigue_diciendo_sin_runs`), no uno preexistente: sin
+> él, quitarle a `runs list` su `(sin runs)` propio no ponía nada en rojo.
+> Un cuarto agujero, también del instrumento: el contra-salto del medidor
+> copiaba el repo entero a `/tmp` y se puso rojo con `EDQUOT` al escribir
+> cientos de MB. Un guard que se pone rojo porque se llenó el disco no mide
+> la propiedad, mide el almacenamiento; ahora copia sólo `src/` y `scripts/`
+> — 1,1 MB — y discrimina igual.
+>
+> **Verificación:** 23 tests. `tests.total` 3088, y el desglose está **medido**,
+> no estimado: con `src/skillgraph/presentation/` apartado del árbol la suite
+> colecta 3055, la cifra exacta que B6 declaró; al devolverlo, 3088. Los 10
+> que no son de B7 los genera el guard de `wi47`, que pasó de 255 a 264 casos
+> al aparecer los módulos nuevos. Es la predicción que B6 dejó escrita y que
+> es fácil leer al revés.
+>
+> **Fuera de alcance y registrado:** P4 —que la TUI sea usable de verdad—,
+> porque depende de un terminal y de una interacción humana que el CI no
+> tiene. Se mide cuando haya alguien usándola. Al medidor la deja registrada
+> y por eso **no** baja el veredicto. Evidencia:
+> `scripts/measure_b7_operational_ux.py` y `scripts/mutate_b7_operational_ux.py`.
+>
+> ---
+>
 > **Bloque 2026-10-03 (B6) — Cada afirmacion dice QUIEN la afirma.**
 > Versión activa `0.26.0.dev0`; último tag `v0.26.0`.
 >
