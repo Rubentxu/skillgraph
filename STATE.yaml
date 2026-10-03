@@ -1176,6 +1176,65 @@ release:
   tag: v0.25.0
   fecha: 2026-10-03
   semver_bump: MINOR
+  rationale_b6: >-
+      BLOQUE B6 — Agent-first determinista, cerrado. SemVer DERIVADO con
+      scripts/derive_semver.py: b/f/x/n/d 0/1/1/4/0, la regla pide MINOR ->
+      v0.26.0. Ningun commit con marcador de ruptura. LO QUE ENTREGA, y es
+      el hallazgo: el campo que PARECIA el sitio del origen epistemico ya
+      existia y no decia lo que su nombre decia. Claim.extraction_method
+      es un str libre cuyos tres valores medidos —static_analysis,
+      regex_def, manual— son METODOS DE EXTRACCION, no origenes
+      epistemicos: son dos ejes ortogonales, y con 'regex_def' no se sabe
+      si lo afirmo la maquina o una persona. MEDIDO Y EN CONTRA DE LO QUE
+      PARECIA: NADIE escribe extraction_method en src/ —las 10 de
+      'manual' y las 4 de 'regex_def' estan todas en tests/, y en
+      produccion solo vive el default de la declaracion—, luego es un eje
+      que nadie rellena y no puede ser donde nazca el origen. LA SEPARACION
+      NO ES UNA PREFERENCIA: es la unica forma de que el gate tenga donde
+      escribir, porque un valor no puede decir quien afirma y como se
+      extrajo a la vez. CERRADO con AssertionOrigin como Literal cerrado en
+      core/runtime_types.py y ASSERTION_ORIGINS DERIVADO por get_args
+      (nunca a mano: es el error de QW-E, un conjunto literal se queda
+      corto cuando el Literal crece y entonces la validacion rechaza el
+      valor nuevo que el tipo si acepta); Claim.assertion_origin con
+      default 'observed', el unico origen que no promete autoridad;
+      InvalidAssertionOriginError con code PROPIO
+      sg_invalid_assertion_origin, porque un code compartido rompe la
+      traduccion a exit code (WI-109); CHECK en la DDL, porque un
+      vocabulario que solo vive en Python no se puede exigir donde se
+      escribe de verdad; y propagacion por INSERT, SELECT, mappers, DTO,
+      promocion y la proyeccion de query. LA MIGRACION es el hallazgo que
+      la suite NO ve: CREATE TABLE IF NOT EXISTS NO anade columnas a una
+      tabla que ya existe —medido: una base nueva funciona y una vieja no,
+      y el fallo sale en produccion y no en los tests, que construyen la
+      base desde cero cada vez—. TRES BUGS DEL PROPIO INSTRUMENTO antes de
+      que sirviera, los tres el error de siempre, un medidor que miente en
+      verde: P3 buscaba CHECK en todo schema.py y decia CERRADO con el
+      CHECK de OTRA tabla; P2 escribia a mano 'es str' en las dos ramas
+      del detalle; y _campo_de_claim derivaba el nombre del campo del
+      nombre de la clase (Claim -> claim), no encontraba
+      extraction_method, devolvia None, y None se leia como 'ya no es
+      str'. CUATRO AGUJEROS REALES ENCONTRADOS POR EL HARNESS, y no sondas
+      malas: (1) el guard de P6 buscaba la MENCION de los dos nombres con
+      ast.dump y pasaba en verde con la validacion gutiada, porque el
+      mensaje del raise sigue nombrando el conjunto —un guard que mide la
+      prosa del error no mide la validacion—; (2) el harness llevaba -x, y
+      sin -x, M3, M6, M7 y M8 NO cazaban: sus mutaciones dejaban la suite
+      en verde y el 8/8 era un numero que no se podia desarmar, con cuatro
+      sondas heredando el fallo de la anterior; (3) el harness guardaba el
+      sha y 'restauraba' reescribiendo el fichero con sus propios bytes,
+      que es no hacer nada; (4) el guard de WI-92 cazo el bloque vivo de
+      CURRENT dos veces, y las dos con razon —primero porque no citaba
+      ninguna linea, despues porque el formato es fichero.py:LINEA::Simbolo
+      con DOS puntos y yo escribia tres—. Se corrigieron las citas, no el
+      guard. VERIFICACION: 23 tests, mutaciones 8/8 con 8 CAUSAS
+      DISTINTAS y arbol restaurado byte a byte. tests.total 3053, +23 y
+      todos de test_b6_provenance.py, porque este bloque no creo modulos
+      nuevos y el guard de wi47 se queda en 255. FUERA DE ALCANCE Y
+      REGISTRADO: P5, si el proveedor real PUEBLA conocimiento o lo
+      CONSUME, que depende de una credencial que este entorno no tiene; el
+      medidor la mantiene abierta y por eso NO baja el veredicto — es
+      deuda, no un olvido—.
   rationale_b3: >-
       BLOQUE B3 — Core extensible, cerrado. SemVer DERIVADO con
       scripts/derive_semver.py: b/f/x/n/d 0/5/2/20/0, la regla pide MINOR ->
