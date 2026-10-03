@@ -12168,3 +12168,112 @@ salidas tienen nombre y se distinguen:
     cambio que no se ve en el commit es un cambio que no existe. Lo bueno es
     que el harness de mutaciones lo aborta por baseline sucio, que es
     exactamente para lo que esta.
+
+## 2026-10-03 — Bloque WI-109 (undécima vía, release `v0.22.0`)
+
+**Tema: «¿qué declara el repo que nada comprueba?».**
+
+La consigna de este bloque era `AGENTS.md §1.2`: *prohibido `raise
+ValueError` / `raise Exception` en código de dominio*. **Medida antes de
+tocar nada**: `grep -rn 'raise ValueError|raise Exception' src/` → **0**.
+La prohibición literal se cumple hoy.
+
+Eso no era «no hay nada que hacer»: era que **la alerta era caduca y la
+regla tenía un defecto que no era el que se buscaba**. Lo que el dominio
+lanza de verdad son otros builtins, medido por AST y no por grep:
+
+```
+TypeError x6   (file_handoff.py, knowledge_controller.py)
+KeyError x5    (platform/ports/dto.py)
+RuntimeError x2 (governance/graph_expansion.py — unwrap())
+NotImplementedError x1
+```
+
+Todos en invariantes internas de adaptadores, ninguno en el camino de
+error que ve el usuario. Instrumentar la prohibición literal habría sido
+vigilar una verdad que nadie puede romper.
+
+**El defecto real estaba en la tercera viñeta de §1.2**, que sí era
+cierta y no estaba instrumentada: *«cada excepción lleva un `code`
+estable (`sg_*`) usado por la CLI para traducir a exit codes»*. Medido en
+tres partes, con sonda de mutación válida:
+
+1. **La traducción no existía.** `runner.main` hacía `except
+   SkillGraphError -> return EXIT_DOMAIN` (10) para todo. EXIT_PARSE (11) y
+   EXIT_VALIDATION (12) solo se alcanzaban porque cada comando repetía su
+   propio `except ParseError`: la decisión la tomaba el TIPO en el sitio de
+   la llamada, y el `code` se imprimía sin decidir nada.
+
+2. **Entrada de usuario malformada salía como traceback.** El experimento
+   que lo demuestra, con el binario real:
+
+   ```
+   $ skillgraph knowledge compile <p> '{"obligatory": ['
+   rc=1   stderr = Traceback (most recent call last): ... JSONDecodeError
+   ```
+
+   El `json.loads(args.recipe)` estaba **fuera** del `try` y
+   `JSONDecodeError` no es `SkillGraphError`. Un defecto que ve el
+   usuario, no una hipótesis.
+
+3. **Tres clases compartían `sg_error`** (la raíz,
+   `SelfCertificationBlockedError`, `HandoffBlockedError`) y **dos
+   `sg_invalid_expansion`**. Un `code` compartido no puede mapear a dos
+   exit codes distintos, y entonces el `code` deja de ser la clave: la
+   traducción prometida **no se podía construir encima de él**.
+
+**Qué cambió.** `exit_para(exc)` en `cli/exit_codes.py`: pura sobre
+`exc.code`, en el módulo hoja que **sigue sin importar nada** porque
+ADR-0016 lo movió allí para que `parser.py` consuma el contrato sin
+arrastrar `Storage` (en `runner.py` sería inalcanzable desde `parser.py`, y
+volvería a la colisión con el 2 de `argparse`). `main()` la cablea, con
+un `code` desconocido cayendo en `EXIT_DOMAIN` y **nunca** en
+`EXIT_OK`: 0 significa éxito, y un error de dominio que sale con 0 es
+peor que uno que sale con 10. Los dos `json.loads` de entrada de
+usuario, protegidos. Los tres `code` colisionados, con `code` propio. Y
+las tres ramas de `cmd_knowledge_compile` que devolvían `EXIT_DOMAIN` las
+tres.
+
+**Medido con el binario**: `rc=1 + Traceback` → `rc=11 + ERROR (sg_parse)`.
+Los errores de dominio no distinguibles **siguen en 10**, que es
+exactamente lo que afirman 16 tests que ya existían: aquí no se cambia
+comportamiento observable que no sea el defecto.
+
+**Guard**: `tests/test_wi109_code_to_exit.py`, 19 tests, **11/11
+mutaciones cazadas con sonda por mutación**. Una no la cazó la sonda, y
+la señal fue que **M6 no la cazó**, no que el guard estuviera roto:
+`code = "sg_error"` es una *colisión* (la clase declara code, el mismo que
+otra), no una *herencia* (no tenerlo en `__dict__`). Son dos propiedades
+con dos tests; se corrigió la sonda y se añadió M6b para la herencia.
+
+**Deuda registrada, no abierta**: los 14 raises de builtins de M2; y las
+4 funciones con ramas que devuelven el mismo exit code
+(`expansion.py:446`, `promotion.py:361`, `runner.py:162`,
+`runner.py:382`) — código muerto, no de dominio.
+
+**Sin push**: 158 commits sin publicar, `origin/main` en `0ebbd58`.
+
+### Errores propios de este bloque
+
+20. **Un guard que busca una cadena encuentra el comentario que explica
+    por qué se quitó la cadena.** `test_main_usa_la_traduccion_y_no_el_
+    catch_all_a_pelo` buscaba `return EXIT_DOMAIN` en el texto de
+    `main()`, y se puso **roja por su propio comentario**: el comentario
+    que documenta el cambio de WI-109 contiene esa cadena. Es la regla de
+    la serie por **tercera** vez en tres semanas (WI-98 con rutas
+    absolutas, WI-108 con el patrón de `pytest.skip`) y por el motivo
+    exacto: la propiedad es «no hay un `return` con ese valor», y el AST
+    es donde se expresa. Un docstring que cita el patrón es
+    indistinguible de una llamada, y un comentario que explica el arreglo
+    es indistinguible del defecto que arregla.
+21. **Colé basura de teclado en tres ficheros de medición y uno de
+    parche, dos veces en el mismo bloque.** Escribí dos ideogramas en un
+    `print` de `wi109_measure.py` y un carácter de Alphabet en
+    `wi109_sondas.py`, y en el parche de `STATE.yaml` una palabra
+    pegada y una comilla suelta. En dos casos el fichero se leyó entero
+    y el texto roto pasó el filtro de CJK porque no era CJK: era basura
+    de otro tipo. El barrido de CJK es necesario y no suficiente; lo que
+    faltaba era **leer lo que se escribe antes de ejecutarlo**, que es la
+    mitad de lo que este bloque cuenta. Y describir el error sin citar
+    los caracteres, que es lo que hizo el error 18 y lo que este
+    párrafo hace.

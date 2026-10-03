@@ -14,6 +14,87 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.22.0] - 2026-10-03 — la viñeta que sí era cierta y nadie ejecutaba
+
+**MINOR**: `git log v0.21.2..HEAD` = 1 `feat`, 0 `fix`, 3 `docs`, 0 breaking.
+Derivado con `scripts/derive_semver.py` (`b/f/x/n/d 0/1/0/3/0`).
+
+Undécima vía de la serie «qué declara el repo que nada comprueba», y la
+primera cuya regla resultó **menos** violada de lo que la alerta suponía.
+
+La consigna era `AGENTS.md §1.2`: *prohibido `raise ValueError` /
+`raise Exception` en código de dominio*. **Medida antes de tocar nada**:
+
+```
+grep -rn 'raise ValueError\|raise Exception' src/   ->  0
+```
+
+La prohibición literal **se cumple**. Instrumentarla habría sido vigilar
+una verdad que nadie puede romper, que es la peor versión de un guard.
+Lo que el dominio lanza de verdad son otros builtins —`TypeError` ×6,
+`KeyError` ×5, `RuntimeError` ×2, `NotImplementedError` ×1, medido por
+AST— y todos en invariantes internas de adaptadores (`unwrap()`,
+`dto.py`), ninguno en el camino de error que ve el usuario.
+
+**El defecto estaba en la tercera viñeta**, que sí era cierta y no
+estaba instrumentada:
+
+> Cada excepción lleva un `code` estable (`sg_*`) usado por la CLI para
+> traducir a exit codes.
+
+Medido en tres partes:
+
+1. **La traducción no existía.** `runner.main` hacía
+   `except SkillGraphError -> return EXIT_DOMAIN` (10) para todo. Los
+   códigos 11 y 12 solo se alcanzaban porque cada comando repetía su
+   propio `except ParseError`: la decisión la tomaba el *tipo* en el
+   sitio de la llamada, y el `code` se imprimía sin decidir nada.
+2. **Entrada de usuario malformada salía como traceback.**
+   `knowledge compile <p> '{"obligatory": ['` devolvía **rc=1** con el
+   `Traceback` entero de `json.JSONDecodeError`: el `json.loads` estaba
+   fuera del `try` y `JSONDecodeError` no es `SkillGraphError`.
+3. **Tres clases compartían `sg_error`** y **dos
+   `sg_invalid_expansion`**. Un `code` compartido no puede mapear a dos
+   exit codes distintos, y entonces el `code` deja de ser la clave: la
+   traducción prometida no se podía construir encima de él.
+
+### Cambios
+
+- **`exit_para(exc)`** en `src/skillgraph/cli/exit_codes.py`: pura sobre
+  `exc.code`, con la tabla `code -> exit`. Vive en el **módulo hoja que
+  sigue sin importar nada** porque ADR-0016 lo movió allí para que
+  `parser.py` consuma el contrato sin arrastrar `Storage`; una traducción
+  en `runner.py` sería inalcanzable desde ahí.
+- **`main()`** cablea la traducción. Un `code` desconocido cae en
+  `EXIT_DOMAIN`, **nunca** en `EXIT_OK`: 0 significa éxito, y un error de
+  dominio que sale con 0 es peor que uno que sale con 10.
+- Los **dos** `json.loads` de entrada de usuario protegidos,
+  convirtiendo la excepción de la stdlib en `ParseError` con su `code`.
+- Los **tres** `code` colisionados, con `code` propio.
+- Las tres ramas de `cmd_knowledge_compile` que devolvían `EXIT_DOMAIN`
+  las tres: no distinguían nada, solo parecían distinguir.
+
+**Medido con el binario**: `rc=1 + Traceback` → `rc=11 + ERROR (sg_parse)`.
+Los errores de dominio no distinguibles **siguen en 10**, que es lo que
+afirman 16 tests que ya existían: cambiarlo habría roto un contrato
+as-built bien observado.
+
+### Guard
+
+`tests/test_wi109_code_to_exit.py`, 19 tests. El que mira el cableado
+mira el **AST**: la primera versión buscaba la cadena
+`return EXIT_DOMAIN` y se puso roja **por su propio comentario**, que
+explica por qué se sustituyó. Tercera vez en tres semanas por el mismo
+motivo (WI-98 con rutas absolutas, WI-108 con el patrón de
+`pytest.skip`): un guard que busca una cadena busca la cadena.
+
+**Mutaciones 11/11 con sonda.** Una no la cazó la sonda, y la señal fue
+que **M6 no la cazó**, no que el guard estuviera roto: `code = "sg_error"`
+es una *colisión* (la clase declara code, el mismo que otra), no una
+*herencia* (no tenerlo en `__dict__`). Son dos propiedades con dos tests.
+
+Sin push.
+
 ## [0.21.2] - 2026-10-03 — la regla que se escribe con tu letra y no se comprueba con ninguna
 
 **PATCH**: `git log v0.21.1..HEAD` = 0 `feat`, 2 `fix`, 4 `docs`, 0 breaking.

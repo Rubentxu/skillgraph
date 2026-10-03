@@ -1,7 +1,158 @@
 # CURRENT — puntero operativo
 
+> **Bloque 2026-10-03 (vigésima primera tanda) cerrado — WI-109, release `v0.22.0`.**
+> Versión activa `0.22.0.dev0`; último tag `v0.22.0`. 2754 passed, **0 skipped**.
+>
+> **WI-109 — la tercera viñeta de §1.2 que nadie ejecutaba, y una entrada
+> de usuario que salía como traceback.**
+> Undécima vía de la serie «qué declara el repo que nada comprueba», y la
+> primera cuya regla resultó **menos** violada de lo que la alerta suponía.
+>
+> La consigna era `AGENTS.md §1.2`: *prohibido `raise ValueError` /
+> `raise Exception` en código de dominio*. **Medida antes de tocar nada**:
+> `grep -rn 'raise ValueError|raise Exception' src/` → **0**. La
+> prohibición literal **se cumple**. Instrumentarla habría sido vigilar una
+> verdad que nadie puede romper: la peor versión de un guard.
+>
+> Lo que el dominio lanza de verdad son **otros** builtins —`TypeError` ×6,
+> `KeyError` ×5, `RuntimeError` ×2, `NotImplementedError` ×1, medido por
+> AST— y todos en invariantes internas de adaptadores (`unwrap()`,
+> `dto.py`), ninguno en el camino de error que ve el usuario.
+>
+> **El defecto real estaba en la tercera viñeta**, que sí era cierta y no
+> estaba instrumentada: *«cada excepción lleva un `code` estable (`sg_*`)
+> usado por la CLI para traducir a exit codes»*. Medido en tres partes:
+>
+> 1. **La traducción no existía.** `runner.main` hacía
+>    `except SkillGraphError -> return EXIT_DOMAIN` (10) para todo. Los
+>    códigos 11 y 12 solo se alcanzaban porque **cada comando repetía su
+>    propio `except ParseError`**: la decisión la tomaba el *tipo* en el
+>    sitio de la llamada, y el `code` se imprimía sin decidir nada.
+> 2. **Entrada de usuario malformada salía como traceback.**
+>    `knowledge compile <p> '{"obligatory": ['` devolvía **rc=1** con el
+>    `Traceback` entero de `json.JSONDecodeError`: el `json.loads` estaba
+>    **fuera** del `try` y `JSONDecodeError` no es `SkillGraphError`.
+> 3. **Tres clases compartían `sg_error`** (`SkillGraphError`,
+>    `SelfCertificationBlockedError`, `HandoffBlockedError`) y **dos
+>    `sg_invalid_expansion`**. Un `code` compartido no puede mapear a dos
+>    exit codes distintos, y entonces el `code` deja de ser la clave: la
+>    traducción prometida **no se podía construir encima de él**.
+>
+> **Ahora** `src/skillgraph/cli/exit_codes.py:77::exit_para` es la
+> traducción: pura sobre `exc.code`, en el módulo hoja que **sigue sin
+> importar nada** porque ADR-0016 lo movió allí para que `parser.py`
+> consuma el contrato sin arrastrar `Storage`. Y
+> `src/skillgraph/cli/runner.py:256::main` la cablea, con un `code`
+> desconocido cayendo en `EXIT_DOMAIN` y **nunca** en `EXIT_OK`: 0
+> significa éxito, y un error de dominio que sale con 0 es peor que uno
+> que sale con 10.
+>
+> **Medido con el binario**: `rc=1 + Traceback` → `rc=11 + ERROR (sg_parse)`.
+> Los errores de dominio no distinguibles **siguen en 10**, que es lo que
+> afirman 16 tests que ya existían: cambiarlo habría roto un contrato
+> as-built bien observado, y aquí no se cambia comportamiento observable
+> que no sea el defecto.
+>
+> **El guard que mira el cableado mira el AST, no el texto.** La primera
+> versión buscaba la cadena `return EXIT_DOMAIN` y se puso roja **por su
+> propio comentario**, que explica por qué se sustituyó. Tercera vez en
+> tres semanas por el mismo motivo (WI-98 con rutas absolutas, WI-108 con
+> el patrón de `pytest.skip`): un guard que busca una cadena busca la
+> cadena.
+>
+> `tests/test_wi109_code_to_exit.py` (19 tests): la traducción por
+> `code`, que `main()` la cablea, que ningún `json.loads` de la CLI queda
+> sin `try` (`:325`), que ningún `code` comparte clase (`:449`), y que la
+> receta malformada no escapa (`:241`).
+>
+> **Mutaciones 11/11 con sonda.** Una no la cazó la sonda, y la señal fue
+> que **M6 no la cazó**, no que el guard estuviera roto: `code = "sg_error"`
+> es una *colisión* (la clase declara code, el mismo que otra), no una
+> *herencia* (no tenerlo en `__dict__`). Son dos propiedades con dos
+> tests. Se corrigió la sonda y se añadió M6b para la herencia.
+>
+> **Release `v0.22.0`**: MINOR derivado con `scripts/derive_semver.py`
+> (`b/f/x/n/d 0/1/0/3/0`). Etiqueta anotada, post-release con el `sha`
+> real.
+>
+> **Sin push**: 158 commits sin publicar, `origin/main` en `0ebbd58`.
+
+---
+
+<details>
+<summary>Bloques anteriores (WI-108 y anteriores)</summary>
+
 > **Bloque 2026-10-03 (vigésima tanda) cerrado — WI-108, release `v0.21.2`.**
 > Versión activa `0.21.2.dev0`; último tag `v0.21.2`. 2735 passed, **0 skipped**.
+>
+> **WI-108 — la regla que se escribe con tu letra y no se comprueba con ninguna.**
+> Décima vía de la serie «qué declara el repo que nada comprueba», y la más
+> pequeña en código: una prohibición de siete palabras con su «por qué»
+> escrito al lado.
+>
+> `AGENTS.md §6.2` dice: **NO usar `pytest.skip` para esconder fallos**,
+> y que *un skip por falta de artefacto es el mismo defecto, con otra
+> forma*. La segunda línea la escribió WI-103 midiendo un gate que se
+> saltaba por falta de informe. De todo el repo, los instrumentos que
+> miran skips: **0**. Las etapas de la receta que los miran: **0**.
+>
+> **Medido antes de tocar nada**, con un run sintético cuyo único cambio es
+> la línea de resumen del journal:
+>
+> ```
+> run sin skips:   0 problemas []
+> run con 3 skips: 0 problemas []
+> veredicto: «OK: el run cumple los criterios que declara AGENTS.md»
+> ```
+>
+> **El detalle grave no es el regex.** Es que el **criterio 2** —el que
+> existe para separar un run real de un veredicto cacheado— acepta un
+> resumen con skips: `2715 passed, 3 skipped` casa con su regex igual que
+> `2718 passed`. No es un bug del regex: es que **la pregunta no se había
+> hecho**. Una regla y el criterio que la vigila no se contradicen cuando
+> nunca se cruzan.
+>
+> **Y la regla la incumplía el autor de la regla.** De los cinco skips,
+> dos son de plataforma (`fcntl` no existe en Windows: no esconden un
+> fallo) y **tres de artefacto** —«sin journal: clon nuevo»—, que es
+> literalmente lo que la segunda línea prohíbe. Los escribí yo en WI-105,
+> en el guard que construí para no esconder nada.
+>
+> **Ahora**, `tests/test_wi108_zero_skips.py:301::TestTodoSkipEstaDeclarado`
+> exige que no haya skip de ejecución y que los legítimos estén
+> declarados, y `scripts/check_pipeline_receipt.py:240::resumen_sin_skips`
+> es el predicado puro que la etapa `evidence` mide vía
+> `sg_pipeline_tests_skipped`. Pregunta por el **valor**, no por la
+> presencia: `0 skipped` es un run limpio.
+>
+> **Los 3 skips se fueron y no se sustituyeron por nada**, que es la
+> decisión que hay que defender: medían el **entorno** —qué pasó en esta
+> máquina— y no el **entregable**. El journal no está versionado, así que
+> en un clon nuevo se saltaban en silencio y la suite pasaba en verde con
+> skips. La tabla de dónde vive ahora cada propiedad está en el fichero
+> donde estaban, en `TestLaClaseDeTestQueVivioAQui`.
+>
+> **El guard que mira el código mira el AST, no el texto.** La primera
+> versión buscaba `pytest.skip(` con regex y se puso roja **por su propia
+> documentación**: un docstring que cita el patrón es indistinguible de una
+> llamada. Segunda vez en dos semanas, mismo repositorio, mismo motivo.
+>
+> **Mutaciones 9/9 en tres pasadas.** Una de las nueve no la cazó la
+> primera sonda porque medía la forma de retorno de un árbol sin llamadas,
+> donde esa forma nunca se ejerce: la mutación era inválida, y el harness
+> lo dijo en vez de acusar al guard.
+>
+> **2735 passed y 0 SKIPPED** (+17: 20 tests nuevos de WI-108 menos los 3
+> de WI-105 que se fueron). La aritmética y el run coinciden:
+> `2718 + 20 − 3 = 2735`. Run canónico `2387c4cc`, verificado por `run_id`.
+>
+> **Release `v0.21.2`**: PATCH derivado con `scripts/derive_semver.py`
+> (`b/f/x/n/d 0/0/1/4/0`). Commit `841a075`, etiqueta anotada sobre él,
+> post-release `4eb56af`.
+>
+> **Sin push**: 156 commits sin publicar, `origin/main` en `0ebbd58`.
+
+
 >
 > **WI-108 — la regla que se escribe con tu letra y no se comprueba con ninguna.**
 > Décima vía de la serie «qué declara el repo que nada comprueba», y la más
