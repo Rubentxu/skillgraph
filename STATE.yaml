@@ -1172,9 +1172,80 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.28.1
+  tag: v0.29.0
   fecha: 2026-10-04
-  semver_bump: PATCH
+  semver_bump: MINOR
+  rationale_b10: >-
+      BLOQUE B10 — LAS SUPERFICIES PUBLICAS, DECLARADAS Y CERTIFICADAS, cerrado.
+      SemVer DERIVADO con scripts/derive_semver.py desde v0.28.1: b/f/x/n/d
+      0/1/0/4/0, la regla pide MINOR -> v0.29.0. El `fix(core)` es el que
+      aporta el valor, y conviene decirlo porque un PATCH suena a menor: sin
+      el, dos propiedades del gate de 1.0 seguian siendo IN-CERTIFICABLES —
+      no incumplidas, no certificables—. MEDIDO con
+      scripts/measure_b9_gate_1_0.py, que deriva las veinte del propio
+      ROADMAP.md: antes 13 PASS / 6 OPEN / 1 NO_MEASURABLE, despues 15 PASS
+      / 4 OPEN / 1 NO_MEASURABLE. LA CUENTA INTERMEDIA fue 14/5, y el OPEN
+      que sobraba era «roadmap/state/docs coherentes», que es precisamente
+      el tests.total. Se puso al final del bloque con el run ejecutado, y
+      esa propiedad volvio a PASS sola: la cadena que B8 monto se nota
+      exactamente al usarla. LAS DOS PROPIEDADES QUE CIERRA estaban abiertas
+      por FALTA DE CERTIFICACION, no por falta de codigo:
+      «resource/controller API estable» porque skillgraph.core no declaraba
+      __all__ —un paquete sin superficie declarada no tiene nada que pueda
+      decir que es estable— y «CLI estable» porque no existia el snapshot, y
+      once comandos de primer nivel podian cambiar sin que nada lo notara.
+      LO IMPORTANTE NO ES LO QUE HACE EL GUARD, ES LO QUE SE LE OPUSO: las
+      dos se cerraban en VEINTE SEGUNDOS escribiendo un __all__ y haciendo
+      `touch` sobre el fichero, porque los predicados de B9 comprobaban la
+      EXISTENCIA y un is_file() es lo mas facil de falsificar que hay. Un
+      touch les daba PASS a los dos, con el gate de 1.0 exactamente igual de
+      lejos. CERRADO con scripts/check_public_surfaces.py, que EJECUTA la
+      comparacion contra el arbol en vez de mirar el fichero, y genera las
+      dos superficies con --actualizar. VERIFICADO EN LAS CUATRO
+      DIRECCIONES: snapshot vacio -> OPEN en las dos; comando quitado del
+      snapshot -> OPEN; superficie real movida -> OPEN; estado de verdad ->
+      PASS en las dos. DEFECTO DEL PROPIO GUARD, MEDIDO AL ESCRIBIRLO: la
+      primera version comparaba los comandos de la CLI en UNA sola direccion
+      (reales - declarados), y anadir un comando INVENTADO al snapshot pasaba
+      en verde. Un guard que solo sabe detectar que el arbol crecio no vigila
+      la declaracion, y la declaracion es justamente lo que dice «esto es lo
+      que hay». Tres decisiones mas, cada una con su motivo. (1) La
+      superficie del nucleo son 60 simbolos DERIVADOS del __all__ de los tres
+      modulos, no escritos a mano, y se reexportan por IDENTIDAD: si el
+      nucleo recreara la clase, el `except` que escribe un consumidor y el
+      que lanza el nucleo serian dos clases distintas y el except no
+      atraparia nada —la misma clase de defecto que el alias de
+      AgentResult.from_fixture en WI-113—. (2) Las superficies viven en
+      `surfaces/` y NO en `docs/`, porque `docs/*` esta en .gitignore salvo
+      tres carve-outs y un snapshot que no viaja no declara nada: es el
+      defecto que B8 midio con el hijo de concurrencia. El guard lo comprueba
+      contra `git ls-files` POR FICHERO, no por directorio, que es el
+      criterio que B8 escribio y midio en las dos direcciones. (3) El
+      docstring anterior decia que cada modulo se reexportaba desde su
+      ubicacion de primer nivel (`skillgraph.errors` y eso); MEDIDO: es
+      falso, ninguno de esos tres modulos existe. Se borra la frase en vez
+      de arreglarla, porque arreglarla seria fabricar un modulo de
+      compatibilidad que nadie pidio y que volveria a caducar. LO QUE EL
+      BLOQUE NO ABRE, con su motivo: «pack/controller lifecycle» y «upgrade
+      desde releases soportadas» piden codigo que no existe; «runtime real
+      certificado» pide SG_UAT_REAL_PROVIDER=1 y una credencial que este
+      entorno no tiene; «security/threat model actualizado» pide reescribir
+      un ADR que se aprobo describiendo un proyecto de 830 tests y 17
+      releases. Y «TUI operacional» sigue NO_MEASURABLE, que no es lo mismo
+      que OPEN: es una propiedad de una persona usando un terminal. HARNESS
+      6/6 con 6 causas distintas, y DOS SONDAS NACIERON ROTAS y se cuentan
+      porque el fallo era instructivo: envolver los 60 simbolos con
+      type('Copia', (v,), {}) revienta con TypeError: metaclass conflict en
+      los 28 NewType/frozenset, el modulo no importaba, y el harness veia
+      rc=4 con CERO lineas FAILED — que se lee como «el guard no muerde»
+      cuando lo que pasa es que la sonda estaba rota; un rc de colecta no es
+      un test en rojo. Y una correccion al harness heredado de B9: contaba
+      como «causa» el conjunto COMPLETO de tests en rojo, con lo que dos
+      sondas legitimamente distintas se pisan en las dos centinelas de «esta
+      todo verde» y el harness avisaba de causa compartida; ahora la causa
+      es el conjunto de tests DIAGNOSTICOS de cada sonda. 19 tests en cinco
+      conjuntos disjuntos, porque un guard con seis aserciones iguales mide
+      una sola cosa seis veces.
   rationale_b6: >-
       BLOQUE B6 — Agent-first determinista, cerrado. SemVer DERIVADO con
       scripts/derive_semver.py: b/f/x/n/d 0/1/1/4/0, la regla pide MINOR ->
@@ -1302,6 +1373,28 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.29.0
+      fecha: 2026-10-04
+      sha: "5ace1e2554beee06440f3eeacc85adacccab61f3"
+      nota: >-
+        B10 cerrado: las superficies publicas, declaradas y certificadas. Cierra las dos
+        propiedades del gate de 1.0 que B9 dejo OPEN por FALTA DE CERTIFICACION, no por
+        falta de codigo: «resource/controller API estable» porque skillgraph.core no
+        declaraba __all__, y «CLI estable» porque no existia el snapshot de la CLI y once
+        comandos de primer nivel podian cambiar sin que nada lo notara. SemVer DERIVADO con
+        scripts/derive_semver.py desde v0.28.1: b/f/x/n/d 0/1/0/4/0, la regla pide MINOR. El
+        `fix(core)` es el que aporta el valor, y conviene decirlo porque un PATCH suena a
+        menor: sin el, dos propiedades seguian siendo IN-CERTIFICABLES. MEDIDO con
+        scripts/measure_b9_gate_1_0.py, que deriva las veinte del propio ROADMAP.md:
+        13 PASS / 6 OPEN / 1 NO_MEASURABLE -> 15 PASS / 4 OPEN / 1 NO_MEASURABLE. La cuenta
+        intermedia fue 14/5, y el OPEN que sobraba era «roadmap/state/docs coherentes»,
+        que es precisamente el tests.total: se puso al final del bloque con el run ejecutado
+        y esa propiedad volvio a PASS sola. LO QUE EL BLOQUE NO ABRE, con su motivo:
+        «pack/controller lifecycle» y «upgrade desde releases soportadas» piden codigo que
+        no existe; «runtime real certificado» pide SG_UAT_REAL_PROVIDER=1 y una credencial
+        que este entorno no tiene; «security/threat model actualizado» pide reescribir un
+        ADR aprobado describiendo un proyecto de 830 tests y 17 releases. «TUI operacional»
+        sigue NO_MEASURABLE, que no es lo mismo que OPEN.
     - tag: v0.28.1
       fecha: 2026-10-04
       sha: "ec6e791109fbba30989b6d186cec61c4b85d2b4f"
