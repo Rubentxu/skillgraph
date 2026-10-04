@@ -60,6 +60,39 @@ CREATE INDEX IF NOT EXISTS resources_by_kind
 CREATE INDEX IF NOT EXISTS resources_by_name
     ON resources(tenant_id, project_id, namespace, name);
 
+-- B11: el REGISTRO de packs instalados.
+--
+-- POR QUE ESTA TABLA Y NO LA DE `resources`, y por que no es un detalle:
+-- `upsert_resource` RECHAZA cambiar el `spec` bajo la misma identidad con
+-- `IdentityConflictError` —es deliberado, es lo que hace que un recurso
+-- sea inmutable y que cambiarlo sea un conflicto, no una edicion—. MEDIDO:
+-- con el registro encima de `resources`, `sg pack update` era
+-- estructuralmente IMPOSIBLE: la version nueva es un spec distinto bajo la
+-- misma identidad, luego el storage la rechazaba siempre.
+--
+-- Una INSTALACION no es un recurso. El recurso es el contenido del pack;
+-- la instalacion es el hecho de que ese pack este vivo en este proyecto,
+-- y ese hecho tiene su propio ciclo: se instala, se actualiza y se retira.
+-- Meterlo en `resources` no era solo comodo, era incorrecto.
+--
+-- Y `retirar` NO borra: mueve `estado` a `retired`. Ver la cabecera de
+-- `skillgraph.packaging.registry`, que explica por que un DELETE perderia
+-- la unica respuesta que existe a «¿este proyecto ha tenido este pack?».
+CREATE TABLE IF NOT EXISTS installed_packs (
+    tenant_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    manifest_json TEXT NOT NULL,
+    estado TEXT NOT NULL,
+    uid TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (tenant_id, project_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS installed_packs_by_project
+    ON installed_packs(tenant_id, project_id, estado);
+
 CREATE TABLE IF NOT EXISTS relations (
     uid TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,

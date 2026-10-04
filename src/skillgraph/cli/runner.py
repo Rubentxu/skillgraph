@@ -47,7 +47,11 @@ from skillgraph.cli.commands.knowledge import (
 )
 from skillgraph.cli.commands.pack import (
     cmd_pack_import,
+    cmd_pack_install,
+    cmd_pack_list,
     cmd_pack_load,
+    cmd_pack_remove,
+    cmd_pack_update,
 )
 from skillgraph.cli.commands.promotion import (
     cmd_promotion_list,
@@ -455,7 +459,11 @@ _DISPATCH: Final[Mapping[str | tuple[str, str], Handler]] = MappingProxyType(
         ("project", "inspect"): cmd_project_inspect,
         # --- paquetes y bricks ---
         ("pack", "import"): cmd_pack_import,
+        ("pack", "install"): cmd_pack_install,
+        ("pack", "list"): cmd_pack_list,
         ("pack", "load"): cmd_pack_load,
+        ("pack", "remove"): cmd_pack_remove,
+        ("pack", "update"): cmd_pack_update,
         # --- promocion ---
         ("promotion", "submit"): cmd_promotion_submit,
         ("promotion", "list"): cmd_promotion_list,
@@ -607,6 +615,10 @@ __all__ = [
     "cmd_knowledge_stale",
     "cmd_knowledge_trace",
     "cmd_pack_import",
+    "cmd_pack_install",
+    "cmd_pack_list",
+    "cmd_pack_remove",
+    "cmd_pack_update",
     "cmd_project_create",
     "cmd_project_inspect",
     "cmd_project_list",

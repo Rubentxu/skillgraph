@@ -194,7 +194,14 @@ class TestPublicSurfacePreserved:
     #: 4 fallos bajo esa misma mutacion), no esta red. Por eso aqui no
     #: se deriva un conjunto de nombres: la cuenta es la property que
     #: esta red afirma, y afirmar mas seria mentira.
-    EXPECTED_PUBLIC = 74
+    #:
+    #: B11 subio la cuenta a 75 al anadir `installed_packs_repository`, que
+    #: es un cluster mas de la fachada con el mismo patron lazy+cacheado que
+    #: los demas (ADR-0016/WI-56). Se sube A PROPOSITO y no por descuido:
+    #: la alternativa —meter el registro de packs dentro de
+    #: `knowledge_repository`— seria mas pequena en apariencia y mentira en
+    #: el sitio, porque una instalacion no es un recurso.
+    EXPECTED_PUBLIC = 75
     # Solo los privados no-dunder: `__init__`/`__enter__`/`__exit__`
     # estan cubiertos por LIVE_SQL_METHODS y por `close`/`uow`.
     EXPECTED_PRIVATE = 5

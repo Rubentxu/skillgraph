@@ -21,17 +21,37 @@ from skillgraph.packaging.manifest import (
     exigir_compatible,
     parse_manifest,
 )
+from skillgraph.packaging.registry import (
+    ESTADO_INSTALADO,
+    ESTADO_RETIRADO,
+    FilaDePack,
+    RegistroDePacks,
+    actualizar,
+    instalar,
+    manifiesto_de,
+    motivos_de_incompatibilidad,
+    retirar,
+)
 
 __all__ = (
+    "ESTADO_INSTALADO",
+    "ESTADO_RETIRADO",
     "ISOLATION_LEVELS",
     "PACK_KINDS",
     "CapabilityRequirement",
+    "FilaDePack",
     "IncompatiblePackError",
     "IsolationLevel",
     "PackKind",
     "PackManifest",
+    "RegistroDePacks",
     "Requires",
+    "actualizar",
     "es_compatible",
     "exigir_compatible",
+    "instalar",
+    "manifiesto_de",
+    "motivos_de_incompatibilidad",
     "parse_manifest",
+    "retirar",
 )

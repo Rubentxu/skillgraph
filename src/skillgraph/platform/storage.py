@@ -81,6 +81,9 @@ from skillgraph.resources.bricks import Brick
 
 if TYPE_CHECKING:
     from skillgraph.platform.event_store import SqliteEventStore
+    from skillgraph.platform.installed_packs_repository import (
+        SqliteInstalledPacksRepository,
+    )
     from skillgraph.platform.knowledge_repository import SqliteKnowledgeRepository
     from skillgraph.platform.policy_store import SqlitePolicyStore
     from skillgraph.platform.promotion_repository import SqlitePromotionRepository
@@ -260,6 +263,7 @@ class Storage(
         self._knowledge_repository: SqliteKnowledgeRepository | None = None
         self._event_store: SqliteEventStore | None = None
         self._promotion_repository: SqlitePromotionRepository | None = None
+        self._installed_packs_repository: SqliteInstalledPacksRepository | None = None
         self._migrate()
         # WI-33 (R2 audit externo): el ``SqliteUnitOfWork`` owns la
         # conexion y expone 5 bounded-context adapters que la
@@ -422,6 +426,26 @@ class Storage(
 
             self._knowledge_repository = SqliteKnowledgeRepository(self)
         return self._knowledge_repository
+
+    def installed_packs_repository(self) -> SqliteInstalledPacksRepository:
+        """El registro de packs instalados (B11).
+
+        Componente REAL y cacheado, por el mismo motivo que los demas
+        clusters de ADR-0016/WI-56: identidad estable, conexion compartida y
+        SQL viviendo en su propio modulo.
+
+        Vive aparte de `knowledge_repository` porque una INSTALACION no es un
+        recurso: `upsert_resource` rechaza cambiar el `spec` bajo la misma
+        identidad, y el ciclo de vida necesita exactamente eso —cambiar de
+        version— para poder existir.
+        """
+        if getattr(self, "_installed_packs_repository", None) is None:
+            from skillgraph.platform.installed_packs_repository import (
+                SqliteInstalledPacksRepository,
+            )
+
+            self._installed_packs_repository = SqliteInstalledPacksRepository(self)
+        return self._installed_packs_repository
 
     def policy_store(self) -> SqlitePolicyStore:
         """Devuelve el componente REAL del cluster policy/budget (WI-56).

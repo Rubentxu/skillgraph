@@ -179,6 +179,35 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("project", help="Proyecto destino (donde se persiste el pack).")
     pl.add_argument("path", type=Path, help="Ruta al archivo Markdown del Domain Pack.")
 
+    # B11: el ciclo de vida. Es lo que el gate de 1.0 pide literally:
+    # «pack/controller lifecycle» y su predicado mira install/update/remove.
+    # El manifiesto que valido B8 viaja en `spec.manifest` del propio pack,
+    # luego un pack instalable es un Markdown como los demas y no un
+    # directorio con dos ficheros.
+    pinst = pp_sub.add_parser(
+        "install",
+        help="Instala un pack: valida su manifiesto y lo deja vivo en el proyecto.",
+    )
+    pinst.add_argument("project", help="Proyecto destino.")
+    pinst.add_argument("path", type=Path, help="Ruta al Markdown del pack, con `spec.manifest`.")
+    pupd = pp_sub.add_parser(
+        "update",
+        help="Actualiza un pack instalado. Exige que la version nueva SUBA.",
+    )
+    pupd.add_argument("project", help="Proyecto destino.")
+    pupd.add_argument("path", type=Path, help="Ruta al Markdown del pack nuevo.")
+    prem = pp_sub.add_parser(
+        "remove",
+        help="Retira un pack instalado. Lo que no esta instalado se dice.",
+    )
+    prem.add_argument("project", help="Proyecto destino.")
+    prem.add_argument("name", help="Nombre del pack a retirar.")
+    plst = pp_sub.add_parser(
+        "list",
+        help="Lista los packs instalados: version y aislamiento.",
+    )
+    plst.add_argument("project", help="Proyecto a listar.")
+
     # H8: promotion entre bases (UAT-13 ruta publica)
     pr = sub.add_parser(
         "promotion",

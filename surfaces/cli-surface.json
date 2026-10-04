@@ -41,6 +41,10 @@
     "cmd_knowledge_stale",
     "cmd_knowledge_trace",
     "cmd_pack_import",
+    "cmd_pack_install",
+    "cmd_pack_list",
+    "cmd_pack_remove",
+    "cmd_pack_update",
     "cmd_project_create",
     "cmd_project_inspect",
     "cmd_project_list",
@@ -74,7 +78,11 @@
     ],
     "pack": [
       "import",
-      "load"
+      "install",
+      "list",
+      "load",
+      "remove",
+      "update"
     ],
     "policy": [
       "get",
