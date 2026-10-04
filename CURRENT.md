@@ -1,6 +1,6 @@
 > **Bloque 2026-10-04 (B16) — Dos propiedades del gate daban PASS sin nada que comparar.**
-> (cerrado; publicación en curso)
-> Versión activa `0.32.0.dev0`; último tag `v0.32.0`.
+> (cerrado y publicado en `v0.32.1`)
+> Versión activa `0.32.1.dev0`; último tag `v0.32.1`.
 >
 > **ESTE ES UN BLOQUE HACÍA 1.0, Y ES LA PRIMERA DE LAS SIETE.** B15 dejó
 > escrito que siete de las veinte propiedades del gate se deciden leyendo el

@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B16** — Dos propiedades del gate daban PASS sin nada que comparar
-> Versión activa `0.32.0.dev0` · último tag `v0.32.0` · 3301 tests · 16/16 UAT
+> Versión activa `0.32.1.dev0` · último tag `v0.32.1` · 3301 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
