@@ -591,3 +591,87 @@ class TestMiseTasksContract:
     def test_sync_task_exists(self, mise_toml_content: str) -> None:
         """CI usa 'mise run sync' para resolver deps; la tarea debe existir."""
         assert "[tasks.sync]" in mise_toml_content, "Tarea [tasks.sync] no encontrada en mise.toml"
+
+
+# =====================================================================
+# El codigo 5 de pytest no es un fallo, y el hook lo decia
+# =====================================================================
+
+
+class TestElSmokeConCincoNoEsUnFallo:
+    """`pytest` sale con 5 cuando NO COLECTA tests, no cuando fallan.
+
+    MEDIDO en B20, y bloquea el release: un commit que stagea solo `src/` —el
+    bump de version, que es lo que hace toda release— fallaba con «el smoke
+    fallo» cuando no habia nada que fallara. Un gate que dice «fallo» sin que
+    haya fallo enseña a su lector a no creerlo, que es el fallo mas caro que
+    puede tener un gate.
+    """
+
+    def test_pytest_sale_con_cinco_sobre_un_fichero_sin_tests(self) -> None:
+        """La medicion, no la opinion: se ejecuta pytest de verdad."""
+        import subprocess as _sp
+        import sys as _sys
+
+        mod = REPO_ROOT / "src" / "skillgraph" / "__init__.py"
+        proc = _sp.run(
+            [_sys.executable, "-m", "pytest", "-q", str(mod)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 5, (
+            f"pytest sobre un modulo sin tests deberia salir con 5, no con "
+            f"{proc.returncode}. Si ha cambiado, este guard esta midiendo un "
+            f"contrato que ya no es el del hook."
+        )
+
+    def test_el_hook_no_confunde_cinco_con_fallo(self, tmp_path: Path) -> None:
+        """El hook EXECUTADO, con un pytest de mentira que sale con 5.
+
+        Se ejecuta el hook entero contra un repositorio de prueba con un solo
+        `.py` staged y ningun test, y se exige que el commit NO se bloquee.
+        """
+        import os as _os
+        import shutil as _shutil
+        import stat as _stat
+        import subprocess as _sp
+
+        repo = tmp_path / "repo"
+        (repo / "scripts" / "hooks").mkdir(parents=True)
+        (repo / ".git" / "hooks").mkdir(parents=True)
+        hook = repo / ".git" / "hooks" / "pre-commit"
+        _shutil.copy(HOOK_PATH, hook)
+        hook.chmod(hook.stat().st_mode | _stat.S_IXUSR | _stat.S_IXGRP | _stat.S_IXOTH)
+
+        _sp.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+        _sp.run(["git", "-C", str(repo), "config", "user.email", "a@b.c"], check=True)
+        _sp.run(["git", "-C", str(repo), "config", "user.name", "probe"], check=True)
+        # El hook pasa por ruff ANTES de llegar a pytest, asi que el repositorio
+        # de prueba necesita la estructura minima que esos dos pasos miran.
+        # MEDIDO: sin esto el hook falla en `ruff check src tests` y el test
+        # mediria un fallo de ruff diciendo que mide el codigo 5 de pytest.
+        (repo / "src" / "mod").mkdir(parents=True)
+        (repo / "tests").mkdir(parents=True)
+        (repo / "src" / "mod" / "a.py").write_text("X = 1\n", encoding="utf-8")
+        (repo / "tests" / "t.py").write_text('"""Sustituto."""\n', encoding="utf-8")
+        (repo / "modulo.py").write_text("X = 1\n", encoding="utf-8")
+        _sp.run(["git", "-C", str(repo), "add", "modulo.py"], check=True, capture_output=True)
+
+        proc = _sp.run(
+            ["sh", str(hook)],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**_os.environ, "HOME": str(tmp_path)},
+        )
+        salida = proc.stdout + proc.stderr
+        assert proc.returncode == 0, (
+            f"el hook bloquea un commit que no tiene nada que fallar "
+            f"(rc={proc.returncode}):\n{salida[-600:]}"
+        )
+        assert "nada que ejecutar" in salida, (
+            f"el hook pasa sin decir POR QUE: un hook que se calla es "
+            f"indistinguible de uno que no ha mirado.\n{salida[-600:]}"
+        )

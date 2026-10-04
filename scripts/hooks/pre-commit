@@ -90,14 +90,34 @@ if [ -n "$STAGED_PY" ] && [ "${HOOK_SKIP_TESTS:-0}" != "1" ]; then
     # palabras. Con "$STAGED_PY" entrecomillado, pytest recibiria un unico
     # argumento con todos los paths pegados y no encontraria nada que
     # correr — el hook pasaria por verde sin haber ejecutado un test.
-    if run_in_toolchain run pytest -q $STAGED_PY >"$PYTEST_LOG" 2>&1; then
+    #
+    # MEDIDO en B20, y bloquea el release: `pytest -q <fichero de produccion>`
+    # no colecta nada y sale con el codigo 5, NO con 0. Un commit que stagea
+    # solo `src/` —el bump de version, por ejemplo— fallaba aqui con «el smoke
+    # fallo» cuando no habia nada que fallara. El 5 de pytest significa «no
+    # se colectaron tests», que es un hecho sobre lo que se le pidio correr,
+    # no un fallo del codigo que se esta committeando.
+    # `|| SMOKE_RC=$?` y no un comando suelto seguido de `$?`: este hook
+    # corre con `set -e`, y un comando suelto que sale con 5 aborta el
+    # script entero ANTES de llegar al `if`. MEDIDO: la primera version de
+    # este arreglo hacia exactamente eso, y el hook seguia saliendo con 5 sin
+    # imprimir nada. La forma `|| rc=$?` queda exenta de errexit porque es
+    # parte de una condicion.
+    SMOKE_RC=0
+    run_in_toolchain run pytest -q $STAGED_PY >"$PYTEST_LOG" 2>&1 || SMOKE_RC=$?
+    if [ "$SMOKE_RC" -eq 0 ]; then
         tail -5 "$PYTEST_LOG"
         echo "[pre-commit] smoke OK ($N_STAGED ficheros)"
+    elif [ "$SMOKE_RC" -eq 5 ]; then
+        # No hay tests en lo staged. Se DICE, y no se calla: un hook que
+        # pasa por verde sin decir nada es indistinguible de uno que no ha
+        # mirado.
+        echo "[pre-commit] smoke: nada que ejecutar en lo staged (pytest=5, no se colectaron tests)"
     else
         tail -40 "$PYTEST_LOG"
         rm -f "$PYTEST_LOG"
         echo ""
-        echo "ERROR: el smoke sobre lo staged fallo."
+        echo "ERROR: el smoke sobre lo staged fallo (pytest=$SMOKE_RC)."
         echo "Bypass for doc-only commits: HOOK_SKIP_TESTS=1 git commit"
         echo "Bypass always: git commit --no-verify"
         exit 1
