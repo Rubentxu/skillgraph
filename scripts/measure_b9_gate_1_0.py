@@ -379,23 +379,121 @@ def _preguntas(informe: str) -> tuple[Pregunta, ...]:
     return tuple((est, evi, "FUERA DEL ALCANCE" in evi.upper()) for est, evi, _ in preguntas)
 
 
+def _paquete_de(fichero: Path) -> tuple[str, ...]:
+    """El PAQUETE al que pertenece un fichero, en partes y respecto a `src/`.
+
+    MEDIDO, y hace falta porque los imports relativos **no tienen nombre**: son
+    una cantidad de puntos mas un trozo, y solo significan algo contra el
+    paquete del que salen. Un `from ..platform import x` en
+    `src/skillgraph/core/runtime_types.py` vale `skillgraph.platform`, y sin
+    esto no hay forma de saberlo salvo a mano.
+
+    **MEDIDO TAMBIEN, Y ESTO FUE UN DEFECTO MIO AL ESCRIBIRLO.** La primera
+    version hacia `pop()` SOLO cuando el fichero se llamaba `__init__.py`, y en
+    el resto de los casos no quitaba nada: devolvia
+    `('skillgraph', 'core', 'runtime_types')` —el MODULO, no el PAQUETE—. Con
+    ese error, un `from ..platform.storage import ...` de nivel 2 resolvia a
+    `skillgraph.core.platform.storage`, que **empieza por `skillgraph.core`**,
+    luego el predicado lo descartaba por ser del nucleo y daba PASS. O sea que
+    el arreglo arreglaba el recuento —los imports pasaron de 5 a 6— y dejaba
+    el defecto entero, que es la forma mas traicionera de arreglar algo: el
+    numero se mueve, luego parece que funciona.
+
+    El condicional era ademas redundante: en los dos casos hay que quitar el
+    ultimo trozo. En `__init__.py` ese trozo es el propio nombre del paquete; en
+    cualquier otro es el modulo que esta DENTRO del paquete. Los dos se van.
+    """
+    relativo = fichero.relative_to(RAIZ / "src").with_suffix("")
+    partes = list(relativo.parts)
+    partes.pop()
+    return tuple(partes)
+
+
+def _resuelve_import_relativo(paquete: tuple[str, ...], nivel: int, modulo: str | None) -> str:
+    """A que modulo absoluto apunta un `from ...x import y` de `nivel` puntos.
+
+    `nivel == 0` es un import absoluto y no pasa por aqui. `nivel == 1` es «este
+    paquete»; `nivel == 2` es el de arriba, y asi sucesivamente.
+
+    **Y QUE PASA CUANDO EL NIVEL SE SALE DEL PAQUETE.** MEDIDO: subir de mas es
+    un error de Python en tiempo de importacion, y un predicado que lo
+    aceptara en silencio se estaria inventando un nombre. Aqui se devuelve una
+    cadena vacia, que el llamante cuenta como un modulo que **no se puede
+    resolver** —que es un dato, y no un fallo del recorrido—. Es lo que
+    distingue «mire y no hay nada» de «mire y hay algo que no entiendo».
+    """
+    base = list(paquete[: len(paquete) - (nivel - 1)]) if nivel > 0 else []
+    if len(base) < 0:  # pragma: no cover - `nivel` es un entero positivo
+        return ""
+    if nivel - 1 > len(paquete):
+        return ""
+    if modulo:
+        base.extend(modulo.split("."))
+    return ".".join(base)
+
+
 def _imports_de(paquete: str) -> tuple[str, ...]:
     """Todos los modulos que importan los ficheros de un paquete de ``src``.
 
     Se recorre el arbol de verdad y no una lista escrita aqui: un paquete
     nuevo tiene que entrar en la medicion por existir, no por que alguien
     se acuerde de anadirlo.
+
+    **MEDIDO, Y ESTA ERA LA MITAD QUE NO SE MIRABA.** La version anterior exigia
+    `nodo.level == 0`, o sea que solo contaba los imports ABSOLUTOS, y todo
+    import RELATIVO se le escapaba. Y como `core/` esta en
+    `src/skillgraph/core/`, un `from ..platform.storage import Storage` tiene
+    `level == 2` y **sale de `core/` entero**. Anadido ese import de verdad a un
+    modulo del nucleo, la propiedad daba PASS con la MISMA cadena de evidencia
+    que el caso limpio, byte a byte: un veredicto que no puede distinguir «el
+    nucleo esta limpio» de «no he mirado la mitad de la superficie».
+
+    Y lo que la hace mas peligrosa: MEDIDO, `core/` **no usa hoy ningun import
+    relativo**. La superficie esta vacia, y una superficie vacia no se mira
+    porque no hay nada que mirar.
+
+    Por eso los relativos se resuelven a su nombre absoluto en vez de
+    ignorarse. Lo que **no** hace este bloque es prohibirlos: que `core/` pueda
+    escribir `from .errors import ...` es correcto, y forzarle a escribir
+    `from skillgraph.core.errors import ...` para que un predicado lo vea es
+    cambiar el codigo para que el guard quede bien.
     """
     raices = sorted((RAIZ / "src" / "skillgraph" / paquete).rglob("*.py"))
     encontrados: set[str] = set()
     for fichero in raices:
         arbol = ast.parse(fichero.read_text(encoding="utf-8"), filename=str(fichero))
+        suyo = _paquete_de(fichero)
         for nodo in ast.walk(arbol):
             if isinstance(nodo, ast.Import):
                 encontrados.update(alias.name for alias in nodo.names)
-            elif isinstance(nodo, ast.ImportFrom) and nodo.module and nodo.level == 0:
-                encontrados.add(nodo.module)
+            elif isinstance(nodo, ast.ImportFrom):
+                if nodo.level == 0:
+                    if nodo.module:
+                        encontrados.add(nodo.module)
+                    continue
+                resuelto = _resuelve_import_relativo(suyo, nodo.level, nodo.module)
+                if resuelto:
+                    encontrados.add(resuelto)
     return tuple(sorted(encontrados))
+
+
+def _ficheros_de(paquete: str) -> int:
+    """Cuantos ficheros recorre `_imports_de` para ese paquete.
+
+    MEDIDO: la evidencia de `core sin dependencias de impl. externa` decia
+    «core/ solo importa de si mismo y de la estandar (5 modulos)». Y `core/`
+    tiene **cuatro** ficheros: la cifra era el numero de nombres de import
+    DISTINTOS, y no de modulos. Y no decia cuantos ficheros se habian
+    recorrido, luego quien lo leia no podia saber si el recorrido estaba
+    completo —que es la otra mitad del defecto que B16 cerro: un PASS cuya
+    evidencia no describe lo que recorrio—.
+
+    Se expone como funcion y no como un segundo `rglob` dentro del predicado
+    porque **las dos cifras tienen que salir del mismo recorrido**. Dos
+    recorridos que cuentan lo mismo no pueden desincronizarse, pero dos
+    preguntas sobre «los ficheros de core» escritas en dos sitios si.
+    """
+    return len(list((RAIZ / "src" / "skillgraph" / paquete).rglob("*.py")))
 
 
 # --------------------------------------------------------------------------
@@ -664,7 +762,48 @@ def _capabilities_deterministas() -> tuple[Veredicto, str]:
 
 
 def _core_sin_dependencias_de_impl_externa() -> tuple[Veredicto, str]:
-    """El nucleo no importa nada que no sea el nucleo o la libreria estandar."""
+    """El nucleo no importa nada que no sea el nucleo o la libreria estandar.
+
+    **MEDIDO, Y SON TRES DEFECTOS QUE TIENEN UNA RAIZ.** Este predicado no
+    sabia que superficie estaba mirando, y por eso hay que decirlo en las tres
+    formas en que se nota:
+
+    1. **No miraba los imports RELATIVOS.** `_imports_de` exigia
+       `nodo.level == 0`. Y como `core/` esta en `src/skillgraph/core/`, un
+       `from ..platform.storage import Storage` tiene `level == 2` y sale de
+       `core/` entero. Anadido ese import de verdad, la propiedad daba PASS
+       **con la misma cadena de evidencia que el caso limpio, byte a byte**: un
+       veredicto que no puede distinguir «el nucleo esta limpio» de «no he
+       mirado la mitad de la superficie». Y MEDIDO, `core/` no usa hoy NINGUN
+       import relativo, luego la superficie estaba vacia y una superficie vacia
+       no se mira porque no hay nada que mirar.
+
+    2. **La estandar eran trece renglones escritos a mano.** MEDIDO: el
+       interprete sabe de 290. `pathlib`, `contextlib`, `abc`, `io`, `warnings`
+       y `copy` son de la estandar y **no estaban en la lista**, luego un
+       import legitimo de cualquiera de ellos en `core/` habria producido un
+       `OPEN` sobre una frontera que se estaba respetando. Una propiedad que se
+       pone roja por lo contrario es una propiedad que entrena a su lector a no
+       creerla, y ese es un fallo aunque salga del lado conservador.
+
+    3. **La evidencia decia «(5 modulos)» y no eran modulos.** Eran los nombres
+       de import **distintos**, y no decia cuantos ficheros se habian
+       recorrido —que son cuatro—. Una evidencia que no describe lo que
+       recorrio no permite saber si el recorrido estaba completo.
+
+    **LA RAIZ DE LAS TRES, Y POR QUE EL ARREGLO ES EL QUE ES.** «Que es de la
+    estandar» es un **hecho del interprete** y se deriva de el. Que superficie
+    se recorre es un **hecho del arbol** y se cuenta y se dice. Nada de esto se
+    escribe a mano, porque escrito a mano se queda viejo en silencio —y una
+    lista de trece que se queda vieja no avisa: simplemente empieza a dar
+    veredictos que nadie reviso—.
+
+    **Y LO QUE ESTE PREDICADO NO HACE, A PROPOSITO.** No prohibe los imports
+    relativos. Que `core/` escriba `from .errors import ...` es correcto, y
+    obligarle a escribir `from skillgraph.core.errors import ...` para que un
+    predicado lo vea es cambiar el codigo para que el guard quede bien. Lo que
+    faltaba era **mirarlos**, y ahora se miran.
+    """
     externos: set[str] = set()
     for nombre in _imports_de("core"):
         if nombre.startswith("skillgraph.core"):
@@ -672,11 +811,25 @@ def _core_sin_dependencias_de_impl_externa() -> tuple[Veredicto, str]:
         if nombre.split(".")[0] in _MODULOS_ESTANDAR:
             continue
         externos.add(nombre)
+    ficheros = _ficheros_de("core")
+    vistos = len(_imports_de("core"))
     if externos:
-        return "OPEN", f"core/ importa fuera de si mismo: {sorted(externos)}"
+        return (
+            "OPEN",
+            f"core/ depende de fuera de si mismo, MEDIDO sobre {ficheros} ficheros y "
+            f"{vistos} imports (absolutos y relativos, ya resueltos): {sorted(externos)}. "
+            f"El nucleo no puede depender de la implementacion: la frontera que declara "
+            f"esta propiedad es la que permite anadir una capacidad sin tocarlo, y esa "
+            f"frontera se comprueba con la version de la estandar del interprete "
+            f"({_MODULOS_ESTANDAR_ORIGEN})",
+        )
     return (
         "PASS",
-        f"core/ solo importa de si mismo y de la estandar ({len(_imports_de('core'))} modulos)",
+        f"core/ no depende de fuera de si mismo, MEDIDO sobre {ficheros} ficheros y "
+        f"{vistos} imports ABSOLUTOS Y RELATIVOS, ya resueltos a su nombre: todos son de "
+        f"skillgraph.core o de la estandar segun {_MODULOS_ESTANDAR_ORIGEN} "
+        f"({len(_MODULOS_ESTANDAR)} modulos de estandar reconocidos). La cifra de "
+        f"ficheros va aqui porque sin ella no se puede saber si el recorrido fue completo",
     )
 
 
@@ -1142,22 +1295,59 @@ def _uat_agent_first_completa() -> tuple[Veredicto, str]:
 
 #: Modulos de la libreria estandar que el nucleo puede importar sin que eso
 #: sea una dependencia de implementacion externa.
-_MODULOS_ESTANDAR = frozenset(
-    {
-        "__future__",
-        "ast",
-        "collections",
-        "dataclasses",
-        "datetime",
-        "enum",
-        "functools",
-        "hashlib",
-        "itertools",
-        "json",
-        "re",
-        "typing",
-        "uuid",
-    }
+#: Que cuenta como modulo de la ESTANDAR, DERIVADO del interprete.
+#:
+#: MEDIDO, Y ESTA CONSTANTE ESTABA ESCRITA A MANO CON TRECE RENGLONES. El
+#: interprete sabe de 290, y entre los que faltaban estan `pathlib`,
+#: `contextlib`, `abc`, `io`, `warnings` y `copy` — todos de la estandar. Un
+#: import legitimo de cualquiera de ellos en `core/` habria producido un
+#: `OPEN` sobre una frontera que se estaba respetando, y una propiedad que se
+#: pone roja por lo contrario es una propiedad que entrena a su lector a no
+#: creerla. Ese fallo es tan malo como el de dar verde: los dos hacen que el
+#: veredicto deje de ser informacion.
+#:
+#: MEDIDO tambien que hoy la lista escrita a mano no contenia NINGUN nombre
+#: que no fuera de la estandar, luego la lista era correcta y ESTA VIEJA. Que
+#: fuera correcta hoy es exactamente lo que la hacia peligroso: una lista
+#: escrita a mano que se queda vieja no avisa, simplemente empieza a dar
+#: veredictos que nadie reviso.
+#:
+#: `sys.stdlib_module_names` es el HECHO, y AGENTS.md 1.4 pide que no haya una
+#: segunda fuente de verdad que se pueda quedar vieja en silencio. Un guard que
+#: compara contra su propia copia no vigila nada —el error de WI-106—, y una
+#: lista escrita a mano es la copia del guard.
+#:
+#: Se quitan los PRIVADOS de un solo underscore —`_abc`, `_ast`—, que son
+#: implementacion del interprete y no una API. MEDIDO: la primera version de
+#: este filtro era «not nombre que empiece por guion bajo» y se llevaba por
+#: delante `__future__`, que tambien empieza por guion bajo y que es una
+#: CONSTRUCTORA DEL LENGUAJE, no un privado. El resultado fue un `OPEN` falso que
+#: nombraba `__future__` como dependencia externa del nucleo —y un nucleo no puede
+#: importar la estandar sin `__future__` si quiere postponed annotations—.
+#:
+#: Y ese falso `OPEN` es, precisamente, la MEJORA DE LA EVIDENCIA haciendose
+#: visible: la evidencia nueva nombra el modulo culpable y cuantos ficheros se
+#: midieron, y la de antes decia «(5 modulos)» y no decia nada. Un `OPEN`
+#: equivocado que se puede leer en dos segundos es un `OPEN` que se arregla; uno
+#: escondido detras de un numero sin nombre es uno que se acepta.
+#: Los nombres con punto se dejan como estan: lo que se compara es el PRIMER
+#: TROZO del import, y `os.path` y `os` tienen que contar igual. Lo que se quita
+#: son los privados de un solo guion bajo, que son implementacion del
+#: interprete y no una API.
+_ESTANDAR_QUE_NO_ES_API: frozenset[str] = frozenset(
+    nombre
+    for nombre in sys.stdlib_module_names
+    if nombre.startswith("_") and not nombre.startswith("__")
+)
+
+_MODULOS_ESTANDAR: frozenset[str] = frozenset(sys.stdlib_module_names) - _ESTANDAR_QUE_NO_ES_API
+
+#: De donde sale la lista, y se dice en la EVIDENCIA del predicado. Un PASS que
+#: no dice como se obtuvo su verdad es el mismo PASS de antes con otra
+#: tipografia, y esta vez la verdad era una lista escrita a mano.
+_MODULOS_ESTANDAR_ORIGEN: str = (
+    f"sys.stdlib_module_names, el conjunto que declara el propio interprete "
+    f"(Python {sys.version_info.major}.{sys.version_info.minor})"
 )
 
 
