@@ -1697,3 +1697,82 @@ release:
       instruccion, no un veredicto de averia. Evidencia:
       scripts/measure_b7_operational_ux.py y
       scripts/mutate_b7_operational_ux.py.
+  rationale_b8: >-
+      BLOQUE B8 — EL CONTRATO DE PAQUETE, cerrado y verificado. SemVer
+      DERIVADO con scripts/derive_semver.py: desde v0.27.0, b/f/x/n/d
+      0/1/0/5/0, la regla pide MINOR -> v0.28.0. Ningun commit con marcador
+      de ruptura. LA DECISION DEL BLOQUE: el enunciado de B8 enumera SIETE
+      frentes —seis tipos de paquete, aislamiento progresivo,
+      mise/asdf/uv tool/PyPI, upgrade, install/update/remove, matriz de
+      compatibilidad y el formato requires—, y siete no es un bloque, son
+      siete. Este mide y entrega EL MANIFIESTO, que es la pieza de la que
+      los otros seis cuelgan: sin requires no hay version que comparar, sin
+      un contrato versionado no hay upgrade, y sin contrato no hay
+      install/update/remove que valga como algo mas que copiar ficheros.
+      MEDIDO antes de escribir nada con scripts/measure_b8_package_contract.py:
+      5 de 5 preguntas ABIERTAS. Y lo que encuentra no es que falte un
+      campo: lo que existe es un Brick con kind="DomainPack", que es el
+      contrato de TIPOS, no el de PAQUETE. LA COSTURA YA ESTABA PUESTA DESDE
+      B3, con un docstring que decia literalmente que CAPABILITY_VERSION
+      estaba ahi 'para que requires.capabilities de B8 tenga algo que
+      versionar': este bloque no invento el requisito, lo ejecuto. TRES
+      DECISIONES. (1) PACK_KINDS se DERIVA por get_args, nunca se escribe a
+      mano —un conjunto literal se queda corto en cuanto el Literal crece y
+      entonces el validador rechaza el valor nuevo que el propio tipo acepta,
+      que es el error de QW-E pagado en B6—. (2) La version de la
+      capability la hereda del PUERTO, que es lo que B3 dejo anotado. (3)
+      ISOLATION_LEVELS es una tupla ORDENADA y no un conjunto: el orden es
+      el contenido, y es lo que convierte 'progresivo' en una propiedad
+      comprobable con es_al_menos y no en un adjetivo. Y es_compatible
+      devuelve MOTIVOS y no un bool, porque en un pack que se esta instalando
+      el 'por que' es la mitad del trabajo: 'no encaja' no le dice al
+      operador si le falta una capability o si su SkillGraph es viejo. DOS
+      DEFECTOS REALES DEL CODIGO, cazados por los tests. (1) EL PARSER
+      RECHAZABA EL FORMATO DEL PROPIO GATE: el enunciado escribe '>=0.30,<1',
+      que MEZCLA '>=0.30' —dos componentes— y '<1' —uno solo—, y la regex
+      exigia X.Y o SemVer completo, luego NINGUN pack encajaba contra el
+      formato que el gate define; lo cazaron seis tests a la vez. (2) LA
+      CAPABILITY LARGA SE ROMPIA EN SILENCIO: {type_name, version}
+      producia type_name='a.b.v2@v2' con la version pegada y la del puerto
+      en el campo version, que no se puede comparar con un CapabilitySpec
+      instalado y cuyo sintoma es 'falta la capability', una respuesta
+      CREIBLE. Y TRES DEFECTOS PROPIOS, que tambien importan porque un
+      guard que miente es peor que un guard que falta. (1) UN PYTEST.SKIP
+      MIO que escondia un fallo del contrato —lo que AGENTS 6.2 prohibe y lo
+      que test_wi108_zero_skips.py caza—; lo grave no era el skip, es que
+      estaba porque la asercion de verdad nunca se escribio y en su lugar se
+      puso un guard que salta justo cuando la propiedad se rompe. (2) UN
+      TEST QUE NO PODIA FALLAR: mutar requires.skillgraph en el dict de
+      origen no puede cambiar un frozen dataclass porque los strings son
+      inmutables, luego era verde por construccion; la sonda M5 salio
+      NO CAZADA —el harness diciendo la verdad en vez de contar un 5/5
+      falso— y se movio a metadatos, donde el alias si es posible. (3)
+      'ARBOL RESTAURADO BYTE A BYTE' NO ES 'EL ARBOL ESTA COMO ESTABA': al
+      restaurar, el mtime puede no avanzar y Python sigue ejecutando el pyc
+      de la version mutada, luego el arbol estaba restaurado y ejecutando la
+      version equivocada A LA VEZ; se vio porque M5 cazaba los tests de M4.
+      El harness ahora borra __pycache__ y VUELVE A PASAR LA SUITE al
+      final, que es la comprobacion que faltaba. Y dos bugs del MEDIDOR,
+      corregidos ANTES de escribir produccion: literal_eval no lee
+      frozenset(get_args(X)), que es la forma correcta de declarar el
+      conjunto, y el indice de alias no veia 'X = Literal[...]' sin
+      anotacion, que es un Assign a secas. Un guard que obliga a escribir
+      peor para poder ser medido es el peor resultado posible. VERIFICACION:
+      3158 passed, 3 skips declarados, 0 failed; 66 tests; cobertura del
+      100% del paquete nuevo, cuando el suelo de AGENTS 6.3 es 90%;
+      contrasaltos 5/5 con 5 conjuntos DISTINTOS de tests, 0 sin sonda, y
+      arbol restaurado byte a byte Y EJECUTANDO como estaba. tests.total
+      3161, con el desglose MEDIDO pieza a pieza: sin el paquete packaging la
+      suite colecta 3088 —la cifra exacta que B7 declaro, por tercera vez— y
+      al devolverlo colecta 3161; los 73 son 66 propios, 6 de wi47 y 1 de
+      WI-107. FLaky MEDIDO y NO OCULTADO: la primera certificacion dio 1
+      failed en test_b2_real_concurrency::test_los_hijos_tienen_solape_en_el
+      _tiempo, que depende del planificador del SO; medido 5/5 aislado, 8/8
+      bajo carga de CPU, y la suite completa en verde al repetirla. Es
+      deuda preexistente de B2 y sin relacion con este bloque. P6 —que un
+      pack se instale de verdad en una instalacion real— queda FUERA y
+      registrada: depende de un registro remoto y de una politica de fijacion
+      que el CI no tiene. Y 'subprocess' y 'sandbox' son campos DECLARADOS, no
+      mecanismos: declararlos sin ejecutarlos es la forma mas facil de
+      mentir sobre seguridad. Evidencia: scripts/measure_b8_package_contract.py
+      y scripts/mutate_b8_package_contract.py.
