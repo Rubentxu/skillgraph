@@ -1,0 +1,108 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B15",
+  "titulo": "Un predicado que se declara leyendo codigo no sabe cuando deja de medir",
+  "release": "0.32.0",
+  "que_es_y_que_no_es": "No es un bloque hacia 1.0 todavia: es un bloque sobre COMO EL GATE SABE LO QUE SABE. Las dos propiedades que quedan abiertas no se tocan, porque una necesita una credencial y la otra una persona.",
+  "hallazgo_1_la_evidencia_del_gate_no_decia_de_que_clase_era": {
+    "que": "El gate de 1.0 declara veinte propiedades y sus veinte PASS salian en la misma lista y con la misma tipografia. No habia forma de saber cuales estaban respaldados por algo que se EJECUTA y cuales por una lectura del arbol.",
+    "por_que_importa": "La diferencia no es de estetica: es si el veredicto puede volverse falso sin que nadie vuelva a mirarlo. El de una ejecutada se cae solo cuando el objeto cambia; el de una derivada solo se cae si alguien vuelve a medirlo, y no hay nadie que lo haga porque nadie sabe que estaba midiendo.",
+    "medido": {
+      "ejecutada": 13,
+      "derivada": 7,
+      "derivado_de": "el grafo de llamadas del propio modulo, siguiendo hasta un subprocess"
+    }
+  },
+  "hallazgo_2_una_propiedad_que_decia_pass_sin_comprobar_lo_que_dice_comprobar": {
+    "que": "distribution reproducible ejecutaba scripts/check_package_build.py, que CONSTRUYE el wheel y el sdist, y devolvia PASS con la evidencia entera: «el wheel y el sdist se construyen y llevan lo que declaran».",
+    "por_que_es_falso_como_evidencia": "Eso prueba que SE CONSTRUYEN. Reproducible es que las mismas entradas den los mismos bytes, y un unico build no puede distinguir «reproducible» de «esta vez salio bien».",
+    "medido_antes_de_arreglar": {
+      "prueba": "se construye, se esperan 2 s, se toca el mtime de src/skillgraph/__init__.py con contenido IDENTICO, y se construye otra vez",
+      "por_que_toca_la_fecha": "construir dos veces seguidas no prueba nada: si el reloj no tick entre las dos, los timestamps que se meten en el zip coinciden aunque el build sea irreproducible",
+      "resultado": "los 2 sha256 coinciden; hatchling normaliza las fechas",
+      "conclusion": "la propiedad ERA CIERTA. lo que no existia era nada que pudiera quitarsela"
+    }
+  },
+  "hallazgo_3_el_bloque_se_encontro_el_falso_en_su_propia_casa": {
+    "que": "La primera version de la derivacion devolvio VEINTE DE VEINTE «derivada», con la autoridad de un print y sin una sola advertencia.",
+    "por_que": "Los predicados se registran en PREDICADOS como «_» + slug; la funcion buscaba el slug a secas, no lo encontraba, y devolvia un valor POR DEFECTO en vez de decir «no lo se». Seis de esos predicados si lanzan subproceso.",
+    "arreglo": "_funcion_del_predicado LEVANTA, y el mensaje nombra el slug, la convencion de registro y el numero que produjo la primera version.",
+    "por_que_es_el_mismo_hallazgo_que_b13_y_b14": "B13 lo cerro en el guard de SQL, que leia literales en vez de la consulta ensamblada. B14 lo encontro en los guards atados a un valor vivo y en las tres mutaciones no-op de su medidor. Aqui aparecio en el codigo del propio bloque, y lo primero que produjo fue, en su casa, el falso que venia a cerrar."
+  },
+  "hallazgo_4_cuatro_sondeos_propios_fallon": {
+    "que": "Al buscar un PASS falso —blueprint legacy completamente probado, que cuenta cobertura de UAT con un re.findall sobre el texto de los tests— se construyeron cuatro sondeos para comprobarlo. Los cuatro fallaron, cada uno en una direccion distinta.",
+    "los_cuatro": [
+      "v1: buscado las capacidades por CADENAS donde el codigo usa NOMBRES. Dio 0 de 12 cuando el modulo tiene cuatro de seis.",
+      "v2: buscado el operador «!=» por su NOMBRE donde el AST tiene un nodo NotEq. Dio 9 de 12 y luego 3 de 12: tres cifras distintas, ninguna correcta.",
+      "v3: buscado «--collect-only» como ARGUMENTO DIRECTO de subprocess.run donde esta dentro de una LISTA. Declaro que ningun harness verifica sus diagnosticos, y si lo hace.",
+      "v4: clasifico «el test razona sobre el UAT» por una ASERCION que lo nombre, cuando un test que de verdad prueba UAT-11 lo nombra en el DOCSTRING. Declaro 12 de 16 cuando los dieciseis estan probados."
+    ],
+    "el_pass_que_se_buscaba": "ERA CIERTO. tests/uat_audit.py tiene una funcion completa por UAT, con directorios temporales, la CLI de verdad y aserciones sobre el informe, y tests/test_uat_audit.py la mete en CI. El predicado es debil; la propiedad es cierta.",
+    "que_se_hace_con_ello": "Queda anotado con su debilidad, que es informacion, no deuda fingida. No se cambia el predicado sin un instrumento que lo reemplace.",
+    "leccion": "Un guard que se declara leyendo el codigo no sabe cuando deja de medir, y un SONDEO que hace lo mismo no sabe cuando deja de MEDIR. Cuatro sondas, cuatro maneras de mentir, y en las cuatro el numero salia con la autoridad de un print. Ninguna habria fallado al ejecutarse."
+  },
+  "que_entra": [
+    "Propiedad.clase_evidencia, con init=False: no hay forma de declararla a mano. La clase se deriva siguiendo el grafo de llamadas hasta un subprocess.",
+    "Un guard que vigila que la clase SIGA AL CODIGO en las dos direcciones: anadir un subproceso a un predicado Derivada lo pasa a Ejecutada, y quitar subprocess del modulo entero pasa las trece a Derivada.",
+    "La derivacion recibe el TEXTO como parametro en vez de leer el fichero por dentro. MEDIDO: leerlo por dentro hace la funcion imposible de probar con codigo alterado, que es la unica prueba que importa.",
+    "distribution reproducible se ejecuta: dos construcciones, la fuente tocada entre medias, los sha comparados, y un OPEN que nombra el artefacto y los dos hashes."
+  ],
+  "resultados": {
+    "gate_de_1_0": {
+      "PASS": 18,
+      "OPEN": 1,
+      "NO_MEASURABLE": 1,
+      "sin_cambios_de_veredicto": true,
+      "con_clase": {
+        "ejecutada": 13,
+        "derivada": 7
+      }
+    },
+    "harness": "6 de 6 sondas cazadas, 6 causas distintas",
+    "autocomprobacion_del_medidor": "13 de 20 clases giran al quitarle el subprocess al modulo entero",
+    "suite_certificada": "3291 passed, 3 skipped, 0 failed",
+    "tests_total": 3294,
+    "desglose_del_total": "3285 -> 3294, +9, fichero nuevo test_b15_evidence_kind.py entero",
+    "guard_que_cazo_el_olvido": "WI-115, en el commit anterior a la correccion: «tests: STATE declara 3285, el arbol colecta 3294». La cifra se conto antes de escribirse, que es al reves de como se hizo mal en WI-115."
+  },
+  "la_lista_de_lo_que_no_se_puede_retirar_solo": {
+    "para_que_sirve": "Es el orden del trabajo siguiente sin inventarlo. Subir una propiedad a Ejecutada requiere un instrumento, y un instrumento es un bloque.",
+    "propiedades": [
+      "blueprint legacy completamente probado",
+      "ontology extensible",
+      "capabilities deterministas",
+      "core sin dependencias de impl. externa",
+      "TUI operacional",
+      "pack/controller lifecycle",
+      "UAT agent-first completa"
+    ]
+  },
+  "ciclo_sddk": {
+    "cycle_id": "p-b7740b96d79ec013/b15",
+    "path": "A-full",
+    "lease": "mavis-b15, fencing token 1",
+    "nota": "PAUSED al cerrar, igual que b4..b14: sddk debt report no esta implementado en esta build, luego los gates de deuda no son evaluables y el ciclo no puede pasar a CLOSED. No hay bloqueo externo."
+  },
+  "publicacion": {
+    "tag": "v0.32.0",
+    "tag_sha": "74c27b4dee3ab723a0bd624a0a22f92073ef9aad",
+    "origin_main": "058f39d502bb6eb3ccc146d660d26faf3c30ee7b",
+    "commits_sin_publicar": 0,
+    "verificado_con": "git ls-remote --tags origin v0.32.0^{}, y git rev-list --count origin/main..HEAD",
+    "eslabones": [
+      "74c27b4 build(release): la version pura de v0.32.0, que existe para el tag",
+      "35d63c9 chore(release): el estado de v0.32.0, con su etiqueta ya creada",
+      "058f39d docs(state): B15 cerrado y publicado en v0.32.0, con las citas verificadas"
+    ],
+    "la_ventana_de_ag_12": "Dos de los cuatro eslabones se hacen con HOOK_SKIP_TESTS=1, y es la misma ventana de v0.31.2, v0.31.1 y v0.31.0: la version tiene que ser PURA porque es la que queda en el tag, y el tag no puede apuntar a un commit que no existe. La suite NO se salta: se ejecuta DESPUES, a mano, sobre el commit ya hecho, que es donde la propiedad importa. MEDIDO en B14 que el orden sin ventana da 7 tests rojos; aqui el orden con ventana dio verde a la primera."
+  },
+  "listo_para_1_0": false,
+  "lo_que_queda": {
+    "OPEN": "runtime real certificado: exige SG_UAT_REAL_PROVIDER=1 y una credencial real (ANTHROPIC_API_KEY u OPENAI_API_KEY)",
+    "NO_MEASURABLE": "TUI operacional: requiere persona y terminal"
+  },
+  "deuda_registrada_y_no_abierta": [
+    "El predicado de «blueprint legacy completamente probado» cuenta cobertura de UAT con un re.findall sobre el TEXTO de los tests. Es debil, y la propiedad es cierta hoy por otra via (tests/uat_audit.py). No se abre: cambiar un predicado cierto por otro mas elegante y menos seguro seria perder cobertura, no ganarla.",
+    "Las siete propiedades «derivada» de la lista de arriba. Cada una necesita un instrumento, y un instrumento es un bloque."
+  ]
+}
