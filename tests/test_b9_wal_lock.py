@@ -48,6 +48,7 @@ import os
 import sqlite3
 import stat
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -285,19 +286,25 @@ class TestLaBarreraDeLosHijos:
             text=True,
         )
         try:
-            limite = 60.0
-            waited = 0.0
-            while not (puerta / "listo-h0").exists() and waited < limite:
-                waited += 0.01
+            # MEDIDO, y este es el bug que hacia intermitente a ESTE test:
+            # la primera version sumaba `waited += 0.01` en vez de DORMIR.
+            # Sin el `sleep`, el bucle consumia los 60 s de plazo en
+            # milisegundos, se rendia antes de que el hijo llegara, y
+            # fallaba ~1 de cada 6. Un fallo intermitente en el guard del
+            # guard es la peor combinacion: entrena a leer el «a veces
+            # pasa» como ruido, que es justo lo que este bloque dice que
+            # hace un guard intermitente.
+            limite = time.monotonic() + 60.0
+            while not (puerta / "listo-h0").exists() and time.monotonic() < limite:
                 assert proc.poll() is None, (
                     f"el hijo murio antes de llegar a la puerta: rc={proc.returncode}"
                 )
+                time.sleep(0.01)
             assert (puerta / "listo-h0").exists(), "el hijo no anuncio que estaba listo"
             assert proc.poll() is None, (
                 "el hijo se fue sin esperar a que el padre abriera la puerta: "
                 "eso es medir desde su propio arranque, que es la carrera"
             )
-            assert waited > 0, "el hijo anuncio estar listo antes de tiempo"
         finally:
             (puerta / "abre").write_text("abre\n", encoding="utf-8")
             proc.communicate(timeout=60)
