@@ -1,5 +1,5 @@
 > **Bloque 2026-10-04 (B7) — Las vistas que CLI y TUI compartirian.**
-> Versión activa `0.27.0`; último tag `v0.27.0`.
+> Versión activa `0.27.0.dev0`; último tag `v0.27.0`.
 >
 > **B7: el hueco no era que faltara una TUI, era que faltaba la pieza de la
 > que la TUI depende.** El gate pide diez widgets vivos «sobre **las mismas**

@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.27.0"  # SemVer PURO: valido solo mientras HEAD este EN el tag v0.27.0
+__version__ = "0.27.0.dev0"  # post-release v0.27.0 (AGENTS 12): bump .dev0 tras el tag
 
 from skillgraph.core.errors import (
     IdentityConflictError,
