@@ -9,8 +9,16 @@
   "ciclo_sddk": {
     "cycle_id": "p-b7740b96d79ec013/b13",
     "path": "A-full",
-    "lease": "mavis-b13",
+    "lease": "mavis-b13, fencing token 2 (el token 1 caduco durante el bloque y hubo que reclamarlo con --cycle explicito: sin el, `sddk cycle lock acquire` responde 'no active cycle found' porque un lease caducado ya no cuenta como ciclo activo, y no hay forma de recuperarlo sin indicar el ciclo)",
     "nota": "PAUSED al cerrar, igual que b4..b12: `sddk debt report` no esta implementado en esta build, luego los gates de deuda no son evaluables y el ciclo no puede pasar a CLOSED. No hay bloqueo externo."
+  },
+  "publicacion": {
+    "tag": "v0.31.1",
+    "tag_sha": "4d66e41999fd9e56bb95de6cb8885da1f2d72478",
+    "origin_main": "a7eda503a71d25e4ca9c8e62718474e9cfd1bc95",
+    "commits_sin_publicar": 0,
+    "verificado_con": "git ls-remote origin main refs/tags/v0.31.1, y git rev-list --count origin/main..HEAD",
+    "guard_que_cazo_el_olvido": "WI-95 es una BIYECCION con git: toda etiqueta tiene su seccion en CHANGELOG.md. El push ya habia salido cuando la recertificacion lo detecto, y se corrigio y volvio a publicar."
   },
   "antes": { "PASS": 17, "OPEN": 2, "NO_MEASURABLE": 1 },
   "despues": { "PASS": 18, "OPEN": 1, "NO_MEASURABLE": 1 },

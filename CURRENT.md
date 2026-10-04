@@ -82,9 +82,10 @@
 > | `mutate_b13_threat_model.py:165::_sucios` | la suite verde NO es el arbol restaurado |
 > | `mutate_b13_threat_model.py:129::_colectados` | el harness rechaza arrancar si un diagnostico no existe |
 >
-> **CERRADO, CERTIFICADO Y PUBLICADO.** `v0.31.1` sale en `4d66e41`; la
-> suite sobre el árbol ya commiteado: **3268 passed, 3 skipped, 0 failed**.
-> Evidencia: `evidence/sddk-b13-gate-report-2026-10-04.json`. Ciclo
+> **CERRADO, CERTIFICADO Y PUBLICADO.** `v0.31.1` sale en `4d66e41`;
+> `origin/main` en `a7eda50`, verificado con `git ls-remote`, con 0 commits sin
+> publicar. Suite sobre el árbol ya commiteado: **3268 passed, 3 skipped, 0
+> failed**. Evidencia: `evidence/sddk-b13-gate-report-2026-10-04.json`. Ciclo
 > `p-b7740b96d79ec013/b13` en **PAUSED**, no CLOSED ni BLOCKED: los gates de
 > deuda no son evaluables en esta build y no hay bloqueo externo.
 >
