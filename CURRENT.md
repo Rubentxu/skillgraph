@@ -1,3 +1,93 @@
+> **Bloque 2026-10-04 (B20) — El gate se contradecía a sí mismo, y la razón era un sufijo.**
+> (vivo: implementado y commiteado, pendiente de certificar y publicar)
+> Versión activa `0.32.4.dev0`; último tag `v0.32.4`.
+>
+> **ES EL HALLAZGO MÁS INCÓMODO DE LA SERIE, Y NO ES UN `PASS` FALSO NI UN
+> `OPEN` FALSO.** B16 abrió propiedades que daban verde con el defecto
+> presente. B18 endureció una que ya era cierta. B19 arregló un veredicto que
+> afirmaba más de lo que podía sostener. B20 es otra cosa: **el gate se
+> contradice a sí mismo.**
+>
+> `ontology extensible` y `core sin dependencias de impl. externa` son dos
+> propiedades del mismo gate sobre la **misma frontera**. MEDIDO, con un solo
+> import en `core/`:
+>
+> ```
+> core/ importa skillgraph.packaging.manifest
+>   ontology extensible    : PASS   «no nombra ningún tipo de recurso»
+>   core sin dependencias  : OPEN   «depende de fuera de sí mismo»
+> ```
+>
+> Dos veredictos sobre el mismo hecho, y no son el mismo. MEDIDO sobre la
+> superficie **real** del proyecto, no sobre casos inventados: **7
+> contradicciones de 9**.
+>
+> **LA RAZÓN, Y TIENE LAS DOS CARAS.** `_TIPO_DE_RECURSO` era
+> `^[A-Z][A-Za-z]*Pack$` — un patrón por **forma**:
+>
+> - **No ve lo que importa.** De los ocho tipos de recurso que el proyecto
+>   *declara de verdad* —`PackManifest`, `CompiledResource`, `CapabilitySpec`,
+>   `BrickType`, `Catalog`, `Brick`— el patrón ve **cero**. `PackManifest` es el
+>   manifiesto de un pack, el tipo central del proyecto, y no acaba en `Pack`.
+> - **Ve lo que no importa.** El único nombre que contaba era `FilaDePack`, que
+>   es una **fila** de la tabla de packs, no un tipo de recurso. Con su import
+>   puesto salía `OPEN` acusando al núcleo de depender de los recursos.
+>
+> **Y EL COMENTARIO DEL CÓDIGO DE AL LADO RAZONABA CORRECTAMENTE.** Decía que no
+> escribir una lista de tipos evita tener una segunda fuente de verdad. Lo que
+> no ve es que **un patrón por forma *es* una lista**, más corta y peor, porque
+> decide **cómo se escribe** un nombre en vez de **a qué conjunto pertenece**.
+> El endurecimiento de B16 fue sobre el **formato** de la mirada —de cadenas a
+> imports y atributos—: una vista más aguda de una cosa que no es la que hay.
+>
+> **QUÉ ENTREGA.** El conjunto se **deriva del árbol**, de los paquetes que el
+> proyecto llama recursos por el nombre de su directorio; la evidencia dice
+> cuántos son, de dónde salen y cuántos ficheros se recorrieron. Y los
+> **docstrings** que nombran un recurso se **dicen** sin abrir el veredicto,
+> porque documentar la frontera es lo contrario de depender de ella: medido,
+> `core/` menciona `WorkflowPlan` en tres sitios y los tres son documentación
+> de `NewType`.
+>
+> **EL TECHO, Y NO SE MAQUILLA.** Quedan **tres** contradicciones —
+> `CompiledResource` en `knowledge/`, `CapabilitySpec` en `platform/ports/`,
+> `SkillImportReport` en `domain/`— y el motivo es uno solo: el proyecto llama
+> recurso a tres tipos cuyos **paquetes no lo dicen**. «Qué es un recurso» **no
+> es un concepto que el código contenga**, y declararlo es una decisión de
+> producto, no una tarea de guard. Por eso este bloque no la toma: **la mide y la
+> deja escrita**, y el guard las **nombra** en vez de contarlas, porque un techo
+> que no se nombra no se puede romper.
+>
+> **DOS DEFECTOS PROPIOS DEL MISMO CLASIFICADOR, que es una clase de error y no
+> dos sucesos:**
+>
+> 1. `id(ast.get_docstring(nodo))` es el id de un **string**, no el del nodo
+>    `Constant`; la comparación no coincidía nunca y el instrumento informó de
+>    «0 docstrings» con `core/` llenándose de ellos.
+> 2. Ya con los nodos, solo miraba `body[0]`, que **pierde la documentación de
+>    los `NewType`** —la segunda sentencia del cuerpo del módulo—. Con esa
+>    versión el veredicto daba `OPEN` sobre un árbol **sano**. Un `OPEN` falso
+>    en estado sano es el fallo más caro que puede tener un guard, porque
+>    entrena a su lector a no creerlo.
+>
+> **Y UN HALLAZGO SOBRE EL HARNESS:** la contrasalto de la contrasalto daba
+> «NO CAYO» porque comprobaba `len(rotas) <= 3`, y con la implicación
+> invertida la lista queda **vacía**: cero caben en tres. Un guard sin con qué
+> enterarse no es un guard que no se entere.
+>
+> **DONDE SE MIRA, VERIFICADO POR AST:**
+>
+> | cita | que sostiene |
+> |---|---|
+> | `measure_b9_gate_1_0.py:602::_ontology_extensible` | los tres defectos, escritos en su docstring |
+> | `measure_b9_gate_1_0.py:793::PAQUETES_DE_RECURSO` | el conjunto se declara por **paquete**, no por clase |
+> | `measure_b9_gate_1_0.py:796::_tipos_de_recurso` | el conjunto se **deriva** del árbol, y la cifra se publica |
+> | `measure_b9_gate_1_0.py:817::_docstrings_de` | documentación y código, separados —y sus dos defectos |
+> | `test_b20_ontologia_contradictoria.py:95::PENDIENTES_POR_DECLARAR` | el techo **nombrado**, que es lo que lo hace rompible |
+> | `test_b20_ontologia_contradictoria.py:216::TestElGateNoSeContradiceASiMismo` | el invariante que cierra la contradicción |
+> | `mutate_b20_ontologia_contradictoria.py` | 3 sondas, 3/3, y **M1 y M2 declaran dos diagnósticos cada una** |
+>
+> ---
+>
 > **Bloque 2026-10-04 (B19) — «NO es reproducible» y «no he podido medirlo» son dos frases distintas.**
 > (cerrado y publicado en `v0.32.4`)
 > Versión activa `0.32.4.dev0`; último tag `v0.32.4`.

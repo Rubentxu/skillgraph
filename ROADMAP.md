@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B19** — «NO es reproducible» y «no he podido medirlo» son la misma frase
-> Versión activa `0.32.4.dev0` · último tag `v0.32.4` · 3318 tests · 16/16 UAT
+> Bloque vivo: **B20** — El gate se contradecía a sí mismo, y la razón era un sufijo
+> Versión activa `0.32.4.dev0` · último tag `v0.32.4` · 3324 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -69,6 +69,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B17** | El ciclo de vida de los packs se decidía contando nombres | La propiedad se decide ejecutando el ciclo, que el instrumento ya hacía y nadie cableó |
 | **B18** | La frontera del núcleo no miraba la mitad de la superficie | Los relativos se resuelven, la estándar se deriva del intérprete, y la evidencia describe el recorrido |
 | **B19** | «NO es reproducible» y «no he podido medirlo» son la misma frase | La entrada del paquete se mide antes de acusar, y el veredicto no culpa al proyecto de haber medido dos entradas distintas |
+| **B20** | El gate se contradecía a sí mismo | El conjunto de recursos se deriva del árbol, y un docstring que documenta la frontera no es una dependencia |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -996,6 +997,53 @@ deuda sin verificar, y sin verificar no era deuda.
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
 
+
+## B20 — El gate se contradecía a sí mismo
+
+**Es el hallazgo más incómodo de la serie, y no es un `PASS` falso ni un
+`OPEN` falso.** B16 abrió propiedades que daban verde con el defecto presente;
+B18 endureció una que ya era cierta; B19 arregló un veredicto que afirmaba más
+de lo que podía sostener. B20 es otra cosa: **el gate se contradice a sí
+mismo**.
+
+`ontology extensible` y `core sin dependencias de impl. externa` son dos
+propiedades sobre la misma frontera. Con un solo import en `core/`, medido:
+
+```
+core/ importa skillgraph.packaging.manifest
+  ontology extensible    : PASS   «no nombra ningún tipo de recurso»
+  core sin dependencias  : OPEN   «depende de fuera de sí mismo»
+```
+
+Sobre la superficie **real** del proyecto, no sobre casos inventados: **7
+contradicciones de 9**.
+
+**La razón, y tiene las dos caras.** `_TIPO_DE_RECURSO` era
+`^[A-Z][A-Za-z]*Pack$`, un patrón por forma. No veía lo que importa — de los
+ocho tipos de recurso que el proyecto declara de verdad veía **cero**, y
+`PackManifest` es el tipo central del proyecto — y veía lo que no importa: el
+único nombre que contaba era `FilaDePack`, una fila de tabla. Con su import
+puesto salía `OPEN` acusando al núcleo.
+
+El comentario del código razonaba correctamente que no escribir una lista de
+tipos evita una segunda fuente de verdad. Lo que no ve es que **un patrón por
+forma *es* una lista**, más corta y peor: decide cómo se *escribe* un nombre en
+vez de a qué conjunto *pertenece*. El endurecimiento de B16 fue sobre el formato
+de la mirada, no sobre su alcance.
+
+**Lo que entra.** El conjunto se deriva del árbol; la evidencia dice cuántos
+tipos hay y de dónde salen; y los docstrings que nombran un recurso se dicen sin
+abrir el veredicto, porque documentar la frontera es lo contrario de depender de
+ella.
+
+**El techo, y no se maquilla.** Quedan tres contradicciones y el motivo es uno:
+el proyecto llama recurso a tres tipos cuyos paquetes no lo dicen. «Qué es un
+recurso» no es un concepto que el código contenga, y declararlo es una decisión
+de producto. Este bloque no la toma: la mide y la deja escrita, y el guard
+**nombra** el techo en vez de contarlo, porque un techo que no se nombra no se
+puede romper —medido, con la implicación invertida la lista queda vacía y cero
+caben en tres, y la contrasalto de la contrasalto daba `NO CAYO` sin que nadie
+supiera que el guard no tenía con qué enterarse—.
 
 ## B19 — «NO es reproducible» y «no he podido medirlo» son la misma frase
 
