@@ -156,13 +156,14 @@ SONDAS: tuple[Sonda, ...] = (
     Sonda(
         nombre="M1_vuelve_un_reader_por_regex_del_estado",
         fichero="scripts/project_truth.py",
-        antes="RAIZ = Path(__file__).resolve().parent.parent",
-        despues=(
-            "RAIZ = Path(__file__).resolve().parent.parent\n"
-            "\n"
-            "# Sonda M1: un reader por regex del estado, el que se elimino en B14.\n"
-            '_TAG_STATE = re.compile(r"^\\s*tag:\\s*v?([0-9][^\\s#]*)", re.MULTILINE)'
+        # Se sustituye el CUERPO de `release_declarada` por la version con
+        # regex, que es como estaba antes de B14. Definir la constante sin
+        # usarla no seria sonda: desactivaria el modulo sin cambiar lo que el
+        # codigo hace, y el guard mide si queda alguien LEYENDO por regex.
+        antes=(
+            '    release = _seccion("release")\n    if release is None or "tag" not in release:'
         ),
+        despues=('    m = _TAG_STATE.search(_lee("STATE.yaml"))\n    if m is None:'),
         esperados=frozenset(
             {"TestElEstadoSeLeeDeUnaSolaManera::test_no_queda_ningun_regex_sobre_state_yaml"}
         ),

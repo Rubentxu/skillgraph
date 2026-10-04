@@ -111,6 +111,61 @@ def _con_clave_duplicada(clave: str, valor_nuevo: str) -> str:
     )
 
 
+class _inyectado:
+    """Escribe `texto` en STATE.yaml y lo restaura al salir.
+
+    Se apoya en el mismo `_EstadoRestaurado` que usan los demas tests, para
+    que restaurar sea siempre la MISMA comprobacion por sha256 y no una
+    segunda via que se pueda olvidar.
+    """
+
+    def __init__(self, texto: str) -> None:
+        self._texto = texto
+        self._restaurador = _EstadoRestaurado()
+
+    def __enter__(self) -> _inyectado:
+        self._restaurador.__enter__()
+        STATE.write_text(self._texto, encoding="utf-8")
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self._restaurador.__exit__(*exc)
+
+
+def _rechaza(estado_nuevo: str, campo: str, que: str) -> None:
+    """El verificador rechaza un valor mal tipado POR EL TIPO, y lo dice.
+
+    **Por que se exige el `ilegible` y no basta `coherente: false`.** La
+    version anterior de este helper aceptaba tres salidas, y con la
+    comprobacion de tipo deshabilitada los tres tests de tipo seguian en
+    verde: `total: 'muchos'` no cuadra con el recuento real, luego el
+    verificador decia `coherente: false` — por el motivo equivocado — y la
+    asercion debil lo contaba como aprobado. MEDIDO con la sonda M3 del
+    harness: `if False:` en la comprobacion de tipo y `3 passed`.
+
+    Un verificador al que se le rompe una cosa y sigue dando «esto no cuadra»
+    no ha comprobado NADA de la cosa que se rompio. Por eso el rechazo tiene
+    que ser el del TIPO: `ilegible` nombrando el campo.
+    """
+    with _inyectado(estado_nuevo):
+        salida = _ejecuta()[1]
+    if salida is None:
+        raise AssertionError(
+            f"{que}: el verificador no devolvio JSON. Si fallo al LEER el estado, "
+            f"tiene que decirlo con «ilegible», no desaparecer."
+        )
+    if "ilegible" not in salida:
+        raise AssertionError(
+            f"{que}: el verificador NO rechazo el valor por su tipo. Djo: {salida}.\n"
+            f"Si hay una contradiccion de otro tipo, el estado no cuadra por otra "
+            f"razon y este test no midio lo que dice medir. Lo que se espera es un "
+            f"«ilegible» que nombre {campo!r}."
+        )
+    assert campo in salida["ilegible"], (
+        f"{que}: el verificador lo rechazo pero sin nombrar el campo: {salida['ilegible']!r}"
+    )
+
+
 # =====================================================================
 class TestElEstadoSeLeeDeUnaSolaManera:
     """Lo UNICO que mide: que no queden readers de STATE por regex.
@@ -178,114 +233,62 @@ class TestElEstadoSeLeeDeUnaSolaManera:
 class TestUnaClaveDuplicadaNoPasaPorAlto:
     """Lo UNICO que mide: el comportamiento ante una clave repetida."""
 
-    def test_una_clave_repetida_cambia_el_veredicto(self) -> None:
-        """La propiedad, aislada: anadir una clave repetida CAMBIA el veredicto.
+    def test_una_clave_repetida_hace_el_estado_ilegible(self) -> None:
+        """El contrato: con la misma clave dos veces, el estado NO se lee.
 
-        **Por que se compara contra una linea base y no se mira `coherente`.**
-        La primera version de este test afirmaba `coherente is not True`, y
-        pasaba en verde con el tool VULNERABLE: en ese momento el estado ya era
-        incoherente por otra cosa (el recuento de tests), y `coherente: false`
-        no dice de que. Un guard que pasa por una causa ajena al objeto que
-        vigila es un guard que no vigila, y es el mismo falso verde que B13
-        cerro en el gate de 1.0.
+        **Por que se exige `ilegible` y no basta con que cambie el veredicto.**
+        Con el constructor de claves duplicadas retirado —la sonda M2 del
+        harness— YAML toma la ULTIMA clave y el verificador dice, textual,
+        `workitem: STATE declara B99_inventado, CURRENT declara B13`. Elige
+        una de las dos declaraciones y la presenta como la verdad, atribuyendo
+        la otra a otro fichero. El veredicto cambia, luego un test de «cambia
+        el veredicto» pasa, y no deberia: aceptar «el tool escogio una» es
+        aceptar el defecto que este bloque cierra.
 
-        Comparar el veredicto con y sin la clave repetida aisla la propiedad y
-        de paso hace que el test no dependa de si el estado circundante esta
-        bien.
+        No se sabe cual de las dos quiso el autor, luego la lectura honesta es
+        negarse a leer. Un `0` o un `None` aqui seria el cero silencioso
+        contra el que WI-115 puso un contrasalto, un nivel mas arriba.
         """
-        base = _ejecuta()[1]
         with (
             _EstadoRestaurado(),
             _inyectado(_con_clave_duplicada("current_workitem", "B99_inventado")),
         ):
-            con_doble = _ejecuta()[1]
-        assert base is not None, "el verificador no responde sobre el estado real"
-        assert con_doble is not None, "el verificador no responde con la clave repetida"
-        antes = (
-            base.get("coherente"),
-            tuple(base.get("contradicciones") or ()),
-            base.get("ilegible", ""),
+            salida = _ejecuta()[1]
+        assert salida is not None, "el verificador no devolvio JSON con la clave repetida"
+        assert "ilegible" in salida, (
+            f"una clave repetida no hizo el estado ilegible: {salida}. El verificador "
+            f"tiene que negarse a leer un estado donde la misma clave aparece dos veces "
+            f"con valores distintos, en vez de elegir una."
         )
-        despues = (
-            con_doble.get("coherente"),
-            tuple(con_doble.get("contradicciones") or ()),
-            con_doble.get("ilegible", ""),
-        )
-        assert antes != despues, (
-            f"una clave duplicada no cambio el veredicto.\n  sin ella: {base}\n"
-            f"  con ella: {con_doble}\nUn verificador al que se le anade una "
-            f"contradiccion al estado y no se inmuta no esta mirando el estado."
+        assert "current_workitem" in salida["ilegible"], (
+            f"el estado es ilegible pero el mensaje no nombra la clave: {salida['ilegible']!r}"
         )
 
-    def test_el_mensaje_nombra_la_clave_y_las_versiones_en_contradicto(self) -> None:
-        """Un verificador que dice «falso» sin decir cual era la verdad deja a
-        quien corrige haciendo la cuenta a mano, que es el trabajo que el
-        verificador existe para evitar."""
+    def test_el_valor_que_se_lee_no_es_uno_de_los_dos_a_eleccion(self) -> None:
+        """CONTRA-SALTO del anterior por su otra via de manifestacion.
+
+        Si alguien arregla la excepcion poniendo un `break` en el bucle de
+        claves —que deja la PRIMERA en vez de la ultima— el estado sigue
+        siendo ilegible y el test anterior pasa. Este comprueba que el
+        verificador no publico NINGUNO de los dos valores como si fuera el
+        declarado.
+        """
         with (
             _EstadoRestaurado(),
             _inyectado(_con_clave_duplicada("current_workitem", "B99_inventado")),
         ):
-            _, salida, texto = _ejecuta()
-        if salida is None or "ilegible" in salida:
-            # La via de la excepcion: tambien vale, pero tiene que NOMBRAR la clave.
-            assert "current_workitem" in texto, f"la excepcion no nombra la clave: {texto[:300]!r}"
-            return
-        contradicciones = " ".join(salida.get("contradicciones") or [])
-        assert contradicciones, f"coherente:false sin nombrar nada: {salida}"
-        assert "B99_inventado" in contradicciones, (
-            f"la contradiccion no nombra el valor que no coincide: {contradicciones!r}"
+            salida = _ejecuta()[1]
+        assert salida is not None
+        if "ilegible" in salida:
+            publicado = str(salida.get("workitem_state", ""))
+        else:
+            publicado = str(salida.get("workitem_state", ""))
+        assert publicado not in {"B13", "B99_inventado"}, (
+            f"el verificador publico {publicado!r} como el workitem declarado, y hay dos "
+            f"declaraciones en el fichero. Escoger una es el defecto."
         )
 
 
-def _inyectado(texto: str) -> object:
-    class _Inyecta:
-        def __enter__(self) -> None:
-            STATE.write_text(texto, encoding="utf-8")
-
-        def __exit__(self, *_exc: object) -> None:
-            return None
-
-    return _Inyecta()
-
-
-# =====================================================================
-
-
-def _rechaza(estado_nuevo: str, campo: str, que: str) -> None:
-    """El verificador rechaza un valor mal tipado POR EL TIPO, y lo dice.
-
-    **Por que se exige el `ilegible` y no basta `coherente: false`.** La
-    version anterior de este helper aceptaba tres salidas, y con la
-    comprobacion de tipo deshabilitada los tres tests de tipo seguian en
-    verde: `total: 'muchos'` no cuadra con el recuento real, luego el
-    verificador decia `coherente: false` — por el motivo equivocado — y la
-    asercion debil lo contaba como aprobado. MEDIDO con la sonda M3 del
-    harness: `if False:` en la comprobacion de tipo y `3 passed`.
-
-    Un verificador al que se rompe una cosa y sigue dando «esto no cuadra» no
-    ha comprobado NADA de la cosa que se rompio. Por eso el rechazo tiene que
-    ser el del TIPO: `ilegible` nombrando el campo.
-    """
-    with _EstadoRestaurado(), _inyectado(estado_nuevo):
-        salida = _ejecuta()[1]
-    if salida is None:
-        raise AssertionError(
-            f"{que}: el verificador no devolvio JSON. Si fallo al LEER el estado, "
-            f"tiene que decirlo con «ilegible», no desaparecer."
-        )
-    if "ilegible" not in salida:
-        raise AssertionError(
-            f"{que}: el verificador NO rechazo el valor por su tipo. Djo: {salida}.\n"
-            f"Si hay una contradiccion de otro tipo, el estado no cuadra por otra "
-            f"razon y este test no midio lo que dice medir. Lo que se espera es un "
-            f"«ilegible» que nombre {campo!r}."
-        )
-    assert campo in salida["ilegible"], (
-        f"{que}: el verificador lo rechazo pero sin nombrar el campo: {salida['ilegible']!r}"
-    )
-
-
-# ====================================================================
 class TestLosTiposNoSeAdelantan:
     # ====================================================================
     """Lo UNICO que mide: que un valor de tipo equivocado no pase por bueno.

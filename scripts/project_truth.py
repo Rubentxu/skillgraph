@@ -122,13 +122,26 @@ class _SinClavesDuplicadas(yaml.SafeLoader):
 
 
 def _construye(loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False) -> dict:
-    Mapping = loader.construct_mapping(node, deep=deep)
-    primera: dict[Any, Any] = {}
-    for clave, valor in Mapping.items():
-        if clave in primera:
+    """Construye el mapa, negandose si una clave aparece dos veces.
+
+    **Por que se recorre `node.value` y no el dict construido.** La primera
+    version hacia `loader.construct_mapping(...)` y luego miraba
+    `Mapping.items()`. No lanzaba NUNCA: `construct_mapping` ya devuelve un
+    dict donde la clave repetida se colapso, luego el bucle ve una clave y no
+    dos. MEDIDO: con dos `current_workitem` en el fichero, `_estado()` leia
+    `B99_inventado` sin protestar.
+
+    `node.value` son los pares (nodo_clave, nodo_valor) en CRUDO, que es donde
+    sigue estando la informacion de que habia mas de una declaracion. Para
+    cuando existe el dict, ya no la hay.
+    """
+    vistas: dict[Any, None] = {}
+    for nodo_clave, _nodo_valor in node.value:
+        clave = loader.construct_object(nodo_clave, deep=deep)
+        if clave in vistas:
             raise _ClaveDuplicada(str(clave), "STATE.yaml")
-        primera[clave] = valor
-    return primera
+        vistas[clave] = None
+    return loader.construct_mapping(node, deep=deep)
 
 
 _SinClavesDuplicadas.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construye)

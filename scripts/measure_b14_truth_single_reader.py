@@ -138,11 +138,24 @@ def main() -> int:
         import json
 
         try:
-            contras = json.loads(salida).get("contradicciones")
+            parsed = json.loads(salida)
+            contras = parsed.get("contradicciones")
+            ilegible_bruto = parsed.get("ilegible", "")
         except json.JSONDecodeError:
             contras = None
-        PREGUNTAS[1]["cumple"] = not (rc == 0 and c is True)
-        PREGUNTAS[1]["detalle"] = f"rc={rc} coherente={c} contradicciones={contras}"
+            ilegible_bruto = ""
+        # NO basta con que el veredicto cambie. Sin el constructor de claves
+        # duplicadas, YAML toma la ULTIMA y el verificador dice «STATE declara
+        # B99_inventado, CURRENT declara B13»: elige una de las dos y la
+        # publica como la verdad. El veredicto cambia, luego un predicado de
+        # «coherente is not true» lo daria por bueno — y asi dio 8/8 con el
+        # mecanismo central roto. Lo que se exige es que el estado sea
+        # ILEGIBLE nombrando la clave.
+        ilegible = ilegible_bruto
+        PREGUNTAS[1]["cumple"] = "current_workitem" in ilegible
+        PREGUNTAS[1]["detalle"] = (
+            f"rc={rc} coherente={c} ilegible={ilegible[:70]!r} contradicciones={contras}"
+        )
         arbol.restaura()
 
         # 3. Total que no cuadra con el arbol.
