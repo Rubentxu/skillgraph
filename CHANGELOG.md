@@ -14,6 +14,89 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.28.0] - 2026-10-04 — el contrato de paquete, y lo que de él depende
+
+**El bloque B8, cerrado y verificado.** El gate enumera siete frentes.
+Siete no es un bloque: son siete, y medirlos juntos daría un veredicto
+que no dice por dónde empezar. Este bloque mide y entrega **el
+manifiesto**, que es la pieza de la que los otros seis cuelgan.
+
+Medido antes de escribir nada con `scripts/measure_b8_package_contract.py`:
+**5 de 5 preguntas abiertas**.
+
+SemVer derivado con `scripts/derive_semver.py`: desde `v0.27.0`,
+`b/f/x/n/d 0/1/0/5/0`, la regla pide **MINOR**. Ningún commit con
+marcador de ruptura. Tag `v0.28.0` en `cdc45475c19487368e34922b448ebe334da57740`.
+
+### El hueco no era un campo que faltara
+
+Lo que existe es un `Brick` con `kind="DomainPack"`, que es el contrato
+de **tipos**, no el de **paquete**. Un paquete tiene nombre, versión,
+clase y requisitos.
+
+### La costura ya estaba puesta desde B3
+
+`CAPABILITY_VERSION: Final[str] = "v1"` vive en el puerto con un
+docstring que dice literalmente que está ahí «para que
+`requires.capabilities` de B8 tenga algo que versionar». Este bloque no
+inventó el requisito: lo ejecutó.
+
+### Tres decisiones
+
+1. **`PACK_KINDS` se deriva por `get_args`, nunca se escribe a mano.**
+   Un conjunto literal se queda corto en cuanto el `Literal` crece, y
+   entonces el validador rechaza el valor nuevo que el propio tipo
+   acepta.
+2. **La versión de la capability la hereda del puerto.** Si viviera en
+   cada adaptador, cada uno inventaría la suya.
+3. **`ISOLATION_LEVELS` es una tupla ordenada, no un conjunto.** El orden
+   es el contenido: es lo que convierte «progresivo» en una propiedad
+   comprobable con `es_al_menos` y no en un adjetivo.
+
+Y `es_compatible` devuelve **motivos**, no un `bool`: en un pack que se
+está instalando, el «por qué» es la mitad del trabajo.
+
+### Dos defectos reales del código
+
+- **El parser rechazaba el formato del propio gate.** El enunciado
+  escribe `">=0.30,<1"`, que **mezcla** `>=0.30` —dos componentes— y
+  `<1` —uno solo—. La regex exigía `X.Y` o SemVer completo, así que
+  **ningún pack encajaba** contra el formato que el gate define. Lo
+  cazaron seis tests a la vez.
+- **La capability larga se rompía en silencio.** Producía
+  `type_name="a.b.v2@v2"` con la versión pegada, que no se puede comparar
+  con un `CapabilitySpec` instalado, y cuyo síntoma es «falta la
+  capability» — una respuesta creíble, que es lo que hace un fallo
+  peligroso.
+
+### Tres defectos propios, que importan más
+
+- **Un `pytest.skip` mío** que escondía un fallo del contrato. Lo grave
+  no era el skip: estaba porque la aserción de verdad nunca se escribió.
+- **Un test que no podía fallar**: mutar un campo `str` en el dict de
+  origen no puede cambiar un `frozen` dataclass. La sonda que lo apuntaba
+  salió `NO CAZADA` —el harness diciendo la verdad en vez de contar un
+  5/5 falso— y se movió a donde el alias sí es posible.
+- **«Árbol restaurado byte a byte» NO es «el árbol está como estaba».** Al
+  restaurar, el `mtime` puede no avanzar y Python sigue ejecutando el
+  `.pyc` de la versión mutada. El harness ahora borra `__pycache__` y
+  **vuelve a pasar la suite al final**.
+
+### Verificación
+
+- **3158 passed, 3 skipped declarados, 0 failed**.
+- 66 tests, cobertura del **100 %** del paquete nuevo (suelo de §6.3: 90 %).
+- Contra-saltos **5/5 con 5 conjuntos distintos** de tests.
+- `tests.total` **3161**, con el desglose medido: sin el paquete
+  `packaging` la suite colecta 3088, la cifra exacta que B7 declaró.
+
+### Fuera de alcance
+
+**P6** — que un pack se instale de verdad — depende de un registro remoto
+y de una política de fijación que el CI no tiene. Y `subprocess` y
+`sandbox` son campos **declarados**, no mecanismos: declararlos sin
+ejecutarlos es la forma más fácil de mentir sobre seguridad.
+
 ## [0.27.0] - 2026-10-04 — las vistas que CLI y TUI compartirían
 
 **El bloque B7, cerrado y verificado.** El gate pide diez widgets vivos

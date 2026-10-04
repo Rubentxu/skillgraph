@@ -608,7 +608,7 @@ tests:
   total: 3161   # BLOQUE B8: la cifra se escribe DESPUES del run, nunca antes. +73 sobre 3088, y el desglose esta MEDIDO pieza a pieza, no estimado: con el paquete src/skillgraph/packaging/ APARTADO del arbol la suite colecta 3088 — la cifra exacta que B7 declaro, otra vez— y al devolverlo colecta 3161. Los 73 son 66 de tests/test_b8_package_contract.py, 6 que genera el guard de wi47 al aparecer manifest.py y __init__.py (264 -> 270 casos) y 1 de la simetria de paquetes de WI-107 (23 -> 24). Que el árbol SIN B8 colecte lo que B7 declaro es la comprobacion que le da sentido al numero: si el +73 fuera una invencion, el 3088 de la fila anterior no saldria. ES LA TERCERA VEZ que la prediccion de B6 se cumple —«si el bloque crea modulos nuevos en src/, los guards se mueven»— y por eso conviene no leerla al reves. CONTEXTO B7 (se conserva, ya no vivo): +33 sobre 3055 = 23 de test_b7_operational_ux.py y 10 de guards. CONTEXTO B6 (se conserva): +25 sobre 3030, 23 de test_b6_provenance.py y 2 de test_b0_truth_convergence.py, anadidos al descubrir que los dos guards de release se CONTRADECIAN entre si. La certificacion de B6 dio 3048 passed + 3 skips declarados + 2 failed, y los 2 failed eran ESTA CIFRA y su gemelo de convergencia: el guard de WI-115 vuelve a cazar, y caza porque el recuento viene del arbol y no de una copia escrita en el propio test. CONTEXTO B5: +34 sobre 2996. CONTEXTO B4: +22 sobre 2974. OJO: el 18 que B3 declaro para test_b3_capability_seam.py ya no cuadra con el arbol, que colecta 12; se deja escrito y NO se corrige porque arreglarlo es medir B3, y un bloque que corrige la contabilidad de otro sin medirlo es el bloque que inventa cifras.
   passed: 2735
   duration_s: 241.57   # MEDIDO en la CI canonica de WI-108, run 2387c4cc-c624-4793-a8ef-1a83f3df72ea, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. El resumen es «2735 passed in 241.57s» SIN la palabra skipped, que es lo que el criterio nuevo de WI-108 exige. Bloque WI-107, run 332e09e6-ba0b-449e-908e-9686dd35a898, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. Criterio 6 (SHA-256 del .pipeline.kts) registrado en sesion: 7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42, sin drift desde 283da96 (WI-105). Bloque anterior WI-105: (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
-  package_version: "0.27.0.dev0"   # post-release v0.27.0. HEAD ya NO esta en la etiqueta (a57f566 va detras de 683dbfc), luego es el caso 2 del guard de release: el SemVer PURO solo era correcto mientras HEAD estaba EN el tag. Va a la par de __init__.py en el MISMO commit: un commit que bumpea uno y deja el otro viejo es el fallo que WI-109 sufrio, y el guard que lo cruza existe desde entonces.
+  package_version: "0.28.0"   # release limpia: HEAD esta EN la etiqueta v0.28.0, luego el SemVer es PURO (caso 1 del guard de release). Va a la par de __init__.py en el MISMO commit: un commit que bumpea uno y deja el otro viejo es el fallo que WI-109 sufrio, y el guard que lo cruza existe desde entonces.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1173,7 +1173,7 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.27.0
+  tag: v0.28.0
   fecha: 2026-10-04
   semver_bump: MINOR
   rationale_b6: >-
@@ -1303,6 +1303,44 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.28.0
+      fecha: 2026-10-04
+      sha: "cdc45475c19487368e34922b448ebe334da57740"
+      nota: >-
+        B8 cerrado: el contrato de paquete, y lo que de el depende. El enunciado de B8 enumera SIETE
+        frentes y este es el primero, porque es el de la que los otros seis cuelgan: sin requires no hay
+        version que comparar, sin un contrato versionado no hay upgrade, y sin contrato no hay
+        install/update/remove que valga como algo mas que copiar ficheros. MEDIDO antes de escribir nada
+        (scripts/measure_b8_package_contract.py): 5 de 5 preguntas abiertas, y lo que encuentra no es que
+        falte un campo —lo que existe es un Brick con kind=DomainPack, que es el contrato de TIPOS, no el
+        de PAQUETE—. LA COSTURA YA ESTABA PUESTA DESDE B3: CAPABILITY_VERSION vive en el puerto con un
+        docstring que decia que esta ahi para que requires.capabilities de B8 tenga algo que versionar. TRES
+        DECISIONES: PACK_KINDS se DERIVA por get_args y nunca se escribe a mano (un conjunto literal se
+        queda corto cuando el Literal crece y la validacion rechaza el valor nuevo que el tipo si acepta);
+        la version de la capability la hereda del PUERTO; y ISOLATION_LEVELS es una tupla ORDENADA y no un
+        conjunto, porque el orden es lo que convierte 'progresivo' en una propiedad comprobable con
+        es_al_menos. Y es_compatible devuelve MOTIVOS y no un bool: en un pack que se esta instalando el
+        'por que' es la mitad del trabajo. DOS DEFECTOS REALES DEL CODIGO: el parser rechazaba el FORMATO
+        DEL PROPIO GATE (el enunciado escribe '>=0.30,<1', que MEZCLA '>=0.30' de dos componentes con '<1'
+        de uno solo, luego NINGUN pack encajaba contra el formato que el gate define, y lo cazaron seis tests
+        a la vez); y la capability larga se rompia en silencio, produciendo el type_name con la version
+        pegada, que no se puede comparar con un CapabilitySpec instalado y cuyo sintoma es 'falta la
+        capability', una respuesta CREIBLE. TRES DEFECTOS PROPIOS: un pytest.skip mio que escondia un fallo
+        del contrato —lo grave no era el skip, es que estaba porque la asercion de verdad nunca se
+        escribio—; un test que NO PODIA FALLAR, porque mutar un campo str en el dict de origen no puede
+        cambiar un frozen dataclass, y cuya sonda salio NO CAZADA, que es el harness diciendo la verdad en
+        vez de contar un 5/5 falso; y que 'arbol restaurado byte a byte' NO es 'el arbol esta como estaba',
+        porque al restaurar el mtime puede no avanzar y Python sigue ejecutando el pyc de la version
+        mutada, luego el arbol estaba restaurado y ejecutando la version equivocada A LA VEZ. Ademas dos
+        bugs del MEDIDOR corregidos antes de escribir produccion, porque un guard que obliga a escribir
+        peor para poder ser medido es el peor resultado posible. VERIFICACION: 3158 passed, 3 skips
+        declarados, 0 failed; 66 tests; cobertura del 100% del paquete nuevo cuando el suelo es 90%;
+        contrasaltos 5/5 con 5 conjuntos DISTINTOS y arbol restaurado byte a byte Y EJECUTANDO como estaba.
+        tests.total 3161 con el desglose MEDIDO: sin el paquete packaging la suite colecta 3088, la cifra
+        exacta que B7 declaro, por tercera vez. Flaky MEDIDO Y NO OCULTADO: la primera certificacion dio 1
+        failed en test_b2_real_concurrency, que depende del planificador del SO; medido 5/5 aislado, 8/8 bajo
+        carga, y la suite completa en verde al repetirla. P6 (instalar un pack de verdad) queda FUERA y
+        registrada, y subprocess/sandbox son campos DECLARADOS, no mecanismos. MINOR por 0/1/0/5/0.
     - tag: v0.27.0
       fecha: 2026-10-04
       sha: "683dbfc821843c7d8c529af6d408ae7bdf626a47"
