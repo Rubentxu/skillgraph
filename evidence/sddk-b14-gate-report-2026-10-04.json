@@ -1,0 +1,111 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B14",
+  "titulo": "La autoridad de coherencia se puede engañar, y se engañó",
+  "release": "0.31.2",
+  "que_es_y_que_no_es": "No es un bloque hacia 1.0. Es el bloque que hace que el verificador del que dependen B0..B13 pueda ser creido. Por eso el gate de 1.0 queda SIN CAMBIOS: 18 PASS / 1 OPEN / 1 NO_MEASURABLE, medido.",
+  "hallazgo_que_lo_abrio": {
+    "que": "Al cerrar B13 se anadio una segunda clave `current_workitem` en STATE.yaml. Seis ficheros de test leian el estado con yaml.safe_load, que se queda con la clave repetida por la ULTIMA, y scripts/project_truth.py lo leia entero con regex, que se queda con la PRIMERA.",
+    "medido": {
+      "yaml_safe_load": "B13_cerrado",
+      "regex_de_project_truth": "B13",
+      "project_truth": "coherente: true, contradicciones: []"
+    },
+    "por_que_es_grave": "Un verificador que dice «coherente» cuando no lo esta es PEOR que no tener verificador, porque las dos mitades de la propiedad se apoyan en el. Y no es hipotesis: es el caso que ya paso en B13."
+  },
+  "instrumentos": {
+    "medidor": "scripts/measure_b14_truth_single_reader.py (8 preguntas, mutaciones EN SITIO con restauracion verificada por sha256)",
+    "mutacion_de_los_tests": "scripts/mutate_b14_truth_single_reader.py (6 sondas)",
+    "autocomprobacion_del_medidor": "scripts/measure_b14_truth_single_reader.py --autocomprobacion (3 sondas sobre el propio medidor)"
+  },
+  "resultados": {
+    "linea_base_antes_de_escribir_nada": "7 de 8",
+    "medicion_al_cerrar": "8 de 8",
+    "harness_de_tests": "6 de 6 sondas cazadas, 6 causas distintas",
+    "autocomprobacion_del_medidor": "3 de 3 sondas cazadas",
+    "suite_certificada": "3282 passed, 3 skipped, 0 failed",
+    "tests_total": 3285,
+    "desglose_del_total": "3271 -> 3285, +14: +13 del fichero nuevo tests/test_b14_truth_single_reader.py y +1 de un test que el propio bloque se encontro a si mismo",
+    "gate_de_1_0": {
+      "PASS": 18,
+      "OPEN": 1,
+      "NO_MEASURABLE": 1,
+      "sin_cambios": true
+    }
+  },
+  "que_entra": [
+    "STATE.yaml se lee UNA vez con yaml.safe_load, en vez de con tres regex que cada una puede encontrar otra cosa.",
+    "Un loader que RECHAZA claves duplicadas en el punto de lectura, no despues con un guard: un guard que busca «¿hay dos claves iguales?» seria un segundo lector, que es el problema.",
+    "Comprobacion de TIPO en release.tag, tests.total y roadmap.current_workitem.",
+    "tests_colectados() se niega a publicar un numero si la colecta de pytest no termino (rc != 0)."
+  ],
+  "defectos_de_verdad_encontrados": [
+    {
+      "que": "El mecanismo central NO LANZABA NUNCA.",
+      "por_que": "_construye llamaba a construct_mapping(...) y luego miraba Mapping.items(); y construct_mapping ya devuelve un dict donde la clave repetida se colapso. El bucle veia UNA clave, no dos.",
+      "arreglo": "Recorrer node.value, que son los pares en crudo."
+    },
+    {
+      "que": "El test de la clave duplicada daba VERDE ACEPTANDO EL DEFECTO.",
+      "por_que": "Sin el constructor, YAML toma la ultima y el verificador dice «workitem: STATE declara B99_inventado, CURRENT declara B13»: elige una de las dos declaraciones y la publica como la verdad. El veredicto SI cambia, luego un test de «cambia el veredicto» pasa.",
+      "arreglo": "El contrato pasa a ser «el estado es ILEGIBLE nombrando la clave», mas un contrasalto que comprueba que no se publica ninguno de los dos valores."
+    },
+    {
+      "que": "tests_colectados() publicaba el numero de una colecta INTERRUMPIDA.",
+      "por_que": "Con src/skillgraph/__init__.py mutilado, pytest imprime «2867 tests collected, 27 errors» y sale con rc=2. Ese numero es real —son los tests que llego a ver— pero no es EL recuento, y se publicaba con su nombre: «tests: STATE declara 3284, el arbol colecta 2867». Sin 417 tests y sin decir por que.",
+      "arreglo": "Se niega a leer el numero si la colecta no termino, y nombra el conteo parcial. Sonda M6 del harness.",
+      "nota_de_alcance": "El fallo va en la direccion SEGURA —dice que no cuadra cuando si cuadra—, luego no es el defecto que B14 persigue. Se arregla porque la autoridad de coherencia hablando de un numero que no conto es del mismo genero que ella hablando de una coherencia que no midio."
+    }
+  ],
+  "instrumentos_que_se_satisfacian_por_la_causa_equivocada": {
+    "que_es": "Cinco, todos de la misma clase: un predicado que se puede satisfacer por una causa que no es la que dice medir. Ninguno lo manifesto una lectura del codigo; los five los manifestaron el harness o la sonda.",
+    "casos": [
+      "Dos guards de los tests atados a `current_workitem: B13` escrito a mano: al mover el bloque vivo a B14 los dos dejaron de mutar nada. Un contrasalto que se desactiva al cambiar el calendario ya no es un contrasalto.",
+      "La medicion tenia TRES mutaciones no-op por el mismo motivo, e imprimia 5 de 8 diciendo que el arreglo recien hecho no funcionaba. Lo que estaba roto era el instrumento. Ahora aborta si la sustitucion no aplico.",
+      "Tres de sus ocho preguntas pedian «no es coherente», que lo cumple un modulo roto igual que un modulo que dejo de mirar. MEDIDO: con una sustitucion mal escrita el estado era YAML invalido, rc=2, y la pregunta contaba eso como PASS.",
+      "RAIZ era una ruta absoluta de esta maquina: el instrumento mutaba ficheros de un arbol que podia no ser el suyo.",
+      "La sonda M1 del harness no media el guard que decia vigilar: referenciaba `_TAG_STATE`, que B14 borro, luego el modulo reventaba con NameError y caian los DIEZ tests, ninguno el diagnosticado. El harness la declaro INVALIDA, que es lo que distingue a una sonda que mide de una que rompe."
+    ],
+    "la_misma_patologia_entre_los_tests": "Y en la direccion contraria, un test de B14 dio verde ACEPTANDO el defecto por la misma razon: con el mecanismo roto, el verificador elegia una de las dos declaraciones y la publicaba como verdad."
+  },
+  "incidente_del_instrumento": {
+    "que": "La primera ejecucion de --autocomprobacion revento a mitad y dejo scripts/project_truth.py SIN el constructor de claves duplicadas, con el repo entero en coherente: false y sin que nadie lo dijera.",
+    "por_que": "Restauraba dos veces: el `with` ya lo hacia y habia borrado la copia, y la segunda reventaba con FileNotFoundError. Como la restauracion del verificador venia DESPUES, la excepcion se comio esa restauracion.",
+    "arreglo": "scripts/project_truth.py entra en MUTABLES, y la restauracion la hace el `with` una sola vez. Una red que verifica por sha256 pero no cubre el fichero que el instrumento mas deforma no es una red.",
+    "como_se_detecto": "El fallo se vio al mirar `git status` justo despues. Un verificador cojo no avisa: dice cualquier cosa con la misma autoridad."
+  },
+  "la_leccion_del_bloque": {
+    "texto": "Con la deformacion puesta, la sonda 3 deja ver el defecto central a la vista: {\"coherente\": true, \"contradicciones\": [], \"workitem_current\": \"B14\", \"workitem_state\": \"B99\"}. El verificador publicando como coherente un estado en el que STATE y CURRENT dicen cosas distintas.",
+    "por_que_eso_y_no_el_arreglo_del_loader": "El arreglo del loader es codigo. Eso es una fotografia del instante en que el verificador puede mentir. La propiedad de B14 no es «el YAML tenga una clave repetida» —eso lo hace el parser— sino que el verificador no pueda decir coherente cuando el estado no lo es, y que diga POR QUE. Y la honestidad de un verificador al que solo se le pregunta «¿es coherente?» no se puede medir: hay que poder obligarlo a equivocarse y comprobar que se da cuenta."
+  },
+  "ciclo_sddk": {
+    "cycle_id": "p-b7740b96d79ec013/b14",
+    "path": "A-full",
+    "lease": "mavis-b14, fencing token 1",
+    "nota": "PAUSED al cerrar, igual que b4..b13: `sddk debt report` no esta implementado en esta build, luego los gates de deuda no son evaluables y el ciclo no puede pasar a CLOSED. No hay bloqueo externo."
+  },
+  "publicacion": {
+    "tag": "v0.31.2",
+    "tag_sha": "238a0f7277917b66647be321efc74ee702b37224",
+    "tag_sha_local": "238a0f7277917b66647be321efc74ee702b37224",
+    "origin_main": "a57ea6eff4adf06843e360449d1c25d5d68461e7",
+    "commits_sin_publicar": 0,
+    "verificado_con": "git ls-remote --tags origin v0.31.2^{}, y git rev-list --count origin/main..HEAD",
+    "eslabones": [
+      "238a0f7 build(release): la version pura de v0.31.2, que existe para el tag",
+      "b05ca23 chore(release): el estado, el changelog y la version .dev0 de v0.31.2",
+      "a57ea6e docs(state): B14 cerrado y publicado en v0.31.2"
+    ],
+    "la_ventana_de_AGENTS_12": "Dos de los cuatro eslabones se hacen con HOOK_SKIP_TESTS=1, y es la MISMA ventana de v0.31.1 y v0.31.0: la version tiene que ser PURA porque es la que queda en el tag, y el tag no puede apuntar a un commit que no existe. En el segundo eslabon, HEAD sigue en la etiqueta y el guard exige ahi un SemVer puro que ese commit, por ser el que mueve HEAD mas alla, no puede tener. La suite NO se salta: se ejecuta DESPUES, a mano, sobre el commit ya hecho, y ahi es donde se ve el verde. MEDIDO en este bloque: los 7 tests que cayeron cuando se intento el orden sin ventana eran 6 de la red de releases de B10 en adelante, mas 1 de B14 que cayo por la misma causa — la release declarada no coincidia con el tag.",
+    "guard_que_cazo_el_olvido": "WI-95 es una biyeccion con git: toda etiqueta tiene su seccion en CHANGELOG.md. Y test_every_semver_tag_is_listed_exactly_once: una etiqueta que existe y no esta registrada en STATE.yaml no es un punto de recuperacion, es un agujero. Los dos pillaron trabajo real de este bloque — faltaba la entrada de v0.31.2 en el inventario, y CURRENT.md seguia diciendo 0.31.1.dev0 mientras el estado decia 0.31.2."
+  },
+  "listo_para_1_0": false,
+  "lo_que_queda": {
+    "gate_de_1_0": "18 PASS / 1 OPEN / 1 NO_MEASURABLE, sin cambios y correctamente",
+    "OPEN": "runtime real certificado: exige SG_UAT_REAL_PROVIDER=1 y una credencial real (ANTHROPIC_API_KEY u OPENAI_API_KEY)",
+    "NO_MEASURABLE": "TUI operacional: requiere persona y terminal"
+  },
+  "deuda_registrada_y_no_abierta": [
+    "El PRE-FLIGHT de B14 anoto «los otros consumidores con regex sobre STATE.yaml que quedan en el repo». MEDIDO: no quedan. project_truth.py era el unico consumidor de produccion, y los seis de test ya usaban el parser. Era deuda sin verificar, y sin verificar no era deuda."
+  ]
+}
