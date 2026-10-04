@@ -144,6 +144,48 @@ class TestElCicloSeEjecuta:
         assert r.returncode == 0
         assert "acme" not in r.stdout, "tras retirar, list no deberia enseñarlo"
 
+    def test_install_por_la_cli_rechaza_un_pack_incompatible_diciendo_por_que(
+        self, tmp_path: Path
+    ) -> None:
+        """La costura de B8 llegando a la linea de comandos.
+
+        MEDIDO, y el hueco lo encontro el harness: la sonda M1 —«instalar
+        acepta un pack incompatible»— cayo en el test del NUCLEO pero NO en
+        el de extremo a extremo, porque el recorrido de la CLI solo
+        instalaba packs compatibles. O sea que el camino que ve el operador
+        no estaba cubierto para el caso que de verdad duele.
+
+        Este test lo cubre, y exige dos cosas: que salga con codigo de
+        dominio y que el mensaje nombre la clausula que fallo.
+        """
+        cli = self._cli
+        assert cli(["project", "create", "p"], tmp_path).returncode == 0
+        villano = self._pack(tmp_path / "packs", "villano", "0.1.0", requiere=">=99.0.0")
+
+        r = cli(["pack", "install", "p", str(villano)], tmp_path)
+        assert r.returncode != 0, "un pack incompatible se instalo sin quejarse"
+        salida = r.stdout + r.stderr
+        assert "Traceback" not in salida, f"salio a traza en vez de a error de dominio:\n{salida}"
+        assert ">=99.0.0" in salida, f"el mensaje no nombra la clausula que fallo:\n{salida}"
+
+        r = cli(["pack", "list", "p"], tmp_path)
+        assert "villano" not in r.stdout, "un pack rechazado se quedo instalado"
+
+    def test_update_por_la_cli_exige_que_suba_la_version(self, tmp_path: Path) -> None:
+        """La exigencia de `update` se comprueba por la CLI, no solo en el nucleo."""
+        cli = self._cli
+        assert cli(["project", "create", "p"], tmp_path).returncode == 0
+        v1 = self._pack(tmp_path / "packs", "acme", "0.1.0")
+        v0 = self._pack(tmp_path / "packs0", "acme", "0.0.9")
+
+        assert cli(["pack", "install", "p", str(v1)], tmp_path).returncode == 0
+        r = cli(["pack", "update", "p", str(v0)], tmp_path)
+        assert r.returncode != 0, "update acepto una version MENOR por la CLI"
+        assert "no sube" in (r.stdout + r.stderr)
+
+        r = cli(["pack", "list", "p"], tmp_path)
+        assert "acme@0.1.0" in r.stdout, "el update fallido dejo cambiada la version"
+
     def test_el_guard_de_la_superficie_se_pone_rojo_si_falta_un_comando(
         self, tmp_path: Path
     ) -> None:

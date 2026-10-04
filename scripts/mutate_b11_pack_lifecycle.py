@@ -47,6 +47,7 @@ PY = sys.executable
 #: «restaura» el defecto y lo cuenta como verde.
 MUTABLES = (
     RAIZ / "src" / "skillgraph" / "packaging" / "registry.py",
+    RAIZ / "src" / "skillgraph" / "platform" / "installed_packs_repository.py",
     RAIZ / "src" / "skillgraph" / "cli" / "commands" / "pack.py",
     RAIZ / "tests" / "test_b11_pack_lifecycle.py",
 )
@@ -105,6 +106,33 @@ def _pytest(objetivos: tuple[str, ...]) -> tuple[int, set[str]]:
         if linea.startswith("FAILED ")
     }
     return proc.returncode, caidos
+
+
+def _sucios() -> tuple[str, ...]:
+    """Los mutables que NO volvieron a su estado de `HEAD` al terminar.
+
+    **ESTE GUARD EXISTE PORQUE SU AUSENCIA DEJO PASAR UN ARBOL ROTO,
+    MEDIDO en la primera ejecucion de este harness.** Una de las seis
+    sondas mutaba `installed_packs_repository.py`, que no estaba en
+    `MUTABLES`: el harness la ejecuto, la restauro (nada que restaurar) y
+    sigio. Al final(reporto «arbol restaurado y ejecutando como estaba»)
+    porque la suite seguia VERDE.
+
+    Y aqui esta lo importante: la suite podia estar verde con el archivo
+    mutado, porque la mutacion era invisible para los tests. Eso es
+    exactamente el fallo de B9 repetido con otro disfraz —«restaurado» y
+    «borrado» son la misma operacion si no hay nada commiteado debajo—,
+    y la leccion de ahi era que comprobar la suite no basta. Hace falta
+    comprobar ADEMAS que el arbol volvio, y eso es lo que hace este.
+    """
+    proc = subprocess.run(
+        ["git", "status", "--porcelain", "--", *[str(p.relative_to(RAIZ)) for p in MUTABLES]],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return tuple(linea for linea in proc.stdout.splitlines() if linea.strip())
 
 
 def _restaura() -> None:
@@ -167,10 +195,10 @@ def _sondas() -> tuple[Sonda, ...]:
             ),
         ),
         Sonda(
-            nombre="M5_el_registro_se_persiste_por_proyecto",
+            nombre="M5_el_aislamiento_por_tenant_y_proyecto",
             fichero="src/skillgraph/platform/installed_packs_repository.py",
-            antes="        if solo_instalados:",
-            despues="        if False:  # sonda M5: el filtro deja de acotar por proyecto",
+            antes='        sql = "SELECT * FROM installed_packs WHERE tenant_id = ? AND project_id = ?"',
+            despues='        sql = "SELECT * FROM installed_packs"  # sonda M5: sin WHERE, sin aislamiento',
             esperados=frozenset(
                 {
                     "TestElRegistroPersisteYAisla::test_el_registro_no_enseña_packs_de_otro_proyecto",
@@ -181,7 +209,7 @@ def _sondas() -> tuple[Sonda, ...]:
         Sonda(
             nombre="M6_instalar_deja_de_crear_registro",
             fichero="src/skillgraph/packaging/registry.py",
-            antes="        return self._con_viva(\n            FilaDePack(pack=manifiesto.name, estado=ESTADO_INSTALADO, manifiesto=manifiesto, uid=uid)\n        )",
+            antes="        return self._con_viva(\n            FilaDePack(\n                pack=manifiesto.name, estado=ESTADO_INSTALADO, manifiesto=manifiesto, uid=uid\n            )\n        )",
             despues="        return self  # sonda M6: instalar no registra nada",
             esperados=frozenset(
                 {
@@ -249,7 +277,11 @@ def main() -> int:
     print(f"causas DISTINTAS: {len(causas)} (una por sonda = {cazadas} esperadas)")
     if sin_sonda:
         print(f"sin sonda: {sin_sonda}")
-    if sondas and len(causas) != len(sondas):
+    # El aviso SOLO tiene sentido cuando todas se cazaron y aun asi las
+    # causas se pisan. Con menos sondeadas que sondas, avisar de «causa
+    # compartida» es mixingar dos cosas distintas: lo que hay ahi son
+    # sondas sin cazar, y eso ya se ha dicho una linea mas arriba.
+    if sondas and cazadas == len(sondas) and len(causas) != len(sondas):
         print(
             "AVISO: dos sondas comparten el MISMO conjunto de tests diagnosticos. Una de "
             "las dos no esta midiendo lo que dice medir: o su guarda no muerde, o cae por "
@@ -261,11 +293,24 @@ def main() -> int:
     _limpia_cache()
     rc, caidos = _pytest(SUITES)
     print()
-    if rc == 0 and not caidos:
-        print(f"Arbol restaurado y EJECUTANDO como estaba: {SUITES[0]} verde.")
-    else:
+    if rc != 0 or caidos:
         print(f"ABORTO: tras restaurar, la suite sigue en rojo (rc={rc}, {sorted(caidos)}).")
         return 2
+
+    # La suite verde NO basta. Este harness fallo MEDIDO por dar verde
+    # con un archivo mutado en el arbol, y por eso el ultimo veredicto
+    # mira las dos cosas: que la suite pase y que el arbol haya vuelto.
+    sucios = _sucios()
+    if sucios:
+        print("ABORTO: el ARBOL NO VOLVIO, aunque la suite este verde.")
+        print("        Una sonda muta algo que no esta en MUTABLES, o el")
+        print("        `git checkout --` no la toco. Esto NO es 'restaurado':")
+        print("        es un fichero roto que la suite no sabe mirar.")
+        for linea in sucios:
+            print(f"        {linea}")
+        return 2
+
+    print(f"Arbol restaurado Y EJECUTANDO como estaba: {SUITES[0]} verde, y `git status` limpio.")
     return 0 if cazadas == len(sondas) and not sin_sonda else 1
 
 
