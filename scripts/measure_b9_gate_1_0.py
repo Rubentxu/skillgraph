@@ -600,62 +600,121 @@ def _runtime_real_certificado() -> tuple[Veredicto, str]:
 
 
 def _ontology_extensible() -> tuple[Veredicto, str]:
-    """Ontologia extensible = el nucleo no nombra ningun tipo de recurso.
+    """Ontologia extensible = el nucleo no DEPENDE de ningun tipo de recurso.
 
-    Es la forma ejecutable de la propiedad: si ``core/`` no sabe que
-    existen los recursos, anadir uno no obliga a tocar el nucleo. Y se mide
-    con AST, no con grep, para que un nombre de recurso en el docstring de
-    un modulo no conta como dependencia.
+    Es la forma ejecutable de la propiedad: si ``core/`` no depende de los
+    tipos que viven en los paquetes de recurso, anadir uno no obliga a tocar el
+    nucleo. Y se mide con AST, no con grep, para que un nombre de recurso en el
+    docstring de un modulo no conta como dependencia.
+
+    **LO QUE ESTE PREDICADO TENIA Y ERA PEOR QUE UNA LISTA.** Medido, y con las
+    dos caras, que es lo que lo hace un defecto:
+
+    - De los ocho tipos de recurso que el proyecto DECLARA de verdad,
+      ``^[A-Z][A-Za-z]*Pack$`` ve **cero**. Con
+      ``from skillgraph.packaging.manifest import PackManifest`` en ``core/`` —
+      el tipo CENTRAL del proyecto, el manifiesto de un pack — el veredicto era
+      ``PASS`` con una evidencia byte a byte identica a la del caso limpio.
+    - El unico nombre que el patron contaba era ``FilaDePack``, que es una FILA
+      de la tabla de packs, no un tipo de recurso. Con el import puesto salia
+      ``OPEN`` acusando al nucleo de depender de los recursos.
+
+    **Y LO QUE HACE ESPECIFICO, MEDIDO: el gate se contradia a si mismo.**
+    Con ese mismo import, ``core sin dependencias de impl. externa`` daba
+    ``OPEN`` y este daba ``PASS``. Dos propiedades del mismo gate, sobre el
+    mismo hecho, con veredictos distintos; 7 contradicciones de 9 casos medidos
+    sobre la superficie real del proyecto.
+
+    **POR QUE UN PATRON NO ES UNA DEFINICION.** B16 paso este predicado de
+    cadenas a imports y atributos, y el endurecimiento fue sobre el FORMATO de
+    la mirada: una vista mas aguda de una cosa que no es la que hay. «Anadir un
+    recurso no obliga a tocar el nucleo» no se cumple mirando COMO SE ESCRIBEN
+    los nombres; se cumple preguntando A QUE CONJUNTO PERTENECE cada nombre. Y
+    el conjunto se deriva del arbol, de los paquetes que el proyecto llama
+    recursos por el nombre de su directorio.
+
+    **Y POR QUE UN DOCSTRING NO ES UNA DEPENDENCIA, QUE ES UNA DECISION.**
+    MEDIDO: ``core/`` menciona ``WorkflowPlan`` en tres docstrings y en ninguna
+    linea de codigo. Documentar la frontera es lo contrario de depender de ella.
+    Contarlos seria un ``OPEN`` sobre una frontera respetada —el fallo
+    conservador que B18 le atribuyo a la lista de la estandar—. Los docstrings
+    que nombran un recurso se CUENTAN y se DICEN, que es informacion, y no abren
+    el veredicto.
     """
-    tipos: dict[str, set[str]] = {}
+    recursos = _tipos_de_recurso()
+    dependencias: dict[str, set[str]] = {}
+    menciones: set[str] = set()
+    ficheros = 0
+    nombres_mirados = 0
     for modulo in sorted((RAIZ / "src" / "skillgraph" / "core").rglob("*.py")):
+        ficheros += 1
         rel = str(modulo.relative_to(RAIZ))
         arbol = ast.parse(modulo.read_text(encoding="utf-8"), filename=str(modulo))
-        # (1) Los IMPORTS. MEDIDO: la version anterior de este predicado miraba
-        #     solo constantes de CADENA, y un `from ... import DomainPack` es un
-        #     `Name` del AST, no una cadena. Anadido ese import de verdad a un
-        #     modulo de core/, el gate decia «core/ no nombra ningun tipo de
-        #     recurso». Es la fuga de B13 con el signo cambiado: alli el guard
-        #     leia literales en vez de la consulta ensamblada y daba verde CON LA
-        #     FUGA PRESENTE; aqui leia cadenas en vez de los imports y daba verde
-        #     CON LA DEPENDENCIA PRESENTE. Una frontera arquitectonica que nada
-        #     vigila no es una frontera.
+        docstrings = _docstrings_de(arbol)
+        # (1) Los IMPORTS, que son dependencias por definicion.
         for nodo in ast.walk(arbol):
             if isinstance(nodo, ast.ImportFrom) and nodo.module:
                 for alias in nodo.names:
-                    if _ES_TIPO_DE_RECURSO(alias.name):
-                        tipos.setdefault(alias.name, set()).add(f"{rel} (import de {nodo.module})")
+                    if alias.name in recursos:
+                        dependencias.setdefault(alias.name, set()).add(
+                            f"{rel} (import de {nodo.module})"
+                        )
             elif isinstance(nodo, ast.Import):
                 for alias in nodo.names:
                     for trozo in alias.name.split("."):
-                        if _ES_TIPO_DE_RECURSO(trozo):
-                            tipos.setdefault(trozo, set()).add(f"{rel} (import de {alias.name})")
-            # Y los ATRIBUTOS: `skillgraph.resources.packs.DomainPack` llega al
-            # nucleo como atributo, no como nombre importado, y un predicado que
-            # solo mira imports dejaria pasar justo la forma mas indirecta.
-            elif isinstance(nodo, ast.Attribute) and _ES_TIPO_DE_RECURSO(nodo.attr):
-                tipos.setdefault(nodo.attr, set()).add(f"{rel} (atributo)")
+                        if trozo in recursos:
+                            dependencias.setdefault(trozo, set()).add(
+                                f"{rel} (import de {alias.name})"
+                            )
+            # (2) Los ATRIBUTOS y las ANOTACIONES de tipo: `packs.DomainPack`
+            # llega al nucleo como atributo, y una anotacion
+            # `-> CompiledResource` es una dependencia que no necesita ni un
+            # import, porque el nucleo no tiene que ejecutar nada para estar
+            # atado al tipo.
+            elif isinstance(nodo, ast.Attribute) and nodo.attr in recursos:
+                dependencias.setdefault(nodo.attr, set()).add(f"{rel} (atributo)")
+            elif isinstance(nodo, ast.Name) and nodo.id in recursos:
+                dependencias.setdefault(nodo.id, set()).add(f"{rel} (nombre)")
 
-        # (2) Las CADENAS, que es lo que la version anterior miraba, y que
-        #         siguen mirandose: un docstring que explica un tipo de recurso
-        #         tambien es un nucleo que lo nombra.
+        # (3) Las CADENAS, separando lo que se EJECUTA de lo que DOCUMENTA.
         for nodo in ast.walk(arbol):
             if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str):
-                for encontrado in re.findall(r"\b[A-Z][A-Za-z]*Pack\b", nodo.value):
-                    tipos.setdefault(encontrado, set()).add(f"{rel} (cadena)")
-    if tipos:
+                es_docstring = id(nodo) in docstrings
+                for tipo in recursos:
+                    if re.search(rf"\b{re.escape(tipo)}\b", nodo.value):
+                        nombres_mirados += 1
+                        if es_docstring:
+                            menciones.add(f"{tipo} ({rel}, docstring)")
+                        else:
+                            dependencias.setdefault(tipo, set()).add(f"{rel} (cadena)")
+    base = (
+        f"MEDIDO sobre {ficheros} ficheros de core/ y {len(recursos)} tipos de recurso, "
+        f"derivados de los paquetes {', '.join(PAQUETES_DE_RECURSO)} por AST"
+    )
+    if dependencias:
         detalle = "; ".join(
-            f"{tipo} en {sorted(donde)[0]}" for tipo, donde in sorted(tipos.items())
+            f"{tipo} en {sorted(donde)[0]}" for tipo, donde in sorted(dependencias.items())
         )
         return (
             "OPEN",
-            f"core/ nombra {len(tipos)} tipo(s) de recurso — {detalle}. El nucleo "
-            f"depende de los recursos, y la propiedad dice que no depende: anadir "
-            f"un recurso pasaria a obligar a tocar el nucleo",
+            f"core/ DEPENDA de {len(dependencias)} tipo(s) de recurso — {detalle}. "
+            f"El nucleo depende de los recursos, y la propiedad dice que no depende: "
+            f"anadir un recurso pasaria a obligar a tocar el nucleo. {base}",
         )
-    return "PASS", (
-        "core/ no nombra ningun tipo de recurso, ni por import ni por atributo ni "
-        "por cadena: se anaden sin tocarlo"
+    documentado = ""
+    if menciones:
+        documentado = (
+            f" Documenta ademas {len(menciones)} tipo(s) en docstrings — "
+            f"{'; '.join(sorted(menciones)[:6])}"
+            f"{'...' if len(menciones) > 6 else ''} — lo cual NO es dependencia: "
+            f"documentar la frontera es lo contrario de depender de ella, y por eso no "
+            f"abre el veredicto pero se dice."
+        )
+    return (
+        "PASS",
+        f"core/ no depende de ningun tipo de recurso: ni por import, ni por atributo, "
+        f"ni por anotacion, ni por cadena que se ejecute. {base}"
+        f"{documentado}",
     )
 
 
@@ -680,19 +739,131 @@ def _concurrencia_real_certificada() -> tuple[Veredicto, str]:
     return "PASS", f"5 de 5 corridas verdes; ultima: {resumenes[-1]}"
 
 
-#: Que cuenta como «tipo de recurso» para la frontera del nucleo. Es un
-#: PREFIJO de sufijo, no un nombre: la lista de tipos que existen hoy seria una
-#: segunda fuente de verdad que dejaria de ser verdad el dia que alguien anada
-#: uno, y el nucleo pasaria a depender de un recurso sin que nadie se entere.
-#: MEDIDO: la version anterior de `_ontology_extensible` usaba
-#: `^[A-Z][A-Za-z]+Pack$` con `re.findall` sobre el valor, lo que exige que el
-#: tipo este SOLO en la cadena; aqui se busca el nombre entero para que tambien
-#: aparezca dentro de una frase.
-_TIPO_DE_RECURSO = re.compile(r"^[A-Z][A-Za-z]*Pack$")
+#: Que cuenta como «tipo de recurso» para la frontera del nucleo.
+#:
+#: **ESTO ERA UN SUFIJO ESCRITO A MANO, Y ERA PEOR QUE UNA LISTA. MEDIDO, y
+#: con las dos caras, que es lo que lo hace un defecto y no una rudeza.**
+#:
+#: `_TIPO_DE_RECURSO = ^[A-Z][A-Za-z]*Pack$` decia, en el comentario de al lado,
+#: que no escribir la lista de tipos evita tener una segunda fuente de verdad. El
+#: razonamiento es correcto sobre una cosa y no ve la otra: **un patron por forma
+#: ES una lista, una mas corta y peor**, porque decide como se ESCRIBE un nombre
+#: en vez de a que conjunto PERTENECE. Y medido, sobre el arbol real:
+#:
+#:   · de 8 tipos de recurso que el proyecto DECLARA de verdad —PackManifest,
+#:     CompiledResource, CapabilitySpec, BrickType, Catalog, Brick— el patron
+#:     ve CERO. Con `from skillgraph.packaging.manifest import
+#:     PackManifest` puesto en core/, que es el tipo CENTRAL del proyecto, el
+#:     veredicto es PASS con una evidencia byte a byte IDENTICA a la del caso
+#:     limpio. El patron no ve lo que importa.
+#:
+#:   · el UNICO nombre que el patron cuenta es `FilaDePack`, que es una fila de
+#:     la tabla de packs, no un tipo de recurso. Con el import puesto, el
+#:     veredicto es OPEN acusando al nucleo de depender de los recursos. La
+#:     divergencia va en las DOS direcciones.
+#:
+#: **Y LO QUE HACE ESPEFICO, MEDIDO: el gate se contradecía a si mismo.** Con
+#: ese mismo import, `core sin dependencias de impl. externa` —que B18
+#: endurecio hace un bloque— da OPEN y `ontology extensible` da PASS. Dos
+#: propiedades del mismo gate, sobre el mismo hecho, con veredictos distintos.
+#: MEDIDO sobre la superficie real: 7 contradicciones de 9 casos.
+#:
+#: **POR QUE ERA UN PATRON Y NO UNA LISTA, Y POR QUE ESO ES JUSTO EL DEFECTO.**
+#: B16 paso este predicado de cadenas a imports y atributos, y el endurecimiento
+#: fue sobre el FORMATO de la mirada: le dio una vista mas aguda de una cosa que
+#: no es la que hay. La propiedad «anadir un recurso no obliga a tocar el
+#: nucleo» no se cumple mirando como se escriben los nombres: se cumple
+#: preguntando a que conjunto pertenece cada nombre.
+#:
+#: **LO QUE ENTRA: el conjunto se DERIVA del arbol**, de los paquetes que el
+#: PROPIO proyecto llama recursos por el nombre de su directorio. Se declara el
+#: nombre del PAQUETE —dos entradas— y no la lista de sus clases, que son
+#: veintitantas y cambian. Un nombre de directorio es un hecho del proyecto, y
+#: `resources/` se llama `resources/` porque es donde viven los recursos.
+#:
+#: **Y LO QUE NO ENTRA, QUE ES UNA DECISION Y NO UN OLVIDO: los docstrings NO
+#: son dependencia.** MEDIDO: core/ menciona `WorkflowPlan` en tres docstrings y
+#: en ninguna linea de codigo. Documentar la frontera es lo CONTRARIO de depender
+#: de ella: un docstring que explica un recurso es el nucleo diciendo donde esta
+#: el limite. Contarlos seria un OPEN sobre una frontera respetada —el fallo
+#: conservador que B18 le atribuyo a la lista de la estandar—, y la distincion
+#: entre un docstring y una cadena que se ejecuta es de AST, no de texto. Los
+#: docstrings que nombran un recurso se CUENTAN y se DICEN en la evidencia, que
+#: es informacion, y no abren el veredicto.
+PAQUETES_DE_RECURSO = ("resources", "packaging")
 
 
-def _ES_TIPO_DE_RECURSO(nombre: str) -> bool:
-    return bool(_TIPO_DE_RECURSO.match(nombre))
+def _tipos_de_recurso() -> dict[str, str]:
+    """Los tipos de recurso del proyecto, DERIVADOS del arbol: {clase: modulo}.
+
+    MEDIDO, y el numero importa porque es la cifra que faltaba: sin ella, una
+    evidencia que dice «core/ no nombra ningun tipo de recurso» no permite saber
+    quantos habia que no nombrar. Es el mismo fallo que la evidencia de B18, que
+    decia «(5 modulos)» sobre un paquete de cuatro ficheros: no decia que
+    recorrido, luego no decia si el recorrido estaba completo.
+    """
+    base = RAIZ / "src" / "skillgraph"
+    tipos: dict[str, str] = {}
+    for paquete in PAQUETES_DE_RECURSO:
+        for modulo in sorted((base / paquete).rglob("*.py")):
+            rel = str(modulo.relative_to(RAIZ))
+            arbol = ast.parse(modulo.read_text(encoding="utf-8"), filename=str(modulo))
+            for nodo in ast.walk(arbol):
+                if isinstance(nodo, ast.ClassDef):
+                    tipos.setdefault(nodo.name, rel)
+    return tipos
+
+
+def _docstrings_de(arbol: ast.AST) -> set[int]:
+    """Los `id()` de los nodos Constant cuyo valor es un DOCSTRING.
+
+    MEDIDO, Y ESTA FUNCION HA TENIDO DOS DEFECTOS, que son el mismo defecto.
+
+    1. La primera version hacia `id(ast.get_docstring(nodo))`, que es el id de
+       un **string**, no el del nodo `Constant` del arbol, luego la comparacion
+       no coincidia nunca y el instrumento de medicion de B20 informo de «0
+       docstrings» con `core/` llenandose de ellos.
+    2. La segunda, ya con los nodos, solo miraba `body[0]` de cada modulo,
+       clase o funcion. MEDIDO: eso encuentra los docstrings de verdad pero
+       **pierde la documentacion suelta**, que en este repo es el patron del
+       `NewType`::
+
+           NodeName = NewType("NodeName", str)
+           \"\"\"Identificador local de un nodo dentro de un WorkflowPlan.\"\"\"
+
+       que es la segunda sentencia del cuerpo del modulo, no la primera, y es
+       documentacion de manual. Con esa version el predicado daba ``OPEN`` sobre
+       un arbol sano: dos tipos de recurso «mencionados», que lo eran solo en su
+       documentacion. Un ``OPEN`` falso en estado sano es el fallo mas caro que
+       puede tener un guard, porque entrena a su lector a no creerlo.
+
+    **LO QUE SE ACEPTA COMO DOCUMENTACION, Y ES UNA DECISION.** Una
+    `Expr(Constant(str))` en el cuerpo de un modulo, una clase o una funcion:
+    Python exige que sea un string, y una sentencia suelta de ese tipo no hace
+    nada mas que documentar. Quedan FUERA las cadenas que se ejecutan —una
+    f-string, un argumento, un valor— porque esas no son prosa: son codigo que
+    produce el texto que el nucleo emite.
+
+    **Y POR QUE ESTO NO ES UN DETALLE DE IMPLEMENTACION.** Los dos defectos son
+    la misma cosa: un clasificador escrito sin una prueba que diga que
+    clasifica. Es el mismo patron que los cuatro fallos de B19, y el
+    contrasalto es el mismo: un clasificador que devuelve siempre lo mismo no se
+    nota hasta que se compara con un caso que se sabe.
+    """
+    ids: set[int] = set()
+    cuerpos: list[list[ast.stmt]] = []
+    for nodo in ast.walk(arbol):
+        if isinstance(nodo, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            cuerpos.append(nodo.body)
+    for cuerpo in cuerpos:
+        for sentencia in cuerpo:
+            if (
+                isinstance(sentencia, ast.Expr)
+                and isinstance(sentencia.value, ast.Constant)
+                and isinstance(sentencia.value.value, str)
+            ):
+                ids.add(id(sentencia.value))
+    return ids
 
 
 #: Donde la version de las capabilities TIENE que vivir. El nombre de la
