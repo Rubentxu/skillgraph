@@ -1,6 +1,6 @@
 > **Bloque 2026-10-04 (B15) — Un predicado que se declara leyendo código no sabe cuándo deja de medir.**
-> (cerrado; pendiente de release)
-> Versión activa `0.31.2.dev0`; último tag `v0.31.2`.
+> (cerrado y publicado en `v0.32.0`)
+> Versión activa `0.32.0.dev0`; último tag `v0.32.0`.
 >
 > **ESTE NO ES UN BLOQUE HACÍA 1.0 TODAVÍA. ES UN BLOQUE SOBRE CÓMO EL GATE
 > SABE LO QUE SABE.**
@@ -64,10 +64,10 @@
 >
 > | cita | que sostiene |
 > |---|---|
-> | `measure_b9_gate_1_0.py::_grafo_del_modulo` | la clase sale de seguir el grafo, no de una lista |
-> | `measure_b9_gate_1_0.py::_funcion_del_predicado` | una busqueda que no encuentra LEVANTA |
-> | `measure_b9_gate_1_0.py::_construye_en` | construye para comparar, no para declarar |
-> | `test_b15_evidence_kind.py::TestLaClaseSigueAlCodigo` | contrasalto en las dos direcciones |
+> | `measure_b9_gate_1_0.py:122::_grafo_del_modulo` | la clase sale de seguir el grafo, no de una lista |
+> | `measure_b9_gate_1_0.py:189::_funcion_del_predicado` | una busqueda que no encuentra LEVANTA |
+> | `measure_b9_gate_1_0.py:819::_construye_en` | construye para comparar, no para declarar |
+> | `test_b15_evidence_kind.py:119::TestLaClaseSigueAlCodigo` | contrasalto en las dos direcciones |
 > | `mutate_b15_evidence_kind.py` | 6 sondas, 6/6, que el harness se autocomprueba |
 >
 > **RESULTADO:** gate de 1.0 **sin cambios de veredicto**, 18 PASS / 1 OPEN / 1
