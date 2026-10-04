@@ -1,0 +1,112 @@
+{
+  "total": 20,
+  "resumen": {
+    "PASS": 13,
+    "OPEN": 6,
+    "NO_MEASURABLE": 1,
+    "NO_MEDIBLE": 0
+  },
+  "listo_para_1_0": false,
+  "propiedades": [
+    {
+      "nombre": "roadmap/state/docs coherentes",
+      "veredicto": "PASS",
+      "evidencia": "project_truth.py rc=0, 0 contradicciones; bloque B8, version 0.28.0.dev0, 3176 tests declarados == 3176 reales"
+    },
+    {
+      "nombre": "resource/controller API estable",
+      "veredicto": "OPEN",
+      "evidencia": "core/__init__.py no declara __all__: la superficie publica no esta declarada, luego no hay nada que pueda decir que es estable"
+    },
+    {
+      "nombre": "blueprint legacy completamente probado",
+      "veredicto": "PASS",
+      "evidencia": "los 16 UAT del blueprint tienen test que los nombra"
+    },
+    {
+      "nombre": "Graph Diff Gate operativo",
+      "veredicto": "PASS",
+      "evidencia": "Graph Diff Gate: 5 cerradas, 0 abiertas, 1 declaradas FUERA DE ALCANCE (no bajan el veredicto)"
+    },
+    {
+      "nombre": "runtime real certificado",
+      "veredicto": "OPEN",
+      "evidencia": "el UAT del proveedor real se salta: exige SG_UAT_REAL_PROVIDER=1 y una credencial en el entorno. Resumen: 3 skipped in 0.06s"
+    },
+    {
+      "nombre": "ontology extensible",
+      "veredicto": "PASS",
+      "evidencia": "core/ no nombra ningun tipo de recurso: se anaden sin tocarlo"
+    },
+    {
+      "nombre": "crash/recovery real certificado",
+      "veredicto": "PASS",
+      "evidencia": "crash y recovery ejecutados de verdad: 18 passed in 1.17s"
+    },
+    {
+      "nombre": "provenance fuerte",
+      "veredicto": "PASS",
+      "evidencia": "provenance: 5 cerradas, 0 abiertas"
+    },
+    {
+      "nombre": "concurrencia real certificada",
+      "veredicto": "PASS",
+      "evidencia": "5 de 5 corridas verdes; ultima: 5 passed in 1.27s"
+    },
+    {
+      "nombre": "capabilities deterministas",
+      "veredicto": "PASS",
+      "evidencia": "CAPABILITY_VERSION se declara en un solo sitio: ['src/skillgraph/platform/ports/capabilities.py']"
+    },
+    {
+      "nombre": "core sin dependencias de impl. externa",
+      "veredicto": "PASS",
+      "evidencia": "core/ solo importa de si mismo y de la estandar (4 modulos)"
+    },
+    {
+      "nombre": "CLI estable",
+      "veredicto": "OPEN",
+      "evidencia": "la CLI expone 11 comandos y no existe docs/cli-surface.json contra el que comparar: su superficie puede cambiar sin que nada lo note"
+    },
+    {
+      "nombre": "TUI operacional",
+      "veredicto": "NO_MEASURABLE",
+      "evidencia": "«operacional» es una propiedad de una persona usando un terminal: no hay forma de medirla ejecutando el repo. B7 la registro como P4 fuera de alcance."
+    },
+    {
+      "nombre": "migrations probadas",
+      "veredicto": "PASS",
+      "evidencia": "migracion contra base previa ejecutada: 3 passed, 20 deselected in 0.08s"
+    },
+    {
+      "nombre": "pack/controller lifecycle",
+      "veredicto": "OPEN",
+      "evidencia": "`sg pack` expone ['import', 'load'] y no ['install', 'update', 'remove']: el ciclo de vida que B8 declaro como requisito no existe todavia como comando"
+    },
+    {
+      "nombre": "backups/restore probados",
+      "veredicto": "PASS",
+      "evidencia": "backups y restore ejecutados: 39 passed in 0.20s"
+    },
+    {
+      "nombre": "upgrade desde releases soportadas",
+      "veredicto": "OPEN",
+      "evidencia": "no existe ninguna funcion de upgrade o de migracion de datos entre releases: no hay de donde subir una base creada por una version anterior"
+    },
+    {
+      "nombre": "security/threat model actualizado",
+      "veredicto": "OPEN",
+      "evidencia": "el ADR se aprobo describiendo un proyecto de 830 tests y 17 releases; el arbol de hoy colecta 3176. El modelo de amenaza describe un producto que ya no es este"
+    },
+    {
+      "nombre": "distribution reproducible",
+      "veredicto": "PASS",
+      "evidencia": "el wheel y el sdist se construyen y llevan lo que declaran"
+    },
+    {
+      "nombre": "UAT agent-first completa",
+      "veredicto": "PASS",
+      "evidencia": "los 16 UAT del blueprint estan cubiertos por tests. Lo que NO mide esta propiedad es si el agente PUELA conocimiento: B6 lo dejo como P5 fuera de alcance porque necesita un proveedor real"
+    }
+  ]
+}
