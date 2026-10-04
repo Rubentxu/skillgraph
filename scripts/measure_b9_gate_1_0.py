@@ -1183,6 +1183,58 @@ def _security_threat_model_actualizado() -> tuple[Veredicto, str]:
 _FICHERO_DE_FECHA = "src/skillgraph/__init__.py"
 
 
+def _huella_de_entrada() -> str:
+    """La huella de lo que hay en el ARBOL, que es lo que entra al paquete.
+
+    **POR QUE ESTA FUNCION EXISTE, Y POR QUE NO PUEDE SER NADA MAS SENCILLO.**
+
+    MEDIDO, y el defecto es de este clase: `distribution reproducible`
+    construye dos veces y compara los BYTES. Si difieren, decia «la
+    distribucion NO es reproducible». Y hay dos causas con DOS ACCIONES
+    OPUESTAS:
+
+      (a) el build del proyecto es irreproducible   -> se arregla el BUILD
+      (b) la entrada cambio entre las dos             -> se arregla la MEDICION
+                                                    -> se mide OTRA cosa
+
+    El predicado no las distinguia. Y la que se carryo durante la certificacion
+    de B18 fue la segunda, con un OPEN que acusa al proyecto de un defecto que
+    no tiene: la distribucion ES reproducible, MEDIDO 8 de 8 construcciones con
+    bytes iguales, con y sin tocar la fecha.
+
+    **Y NO SE PUEDE AVERIGUAR DESDE EL ARTEFACTO.** Comparar el contenido de los
+    dos paquetes no alcanza: si un fichero ya versionado cambia entre las dos
+    construcciones, los dos artefactos son coherentes consigo mismos y aun
+    asi se construyeron con entradas DISTINTAS. Hace falta el estado del arbol,
+    y el unico sitio donde esta es el arbol de trabajo.
+
+    **LO QUE YA EXISTIA Y NO ALCANZABA.** `sg_build_sdist_no_versionado`, en
+    scripts/check_package_build.py, rechaza que el paquete lleve un fichero que
+    git no versiona, con un mensaje que es exactamente el que haria falta. Es un
+    buen guard y cubre la mitad del problema. La otra mitad es un fichero que SI
+    esta versionado y que ha cambiado, y ese no lo ve: pregunta «¿git lo
+    versiona?» y no «¿ha cambiado?».
+
+    **POR QUE ESTA DERIVADA Y NO ESCRITA A MANO.** Las tres piezas que la
+    componen —HEAD, el estado del arbol, y el diff contra HEAD— son hechos de
+    git, y de git se leen. `git diff HEAD` es lo que aporta el CONTENIDO de lo
+    modificado, que sin el seria un `git status` que solo ve nombres: dos
+    ficheros con el mismo nombre y distinto contenido darian la misma huella.
+    """
+    proc_head = _corre(["git", "rev-parse", "HEAD"])
+    proc_estado = _corre(["git", "status", "--porcelain", "-z"])
+    proc_diff = _corre(["git", "diff", "HEAD"])
+    if proc_head.returncode != 0:
+        raise RuntimeError(
+            f"git rev-parse devolvio {proc_head.returncode}: {proc_head.stderr.strip()[-300:]}"
+        )
+    # El separador NUL es lo que hace que la huella no se pueda construir por
+    # casualidad con las tres partes pegadas: un nombre de fichero acaba en
+    # blanco, y un sha no.
+    crudo = "\0".join((proc_head.stdout, proc_estado.stdout, proc_diff.stdout))
+    return hashlib.sha256(crudo.encode("utf-8", "surrogateescape")).hexdigest()
+
+
 def _construye_en(destino: Path) -> dict[str, str]:
     """Construye la distribucion en `destino` y devuelve {artefacto: sha256}.
 
@@ -1203,6 +1255,78 @@ def _construye_en(destino: Path) -> dict[str, str]:
     }
 
 
+def _decide_por_bytes(
+    primera: dict[str, str],
+    segunda: dict[str, str],
+    *,
+    huella_antes: str,
+    huella_despues: str,
+) -> tuple[Veredicto, str]:
+    """Decide sobre dos construcciones. NO construye: decide.
+
+    **POR QUE ESTA SEPARADA, Y POR QUE NO ES COSMETICA.** La construccion son
+    cuatro `uv build` y el bloque entero tardaba mas de un minuto por caso. Si
+    el fallo estuviera dentro de la decision —que es donde esta — un guard que
+    solo puede probarla construyendo tardaria un minuto en CADA asercion, y un
+    guard lento se deja de ejecutar. La decision es pura: dos dicts de hashes y
+    dos huellas, sin disco y sin reloj, y por eso se puede deformar en
+    milisegundos.
+
+    Y medido, no supuesto: la primera version de este bloque metio la decision
+    dentro de `_distribution_reproducible` y los tests no tardaban un minuto
+    cada uno — tardaban CERO, porque no se podia deformar la decision sin
+    deformar tambien la construccion, y lo que se deformaba era la construccion
+    entera. Un guard que no se puede deformar sin disparar el sistema entero no
+    vigila la decision: vigila que el sistema entero corra.
+    """
+    if not primera or not segunda:
+        return "OPEN", "una de las dos construcciones no produjo artefactos"
+    if set(primera) != set(segunda):
+        return (
+            "OPEN",
+            f"las dos construcciones no producen los MISMOS artefactos: "
+            f"solo en la primera {sorted(set(primera) - set(segunda))}, "
+            f"solo en la segunda {sorted(set(segunda) - set(primera))}",
+        )
+    distintos = sorted(n for n in primera if primera[n] != segunda[n])
+    if not distintos:
+        return (
+            "PASS",
+            f"la distribucion es REPRODUCIBLE, medido: {len(primera)} artefactos "
+            f"construidos dos veces con la fuente tocada entre medias (contenido identico, "
+            f"fecha distinta) y los {len(primera)} sha256 coinciden. Ademas el paquete "
+            f"construye y lleva lo que declara. {', '.join(sorted(primera))}",
+        )
+    # MEDIDO, Y ESTA ES LA SEPARACION QUE NO EXISTIA. Los bytes pueden diferir
+    # por DOS motivos que piden acciones OPUESTAS, y confundirlos hace que
+    # alguien arregle el build de un proyecto cuyo build esta bien.
+    #
+    # Aqui se ha podido COMPROBAR que la entrada era la misma —el arbol de
+    # trabajo no cambio— luego lo que queda es la reproducibilidad del build,
+    # que es exactamente lo que el veredicto dice. No se baja el tono: se puede
+    # sostener porque se ha medido la precondicion.
+    if huella_antes != huella_despues:
+        return (
+            "NO_MEASURABLE",
+            f"el ARBOL DE TRABAJO cambio entre las dos construcciones "
+            f"(huella {huella_antes[:12]} -> {huella_despues[:12]}), y por eso los bytes "
+            f"difieren en {len(distintos)} artefacto(s): {', '.join(distintos)}. NO es un "
+            f"defecto de reproducibilidad: se han medido DOS ENTRADAS DISTINTAS, y un "
+            f"veredicto que las llama «no reproducible» acusa al proyecto de algo que no ha "
+            f"hecho. Lo que hay que medir es la reproducibilidad con el arbol quieto; lo que "
+            f"hay que arreglar, si algo, es por que el arbol se movio entre las dos "
+            f"construcciones",
+        )
+    detalle = "; ".join(f"{n}: {primera[n][:12]} vs {segunda[n][:12]}" for n in distintos)
+    return (
+        "OPEN",
+        f"la distribucion NO es reproducible: mismo contenido y distinta fecha dan "
+        f"bytes distintos en {len(distintos)} artefacto(s) — {detalle}. Y esto SI se puede "
+        f"sostener porque se ha comprobado que el arbol de trabajo era el mismo en las dos "
+        f"construcciones (huella {huella_antes[:12]}), luego la diferencia es del build",
+    )
+
+
 def _distribution_reproducible() -> tuple[Veredicto, str]:
     """La distribucion es REPRODUCIBLE: mismas entradas, mismos bytes.
 
@@ -1220,6 +1344,30 @@ def _distribution_reproducible() -> tuple[Veredicto, str]:
     gate passaria con un defecto real. Tocando el mtime —contenido identico— la
     unica variable que queda es la que hace que un build NO sea reproducible, y
     si los bytes siguen igual, es que de verdad no depende de ella.
+
+    **Y LO QUE LE FALTABA, MEDIDO AL CERTIFICAR B18.** Este predicado decidia
+    mirando los BYTES y nada mas, y hay dos razones por las que pueden diferir
+    que piden acciones OPUESTAS: que el build sea irreproducible —se arregla el
+    build— o que la ENTRADA haya cambiado entre las dos construcciones —se
+    arregla la medicion—. Decia «la distribucion NO es reproducible» en los dos
+    casos. MEDIDO: dio OPEN 1 vez de 8 durante la certificacion de B18, con la
+    evidencia «mismo contenido y distinta fecha dan bytes distintos en 2
+    artefacto(s)», y la distribucion ES reproducible —8 de 8 construcciones dan
+    bytes iguales, con y sin tocar la fecha—.
+
+    **Lo que entra, y por que no se resuelve dentro del artefacto.** No se puede
+    saber desde el paquete si las dos construcciones recibieron la misma entrada:
+    con un fichero ya versionado que cambia entre medias, los dos artefactos son
+    coherentes consigo mismos y aun asi se construyeron con entradas distintas.
+    Hace falta el estado del arbol, y se toma con `_huella_de_entrada` justo
+    antes de cada construccion. Con la entrada comprobada, el `OPEN` que acusa
+    se puede sostener; sin ella, era una acusacion sin prueba.
+
+    **LO QUE YA EXISTIA Y CUBRE LA MITAD.** `sg_build_sdist_no_versionado`, en
+    scripts/check_package_build.py, rechaza que el paquete lleve un fichero que
+    git no versiona. MEDIDO: con un fichero nuevo en el arbol, el veredicto es
+    OPEN y la evidencia dice «el artefacto depende de lo que haya en el arbol
+    de trabajo, no del commit». Es un buen guard y no se toca.
     """
     # Primero, lo de siempre: que el paquete se pueda construir y llevar lo que
     # declara. Sin esto, un fallo de construccion se presentaria como un fallo
@@ -1235,7 +1383,12 @@ def _distribution_reproducible() -> tuple[Veredicto, str]:
     contenido = fuente.read_bytes()
     mtime = fuente.stat().st_mtime
     try:
+        # La huella se toma INMEDIATAMENTE ANTES de cada construccion, no una
+        # vez al principio: lo que se quiere saber es si cada construccion
+        # recibio la misma entrada, y eso solo se responde tomando la huella en
+        # el instante de cada una.
         with tempfile.TemporaryDirectory(prefix="gate1_a_") as da:
+            huella_antes = _huella_de_entrada()
             primera = _construye_en(Path(da))
             # La fecha se separa de forma VISIBLE: dos segundos. Si el build
             # embebiese el mtime, dos segundos bastarian para que se notara.
@@ -1244,6 +1397,7 @@ def _distribution_reproducible() -> tuple[Veredicto, str]:
             os.utime(fuente, (futuro, futuro))
             assert fuente.read_bytes() == contenido, "tocar la fecha no puede cambiar el texto"
             with tempfile.TemporaryDirectory(prefix="gate1_b_") as db:
+                huella_despues = _huella_de_entrada()
                 segunda = _construye_en(Path(db))
     except RuntimeError as exc:
         return "OPEN", f"no se pudo construir dos veces para comparar: {exc}"
@@ -1251,29 +1405,8 @@ def _distribution_reproducible() -> tuple[Veredicto, str]:
         os.utime(fuente, (mtime, mtime))
         fuente.write_bytes(contenido)
 
-    if not primera or not segunda:
-        return "OPEN", "una de las dos construcciones no produjo artefactos"
-    if set(primera) != set(segunda):
-        return (
-            "OPEN",
-            f"las dos construcciones no producen los MISMOS artefactos: "
-            f"solo en la primera {sorted(set(primera) - set(segunda))}, "
-            f"solo en la segunda {sorted(set(segunda) - set(primera))}",
-        )
-    distintos = sorted(n for n in primera if primera[n] != segunda[n])
-    if distintos:
-        detalle = "; ".join(f"{n}: {primera[n][:12]} vs {segunda[n][:12]}" for n in distintos)
-        return (
-            "OPEN",
-            f"la distribucion NO es reproducible: mismo contenido y distinta fecha dan "
-            f"bytes distintos en {len(distintos)} artefacto(s) — {detalle}",
-        )
-    return (
-        "PASS",
-        f"la distribucion es REPRODUCIBLE, medido: {len(primera)} artefactos "
-        f"construidos dos veces con la fuente tocada entre medias (contenido identico, "
-        f"fecha distinta) y los {len(primera)} sha256 coinciden. Ademas el paquete "
-        f"construye y lleva lo que declara. {', '.join(sorted(primera))}",
+    return _decide_por_bytes(
+        primera, segunda, huella_antes=huella_antes, huella_despues=huella_despues
     )
 
 
