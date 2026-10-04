@@ -14,6 +14,85 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.32.2] - 2026-10-04 — el ciclo de vida de los packs se decidía contando nombres
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.1`:
+`b/f/x/n/d 0/0/2/6/0`, la regla pide **PATCH -> v0.32.2**.
+
+**Es la tercera de las siete propiedades que B15 nombró**, y la más fácil de
+las que quedan por una razón que no es de estilo: **el instrumento que hace el
+trabajo ya estaba escrito y no se estaba usando.**
+
+`scripts/measure_b11_pack_lifecycle.py` responde **cinco** preguntas y cada una
+**ejecuta la CLI de verdad** en un proyecto temporal, con su propio código de
+salida. El gate no lo llamaba. Decía
+
+```
+`sg pack` expone el ciclo completo: ['import', 'install', 'list', ...]
+```
+
+y su único trabajo era mirar si tres **cadenas** estaban en un `dict` que sale
+del parser.
+
+### Fixed
+
+- **`pack/controller lifecycle` se decidía por los nombres de sus subcomandos.**
+  Medido antes de escribir una línea, sobre copias del árbol con el repo real
+  intacto, rompiendo la **decisión** y no el sitio donde se mira — el `if` que
+  levanta `ValidationError` cuando `motivos_de_incompatibilidad` devuelve
+  motivos, y **no** `es_compatible`, que es la verdad del dominio:
+
+  ```
+  MEDIDO A · install deja de rechazar un pack incompatible
+    gate   : PASS    <- leía NOMBRES
+    B11 Q1 : PASS    <- leía NOMBRES, y es LITERALMENTE el predicado del gate
+    B11 Q2 : OPEN    <- EJECUTABA install con un pack incompatible
+    resumen: OPEN: 1 · PASS: 4
+  ```
+
+  **El ciclo de vida estaba roto y la propiedad que lo declara estaba en
+  verde.** Ahora el predicado **ejecuta** el instrumento y decide por su código
+  de salida —la forma de B12 para `upgrade desde releases soportadas`—, y la
+  evidencia pasa a ser el veredicto de las cinco preguntas nombrando cuál cae.
+  La clase de la propiedad pasa de `derivada` a **`ejecutada`**.
+
+- **Un defecto propio, cazado por el guard de este bloque al escribirlo.** Con
+  el instrumento sin arrancar, el predicado decía *«se ha EJECUTADO para
+  saberlo»* y *«Caen 0 de 0 preguntas»*. No se había ejecutado nada: `rc=2`,
+  «can't open file». Publicaba una ejecución que no había ocurrido, con la
+  autoridad de quien sí la hace. Ahora **«¿el ciclo se sostiene?»** y **«¿puedo
+  medir si se sostiene?»** son dos veredictos distintos, que es la misma
+  separación que B14 cerró en `tests_colectados()`.
+
+### Notes
+
+- **Y el hallazgo más incómodo no es del gate: era Q1 del propio instrumento.**
+  El predicado del gate **era** Q1 de las cinco, y Q1 es la más débil, porque
+  las otras cuatro ejecutan. El gate llevaba tiempo decidiendo «el ciclo de
+  vida existe» con **la única de las cinco preguntas que no lo prueba**. Q1 no
+  se toca en este bloque y el motivo está escrito: «¿existen los comandos?» es
+  una condición necesaria y es barata; lo que no puede hacer es **bastar**, y
+  con las cinco en AND deja de bastar. Cambiarla sin un instrumento que la
+  reemplace sería perder cobertura.
+
+- **M6 es la sonda que hace que las otras cinco valgan.** No deforma el gate:
+  deforma el **instrumento** que el gate ejecuta, neutralizando Q2, y exige que
+  el gate caiga. Si el único defecto posible fuera «el gate dejó de mirar»,
+  bastaría comprobar que el gate llama al instrumento, y un guard así solo sabe
+  mirar su propio teléfono. M6 cayó, luego la cadena **decisión → instrumento →
+  gate** se sostiene entera y no solo el cable. Harness **6/6 con 6 causas**.
+
+- **La autocomprobación del harness cazó dos sondas suyas.** Una **no medía lo
+  que decía medir**: la primera versión de M1 añadía una comprobación de
+  nombres delante de la llamada y dejaba seguir al instrumento, así que daba
+  5 de 5 en verde con el defecto puesto. Y la otra **no existía**: sus anclas
+  se partieron en trozos de cadena y el nombre del fichero se quedó sin
+  comillas, luego el ancla no estaba en el fichero. Sin el «el ancla aparece 0
+  veces» el 6/6 habría sido un número sobre seis deformaciones que no
+  deformaron nada.
+
+- `tests.total` 3301 -> 3306.
+
 ## [0.32.1] - 2026-10-04 — dos propiedades del gate daban PASS sin nada que comparar
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.0`:
