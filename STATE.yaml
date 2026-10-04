@@ -607,7 +607,7 @@ tests:
   total: 3294  # BLOQUE B15: la cifra se escribe DESPUES del run, nunca antes. 3285 -> 3294, +9, y es el segundo bloque consecutivo cuyo desglose es un fichero nuevo entero: test_b15_evidence_kind.py. MEDIDO: el commit anterior a este lo fallo el propio guard de WI-115, 2 failed con «tests: STATE declara 3285, el arbol colecta 3294», y es exactamente para lo que existe: la cifra se conto antes de escribirla aqui, no despues. LO QUE EL BLOQUE MIDE, Y POR QUE IMPORTA MAS QUE LA CIFRA: el gate de 1.0 decia PASS en sus veinte propiedades sin decir cuales estaban respaldadas por algo que se EJECUTA y cuales por una lectura del arbol. Ahora cada propiedad declara su clase —13 ejecutada, 7 derivada— y la clase se DERIVA del AST del propio modulo en vez de escribirse. CONTEXTO B14: 3271 -> 3285, +14, +13 de su fichero nuevo y +1 de un test que el bloque se encontro a si mismo. CONTEXTO B13: +17 sobre 3254, tambien fichero nuevo entero. CONTEXTO B12: +21 sobre 3233, de los que +3 son WI-47 por el modulo nuevo. CONTEXTO B11: +38 sobre 3195. CONTEXTO B10: +19 sobre 3176.
   passed: 2735
   duration_s: 241.57   # MEDIDO en la CI canonica de WI-108, run 2387c4cc-c624-4793-a8ef-1a83f3df72ea, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. El resumen es «2735 passed in 241.57s» SIN la palabra skipped, que es lo que el criterio nuevo de WI-108 exige. Bloque WI-107, run 332e09e6-ba0b-449e-908e-9686dd35a898, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. Criterio 6 (SHA-256 del .pipeline.kts) registrado en sesion: 7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42, sin drift desde 283da96 (WI-105). Bloque anterior WI-105: (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
-  package_version: "0.31.2.dev0"   # cuarto eslabon de la cadena de v0.31.2: HEAD ya NO esta en la etiqueta, luego el SemVer vuelve a ser <tag>.dev0 (caso 2 del guard de release). HEAD tiene que estar MAS ALLA del tag para que este commit exista, y ese es el motivo de que este commit se haga con la suite saltada y se compruebe DESPUES a mano: no hay orden en el que el hook vea un HEAD que todavia no existe. La ventana es la misma que en v0.31.1 y v0.31.0, y el motivo esta medido en B12, no supuesto.
+  package_version: "0.32.0.dev0"   # cuarto eslabon de la cadena de v0.32.0: HEAD ya NO esta en la etiqueta, luego el SemVer vuelve a ser <tag>.dev0 (caso 2 del guard de release). HEAD tiene que estar MAS ALLA del tag para que este commit exista.   # cuarto eslabon de la cadena de v0.31.2: HEAD ya NO esta en la etiqueta, luego el SemVer vuelve a ser <tag>.dev0 (caso 2 del guard de release). HEAD tiene que estar MAS ALLA del tag para que este commit exista, y ese es el motivo de que este commit se haga con la suite saltada y se compruebe DESPUES a mano: no hay orden en el que el hook vea un HEAD que todavia no existe. La ventana es la misma que en v0.31.1 y v0.31.0, y el motivo esta medido en B12, no supuesto.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1178,9 +1178,40 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.31.2
+  tag: v0.32.0
   fecha: 2026-10-04
-  semver_bump: PATCH
+  semver_bump: MINOR
+  rationale_b15: >-
+      BLOQUE B15 — UN PREDICADO QUE SE DECLARA LEYENDO CODIGO NO SABE CUANDO
+      DEJA DE MEDIR, cerrado. SemVer DERIVADO con scripts/derive_semver.py desde
+      v0.31.2: 0 breaking, 2 feat, 1 fix => MINOR. Los dos feat son la clase de
+      evidencia que declara el gate y el medidor que la mide; el MINOR lo pide
+      la regla, no elDimensions del cambio perceived.
+      EL HALLAZGO, MEDIDO: el gate declara veinte propiedades y sus veinte PASS
+      salian en la misma lista y con la misma tipografia, sin forma de saber
+      cuales estaban respaldados por algo que se EJECUTA y cuales por una lectura
+      del arbol. La diferencia no es de estetica: es si el veredicto puede
+      volverse falso sin que nadie vuelva a mirarlo. 13 ejecutada, 7 derivada,
+      derivado del AST del propio gate.
+      UNA PROPIEDAD QUE DECIA PASS SIN COMPROBAR LO QUE DICE COMPROBAR:
+      distribution reproducible ejecutaba check_package_build.py, que CONSTRUYE
+      el paquete, y devolvia PASS con la evidencia «el wheel y el sdist se
+      construyen y llevan lo que declaran». MEDIDO antes de arreglar, con una
+      prueba que tiene dientes: dos construcciones con la fuente tocada entre
+      medias —contenido IDENTICO, fecha distinta— y los sha256 coinciden. La
+      propiedad ERA CIERTA; lo que no existia era nada que pudiera quitarsela.
+      LO QUE EL BLOQUE ENCONTRO EN SI MISMO: la primera version de la derivacion
+      devolvio veinte de veinte derivada, con la autoridad de un print y sin una
+      sola advertencia, porque la busqueda del slug fallaba y devolvia un valor
+      POR DEFECTO en vez de decir «no lo se». Seis de esos predicados si lanzan
+      subproceso. B13 cerro esto mismo en el guard de SQL y B14 en los guards
+      atados a un valor vivo; aqui aparecio en el codigo del propio bloque.
+      3285 -> 3294 tests, +9, fichero nuevo entero, y lo fallo el propio guard de
+      WI-115 con el texto «tests: STATE declara 3285, el arbol colecta 3294».
+      Gate de 1.0 SIN CAMBIOS DE VEREDICTO, 18 PASS / 1 OPEN / 1
+      NO_MEASURABLE, ahora con la clase de cada una. Harness 6/6 con 6 causas.
+      Lo que queda OPEN es «runtime real certificado», que exige
+      SG_UAT_REAL_PROVIDER=1 y una credencial real.
   rationale_b14: >-
       BLOQUE B14 — LA AUTORIDAD DE COHERENCIA SE PUEDE ENGANAR, Y SE
       ENGANO, cerrado. SemVer DERIVADO con scripts/derive_semver.py desde
@@ -1834,6 +1865,10 @@ release:
       fecha: 2026-10-04
       sha: "25675323c233463c7ebc18b1db30c77e22871811"
       nota: "Bloque B12: la version del esquema era una constante, y por eso el upgrade era imposible. 0 breaking, 1 feat (6d7a5ef), 1 fix (7ac03d1) => MINOR. 3233 -> 3254 tests, +21 con el desglose MEDIDO por diff de ids colectados. Cierra la segunda de las OPEN del gate de 1.0 que piden CODIGO: el predicado decia que no habia de donde subir una base creada por una version anterior. MEDIDO antes de escribir una linea: 0 de 5 ABIERTAS, 5 PASS al final, con un instrumento que EJECUTA y no mira nombres. Lo que encontro, y es mas profundo que «falta la funcion»: SCHEMA_VERSION era 1 desde WI-65 con 73 releases encima, se escribia con INSERT OR IGNORE y NO SE LEIA en ningun sitio de platform/, y BORRAR LA TABLA schema_version ENTERA de una base y abrirla no daba ningun error porque el codigo la recreaba. Una version que se regenera cuando falta es un DEFAULT, no un hecho. DECISION DE DISENO, la que mas se discutira: EL LIBRO REGISTRA, NO GOBIERNA — sincroniza ejecuta todas las migraciones y anota las que faltaban, en vez de ejecutar solo las pendientes, que seria mas eficiente. Se eligio por el caso que de verdad duele: una base restaurada de una copia parcial tiene el libro atrasado Y el esquema con una columna que falta a la vez, y un libro que gobierna se creeria que esta bien y no repararia nada. REGRESION QUE EL BLOQUE INTRODUJO Y CORRIGIO, MEDIDA: la primera version hacia DELETE FROM schema_version + INSERT SIEMPRE, y antes era INSERT OR IGNORE, que tras la primera apertura no escribe nada; con el DELETE incondicional ocho procesos concurrentes se repartian mal el turno de escritura («se esperaban 8 autores distintos y hay 7»), medido con tres corridas que dan verde, verde y ROJO. Y UN PREDICADO DEL GATE QUE MENTIA EN LA DIRECCION CONTRARIA: «upgrade desde releases soportadas» buscaba `def upgrade` con un regex y la capacidad se llama sincroniza, luego este bloque habria entregado la capacidad y el gate habria seguido diciendo OPEN —un falso NEGATIVO, la misma clase que el falso positivo de B9 con el signo cambiado—; ahora ejecuta el medidor y decide por su codigo de salida, verificado en las dos direcciones. HARNESS 5/5 con 5 causas distintas, y UNA SONDA NACIO ROTA: M4 apuntaba a una linea que ruff format habia movido al refactorizar, y el harness la reporto [SIN SONDA] en vez de contarla como verde. 3251 passed, 3 skipped, 0 failed. 17 PASS / 2 OPEN / 1 NO_MEASURABLE en el gate de 1.0. LO QUE NO SE AFIRMA: que una base creada por una release de hace dos anos conserve su contenido; la base «vieja» del medidor se RECONSTRUYE quitando lo que esa release no conocia."
+    - tag: v0.32.0
+      fecha: 2026-10-04
+      sha: "74c27b4dee3ab723a0bd624a0a22f92073ef9aad"
+      nota: "Bloque B15: un predicado que se declara leyendo codigo no sabe cuando deja de medir. 0 breaking, 2 feat, 1 fix => MINOR. 3285 -> 3294 tests, +9, fichero nuevo entero. EL HALLAZGO, MEDIDO: el gate de 1.0 declara veinte propiedades y sus veinte PASS salian en la misma lista y con la misma tipografia, sin forma de saber cuales estaban respaldados por algo que se EJECUTA y cuales por una lectura del arbol —13 ejecutada, 7 derivada, derivado del AST del propio gate—. Y UNA PROPIEDAD QUE DECIA PASS SIN COMPROBAR LO QUE DICE COMPROBAR: distribution reproducible ejecutaba check_package_build.py, que CONSTRUYE, y decia «el wheel y el sdist se construyen y llevan lo que declaran»; la reproducibilidad es que las mismas entradas den los mismos bytes, y un unico build no puede distinguir «reproducible» de «esta vez salio bien». MEDIDO antes de arreglar, con una prueba que tiene dientes: dos construcciones con la fuente tocada entre medias —contenido IDENTICO, fecha distinta— y los sha256 coinciden. LA PROPIEDAD ERA CIERTA; lo que no existia era nada que pudiera quitarsela. LO QUE EL BLOQUE ENCONTRO EN SI MISMO, Y QUE IMPORTA MAS: la primera version de la derivacion devolvio veinte de veinte derivada, con la autoridad de un print y sin una advertencia, porque la busqueda del slug fallaba y devolvia un valor POR DEFECTO en vez de decir «no lo se»; seis de esos predicados si lanzan subproceso. B13 cerro esto mismo en el guard de SQL y B14 en los guards atados a un valor vivo; aqui aparecio en el codigo del propio bloque. Y al buscar un PASS falso se construyeron cuatro sondeos y los CUATRO fallaron, cada uno en una direccion distinta, dando tres cifras distintas: el PASS era cierto, tests/uat_audit.py tiene una funcion completa por UAT con la CLI de verdad. Gate SIN CAMBIOS DE VEREDICTO, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, ahora con la clase de cada una. Harness 6/6 con 6 causas; autocomprobacion del medidor 13 de 20 clases giran. PENDIENTE: el push."
     - tag: v0.31.2
       fecha: 2026-10-04
       sha: "238a0f7277917b66647be321efc74ee702b37224"
