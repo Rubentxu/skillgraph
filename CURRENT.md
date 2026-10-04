@@ -1,6 +1,8 @@
 > **Bloque 2026-10-04 (B13) — El modelo de amenaza AFIRMABA que no habia fuga. Y habia una.**
-> Versión activa `0.31.0.dev0` (ya fuera del tag `v0.31.0`); último tag
-> `v0.31.0`.
+> (cerrado y publicado en `v0.31.1`; evidencia en
+> `evidence/sddk-b13-gate-report-2026-10-04.json`)
+> Versión activa `0.31.1.dev0` (ya fuera del tag `v0.31.1`); último tag
+> `v0.31.1`.
 >
 > **MEDIDO ANTES DE ESCRIBIR NADA** (`/tmp/b13_measure.py`): **0 de 5 preguntas
 > en PASS**. Y la primera no es documental. Se inserta un `DomainPack` del
@@ -80,11 +82,15 @@
 > | `mutate_b13_threat_model.py:165::_sucios` | la suite verde NO es el arbol restaurado |
 > | `mutate_b13_threat_model.py:129::_colectados` | el harness rechaza arrancar si un diagnostico no existe |
 >
-> **CERRADO Y CERTIFICADO. GATE DE 1.0: 17 PASS / 2 OPEN / 1 NO_MEASURABLE
-> -> 18 / 1 / 1.** Lo unico que queda `OPEN` es `runtime real certificado`,
-> que exige `SG_UAT_REAL_PROVIDER=1` y una credencial real: no se resuelve
-> desde el repositorio. `TUI operacional` sigue `NO_MEASURABLE` porque
-> «operacional» es una propiedad de una persona usando un terminal.
+> **CERRADO, CERTIFICADO Y PUBLICADO.** `v0.31.1` sale en `4d66e41`; la
+> suite sobre el árbol ya commiteado: **3268 passed, 3 skipped, 0 failed**.
+> Evidencia: `evidence/sddk-b13-gate-report-2026-10-04.json`. Ciclo
+> `p-b7740b96d79ec013/b13` en **PAUSED**, no CLOSED ni BLOCKED: los gates de
+> deuda no son evaluables en esta build y no hay bloqueo externo.
+>
+> **GATE DE 1.0: 17 PASS / 2 OPEN / 1 NO_MEASURABLE -> 18 / 1 / 1.** Quedan
+> `runtime real certificado` (credencial real) y `TUI operacional`
+> (NO_MEASURABLE).
 >
 > **HARNESS: 6/6 sondas cazadas, 6 causas distintas.** Dos NACIERON ROTAS y
 > las cazó el propio harness antes de contarlas, que es lo que un contador

@@ -607,7 +607,7 @@ tests:
   total: 3271   # BLOQUE B13: la cifra se escribe DESPUES del run, nunca antes. 3254 -> 3271, +17, y el desglose es el mas simple de la serie: el fichero nuevo test_b13_threat_model.py, entero. A diferencia de B12, aqui NO se mueve test_wi47_broad_except_guard.py, porque B13 no anade ningun modulo nuevo en src/ —arregla una linea de SQL y reescribe un ADR— y eso confirma por el lado contrario la medicion de B12: los +3 de WI-47 venian de ahi, no de que el bloque tocara tests. El +17 frente a los 16 de la primera version es el test que caza la TERCERA contradiccion del ADR, que se encontro al releerlo con la correccion ya escrita: decia que no introduce cambios de codigo, y el bloque que lo revisa habia arreglado una fuga. CONTEXTO B12 (se conserva, ya no vivo): +21 sobre 3233, de los que +3 son WI-47 por el modulo nuevo. CONTEXTO B11: +38 sobre 3195. CONTEXTO B10: +19 sobre 3176.
   passed: 2735
   duration_s: 241.57   # MEDIDO en la CI canonica de WI-108, run 2387c4cc-c624-4793-a8ef-1a83f3df72ea, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. El resumen es «2735 passed in 241.57s» SIN la palabra skipped, que es lo que el criterio nuevo de WI-108 exige. Bloque WI-107, run 332e09e6-ba0b-449e-908e-9686dd35a898, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. Criterio 6 (SHA-256 del .pipeline.kts) registrado en sesion: 7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42, sin drift desde 283da96 (WI-105). Bloque anterior WI-105: (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
-  package_version: "0.31.0.dev0"   # cuarto eslabon de la cadena de v0.31.0: HEAD ya NO esta en la etiqueta, luego el SemVer vuelve a ser <tag>.dev0 (caso 2 del guard de release). HEAD tiene que estar MAS ALLA del tag para que este commit exista.
+  package_version: "0.31.1.dev0"   # cuarto eslabon de la cadena de v0.31.1: HEAD ya NO esta en la etiqueta, luego el SemVer vuelve a ser <tag>.dev0 (caso 2 del guard de release). HEAD tiene que estar MAS ALLA del tag para que este commit exista.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1178,9 +1178,46 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.31.0
+  tag: v0.31.1
   fecha: 2026-10-04
-  semver_bump: MINOR
+  semver_bump: PATCH
+  rationale_b13: >-
+      BLOQUE B13 — EL MODELO DE AMENAZA QUE SE SOSTIENE, cerrado.
+      SemVer DERIVADO con scripts/derive_semver.py desde v0.31.0: 0 breaking,
+      0 feat, 2 fix, mas chore y docs => PATCH. B13 entrega una fuga de
+      aislamiento CORREGIDA, un ADR reescrito y sus guards; corregir una fuga
+      cross-tenant es exactamente lo que un PATCH describe, y llamar MINOR a
+      un arreglo de seguridad seria inflar el numero para que la release
+      parezca mas importante de lo que es.
+      3254 -> 3271 tests, +17 y el desglose es el mas simple de la serie: el
+      fichero nuevo test_b13_threat_model.py, entero. WI-47 NO se mueve porque
+      B13 no anade ningun modulo en src/, lo que CONFIRMA por el lado
+      contrario la medicion de B12: los +3 de WI-47 venian del modulo nuevo,
+      no de que el bloque tocara tests.
+      Cierra la TERCERA y ultima OPEN del gate de 1.0 que no depende de
+      credencial ni de persona. 18 PASS / 1 OPEN / 1 NO_MEASURABLE. Lo que
+      queda OPEN es «runtime real certificado», que exige
+      SG_UAT_REAL_PROVIDER=1 y una credencial real.
+      LO QUE SE CORRIGIO NO ERA DOCUMENTAL: T2 pedia kind='DomainPack' y
+      recibia ['dp-de-t1']. La causa era un OR sin parentesis en
+      platform/knowledge_repository.py:196, que en SQL hace opcional el
+      filtro de tenant, y era alcanzable desde la CLI. B11 la encontro y no la
+      arreglo —correcto para su alcance—; lo que fallo es que la puerta se
+      quedo abierta y el ADR-0015 la declaraba CERRADA.
+      PREDICADO DEL GATE QUE MEDIA UNA FOTO: la vigencia se comprobaba
+      comparando un numero de tests. Ahora EJECUTA el guard, verificado en las
+      dos direcciones con causas distintas.
+      HARNESS 6/6 con 6 causas distintas, y DOS SONDAS NACIERON ROTAS: M5
+      declaraba sus dos diagnosticos con el nombre de la clase mal escrito y
+      el harness lo reportaba [CAZADA] igual, porque caidos & esperados no
+      esta vacio mientras caiga UNO de los dos; M4 usaba «## Superficies»
+      como ancla y aparece dos veces, y replace(..., 1) se comia la prosa. El
+      harness ahora rechaza arrancar si un diagnostico no existe o si un ancla
+      no es unica.
+      3268 passed, 3 skipped, 0 failed. UN ROJO QUE NO SE HA EXPLICADO: una
+      corrida del hook de pre-commit dio «3 failed, 3264 passed», y cinco
+      corridas completas posteriores sobre el MISMO arbol dieron 0 failed. No
+      se reproduce y la causa no esta identificada; se registra sin maquillar.
   rationale_b10: >-
       BLOQUE B10 — LAS SUPERFICIES PUBLICAS, DECLARADAS Y CERTIFICADAS, cerrado.
       SemVer DERIVADO con scripts/derive_semver.py desde v0.28.1: b/f/x/n/d
@@ -1776,7 +1813,11 @@ release:
     - tag: v0.31.0
       fecha: 2026-10-04
       sha: "25675323c233463c7ebc18b1db30c77e22871811"
-      nota: "Bloque B12: la version del esquema era una constante, y por eso el upgrade era imposible. 0 breaking, 1 feat (6d7a5ef), 1 fix (7ac03d1) => MINOR. 3233 -> 3254 tests, +21 con el desglose MEDIDO por diff de ids colectados. Cierra la segunda de las OPEN del gate de 1.0 que piden CODIGO: el predicado decia que no habia de donde subir una base creada por una version anterior. MEDIDO antes de escribir una linea: 0 de 5 ABIERTAS, 5 PASS al final, con un instrumento que EJECUTA y no mira nombres. Lo que encontro, y es mas profundo que «falta la funcion»: SCHEMA_VERSION era 1 desde WI-65 con 73 releases encima, se escribia con INSERT OR IGNORE y NO SE LEIA en ningun sitio de platform/, y BORRAR LA TABLA schema_version ENTERA de una base y abrirla no daba ningun error porque el codigo la recreaba. Una version que se regenera cuando falta es un DEFAULT, no un hecho. DECISION DE DISENO, la que mas se discutira: EL LIBRO REGISTRA, NO GOBIERNA — sincroniza ejecuta todas las migraciones y anota las que faltaban, en vez de ejecutar solo las pendientes, que seria mas eficiente. Se eligio por el caso que de verdad duele: una base restaurada de una copia parcial tiene el libro atrasado Y el esquema con una columna que falta a la vez, y un libro que gobierna se creeria que esta bien y no repararia nada. REGRESION QUE EL BLOQUE INTRODUJO Y CORRIGIO, MEDIDA: la primera version hacia DELETE FROM schema_version + INSERT SIEMPRE, y antes era INSERT OR IGNORE, que tras la primera apertura no escribe nada; con el DELETE incondicional ocho procesos concurrentes se repartian mal el turno de escritura («se esperaban 8 autores distintos y hay 7»), medido con tres corridas que dan verde, verde y ROJO. Y UN PREDICADO DEL GATE QUE MENTIA EN LA DIRECCION CONTRARIA: «upgrade desde releases soportadas» buscaba `def upgrade` con un regex y la capacidad se llama sincroniza, luego este bloque habria entregado la capacidad y el gate habria seguido diciendo OPEN —un falso NEGATIVO, la misma clase que el falso positivo de B9 con el signo cambiado—; ahora ejecuta el medidor y decide por su codigo de salida, verificado en las dos direcciones. HARNESS 5/5 con 5 causas distintas, y UNA SONDA NACIO ROTA: M4 apuntaba a una linea que ruff format habia movido al refactorizar, y el harness la reporto [SIN SONDA] en vez de contarla como verde. 3251 passed, 3 skipped, 0 failed. 17 PASS / 2 OPEN / 1 NO_MEASURABLE en el gate de 1.0. LO QUE NO SE AFIRMA: que una base creada por una release de hace dos anos conserve su contenido; la base «vieja» del medidor se RECONSTRUYE quitando lo que esa release no conocia. PENDIENTE: el push."
+      nota: "Bloque B12: la version del esquema era una constante, y por eso el upgrade era imposible. 0 breaking, 1 feat (6d7a5ef), 1 fix (7ac03d1) => MINOR. 3233 -> 3254 tests, +21 con el desglose MEDIDO por diff de ids colectados. Cierra la segunda de las OPEN del gate de 1.0 que piden CODIGO: el predicado decia que no habia de donde subir una base creada por una version anterior. MEDIDO antes de escribir una linea: 0 de 5 ABIERTAS, 5 PASS al final, con un instrumento que EJECUTA y no mira nombres. Lo que encontro, y es mas profundo que «falta la funcion»: SCHEMA_VERSION era 1 desde WI-65 con 73 releases encima, se escribia con INSERT OR IGNORE y NO SE LEIA en ningun sitio de platform/, y BORRAR LA TABLA schema_version ENTERA de una base y abrirla no daba ningun error porque el codigo la recreaba. Una version que se regenera cuando falta es un DEFAULT, no un hecho. DECISION DE DISENO, la que mas se discutira: EL LIBRO REGISTRA, NO GOBIERNA — sincroniza ejecuta todas las migraciones y anota las que faltaban, en vez de ejecutar solo las pendientes, que seria mas eficiente. Se eligio por el caso que de verdad duele: una base restaurada de una copia parcial tiene el libro atrasado Y el esquema con una columna que falta a la vez, y un libro que gobierna se creeria que esta bien y no repararia nada. REGRESION QUE EL BLOQUE INTRODUJO Y CORRIGIO, MEDIDA: la primera version hacia DELETE FROM schema_version + INSERT SIEMPRE, y antes era INSERT OR IGNORE, que tras la primera apertura no escribe nada; con el DELETE incondicional ocho procesos concurrentes se repartian mal el turno de escritura («se esperaban 8 autores distintos y hay 7»), medido con tres corridas que dan verde, verde y ROJO. Y UN PREDICADO DEL GATE QUE MENTIA EN LA DIRECCION CONTRARIA: «upgrade desde releases soportadas» buscaba `def upgrade` con un regex y la capacidad se llama sincroniza, luego este bloque habria entregado la capacidad y el gate habria seguido diciendo OPEN —un falso NEGATIVO, la misma clase que el falso positivo de B9 con el signo cambiado—; ahora ejecuta el medidor y decide por su codigo de salida, verificado en las dos direcciones. HARNESS 5/5 con 5 causas distintas, y UNA SONDA NACIO ROTA: M4 apuntaba a una linea que ruff format habia movido al refactorizar, y el harness la reporto [SIN SONDA] en vez de contarla como verde. 3251 passed, 3 skipped, 0 failed. 17 PASS / 2 OPEN / 1 NO_MEASURABLE en el gate de 1.0. LO QUE NO SE AFIRMA: que una base creada por una release de hace dos anos conserve su contenido; la base «vieja» del medidor se RECONSTRUYE quitando lo que esa release no conocia."
+    - tag: v0.31.1
+      fecha: 2026-10-04
+      sha: "4d66e41999fd9e56bb95de6cb8885da1f2d72478"
+      nota: "Bloque B13: el modelo de amenaza AFIRMABA que no habia fuga, y habia una. 0 breaking, 0 feat, 2 fix => PATCH. 3254 -> 3271 tests, +17, el fichero nuevo entero. Cierra la tercera y ultima OPEN del gate de 1.0 que no depende de credencial ni de persona. MEDIDO antes de escribir una linea: 0 de 5 ABIERTAS. LO QUE NO ERA DOCUMENTAL: T2 pedia kind='DomainPack' y recibia ['dp-de-t1'] — una fila de T1 que cruzo, alcanzable desde la CLI. La causa era un OR sin parentesis en platform/knowledge_repository.py:196, que en SQL hace opcional el filtro de tenant. B11 la encontro y no la arreglo, porque esquivarla era lo correcto para su bloque; lo que fallo es que la puerta se quedo abierta y el ADR-0015, que en S1 decia «las queries filtran por tenant_id, project_id en todos los paths verificados», la declaraba CERRADA. EL GUARD QUE MEDIA TEXTO Y NO CONSULTA: la primera version recorria literales y daba verde CON LA FUGA PRESENTE, porque WHERE y OR estan en literales distintos y la frase solo existe ensamblada. Ahora usa set_trace_callback. Y hay un contrasalto de COBERTURA derivado del arbol: solo 4 superficies combinan tenant_id con un filtro de kind, y son la unica via por la que un AND se vuelve opcional. PREDICADO DEL GATE QUE MEDIA UNA FOTO: la vigencia se comprobaba comparando un numero de tests; ahora EJECUTA el guard, verificado en las dos direcciones con causas distintas (quitar la fila de packaging da OPEN con 1 fallo; reabrir la fuga da OPEN con 3). TRES CONTRADICCIONES DEL ADR RESUELTAS, y la tercera se encontro al reescribirlo: decia que no introduce cambios de codigo, y el bloque que lo revisaba acababa de arreglar una fuga. HARNESS 6/6 con 6 causas distintas, y DOS SONDAS NACIERON ROTAS —M5 con los dos diagnosticos mal escritos, que el harness reportaba [CAZADA] igual porque caidos & esperados no esta vacio mientras caiga uno; M4 con un ancla que aparece dos veces—. El harness ahora rechaza arrancar si un diagnostico no existe o si un ancla no es unica. 3268 passed, 3 skipped, 0 failed. 18 PASS / 1 OPEN / 1 NO_MEASURABLE. PENDIENTE: el push."
   capacidades_entregadas:
     - H0_Blueprint_validado
     - H1_Recursos_persistentes

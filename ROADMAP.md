@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B13** — El modelo de amenaza que se sostiene
-> Versión activa `0.31.0.dev0` · último tag `v0.31.0` · 3271 tests · 16/16 UAT
+> Versión activa `0.31.1.dev0` · último tag `v0.31.1` · 3271 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
