@@ -241,9 +241,7 @@ def _tests_que_caen() -> tuple[str, ...]:
         check=False,
     )
     return tuple(
-        linea.split("::")[-1]
-        for linea in proc.stdout.splitlines()
-        if linea.startswith("FAILED")
+        linea.split("::")[-1] for linea in proc.stdout.splitlines() if linea.startswith("FAILED")
     )
 
 

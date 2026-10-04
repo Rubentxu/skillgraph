@@ -1634,4 +1634,62 @@ release:
     e2e_real_h6: "pack_loader declara Character/StoryArc desde narrative-core.md; valida instancias; shadowing de tipos core y namespaces reservados rechazados"
     e2e_real_h7: "reconcile_after_interruption_completes_pending: IN_PROGRESS dejado por crash -> reconcile_pending aplica apply_fn exactamente 1 vez por propuesta, sin duplicar"
   push: false   # MEDIDO 2026-10-02 tras WI-93: sin autorizacion del operador, y `sddk release apply --route local` haria push de trunk y tag, luego no es opcion. MEDIDO con `git rev-list --count origin/main..HEAD`: **58 commits sin publicar**, con `origin/main` en 0ebbd58. El tag `v0.16.18` es local y no se ha publicado: existe en git pero no en ningun remoto. 37 ciclos SDDK CLOSED, 0 pendientes (35 tras WI-94, 36 con WI-95, 37 con WI-96).
-
+  rationale_b7: >-
+      BLOQUE B7 — UX operacional, cerrado y verificado. SemVer DERIVADO con
+      scripts/derive_semver.py: desde v0.26.0, b/f/x/n/d 0/1/1/2/0, la regla
+      pide MINOR -> v0.27.0. Ningun commit con marcador de ruptura. LO QUE
+      ENTREGA: la capa de presentacion de la que dependia la TUI. MEDIDO antes
+      de escribir nada con scripts/measure_b7_operational_ux.py: 3 de 3
+      preguntas ABIERTAS, y el hueco no era que faltara una TUI sino la pieza
+      de la que la TUI depende — cero declaraciones de --format en siete
+      modulos de comando, y ningun simbolo en src/ que expusiera render, luego
+      la palabra cargada del gate, «las MISMAS APIs y query models», no tenia
+      a que referirse. CERRADO con src/skillgraph/presentation/ (views.py con
+      Column, TableView y DetailView; widgets.py con las DIEZ proyeciones
+      puras) y --format {text,json} en runs list y runs show sobre un unico
+      _emit. TRES DECISIONES. (1) Las vistas NO leen disco: se construyen
+      desde lo que el dominio ya devolvio, porque una vista que consulta
+      seria una segunda via de consulta, que es el duplicado que este bloque
+      existe para impedir; se comprueba por AST, cero imports de sqlite3 y de
+      Storage. (2) Una sola vista, dos representaciones, leyendo los MISMOS
+      campos, para que no puedan divergir — y aqui se distinguio algo que la
+      primera version del test confundia: «mismos campos» NO es «mismo
+      renderizado». Un vacio se imprime como «-» en texto, que es el contrato
+      antiguo de runs show, y como [] en JSON, que es lo que una maquina
+      necesita para no tener que adivinar si es vacio o la cadena «-».
+      Exigir que coincidieran habria obligado a romper uno de los dos. (3) B7
+      ANADE representaciones, NO sustituye: sin --format, runs show sigue
+      siendo clave=valor, porque hay callers que lo leen con cut -d= -f2 y
+      su docstring lo promete. Y MEDIDO CONTRA, que es lo que hace el
+      bloque creible: el guard que vigila (3) no es teorico. La primera
+      version de _emit pasaba vacio= a toda vista; TableView lo acepta,
+      DetailView no, y runs show —el camino de TEXTO, el de por defecto, el
+      que se usa siempre que nadie pasa --format— salia con TypeError. Un
+      test que mira la vista NO lo ve, porque el defecto estaba en el
+      cableado entre el comando y la vista: hay que ejecutar el comando, y
+      por eso TestB7NoRompeElContratoExterno va por subprocess. CONTRA-
+      SALTOS 3/3, cada uno con su propia causa, y M3 la cazo un guard NUEVO
+      (test_list_sigue_diciendo_sin_runs) y no uno preexistente: sin el,
+      quitarle a runs list su (sin runs) propio no ponia nada en rojo. Un
+      cuarto agujero, del propio instrumento: el contra-salto del medidor
+      copiaba el repo entero a /tmp y se ponia rojo con EDQUOT al escribir
+      cientos de MB — un guard que se pone rojo porque se lleno el disco no
+      mide la propiedad, mide el almacenamiento; ahora copia solo src/ y
+      scripts/, 1,1 MB, y discrimina igual. CERTIFICACION: 3085 passed, 3
+      skipped declarados, 0 failed. tests.total 3088, con el desglose
+      MEDIDO y no estimado: sin el paquete presentation en el arbol la suite
+      colecta 3055, la cifra exacta que B6 declaro, y al devolverlo colecta
+      3088; los 10 que no son de B7 los genera wi47 al aparecer los modulos
+      nuevos. Es la prediccion que B6 dejo escrita y que es facil leer al
+      reves. FUERA DE ALCANCE Y REGISTRADO: P4, que la TUI sea usable de
+      verdad, porque depende de un terminal y de un humano que el CI no
+      tiene; el medidor la deja registrada y por eso NO baja el veredicto.
+      HALLAZGO FUERA DEL BLOQUE, con efecto real: el ciclo b6 llevaba dos
+      sesiones bloqueado en explore por un supuesto defecto del framework
+      (sddk artifact store no vinculaba el artefacto al ciclo), y NO lo era:
+      cycle transition acepta --artifact kind=path EN LA PROPIA TRANSICION.
+      Con esa via la transicion se aplica y b6 quedo desbloqueado. Un
+      ENGINE_MISSING_ARTIFACT que NOMBRA el artefacto que falta es una
+      instruccion, no un veredicto de averia. Evidencia:
+      scripts/measure_b7_operational_ux.py y
+      scripts/mutate_b7_operational_ux.py.

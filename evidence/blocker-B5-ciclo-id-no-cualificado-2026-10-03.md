@@ -109,7 +109,13 @@ va a pasar mientras los gates de deuda no sean evaluables —ver
 `blocker-B4-debt-report-context.md`, que sigue vigente y cuya redacción
 la propia herramienta confirma.
 
-## Tercera manifestación, medida en B6: el artefacto se guarda y el ciclo no lo ve
+> **CORREGIDO el 2026-10-04, en B7. Esta seccion afirmaba un defecto
+> del framework que no existe.** Ver «Correccion» al final del fichero. Se
+> conserva el diagnostico original porque el error de razonamiento es
+> instructivo, pero la fila 3 de la tabla ya no es un bug: es una via que
+> no se habia probado.
+
+## Tercera manifestacion, medida en B6: el artefacto se guarda y el ciclo no lo ve
 
 El 2026-10-04, al caminar el ciclo `b6`, apareció la misma clase de fallo
 en otro sitio: **una escritura que la herramienta reporta como exitosa y
@@ -139,7 +145,7 @@ Las tres manifestaciones del mismo defecto, entonces:
 |---|---|---|
 | 1 | `cycle status --cycle b5` → `cycle not found` | el ciclo existe; sólo falla el id corto |
 | 2 | `cycle start` → `OPEN` con `event_id` | el evento va con `sequence 1`, que colisiona con 130 |
-| 3 | `artifact store` → `artifact_id` y `sha256` | el ciclo sigue con `artifacts: 0` |
+| 3 | `artifact store` → `artifact_id` y `sha256` | el ciclo sigue con `artifacts: 0` — **no es un bug, ver la correccion** |
 
 **Por qué importa más de lo que parece.** Las tres devuelven un
 identificador y un digest convincentes. Un agente que se fíe de la salida
@@ -152,3 +158,51 @@ se puede.
 commitea. El ciclo registra lo que sí puede registrar —los gates, con su
 `argv`, `exit_code` y `output_digest` reales— y lo que no puede, queda
 dicho en el informe de verificación en vez de darse por bueno.
+
+---
+
+## Correccion del 2026-10-04 (B7): no era un defecto del framework
+
+La fila 3 se diagnostico como «el store no vincula el artefacto al ciclo», y
+sobre ese diagnostico el ciclo `b6` quedo cerrado no avanzar de `explore`.
+**El diagnostico era falso**, y el error fue de metodo, no de herramienta: se
+probo `sddk artifact store` y se concluyo que la vinculacion no ocurria, **sin
+mirar la otra via que existe**.
+
+`cycle transition` acepta el artefacto **en la propia transicion**:
+
+```bash
+$ sddk cycle transition --cycle p-b7740b96d79ec013/b7 \
+      --transition phase.explore.complete \
+      --lease-owner mavis-b7 --fencing-token 1 \
+      --gate-receipt gate-exploration-sufficient-788358014ead94dd-1 \
+      --artifact exploration-report=evidence/sddk-b7-exploration-2026-10-04.md
+{"cycle_id": "p-b7740b96d79ec013/b7",
+ "transition_id": "phase.explore.complete",
+ "outcome": "succeeded",          # <-- funciona
+ "phase": "specify",
+ "sequence": 2}
+
+$ sddk cycle status --cycle p-b7740b96d79ec013/b7
+{"phase": "specify", "artifacts": 1}     # <-- 1, no 0
+```
+
+`--artifact kind=path` es un parametro de `cycle transition`. El artefacto se
+declara **donde se consume**, que es la transicion, y no aparte. `artifact
+store` persiste los bytes; la vinculacion es de la transicion.
+
+**Lo que hay que aprender de esto, y es mas util que el arreglo:**
+
+Un fallo medido con un caso no es un defecto del sistema: es un defecto de la
+hipotesis. «`artifact store` no vincula» y «no probe la otra via» producen la
+misma observacion —`artifacts: 0`— y la segunda es vastly mas probable,
+porque una herramienta que acepta el parametro y devuelve un error
+especifico (`ENGINE_MISSING_ARTIFACT`, que **menciona el artefacto que
+falta**) esta diciendo que falta una entrada, no que este rota.
+
+**Un `ENGINE_MISSING_ARTIFACT` que nombra el artefacto es una instruccion, no
+un veredicto de averia.** Se leyo como averia porque se documento como tal en
+tres sitios, y una vez escrito el diagnostico, cada relectura lo confirmaba.
+El ciclo `b6` sigue bloqueado en `explore` por esta razon y puede
+desbloquearse con el mismo comando; queda pendiente porque forzar su cierre
+exigiria reescribir su historia, y eso es otra cosa.
