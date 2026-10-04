@@ -14,6 +14,90 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.27.0] - 2026-10-04 — las vistas que CLI y TUI compartirían
+
+**El bloque B7, cerrado y verificado.** El gate pide diez widgets vivos
+«sobre **las mismas** APIs y query models». Medido antes de escribir nada
+con `scripts/measure_b7_operational_ux.py`: **3 de 3 preguntas abiertas**.
+
+SemVer derivado con `scripts/derive_semver.py`: desde `v0.26.0`,
+`b/f/x/n/d 0/1/1/2/0`, la regla pide **MINOR**. Ningún commit con
+marcador de ruptura. Tag `v0.27.0` en `HEAD` de esta entrada.
+
+### El hueco no era que faltara una TUI
+
+Era que faltaba **la pieza de la que la TUI depende**. Medido sobre el
+árbol real: cero declaraciones de `--format` o `--json` en siete módulos
+de comando, y ningún símbolo en `src/` que expusiera render. La palabra
+cargada del gate —«las mismas»— no tenía a qué referirse.
+
+### Lo que se entrega
+
+```
+src/skillgraph/presentation/views.py     Column, TableView, DetailView
+src/skillgraph/presentation/widgets.py   las diez proyecciones puras
+src/skillgraph/cli/parser.py             --format {text,json}
+src/skillgraph/cli/commands/runs.py      un único _emit
+```
+
+### Tres decisiones
+
+1. **Las vistas no leen disco.** Se construyen desde lo que el dominio
+   ya devolvió, porque una vista que consulta sería una segunda vía de
+   consulta — el duplicado que este bloque existe para impedir. Se
+   comprueba por AST: cero imports de `sqlite3` y de `Storage`.
+
+2. **Una sola vista, dos representaciones, leyendo los mismos campos.**
+   Y aquí se distinguirá algo que la primera versión del test confundía:
+   **«mismos campos» no es «mismo renderizado»**. Un vacío se imprime
+   como `-` en texto — el contrato antiguo de `runs show` — y como `[]`
+   en JSON, que es lo que una máquina necesita para no tener que adivinar
+   si es vacío o la cadena `-`. Exigir que coincidieran habría obligado a
+   romper uno de los dos.
+
+3. **B7 añade representaciones, no sustituye.** Sin `--format`,
+   `runs show` sigue siendo `clave=valor`, porque hay callers que lo
+   leen con `cut -d= -f2` y su docstring lo promete.
+
+### Y la tercera estaba rota, medido contra
+
+El guard que la vigila no es teórico. La primera versión de `_emit`
+pasaba `vacio=` a toda vista: `TableView` lo acepta, `DetailView` no — y
+`runs show`, que es el camino de **texto**, el de por defecto, el que se
+usa siempre que nadie pasa `--format`, salía con `TypeError`.
+
+**Un test que mira la vista no lo ve**: el defecto estaba en el cableado
+entre el comando y la vista. Por eso `TestB7NoRompeElContratoExterno`
+ejecuta el comando por `subprocess`.
+
+### Verificación
+
+- **3085 passed, 3 skipped declarados, 0 failed**.
+- 23 tests en `tests/test_b7_operational_ux.py`.
+- Contra-saltos **3/3**, cada uno con su propia causa; M3 la cazó un
+  guard **nuevo** y no uno preexistente.
+- `tests.total` **3088**, con el desglose **medido**: sin el paquete
+  `presentation` en el árbol la suite colecta 3055 — la cifra exacta que
+  B6 declaró — y al devolverlo colecta 3088.
+
+### Hallazgo fuera del bloque, con efecto real
+
+El ciclo `b6` llevaba dos sesiones bloqueado en `explore` por un supuesto
+defecto del framework —`sddk artifact store` no vinculaba el artefacto al
+ciclo— y **no lo era**. `cycle transition` acepta `--artifact kind=path`
+**en la propia transición**, y con esa vía la transición se aplica.
+
+Un `ENGINE_MISSING_ARTIFACT` que **nombra** el artefacto que falta es una
+instrucción, no un veredicto de avería. Se leyó como avería porque se
+escribió como avería, y una vez escrito el diagnóstico cada relectura lo
+confirmaba.
+
+### Fuera de alcance
+
+**P4** — que la TUI sea usable de verdad — depende de un terminal y de una
+interacción humana que el CI no tiene. Registrada, y por eso **no** baja
+el veredicto.
+
 ## [0.26.0] - 2026-10-03 — cada afirmación dice QUIÉN la afirma
 
 **El bloque B6, cerrado.** El gate pide que cada afirmación del Knowledge
