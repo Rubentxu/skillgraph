@@ -115,6 +115,31 @@ source = skillgraph
 parallel = true
 sigterm = true
 data_file = $REPO_ROOT/.coverage.parallel
+# MEDIDO en B20, al certificar: sin esto, la etapa unit-tests falla con
+# «No source for code: /tmp/.../src/skillgraph/__init__.py» y rc=1, DESPUÉS
+# de que la suite entero haya pasado.
+#
+# De donde sale: varios tests ejecutan el paquete desde una COPIA en un
+# temporal —`test_b17_pack_lifecycle_exec.py` abre un
+# `TemporaryDirectory(prefix="b17_")` y lo levanta como subproceso—, y el
+# hook .pth del punto 1 mide ese subproceso con la destreza de medir
+# cualquier otro. La copia se borra al terminar el test, y para cuando llega
+# `coverage report` la ruta ya no existe: coverage no puede abrir el fichero
+# y aborta el informe entero.
+#
+# MEDIDO: de las 376 rutas del fichero de datos, 282 eran de /tmp. Y no es un
+# solo layout —conviven `/tmp/b17_*/src/` y `/tmp/b19_*/repo/src/`—, asi que
+# un remapeo con `[paths]` habria tenido que enumerarlos. Eso seria una lista
+# de layouts en vez de una regla, que es la misma trampa por forma que B20
+# denuncia en otro sitio. La regla es una: lo que vive fuera del arbol del
+# repo no es codigo de este repo y no se mide.
+#
+# No relaja el suelo: `fail_under` sigue aplicando al informe, y con
+# `--ignore-errors` de comprobacion, subirlo a 95 o 99 sigue dando rc=2
+# sobre el 94 % real. Lo que se deja de exigir es que coverage sepa abrir
+# ficheros que ya no existen.
+omit =
+    /tmp/*
 
 [report]
 show_missing = true

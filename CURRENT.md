@@ -118,6 +118,37 @@
 > posteriores: dos sueltas y dos completas. **Causa no establecida, y no se
 > afirma ninguna.**
 >
+> **Y LA CERTIFICACIÓN FALLÓ DESPUÉS DE QUE TODO PASARA, QUE ES LA FORMA
+> PEOR.** La etapa `unit-tests` terminó con rc=1 cuando la suite entera llevaba
+> un rato en verde: **3321 passed, cobertura 93,68 % sobre un suelo de 80**, y
+> luego `No source for code: '/tmp/b17_16r3_ise/…'`.
+>
+> MEDIDO sobre el dato real, no sobre un caso inventado: de las **376** rutas
+> del fichero de cobertura, **282 eran de `/tmp`**, y ninguna existía ya cuando
+> llegaba el informe. El dato lo producía la clase `_ArbolCopiado` de
+> `test_b17_pack_lifecycle_exec.py`, que abre un
+> `TemporaryDirectory(prefix="b17_")`, copia `src/` dentro y levanta el paquete
+> de ahí como subproceso —que el hook `.pth` mide igual que cualquier otro— y
+> lo borra al terminar. Rompía **las dos** consumidoras: `coverage report` y
+> `coverage json`, o sea la etapa siguiente de la receta.
+>
+> **LO QUE NO SE HIZO, Y ES LA DECISIÓN.** Los temporales no tienen un solo
+> layout: conviven `/tmp/b17_*/src/` y `/tmp/b19_*/repo/src/`. Remapearlos con
+> `[paths]` obligaba a enumerarlos, y **enumerar layouts es la misma lista
+> encubierta por forma** que este bloque denuncia en el predicado: decide cómo
+> se escribe la ruta en vez de a qué conjunto pertenece. La regla es una y no
+> necesita lista: **lo que vive fuera del árbol del repo no es código de este
+> repo, y no se mide.**
+>
+> **Y NO RELAJA EL SUELO.** MEDIDO: con el `omit` puesto, subir `fail_under` a
+> 95 o a 99 sobre el 94 % real sigue dando **rc=2**. Lo que se deja de exigir es
+> que coverage sepa abrir ficheros que ya no existen. El guard deriva la
+> configuración del heredoc de `coverage.sh` en vez de copiarla —una copia en el
+> propio guard sería el guard comparándose consigo mismo— y su contrasalto dio
+> **rojo al escribirlo**: con un temporal que no se llamaba `skillgraph` la
+> medición no registraba nada y el test principal pasaba por la razón
+> equivocada. Dos mutaciones sobre producción, ambas cazadas.
+>
 > **DONDE SE MIRA, VERIFICADO POR AST:**
 >
 > | cita | que sostiene |
@@ -129,6 +160,10 @@
 > | `test_b20_ontologia_contradictoria.py:95::PENDIENTES_POR_DECLARAR` | el techo **nombrado**, que es lo que lo hace rompible |
 > | `test_b20_ontologia_contradictoria.py:216::TestElGateNoSeContradiceASiMismo` | el invariante que cierra la contradicción |
 > | `mutate_b20_ontologia_contradictoria.py` | 3 sondas, 3/3, y **M1 y M2 declaran dos diagnósticos cada una** |
+> | `test_b20_coverage_omit.py:66::_rc_generada` | la configuración se **deriva** del script, no se copia en el guard |
+> | `test_b20_coverage_omit.py:153::TestLaConfiguracionNoMideFueraDelRepo` | la propiedad **ejecutada**, con su contrasalto que dio rojo al escribirlo |
+> | `test_b20_coverage_omit.py:202::TestElArregloNoRelajaElSuelo` | un arreglo que apaga el umbral no es un arreglo |
+> | `check_coverage_floors.py:159::informe` | la **segunda** consumer, que también se rompía |
 >
 > ---
 >
