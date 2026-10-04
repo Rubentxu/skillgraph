@@ -33,7 +33,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-RAIZ = Path("/var/mnt/DiscoChino2-fast/Proyectos/python/skillgraph")
+# Derivado de donde ESTA el script. Escrito a mano, el instrumento medía
+# un arbol que puede no ser el suyo, y mutaba ficheros de otra maquina.
+RAIZ = Path(__file__).resolve().parent.parent
 MUTABLES = ("STATE.yaml", "ROADMAP.md", "CURRENT.md", "src/skillgraph/__init__.py")
 
 
@@ -95,6 +97,100 @@ def _coherente(salida: str) -> bool | None:
         return None
 
 
+_WORKITEM = re.compile(r"^(\s*)current_workitem:.*$", re.MULTILINE)
+
+
+def _leido(estado: str, clave: str) -> object:
+    """Lo que el PARSER lee de `clave`, no lo que el texto parece decir.
+
+    La diferencia es el negocio entero de B13: seis ficheros de test leian el
+    estado con `yaml.safe_load` y `project_truth` lo leia con un regex, y cada
+    uno encuentras una cosa distinta del mismo fichero sin que nadie lo notara.
+    Comparar texto contra texto para decidir si una mutacion surtiio es el mismo
+    error una vez mas abajo.
+    """
+    import yaml
+
+    datos = yaml.safe_load(estado)
+    valor = datos.get("roadmap", {}).get(clave)
+    return "" if valor is None else str(valor).split()[0]
+
+
+def _pon_workitem(texto: str, valor: str) -> str:
+    """El estado con `current_workitem` a `valor`, o ABORTA si no se pudo.
+
+    MEDIDO: este instrumento hacia `.replace("  current_workitem: B13", ...)`
+    en tres preguntas, con el workitem vivo escrito a mano. Al pasar el bloque
+    vivo a B14 los tres `.replace` se volvieron no-ops: el estado nunca se
+    mutaba, el verificador contestaba `coherente: true` con su respuesta
+    NORMAL a un estado intacto, y el instrumento imprimia 5/8 diciendo que el
+    arreglo de B14 no funcionaba. Lo que estaba roto era el instrumento, y
+    hacia tres preguntas a la vez.
+
+    Un no-op aqui es peor que en un test: aqui no cae nadie, solo se pierde la
+    medicion, y una medicion perdida se lee como un defecto del codigo que se
+    acaba de arreglar. Por eso el numero de sustituciones es una condicion de
+    exito, no un detalle.
+    """
+    cambiado, n = _WORKITEM.subn(rf"\g<1>current_workitem: {valor}", texto, count=1)
+    if n != 1:
+        raise SystemExit(
+            "ABORTA: STATE.yaml ya no declara `current_workitem` con esa forma, y la "
+            "pregunta no mutaria nada. Un PASS aqui seria el de un estado intacto."
+        )
+    if _leido(cambiado, "current_workitem") != valor:
+        raise SystemExit(
+            "ABORTA: la sustitucion dejo el estado declarando "
+            f"{_leido(cambiado, 'current_workitem')!r} y no {valor!r}. MEDIDO: la primera "
+            "version de este helper remplazaba la LINEA entera por el valor, se llevaba "
+            "el nombre de la clave, y dejaba un `B99` suelto: YAML invalido, el "
+            "verificador con rc=2, y la pregunta 4 contando eso como PASS. Un abort "
+            "que comprueba la cadena entera no habria visto nada, porque el nombre de "
+            "la clave aparece en otras lineas del fichero: lo que se comprueba es el "
+            "VALOR que el parser lee, que es lo que el verificador va a mirar."
+        )
+    return cambiado
+
+
+def _duplica_workitem(texto: str, valor: str) -> str:
+    """El estado con la MISMA clave declarada DOS veces, o ABORTA si no pudo.
+
+    No es «poner un valor»: es la lectura duplicada, que es el caso que B13
+    produjo sin querer y que ninguna de las otras preguntas reproduce.
+    """
+
+    def _dos(m: re.Match[str]) -> str:
+        return f"{m.group(0)}\n{m.group(1)}current_workitem: {valor}"
+
+    cambiado, n = _WORKITEM.subn(_dos, texto, count=1)
+    if n != 1:
+        raise SystemExit(
+            "ABORTA: STATE.yaml ya no declara `current_workitem` con esa forma, y la "
+            "pregunta de la clave duplicada no inyectaria la segunda declaracion."
+        )
+    return cambiado
+
+
+def _contradicciones(salida: str) -> list[str]:
+    import json
+
+    try:
+        valor = json.loads(salida).get("contradicciones")
+    except json.JSONDecodeError:
+        return []
+    return [str(c) for c in valor] if isinstance(valor, list) else []
+
+
+def _ilegible(salida: str) -> str:
+    import json
+
+    try:
+        valor = json.loads(salida).get("ilegible", "")
+    except json.JSONDecodeError:
+        return ""
+    return str(valor)
+
+
 def _pregunta(nombre: str) -> dict[str, object]:
     return {"nombre": nombre, "cumple": None, "detalle": ""}
 
@@ -111,7 +207,97 @@ PREGUNTAS: list[dict[str, object]] = [
 ]
 
 
-def main() -> int:
+#: Deformaciones del VERIFICADOR, y las preguntas que tienen que ponerse OPEN.
+#:
+#: MEDIDO, y por que este bloque existe. Durante B14 este instrumento dio 7/8 y
+#: luego 8/8, y en ninguno de los dos casos se sabia si decia la verdad: sus
+#: predicados eran «el verificador no dice coherente», y eso lo cumple un modulo
+#: roto con la misma facilidad que un modulo que dejo de mirar. Se demostro en
+#: carne propia — una sustitucion mal escrita dejo el YAML invalido, el
+#: verificador salio con rc=2, y la pregunta dio PASS por un motivo que no era
+#: el suyo. Un 8/8 que no puede ponerse en rojo no es un 8/8.
+#:
+#: Cada sonda se ancla en el texto EXACTO que escribio `ruff format`; el
+#: instrumento se niega a arrancar si un ancla no es unica o no existe, que es
+#: el mismo criterio que usa `mutate_b14_truth_single_reader.py`.
+SONDAS_AUTOCOMPROBACION: tuple[tuple[str, str, str, frozenset[int]], ...] = (
+    (
+        "sin el constructor de claves duplicadas",
+        "    _SinClavesDuplicadas.add_constructor("
+        "yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construye)",
+        "# Autocomprobacion: sin este constructor, YAML elige una de las dos.",
+        frozenset({1}),
+    ),
+    (
+        "el total deja de comprobar que es un entero",
+        "    if not isinstance(total, int) or isinstance(total, bool):",
+        "    if False:",
+        frozenset({2, 5}),
+    ),
+    (
+        "el workitem deja de cruzarse con CURRENT.md",
+        '    if v["workitem_state"] != v["workitem_current"]:',
+        "    if False:",
+        frozenset({3, 4, 7}),
+    ),
+)
+
+
+def _autocomprobacion() -> int:
+    """Deforma el verificador de verdad y exige que las preguntas se caigan.
+
+    No mira el verificador: lo EJECUTA, con las mismas preguntas y los mismos
+    predicados que la medicion. Si una deformacion deja el 8/8 intacto, el
+    predicado de esa pregunta no mira lo que dice mirar.
+    """
+    ruta = RAIZ / "scripts" / "project_truth.py"
+    original = ruta.read_text(encoding="utf-8")
+    for nombre, ancla, deformado, indices in SONDAS_AUTOCOMPROBACION:
+        apariciones = original.count(ancla)
+        if apariciones != 1:
+            print(f"NO SE EJECUTA: el ancla de «{nombre}» aparece {apariciones} veces.")
+            return 2
+        if deformado == ancla:
+            print(f"NO SE EJECUTA: «{nombre}» no deforma nada. Una deformacion que no")
+            print("cambia el texto no puede hacer caer a nadie: probaria el harness,")
+            print("no el codigo que dice vigilar.")
+            return 2
+        if not indices:
+            print(f"NO SE EJECUTA: «{nombre}» no declara que preguntas tienen que caer.")
+            print("Una sonda sin preguntas no se puede ni cazar ni fallar.")
+            return 2
+    print(f"autocomprobacion: {len(SONDAS_AUTOCOMPROBACION)} anclas unicas")
+
+    fallos: list[str] = []
+    for nombre, ancla, deformado, indices in SONDAS_AUTOCOMPROBACION:
+        with Arbol() as arbol:
+            ruta.write_text(original.replace(ancla, deformado, 1), encoding="utf-8")
+            _mide()
+        siguen = [i for i in sorted(indices) if PREGUNTAS[i]["cumple"]]
+        if siguen:
+            fallos.append(f"{nombre}: las preguntas {siguen} siguen en PASS")
+            print(f"  [SIN CAZAR] {nombre}: {siguen} siguen en PASS")
+        else:
+            print(f"  [CAZADA]    {nombre}: preguntas {sorted(indices)} en OPEN")
+        arbol.restaura()
+        ruta.write_text(original, encoding="utf-8")
+
+    if ruta.read_text(encoding="utf-8") != original:
+        print("ABORTA: el verificador no volvio a su texto original.")
+        return 2
+    if fallos:
+        print(f"\n{len(fallos)} sonda(s) sin cazar: los predicados no miran lo que dicen.")
+        return 1
+    print(f"\n{len(SONDAS_AUTOCOMPROBACION)}/{len(SONDAS_AUTOCOMPROBACION)} sondas cazadas")
+    return 0
+
+
+def _mide() -> None:
+    """Rellena PREGUNTAS ejecutando el verificador de verdad.
+
+    NO imprime: la autocomprobacion corre esto ocho veces, una por sonda, y
+    una tabla de resultados por sonda seria ruido que tapa el veredicto.
+    """
     with Arbol() as arbol:
         rc, salida = _corre()
         c = _coherente(salida)
@@ -125,14 +311,7 @@ def main() -> int:
             return (RAIZ / rel).read_text(encoding="utf-8")
 
         # 2. Clave duplicada: el caso MEDIDO durante B13.
-        muta(
-            "STATE.yaml",
-            texto("STATE.yaml").replace(
-                "  current_workitem: B13",
-                "  current_workitem: B13\n  current_workitem: B99_inventado",
-                1,
-            ),
-        )
+        muta("STATE.yaml", _duplica_workitem(texto("STATE.yaml"), "B99_inventado"))
         rc, salida = _corre()
         c = _coherente(salida)
         import json
@@ -171,19 +350,32 @@ def main() -> int:
         )
         rc, salida = _corre()
         c = _coherente(salida)
-        PREGUNTAS[2]["cumple"] = c is False
-        PREGUNTAS[2]["detalle"] = f"rc={rc} coherente={c}"
+        contras3 = _contradicciones(salida)
+        # Un total que no cuadra NO es un estado ilegible: se lee bien y lo que
+        # no cuadra es la ARITMETICA. Por eso se exige rc=1 y una contradiccion
+        # que hable de los tests, y no «no es coherente»: con el campo vacio el
+        # verificador sale con rc=2, `coherente: false`, y un predicado de
+        # «falso» lo daria por bueno sin haber mirado la cifra.
+        PREGUNTAS[2]["cumple"] = rc == 1 and any("tests" in x for x in contras3)
+        PREGUNTAS[2]["detalle"] = f"rc={rc} coherente={c} contradicciones={contras3}"
         arbol.restaura()
 
         # 4. Workitem que no existe en ninguna parte.
-        muta(
-            "STATE.yaml",
-            texto("STATE.yaml").replace("  current_workitem: B13", "  current_workitem: B99", 1),
-        )
+        muta("STATE.yaml", _pon_workitem(texto("STATE.yaml"), "B99"))
         rc, salida = _corre()
         c = _coherente(salida)
-        PREGUNTAS[3]["cumple"] = c is False
-        PREGUNTAS[3]["detalle"] = f"rc={rc} coherente={c}"
+        contras4 = _contradicciones(salida)
+        # NO basta con «no es coherente». MEDIDO: con la sustitucion rota —que
+        # se llevaba el nombre de la clave y dejaba un `B99` suelto— el estado
+        # era YAML invalido, el verificador salia con rc=2 y `coherente: false`,
+        # y esta pregunta lo contaba como PASS. Es el mismo falso verde que
+        # B14 persigue, en el instrumento que certifica a B14: un predicado que
+        # se puede satisfacer por una causa ajena al objeto que mide.
+        #
+        # Un workitem que no existe es un estado PERFECTAMENTE LEGIBLE con una
+        # str que no cuadra: lo honesto es rc=1 y una contradiccion, no ilegible.
+        PREGUNTAS[3]["cumple"] = rc == 1 and bool(contras4)
+        PREGUNTAS[3]["detalle"] = f"rc={rc} coherente={c} contradicciones={contras4}"
         arbol.restaura()
 
         # 5. Version activa incoherente con el tag.
@@ -191,8 +383,14 @@ def main() -> int:
         muta("src/skillgraph/__init__.py", '__version__ = "7.7.7"\n')
         rc, salida = _corre()
         c = _coherente(salida)
-        PREGUNTAS[4]["cumple"] = c is False
-        PREGUNTAS[4]["detalle"] = f"rc={rc} coherente={c}"
+        contras5 = _contradicciones(salida)
+        # El mensaje que el verificador escribe es `version:`, no `release:`:
+        # lo que se compara es `__init__.py` contra el ULTIMO TAG, y la release
+        # declarada concuerda con el. MEDIDO: el predicado pedia «release» y dio
+        # OPEN con el codigo correcto — un predicado escrito de memoria mide la
+        # memoria, no el codigo. Se exige que la contradiccion nombre la version.
+        PREGUNTAS[4]["cumple"] = rc == 1 and any("version" in x for x in contras5)
+        PREGUNTAS[4]["detalle"] = f"rc={rc} coherente={c} contradicciones={contras5}"
         (RAIZ / "src/skillgraph/__init__.py").write_text(original_init, encoding="utf-8")
 
         # 6. Campo de verdad VACIO.
@@ -204,8 +402,15 @@ def main() -> int:
         )
         rc, salida = _corre()
         c = _coherente(salida)
-        PREGUNTAS[5]["cumple"] = not (rc == 0 and c is True)
-        PREGUNTAS[5]["detalle"] = f"rc={rc} coherente={c} salida={salida.strip()[:90]!r}"
+        ilegible6 = _ilegible(salida)
+        # MEDIDO: el predicado era `not (rc == 0 and coherente)`, que se puede
+        # satisfacer por CUALQUIER motivo de fallo — incluido un `total:` vacio
+        # que el verificador leiera como None y que por el hueco se notara como
+        # una cifra que no cuadra. Sin comprobar el TIPO, la comprobacion del
+        # tipo es opcional y nadie lo sabe. Se exige lo que el caso really es:
+        # el estado no se lee, y el mensaje dice que campo.
+        PREGUNTAS[5]["cumple"] = "total" in ilegible6
+        PREGUNTAS[5]["detalle"] = f"rc={rc} coherente={c} ilegible={ilegible6[:90]!r}"
         arbol.restaura()
 
         # 7. Falta un fichero: tiene que fallar ruidosamente.
@@ -219,19 +424,22 @@ def main() -> int:
         #    sin decir cual era la verdad deja a quien corrige haciendo la
         #    cuenta a mano, que es el trabajo que el verificador existe para
         #    evitar.
-        muta(
-            "STATE.yaml",
-            texto("STATE.yaml").replace("  current_workitem: B13", "  current_workitem: B99", 1),
-        )
+        muta("STATE.yaml", _pon_workitem(texto("STATE.yaml"), "B99"))
         rc, salida = _corre()
-        try:
-            contras = json.loads(salida).get("contradicciones") or []
-        except json.JSONDecodeError:
-            contras = []
-        PREGUNTAS[7]["cumple"] = bool(contras) and "B13" in " ".join(contras)
+        contras = _contradicciones(salida)
+        # El valor que se comprueba es el que INYECTO esta instrumentacion, no
+        # el que el estado declaraba: si el verificador contestara con un valor
+        # suyo, estaria leyendo otra cosa, y eso es justo lo que hay que cazar.
+        PREGUNTAS[7]["cumple"] = bool(contras) and "B99" in " ".join(contras)
         PREGUNTAS[7]["detalle"] = f"contradicciones={contras}"
         arbol.restaura()
 
+
+def main() -> int:
+    if "--autocomprobacion" in sys.argv:
+        return _autocomprobacion()
+    with Arbol():
+        _mide()
     paso = sum(1 for p in PREGUNTAS if p["cumple"])
     print("B14 · la autoridad de coherencia, medida antes de escribir nada")
     print("(mutaciones EN SITIO con restauracion verificada por sha256)\n")
