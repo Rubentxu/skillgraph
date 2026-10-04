@@ -1,6 +1,14 @@
 > **Bloque 2026-10-04 (B14) — La autoridad de coherencia se puede engañar, y se engañó.**
-> (en curso; sin release todavía)
-> Versión activa `0.31.1.dev0`; último tag `v0.31.1`.
+> (cerrado y publicado en `v0.31.2`)
+> Versión activa `0.31.2.dev0`; último tag `v0.31.2`.
+>
+> **MEDIDO ANTES DE ESCRIBIR NADA: 7 de 8. MEDIDO AL CERRAR: 8 de 8**, con la
+> autocomprobación del instrumento en 3 de 3 y el harness en 6 de 6 con 6 causas
+> distintas. La línea base era 7 de 8 y no 0, y esa diferencia es el bloque
+> entero: aquí no se empezó porque el verificador mintiera, sino porque **no se
+> podía saber si mentía**. Y la honestidad de un verificador al que solo se le
+> pregunta «¿es coherente?» no se puede medir: hay que poder obligarlo a
+> equivocarse y comprobar que se da cuenta.
 >
 > **ESTE NO ES UN BLOQUE HACÍA 1.0. ES EL BLOQUE QUE HACE QUE EL VERIFICADOR
 > DEL QUE DEPENDEN TODOS LOS DEMÁS PUEDA SER CREÍDO.**
@@ -157,9 +165,10 @@
 > | `test_b14_truth_single_reader.py::TestUnRecuentoQueNoSeTerminoNoSePublica` | un numero de una colecta a medias no se publica |
 > | `measure_b14_truth_single_reader.py::Arbol` | restaura el VERIFICADOR tambien, y lo comprueba |
 >
-> **GATE DE 1.0: sin cambios, 18 PASS / 1 OPEN / 1 NO_MEASURABLE**, que es lo
-> correcto: B14 endurece la autoridad de coherencia de B0, no una propiedad de
-> 1.0. `coherente: true` con `tests.total` cuadrando contra el arbol.
+> **GATE DE 1.0: sin cambios, 18 PASS / 1 OPEN / 1 NO_MEASURABLE** (MEDIDO con
+> `scripts/measure_b9_gate_1_0.py` al cerrar), que es lo correcto: B14 endurece
+> la autoridad de coherencia de B0, no una propiedad de 1.0. `coherente: true`
+> con `tests.total` cuadrando contra el árbol: 3285 declarados, 3285 colectados.
 >
 > ---
 >
