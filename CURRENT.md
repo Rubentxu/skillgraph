@@ -93,12 +93,43 @@
 > en B16, B17 y B18 con tres síntomas distintos, y el más caro de B18 fue
 > silencioso.
 >
-> **DONDE ESTÁ EL VEREDICTO HOY:** 17 PASS / 2 OPEN / 1 NO_MEASURABLE, con
-> `core sin dependencias de impl. externa` en **PASS** —la clase **no cambia**, y
-> es lo correcto: B18 endurece una medición que ya era cierta, no una propiedad
-> que fuera falsa—. `roadmap/state/docs coherentes` sale `OPEN` porque `STATE`
-> declara 3306 y el árbol colecta 3312 (+6, sus seis tests nuevos), que se escribe
-> **después** del run.
+> ---
+>
+> **LO QUE LA MEDICIÓN DE CIERRE DE B18 ENCONTRÓ, y es el primer bloque nuevo de
+> la serie que NO es una propiedad falsa.** Al correr el gate sobre el árbol de
+> release, `distribution reproducible` dio **OPEN 1 vez de 8** ejecuciones. La
+> evidencia, capturada: *«mismo contenido y distinta fecha dan bytes distintos
+> en 2 artefacto(s) — wheel: 8612ab04ee18 vs dc5789082776; sdist:
+> 673d9c2cc5f5 vs eb37bbcbabf2»*.
+>
+> **MEDIDO, y NO SUPUESTO, lo que se ha podido descartar:**
+>
+> - **La concurrencia como causa del contenido: REFUTADA.** Dos sdists
+>   construidos con la suite completa de pytest corriendo en paralelo tienen
+>   **exactamente el mismo contenido**: 397 ficheros, 0 solo en cada lado, 0
+>   comunes con contenido distinto.
+> - **La irreproducibilidad del build: REFUTADA.** Ocho construcciones con la
+>   condición exacta del predicado dan **bytes iguales 8 de 8**: cuatro sin tocar
+>   la fecha y cuatro tocándola con `os.utime` sobre `src/skillgraph/__init__.py`,
+>   que es lo que hace el predicado para delatar un build que se embeba el
+>   mtime. **La distribución ES reproducible.**
+>
+> **LO QUE NO SE HA ESTABLECIDO, y se dice así en vez de rellenarlo:** la causa
+> de aquel OPEN. Y eso deja el defecto, que es real e independiente de la causa:
+> **el OPEN de este predicado no distingue «la distribución no es reproducible»
+> de «esta medición no ha podido hacerse».** Su evidencia afirma la primera con
+> una seguridad que la medición no tiene. Es la lección de B17 —
+> `NO_MEASURABLE` ≠ `OPEN` — aplicada a otra propiedad, y con un caso más difícil:
+> aquí el instrumento **arranca y construye**, luego no hay forma de que el
+> predicado sepa si construyó lo que cree.
+>
+> **Y UN FALLO PROPIO QUE ESTA MEDICIÓN EMPEZÓ TENIENDO, porque es la razón de
+> que el bloque sea un hallazgo y no un recuerdo.** La primera vez que vi el OPEN
+> solo leí el nombre de la propiedad en un resumen y volví a ejecutar el gate.
+> **No guardé la evidencia.** Un veredicto del que no se conserva la frase no se
+> puede diagnosticar, y por eso el primer instrumento de esto —6 de 6 PASS— no
+> reproducía nada: estaba bien ejecutado y midió la pregunta equivocada. Guardar
+> la evidencia del fallo es lo que convirtió un número raro en un diagnóstico.
 >
 > ---
 
