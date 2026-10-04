@@ -43,6 +43,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 RAIZ = Path(__file__).resolve().parent.parent
 
 STATE = RAIZ / "STATE.yaml"
@@ -56,11 +58,22 @@ INIT = RAIZ / "src" / "skillgraph" / "__init__.py"
 # cogiera la primera mediria el mapa en vez de la respuesta.
 _BLOQUE_VIVO = re.compile(r"^>\s*Bloque vivo:\s*\*\*(B\d+)\*\*", re.MULTILINE)
 _VERSION = re.compile(r'__version__\s*=\s*"([^"]+)"')
-_TAG_STATE = re.compile(r"^\s*tag:\s*v?([0-9][^\s#]*)", re.MULTILINE)
-_TOTAL = re.compile(r"^\s*total:\s*([0-9]+)", re.MULTILINE)
-_WORKITEM_STATE = re.compile(r"^\s*current_workitem:\s*(\S+)", re.MULTILINE)
 _WORKITEM_CUALQUIERA = re.compile(r"WI-\d+|B\d+")
 _COLECTADOS = re.compile(r"([0-9]+) tests? collected")
+
+# Los tres regex que se leian de STATE.yaml —`_TAG_STATE`, `_TOTAL` y
+# `_WORKITEM_STATE`— han desaparecido. No se sustituyen por otros tres: se
+# sustituyen por UNA lectura, y esa es la mitad del punto.
+#
+# MEDIDO en B14: seis ficheros de test leen STATE con `yaml.safe_load` y este
+# lo leia entero con regex. Los dos protagonists son la MISMA clase de
+# regexp sobre el mismo fichero, y YAML toma la clave DUPLICADA por la
+# ultima mientras un regex se queda con la primera. Con dos
+# `current_workitem` en el fichero, `yaml.safe_load` decia `B13_cerrado`, el
+# regex decia `B13`, y este tool reportaba `coherente: true` con
+# `contradicciones: []`. Dos lectores del mismo texto discrepando en silencio
+# es la forma mas economica de falsificar la verdad del repositorio, y este
+# fichero es la respuesta a «¿donde esta el proyecto?».
 
 
 class VerdadNoLegible(RuntimeError):
@@ -83,6 +96,74 @@ def _lee(relative: str) -> str:
         raise VerdadNoLegible(f"no se pudo leer {relative}: {exc}") from exc
 
 
+class _ClaveDuplicada(VerdadNoLegible):
+    """El mismo nombre de clave dos veces en el MISMO mapa.
+
+    YAML no protesta: se queda con la ultima y sigue. Por eso el fallo es
+    invisible, y por eso se rechaza en el punto de lectura en vez de
+    comprobarlo despues con un guard: un guard que busca «¿hay dos claves
+    iguales?» tiene que recorrer el fichero, y un lector que las cuenta es un
+    segundo lector, que es exactamente el problema.
+    """
+
+    def __init__(self, clave: str, donde: str) -> None:
+        self.clave = clave
+        self.donde = donde
+        super().__init__(
+            f"{donde} declara la clave {clave!r} DOS VECES. YAML se quedaria con la "
+            f"ultima en silencio, y con dos consumidores del fichero eso significa que "
+            f"pueden leer cosas distintas del mismo estado. Se rechaza en el punto de "
+            f"lectura, no despues."
+        )
+
+
+class _SinClavesDuplicadas(yaml.SafeLoader):
+    """SafeLoader que dice NO en vez de quedarse con la ultima."""
+
+
+def _construye(loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False) -> dict:
+    Mapping = loader.construct_mapping(node, deep=deep)
+    primera: dict[Any, Any] = {}
+    for clave, valor in Mapping.items():
+        if clave in primera:
+            raise _ClaveDuplicada(str(clave), "STATE.yaml")
+        primera[clave] = valor
+    return primera
+
+
+_SinClavesDuplicadas.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construye)
+
+
+def _estado() -> dict[str, Any]:
+    """El estado, leído UNA vez y de una sola manera.
+
+    Todo el que necesite un campo de STATE.yaml pasa por aquí. No es una
+    medida de estilo: es lo que hace imposible que este tool y los tests que
+    leen el mismo fichero puedan responder cosas distintas.
+    """
+    try:
+        datos = yaml.load(_lee("STATE.yaml"), Loader=_SinClavesDuplicadas)
+    except yaml.YAMLError as exc:
+        raise VerdadNoLegible(f"STATE.yaml no se pudo leer como YAML: {exc}") from exc
+    if not isinstance(datos, dict):
+        raise VerdadNoLegible(
+            f"STATE.yaml deberia ser un mapa en la raiz, y es {type(datos).__name__}"
+        )
+    return datos
+
+
+def _seccion(nombre: str) -> Any:
+    """La seccion de STATE, o `None` si no esta —que no es lo mismo que vacia."""
+    valor = _estado().get(nombre)
+    if valor is None:
+        return None
+    if not isinstance(valor, dict):
+        raise VerdadNoLegible(
+            f"STATE.yaml.{nombre} deberia ser un mapa, y es {type(valor).__name__}"
+        )
+    return valor
+
+
 def version_activa() -> str:
     m = _VERSION.search(_lee("src/skillgraph/__init__.py"))
     if m is None:
@@ -91,10 +172,15 @@ def version_activa() -> str:
 
 
 def release_declarada() -> str:
-    m = _TAG_STATE.search(_lee("STATE.yaml"))
-    if m is None:
+    release = _seccion("release")
+    if release is None or "tag" not in release:
         raise VerdadNoLegible("STATE.yaml.release no declara `tag`")
-    return m.group(1)
+    etiqueta = release["tag"]
+    if not isinstance(etiqueta, str) or not etiqueta.startswith("v"):
+        raise VerdadNoLegible(
+            f"STATE.yaml.release.tag deberia ser un tag tipo vX.Y.Z, y es {etiqueta!r}"
+        )
+    return etiqueta[1:]
 
 
 def tag_real() -> str | None:
@@ -167,10 +253,15 @@ def _head_esta_en_la_etiqueta() -> bool:
 
 
 def tests_declarados() -> int:
-    m = _TOTAL.search(_lee("STATE.yaml"))
-    if m is None:
+    tests = _seccion("tests")
+    if tests is None or "total" not in tests:
         raise VerdadNoLegible("STATE.yaml.tests no declara `total`")
-    return int(m.group(1))
+    total = tests["total"]
+    if not isinstance(total, int) or isinstance(total, bool):
+        raise VerdadNoLegible(
+            f"STATE.yaml.tests.total deberia ser un entero, y es {type(total).__name__}: {total!r}"
+        )
+    return total
 
 
 def tests_colectados() -> int:
@@ -222,10 +313,16 @@ def bloque_del_roadmap() -> str:
 
 
 def workitem_de_state() -> str:
-    m = _WORKITEM_STATE.search(_lee("STATE.yaml"))
-    if m is None:
+    roadmap = _seccion("roadmap")
+    if roadmap is None or "current_workitem" not in roadmap:
         raise VerdadNoLegible("STATE.yaml.roadmap no declara `current_workitem`")
-    return m.group(1)
+    workitem = roadmap["current_workitem"]
+    if not isinstance(workitem, str) or not workitem:
+        raise VerdadNoLegible(
+            f"STATE.yaml.roadmap.current_workitem deberia ser un identificador no vacio, "
+            f"y es {workitem!r}"
+        )
+    return workitem
 
 
 def workitem_de_current() -> str:
