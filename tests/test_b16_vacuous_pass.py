@@ -203,9 +203,44 @@ class TestUnaFronteraQueNoSeMideNoEsUnaFrontera:
     """Lo UNICO que mide: que `core/` no pueda depender de un recurso.
 
     MEDIDO: el predicado buscava `^[A-Z][A-Za-z]+Pack$` dentro de constantes de
-    CADENA. Un `from skillgraph.resources.packs import DomainPack` es un `Name`
+    CADENA. Un `from ... import <un tipo de recurso>` es un `Name`
     del AST, no una cadena; anadido ese import de verdad a un modulo de `core/`,
     el gate decia «core/ no nombra ningun tipo de recurso».
+
+    **Y LA DEFORMACION DE ESTE BLOQUE NO EXISTIA. MEDIDO EN B20, al endurecer el
+    predicado que este bloque vigila.** La primera version usaba `from
+    skillgraph.resources.packs import DomainPack`, y medido sobre el arbol real:
+
+      · `skillgraph.resources.packs` NO es un modulo. MEDIDO por AST sobre
+        `src/skillgraph/resources/`: los modulos son `bricks`, `catalog`,
+        `parser`, `plan_loader`, `registry`, `status` y `workflow`. No hay
+        `packs`, ni como modulo ni como atributo del paquete.
+      · `DomainPack` NO es un simbolo. MEDIDO por AST sobre `src/skillgraph/`:
+        cero `Name`, cero `ClassDef`, cero alias. Aparece 8 veces como CONSTANTE
+        DE CADENA, en 5 ficheros, y las 8 son el `kind` de un recurso —el
+        valor persistido, no la clase—. El resto son prosa.
+
+    La segunda es la que mas dice: `DomainPack` es un **dato de disco**, no un
+    tipo de Python. Un predicado que lo trata como si fuera un simbolo no esta
+    equivocado de tipado, esta equivocado de RATO: confundio el nombre que el
+    dato lleva escrito con el tipo que el codigo declara.
+
+    O sea: **la deformacion era codigo que no podria ejecutarse nunca**, y el
+    test pasaba de todos modos porque el predicado respondia a la FORMA del
+    nombre —«acaba en Pack»— y no a si el tipo existia. Un guard de la frontera
+    arquitectonica estaba midiendo la frontera con un objeto que no existe.
+
+    Y no lo hacia solo en el test: `DomainPack` aparecia como ejemplo en el
+    docstring del PROPIO PREDICADO, luego la invariacion estaba en el codigo de
+    produccion del gate. Que B16 no la viera no es un fallo de B16: B16 leyo el
+    docstring y uso el ejemplo que el docstring daba. El fallo es del docstring,
+    y el guard WI-92 no lo ve porque solo resuelve citas de la forma
+    `fichero.py:N::simbolo`: un simbolo nombrado en prosa, SIN linea a la que
+    anclarlo, queda fuera de lo que ese guard sabe mirar. Registrar aqui.
+
+    Las deformaciones de aqui usan `BrickType` y `skillgraph.resources.registry`,
+    que existen, y el conjunto derivado los contiene porque ambos declararon el
+    paquete que los declara.
     """
 
     def test_un_import_de_verdad_es_open_y_nombra_el_modulo(self) -> None:
@@ -213,19 +248,19 @@ class TestUnaFronteraQueNoSeMideNoEsUnaFrontera:
             arbol.escribe_en_core(
                 "dependencia_de_verdad.py",
                 '"""Un modulo de core/ que depende de un recurso."""\n'
-                "from skillgraph.resources.packs import DomainPack\n"
+                "from skillgraph.resources.registry import BrickType\n"
                 "\n"
                 "\n"
                 "def usa() -> type:\n"
-                "    return DomainPack\n",
+                "    return BrickType\n",
             )
             veredicto, evidencia = arbol.modulo._ontology_extensible()
         assert veredicto == "OPEN", (
-            f"core/ importa DomainPack de verdad y el veredicto es {veredicto!r}. "
+            f"core/ importa BrickType de verdad y el veredicto es {veredicto!r}. "
             f"La frontera arquitectonica que dice «el nucleo no depende de los "
             f"recursos» no la vigila nadie."
         )
-        assert "DomainPack" in evidencia and "dependencia_de_verdad" in evidencia, (
+        assert "BrickType" in evidencia and "dependencia_de_verdad" in evidencia, (
             f"el veredicto es OPEN pero no nombra QUE tipo ni DONDE: {evidencia!r}"
         )
 
@@ -241,18 +276,18 @@ class TestUnaFronteraQueNoSeMideNoEsUnaFrontera:
             arbol.escribe_en_core(
                 "dependencia_por_atributo.py",
                 '"""Depende de un recurso por atributo, sin importar el tipo."""\n'
-                "from skillgraph.resources import packs\n"
+                "from skillgraph.resources import registry\n"
                 "\n"
                 "\n"
                 "def usa() -> type:\n"
-                "    return packs.DomainPack\n",
+                "    return registry.BrickType\n",
             )
             veredicto, evidencia = arbol.modulo._ontology_extensible()
         assert veredicto == "OPEN", (
-            f"core/ accede a DomainPack por atributo y el veredicto es {veredicto!r}. "
+            f"core/ accede a BrickType por atributo y el veredicto es {veredicto!r}. "
             f"El predicado miraba imports, y esta forma no es un import del tipo."
         )
-        assert "DomainPack" in evidencia, f"la evidencia no nombra el tipo: {evidencia!r}"
+        assert "BrickType" in evidencia, f"la evidencia no nombra el tipo: {evidencia!r}"
 
     def test_el_nucleo_real_sigue_limpio(self) -> None:
         """CONTRA-SALTO de la direccion contraria, sobre el estado de HOY.

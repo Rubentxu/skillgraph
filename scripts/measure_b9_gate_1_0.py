@@ -666,11 +666,17 @@ def _ontology_extensible() -> tuple[Veredicto, str]:
                             dependencias.setdefault(trozo, set()).add(
                                 f"{rel} (import de {alias.name})"
                             )
-            # (2) Los ATRIBUTOS y las ANOTACIONES de tipo: `packs.DomainPack`
+            # (2) Los ATRIBUTOS y las ANOTACIONES de tipo: `registry.BrickType`
             # llega al nucleo como atributo, y una anotacion
             # `-> CompiledResource` es una dependencia que no necesita ni un
             # import, porque el nucleo no tiene que ejecutar nada para estar
             # atado al tipo.
+            #
+            # El ejemplo de este comentario solia ser `packs.DomainPack`, que no
+            # es codigo: no hay modulo `packs`, y `DomainPack` no es un simbolo
+            # sino el `kind` de un recurso escrito como cadena. MEDIDO EN B20.
+            # Un ejemplo inventado en un comentario no rompe nada, pero siembra
+            # justo el patron-por-forma que este predicado sufria.
             elif isinstance(nodo, ast.Attribute) and nodo.attr in recursos:
                 dependencias.setdefault(nodo.attr, set()).add(f"{rel} (atributo)")
             elif isinstance(nodo, ast.Name) and nodo.id in recursos:

@@ -79,9 +79,9 @@
 > | cita | que sostiene |
 > |---|---|
 > | `measure_b9_gate_1_0.py:602::_ontology_extensible` | los tres defectos, escritos en su docstring |
-> | `measure_b9_gate_1_0.py:793::PAQUETES_DE_RECURSO` | el conjunto se declara por **paquete**, no por clase |
-> | `measure_b9_gate_1_0.py:796::_tipos_de_recurso` | el conjunto se **deriva** del árbol, y la cifra se publica |
-> | `measure_b9_gate_1_0.py:817::_docstrings_de` | documentación y código, separados —y sus dos defectos |
+> | `measure_b9_gate_1_0.py:799::PAQUETES_DE_RECURSO` | el conjunto se declara por **paquete**, no por clase |
+> | `measure_b9_gate_1_0.py:802::_tipos_de_recurso` | el conjunto se **deriva** del árbol, y la cifra se publica |
+> | `measure_b9_gate_1_0.py:823::_docstrings_de` | documentación y código, separados —y sus dos defectos |
 > | `test_b20_ontologia_contradictoria.py:95::PENDIENTES_POR_DECLARAR` | el techo **nombrado**, que es lo que lo hace rompible |
 > | `test_b20_ontologia_contradictoria.py:216::TestElGateNoSeContradiceASiMismo` | el invariante que cierra la contradicción |
 > | `mutate_b20_ontologia_contradictoria.py` | 3 sondas, 3/3, y **M1 y M2 declaran dos diagnósticos cada una** |
