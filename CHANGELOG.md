@@ -14,6 +14,101 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.29.0] - 2026-10-04 — las superficies públicas, declaradas y certificadas
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.28.1`:
+`b/f/x/n/d 0/1/0/4/0`, la regla pide **MINOR → v0.29.0**. El `fix(core)`
+es el que aporta el valor: sin él, dos propiedades del gate de 1.0
+seguían siendo IN-CERTIFICABLES, no incumplidas.
+
+Medido con `scripts/measure_b9_gate_1_0.py`, que deriva las veinte
+propiedades del propio `ROADMAP.md` y ejecuta un predicado por cada una:
+
+```
+antes (v0.28.1)  13 PASS · 6 OPEN · 1 NO_MEASURABLE
+ahora (v0.29.0)  15 PASS · 4 OPEN · 1 NO_MEASURABLE
+```
+
+Durante el bloque, y con el `tests.total` todavía sin actualizar, la cuenta
+intermedia fue 14/5: el `OPEN` que sobraba era
+`roadmap/state/docs coherentes`, que es precisamente el `tests.total`
+(estado 3176, árbol 3195). Puesta la cifra con el run ejecutado, esa
+propiedad vuelve a `PASS` y quedan cuatro.
+
+### Las dos propiedades que se cierran, y por qué estaban abiertas
+
+`resource/controller API estable` y `CLI estable` no estaban abiertas por
+falta de código: `skillgraph.core` no declaraba `__all__`, y no existía
+el snapshot de la CLI. Once comandos de primer nivel podían cambiar sin
+que nada lo notara.
+
+### Lo importante: lo que se le opuso
+
+Las dos se cerraban en **veinte segundos**. Se escribía un `__all__` y se
+hacía `touch` sobre el fichero de la declaración. Los predicados de B9
+comprobaban la **existencia** del fichero, y un `is_file()` es lo más
+fácil de falsificar que hay: un `touch` les daba `PASS` a los dos, con el
+gate de 1.0 exactamente igual de lejos.
+
+El guard **ejecuta** la comparación en vez de mirar el fichero, y las dos
+superficies se **generan desde el árbol** con `--actualizar`. Verificado
+en las cuatro direcciones:
+
+| qué se rompe | veredicto |
+|---|---|
+| snapshot vacío (`{}`) | `OPEN` en las dos propiedades |
+| comando quitado del snapshot | `OPEN` |
+| superficie real movida | `OPEN` |
+| estado de verdad | `PASS` en las dos |
+
+### Defecto del propio guard, medido al escribirlo
+
+La primera versión comparaba los comandos de la CLI en **una sola
+dirección** (`reales - declarados`). Añadir un comando *inventado* al
+snapshot pasaba en verde: el guard sabía detectar que el árbol crecía y
+no que la declaración miente, y la declaración es justamente lo que dice
+«esto es lo que hay». Ahora compara en las dos direcciones.
+
+### Qué se entrega
+
+- `src/skillgraph/core/__init__.py` declara `__all__` con los **60
+  símbolos** de los tres módulos del núcleo, **derivados** de sus `__all__`
+  y no escritos a mano, y los reexporta **por identidad**:
+  `core.ValidationError is core.errors.ValidationError`. Si el núcleo
+  recreara la clase, el `except` que escribe un consumidor y el que lanza
+  el núcleo serían dos clases distintas.
+- `scripts/check_public_surfaces.py` — cuatro contratos, con capa pura
+  (`evaluar_*`, sin disco ni imports) sobre capa de efecto (`medir`).
+- `surfaces/core-surface.json` y `surfaces/cli-surface.json`, **generados**.
+  Fuera de `docs/` porque `docs/*` está en `.gitignore` salvo tres
+  carve-outs, y un snapshot que no viaja no declara nada — el defecto que
+  B8 midió con el hijo de concurrencia. El guard lo comprueba contra
+  `git ls-files`, por fichero.
+- `public-surfaces` como etapa de la receta canónica. Lo decidió el propio
+  guard WI-98, que exige que todo checker del repo lo invoque.
+- `tests/test_b10_public_surface.py` — 19 tests en cinco conjuntos
+  disjuntos, con contra-saltos en ambas direcciones. Un guard con seis
+  aserciones iguales mide una sola cosa seis veces.
+- `scripts/mutate_b10_public_surfaces.py` — **6/6 sondas cazadas con 6
+  causas distintas**, árbol restaurado y ejecutando. Dos de las sondas
+  nacieron rotas y se cuentan: envolver los 60 símbolos con
+  `type('Copia', (v,), {})` revienta con `TypeError: metaclass conflict`
+  en los 28 `NewType`/frozenset, el módulo no importaba, y el harness veía
+  `rc=4` con cero líneas `FAILED` — que se lee como «el guard no muerde»
+  cuando lo que pasa es que la sonda estaba rota. Un `rc` de colecta no
+  es un test en rojo.
+
+### Lo que NO se cierra aquí
+
+Las cuatro `OPEN` que quedan **no dependen de certificación**: `pack/
+controller lifecycle` y `upgrade desde releases soportadas` piden código
+que todavía no existe; `runtime real certificado` pide
+`SG_UAT_REAL_PROVIDER=1` y una credencial que este entorno no tiene; y
+`security/threat model actualizado` pide reescribir un ADR que se aprobó
+describiendo un proyecto de 830 tests y 17 releases.
+
+---
+
 ## [0.28.1] - 2026-10-04 — el gate de 1.0 deja de ser una lista en prosa
 
 Medido con `scripts/measure_b9_gate_1_0.py`, que **deriva** las veinte

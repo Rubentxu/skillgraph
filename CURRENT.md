@@ -1,5 +1,71 @@
+> **Bloque 2026-10-04 (B10) — Las superficies públicas, declaradas y certificadas.**
+> Versión activa `0.29.0.dev0`; último tag `v0.28.1` (esta release aún sin
+> publicar: se etiqueta al cerrar el bloque).
+>
+> **B10 cierra las dos `OPEN` que estaban abiertas SOLO por falta de
+> certificacion.** B9 dejo el gate en 13 PASS / 6 OPEN / 1 NO_MEASURABLE.
+> Dos de las seis OPEN —`resource/controller API estable` y `CLI estable`—
+> no estaban abiertas por falta de codigo: `skillgraph.core` no declaraba
+> `__all__` y no existia el snapshot de la CLI. Once comandos de primer
+> nivel podian cambiar sin que nada lo notara.
+>
+> **LO IMPORTANTE NO ES LO QUE HACE, ES LO QUE SE LE OPUSO.** Las dos se
+> cerraban en veinte segundos: se escribia un `__all__` y se hacia `touch`
+> sobre el fichero de la declaracion. Los predicados de B9 comprobaban la
+> EXISTENCIA del fichero, y un `is_file()` es lo mas facil de falsificar
+> que hay. Un `touch` les daba PASS a los dos, con el gate de 1.0
+> exactamente igual de lejos. Por eso el guard EJECUTA la comparacion en
+> vez de mirar el fichero, y las dos superficies se GENERAN desde el arbol
+> con `--actualizar`.
+>
+> Verificado en las cuatro direcciones que importan: snapshot vacio ->
+> OPEN en las dos · comando quitado del snapshot -> OPEN · superficie real
+> movida -> OPEN · estado de verdad -> PASS en las dos.
+>
+> **DEFECTO DEL PROPIO GUARD, MEDIDO AL ESCRIBIRLO.** La primera version
+> comparaba los comandos de la CLI en UNA sola direccion
+> (`reales - declarados`): anadir un comando INVENTADO al snapshot pasaba
+> en verde. Un guard que solo sabe detectar que el arbol crecio no vigila la
+> declaracion, y la declaracion es justamente lo que dice «esto es lo que
+> hay». Ahora compara en las dos direcciones.
+>
+> **MEDIDO, 15 PASS / 4 OPEN / 1 NO_MEASURABLE.** Con el `tests.total`
+> todavia sin actualizar la cuenta intermedia fue 14/5, y el `OPEN` que
+> sobraba era `roadmap/state/docs coherentes`, que es precisamente el
+> `tests.total` (estado 3176, arbol 3195). Puesta la cifra con el run ya
+> ejecutado, esa propiedad vuelve a `PASS`. Las cuatro que quedan no
+> dependen de certificacion: `pack/controller lifecycle` y `upgrade desde
+> releases soportadas` piden codigo que no existe, `runtime real
+> certificado` pide una credencial, y `security/threat model actualizado`
+> pide reescribir un ADR caducado.
+>
+> Instrumento: `scripts/check_public_surfaces.py`. Harness:
+> `scripts/mutate_b10_public_surfaces.py` (6/6, 6 causas distintas). Guards:
+> `tests/test_b10_public_surface.py` (19 tests, cinco conjuntos disjuntos).
+>
+> check_public_surfaces.py:107::evaluar_core_declarado  la superficie es la UNION de los modulos
+> check_public_surfaces.py:156::evaluar_core_snapshot   un `touch` no produce un snapshot valido
+> check_public_surfaces.py:212::evaluar_cli_snapshot    compara en las DOS direcciones
+> check_public_surfaces.py:303::evaluar_superficies_versionadas  por fichero, contra git ls-files
+> mutate_b10_public_surfaces.py:84::_sin_trabajo_sin_commitar  «restaurar» y «borrar» son lo mismo
+> test_b10_public_surface.py:301::test_un_comando_inventado_en_el_snapshot_no_pasa  la direccion que faltaba
+> test_b10_public_surface.py:139::test_los_simbolos_reexportados_son_los_mismos_objetos  reexportar, NO copiar
+>
+> NOTA SOBRE LO QUE NO SE CITA: `core/__init__.py` —donde vive la superficie y
+> la reexportacion por identidad— NO aparece en la tabla de citas, y es a
+> proposito. El guard de WI-92 resuelve una cita por BASENAME, y hay
+> CATORCE `__init__.py` en el arbol: la cita seria ambigua y el guard la
+> rechaza. Citar el fichero por su ruta completa tampoco vale, porque la
+> busqueda es por nombre de fichero. La propiedad —la superficie es la
+> UNION de los tres `__all__` y los simbolos se reexportan por identidad— la
+> comprueban `test_b10_public_surface.py::test_la_superficie_es_la_union_de_los_tres_modulos`
+> y `::test_los_simbolos_reexportados_son_los_mismos_objetos`, que leen el
+> modulo de verdad.
+>
+> ---
+>
 > **Bloque 2026-10-04 (B9) — El gate de 1.0 deja de ser una lista en prosa.**
-> Versión activa `0.28.1.dev0`; último tag `v0.28.1`.
+> (cerrado; ver arriba el bloque vivo B10)
 >
 > **B9: `ROADMAP.md` dice, textual, que `v1.0.0` solo existe cuando se
 > cumplan TODAS sus propiedades, y a continuacion lista veinte. Era la
@@ -113,9 +179,9 @@
 > measure_b9_gate_1_0.py:201::_preguntas          el marcador se reconoce por forma
 > measure_b9_gate_1_0.py:319::_veredicto_de_hoja   cero preguntas leidas = OPEN
 > measure_b9_gate_1_0.py:177::_pasaron             se cuentan los `passed`, no `deselected`
-> measure_b9_gate_1_0.py:659::_comandos_de_la_cli  importa el parser, no lo adivina
-> measure_b9_gate_1_0.py:724::evaluar             una sin predicado = NO_MEDIBLE
-> measure_b9_gate_1_0.py:758::listo_para_1_0       NO_MEASURABLE tambien impide 1.0
+> measure_b9_gate_1_0.py:698::_comandos_de_la_cli  importa el parser, no lo adivina
+> measure_b9_gate_1_0.py:758::evaluar             una sin predicado = NO_MEDIBLE
+> measure_b9_gate_1_0.py:792::listo_para_1_0       NO_MEASURABLE tambien impide 1.0
 > platform/journal.py:75::modo_de_journal          LECTURA, y por eso no pide lock
 > platform/journal.py:85::asegura_wal             releer y dormir entre reintentos
 > platform/journal.py:62::INTENTOS_WAL             tres, y el por que esta escrito

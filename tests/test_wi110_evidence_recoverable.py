@@ -373,10 +373,20 @@ def test_la_receta_no_cambio() -> None:
     certificaciones de WI-101 a WI-109 sigan valiendo. Un cambio aqui
     invalidaria todas a la vez, asi que se fija con un test: el
     digest es parte del contrato de CI.
+
+    B10 anadio la etapa `public-surfaces` y actualizo el digest A
+    PROPOSITO. El mensaje de este test dice exactamente eso: si cambias
+    la receta, el digest hay que actualizarlo a proposito y las
+    certificaciones anteriores quedan reinterpretadas. Ese es el
+    contrato, y por eso el digest se cambia con el motivo escrito al
+    lado y no en silencio.
     """
     import hashlib
 
-    esperado = "7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42"
+    # 7541ced5... era el digest con las ocho etapas. B10 anadio
+    # `public-surfaces` (nona), el guard WI-98 lo exigio al descubrir el
+    # checker huerfano, y el digest paso a de3fbf76... al registrarlo aqui.
+    esperado = "de3fbf7618c584fda952ef9febba2c9cdc97e4dda7dcdbb36d0af78bb2c176c4"
     real = hashlib.sha256((RAIZ / ".pipeline.kts").read_bytes()).hexdigest()
     assert real == esperado, (
         f"`.pipeline.kts` cambio: {real}\n"

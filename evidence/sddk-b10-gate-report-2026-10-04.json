@@ -1,0 +1,103 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B10",
+  "instrumento": "scripts/measure_b9_gate_1_0.py",
+  "antes": {
+    "PASS": 13,
+    "OPEN": 6,
+    "NO_MEASURABLE": 1
+  },
+  "despues": {
+    "PASS": 15,
+    "OPEN": 4,
+    "NO_MEASURABLE": 1
+  },
+  "listo_para_1_0": false,
+  "total_propiedades": 20,
+  "cerradas_por_b10": [
+    "resource/controller API estable",
+    "CLI estable"
+  ],
+  "propiedades": [
+    {
+      "nombre": "roadmap/state/docs coherentes",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "resource/controller API estable",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "blueprint legacy completamente probado",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "Graph Diff Gate operativo",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "runtime real certificado",
+      "veredicto": "OPEN"
+    },
+    {
+      "nombre": "ontology extensible",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "crash/recovery real certificado",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "provenance fuerte",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "concurrencia real certificada",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "capabilities deterministas",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "core sin dependencias de impl. externa",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "CLI estable",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "TUI operacional",
+      "veredicto": "NO_MEASURABLE"
+    },
+    {
+      "nombre": "migrations probadas",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "pack/controller lifecycle",
+      "veredicto": "OPEN"
+    },
+    {
+      "nombre": "backups/restore probados",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "upgrade desde releases soportadas",
+      "veredicto": "OPEN"
+    },
+    {
+      "nombre": "security/threat model actualizado",
+      "veredicto": "OPEN"
+    },
+    {
+      "nombre": "distribution reproducible",
+      "veredicto": "PASS"
+    },
+    {
+      "nombre": "UAT agent-first completa",
+      "veredicto": "PASS"
+    }
+  ]
+}
