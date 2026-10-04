@@ -14,6 +14,129 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.28.1] - 2026-10-04 — el gate de 1.0 deja de ser una lista en prosa
+
+Medido con `scripts/measure_b9_gate_1_0.py`, que **deriva** las veinte
+propiedades del propio `ROADMAP.md` y ejecuta un predicado por cada una:
+
+```
+13 PASS · 6 OPEN · 1 NO_MEASURABLE · 0 NO_MEDIBLE
+listo_para_1_0: false
+```
+
+`ROADMAP.md` decía, textual, que `v1.0.0` solo existe cuando se cumplan
+*todas* sus propiedades, y listaba veinte. Era la afirmación más fuerte
+del repositorio y la única sin nada que la comprobara. El conjunto se
+deriva y no está escrito en el script, así que una propiedad que el
+instrumento no sepa medir sale como `NO_MEDIBLE` en vez de pasar en
+verde: anadir una línea al roadmap no la convierte en un PASS por olvido.
+
+### Defecto de producción corregido — el que la medición destapó
+
+Medir «concurrencia real certificada» salió `OPEN`. En detalle: **3 de 8
+hijos muertos y 50 de 80 filas escritas**.
+
+La causa era el defecto que B2 abrió y no cerró. `Storage.__init__`
+ejecutaba `PRAGMA journal_mode = WAL` en cada apertura; el PRAGMA es
+idempotente y aun así **toma un lock de escritura para averiguar que no
+hace nada**. Con ocho procesos abriendo la misma base a la vez, uno moría
+con `database is locked` *antes de escribir una sola fila*, y sus
+escrituras se perdían sin excepción en el padre y sin log: el run
+«funcionaba» y solo le faltaba un evento.
+
+B2 lo había arreglado con un reintento. El reintento no bastaba:
+`journal_mode` **no honra el `busy_timeout` del `connect`** —devuelve
+`SQLITE_BUSY` de inmediato—, así que esperar era cosa del proceso y no
+del driver, y dos intentos seguidos caían en la misma ventana.
+
+`src/skillgraph/platform/journal.py` lo cierra en tres partes:
+
+- **Preguntar antes de cambiar.** `PRAGMA journal_mode` a secas es una
+  *lectura*, y una lectura no pide el lock exclusivo. Una base ya en WAL
+  —el caso normal, y el único que importa con concurrencia— no toca el
+  lock de escritura ni una vez.
+- **Releer entre reintentos**, para que el que pierde el cambio se salga
+  en vez de seguir peleando contra un modo que otro ya cambió.
+- **Dormir entre reintentos** (10 ms y 20 ms), que es lo que deja ganar a
+  alguien.
+
+Medido con el mismo escenario que antes fallaba: **40 rondas de ocho
+procesos abriendo una base nueva a la vez, sin un solo fallo**.
+
+### La segunda mitad: el solape era una carrera, no una concurrencia
+
+Lanzar ocho procesos en un bucle no los hace competir: los hace empezar,
+y cada uno tarda lo que tarde en arrancar el interprete e importar
+`skillgraph.platform.storage`. Medido: **4 de 20** corridas del módulo de
+concurrencia fallaban, y la que caía no era la del solape sino la de
+autores, porque un hijo había muerto sin que nadie se enterara —el test
+descarta el resultado de `_procesos`—.
+
+Ahora cada hijo escribe su fichero de «listo» y espera a que el padre
+abra la puerta, y el padre no abre hasta tenerlos a todos. El solape pasa
+a ser estructural. **0 de 20 y 0 de 25** donde antes eran 4 de 20.
+
+### Lo que impide 1.0, y por qué cada una pide cosas distintas
+
+| Propiedad | Por qué está abierta |
+|---|---|
+| resource/controller API estable | **Falta de certificación**: no hay superficie declarada contra la que comparar |
+| CLI estable | Ídem: 11 comandos y ningún `docs/cli-surface.json` que los fije |
+| runtime real certificado | Necesita `SG_UAT_REAL_PROVIDER=1` y una credencial; se ve en el `skip` del propio UAT |
+| pack/controller lifecycle | Trabajo, no defecto: `sg pack` expone `import`/`load`, no `install`/`update`/`remove` |
+| upgrade desde releases soportadas | No existe función de upgrade entre releases |
+| security/threat model actualizado | El ADR-0015 se aprobó describiendo un proyecto de 830 tests; hoy colecta 3176 |
+| TUI operacional | **NO_MEASURABLE**: «operacional» es una propiedad de una persona usando un terminal |
+
+`TUI operacional` no es un `OPEN` con mejor prensa. Declararla `PASS`
+sería la única forma de mentir, y no baja el veredicto igual que un
+`OPEN`: el roadmap dice *todas*.
+
+### Cuatro bugs del propio medidor, todos hacia el lado de mentir
+
+1. La hoja de B5 escribe `[CERRADO ]` con un espacio y la de B6
+   `[CERRADO]` sin él. Buscando el texto exacto, el predicado de
+   provenance leía **cero** preguntas y devolvía `PASS`. Un predicado que
+   pasa porque no leyó nada.
+2. `_migrations_probadas` buscaba la palabra «deselected» para detectar
+   que no se había ejecutado nada, y daba `OPEN` sobre un resumen que dice
+   `3 passed, 20 deselected`.
+3. Dos consultas al parser llamaban a `construir_parser()`, que no existe
+   —es `build_parser()`—, y el `ImportError` se comía en un `return ()`.
+   Dos veredictos falsos, ambos en la dirección de alarmar de más.
+4. B5 declara su P6 FUERA DE ALCANCE, y por el principio de siempre no
+   puede contar como abierta. El primer medidor la contaba.
+
+### Harness: 6 de 6, y tres fallos que eran de los guards
+
+`scripts/mutate_b9_gate_1_0.py`, 6 sondas cazadas con **6 causas
+distintas**. Tres de las seis salidas fueron fallos de los *guards*, no de
+las sondas: uno miraba que el proceso siguiera vivo (un hijo sin puerta lo
+sigue estando 30 ms), otro hacía `join()` del hilo **antes** de
+comprobar, y el tercero decía «ha salido un error» queriendo decir «ha
+salido **este** error» —con el error tragado, la excepción igualmente
+salía de `_migrate()`—. Los tres medían la mitad de lo que decían
+medir. Un 3/6 es un número honesto; un 6/6 sobre esos tests habría sido
+falso.
+
+**El harness se destruyó a sí mismo.** Restauraba con
+`git checkout --`, que restaura **del índice**, y con el arreglo sin
+commitear el primer `checkout` se llevó el arreglo entero: cinco sondas
+se quedaron sin texto que deformar. Lo peor es que **parecía funcionar**,
+con la base verde y la primera sonda cazada. «Restaurar» y «borrar» son
+la misma operación si no hay commit debajo, así que ahora se niega a
+empezar si encuentra cambios sin commitear en lo que va a restaurar.
+
+### Una paradoja que queda escrita
+
+El bloque entrega un módulo **nuevo** y un instrumento **nuevo**, y el
+SemVer dice `PATCH`. No es que la regla falle: `journal.py` viajar en un
+commit `fix(platform)` porque el cambio dominante era cerrar un defecto
+de producción. El SemVer lo deriva de los **tipos** de commit, no de su
+tamaño. El mismo trabajo, partido en un `feat` y un `fix`, habría salido
+MINOR. Queda en `rationale_b9` para que el próximo que lea «B9 fue un
+PATCH» sepa que fue consecuencia de cómo se commiteó.
+
 ## [0.28.0] - 2026-10-04 — el contrato de paquete, y lo que de él depende
 
 **El bloque B8, cerrado y verificado.** El gate enumera siete frentes.

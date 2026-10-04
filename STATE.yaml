@@ -608,7 +608,7 @@ tests:
   total: 3176   # BLOQUE B9: la cifra se escribe DESPUES del run, nunca antes. +11 sobre 3165, y el desglose esta MEDIDO, no estimado: con tests/test_b9_wal_lock.py APARTADO la suite colecta 3168 —los 8 suyos—, y de los 3 que faltan hasta 3176, 3 los genera el guard de wi47 al aparecer src/skillgraph/platform/journal.py (270 -> 273). QUE EL ARBOL SIN B9 COLECTE LO QUE B8 DECLARO SIGUE SIENDO LA COMPROBACION QUE LE DA SENTIDO AL NUMERO: si el +11 fuera una invencion, el 3165 de la fila anterior no saldria. ES LA CUARTA VEZ que la prediccion de B6 se cumple —«si el bloque crea modulos nuevos en src/, los guards se mueven»—, y por eso conviene no leerla al reves. CONTEXTO B8 (se conserva, ya no vivo): +77 sobre 3088 = 66 de test_b8_package_contract.py, 6 de wi47, 1 de WI-107 y 4 del guard de B0 que-viaja. CONTEXTO B7: +33 sobre 3055. CONTEXTO B6: +25 sobre 3030. CONTEXTO B5: +34 sobre 2996. CONTEXTO B4: +22 sobre 2974. OJO: el 18 que B3 declaro para test_b3_capability_seam.py ya no cuadra con el arbol, que colecta 12; se deja escrito y NO se corrige porque arreglarlo es medir B3, y un bloque que corrige la contabilidad de otro sin medirlo es el bloque que inventa cifras.
   passed: 2735
   duration_s: 241.57   # MEDIDO en la CI canonica de WI-108, run 2387c4cc-c624-4793-a8ef-1a83f3df72ea, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. El resumen es «2735 passed in 241.57s» SIN la palabra skipped, que es lo que el criterio nuevo de WI-108 exige. Bloque WI-107, run 332e09e6-ba0b-449e-908e-9686dd35a898, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. Criterio 6 (SHA-256 del .pipeline.kts) registrado en sesion: 7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42, sin drift desde 283da96 (WI-105). Bloque anterior WI-105: (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
-  package_version: "0.28.0.dev0"   # cuarto eslabon de la cadena de v0.28.0: HEAD ya NO esta en la etiqueta (hay commits por detras), luego el SemVer vuelve a ser `<tag>.dev0` (caso 2 del guard de release). Va a la par de __init__.py en el MISMO commit: un commit que bumpea uno y deja el otro viejo es el fallo que WI-109 sufrio, y el guard que lo cruza existe desde entonces.
+  package_version: "0.28.1"   # post-tag: HEAD esta EN la etiqueta v0.28.1, luego el SemVer es PURO (caso 1 del guard de release). Va a la par de __init__.py en el MISMO commit: un commit que bumpea uno y deja el otro viejo es el fallo que WI-109 sufrio.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1173,9 +1173,9 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.28.0
+  tag: v0.28.1
   fecha: 2026-10-04
-  semver_bump: MINOR
+  semver_bump: PATCH
   rationale_b6: >-
       BLOQUE B6 — Agent-first determinista, cerrado. SemVer DERIVADO con
       scripts/derive_semver.py: b/f/x/n/d 0/1/1/4/0, la regla pide MINOR ->
@@ -1303,6 +1303,46 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.28.1
+      fecha: 2026-10-04
+      sha: "5cc5436dcea4eb9125f1b44c9c3a2429de9b27e1"
+      nota: >-
+        B9 cerrado: el gate de 1.0 deja de ser una lista en prosa. ROADMAP.md decia, textual, que
+        v1.0.0 solo existe cuando se cumplan TODAS sus propiedades, y listaba veinte: era la
+        afirmacion mas fuerte del repositorio y la unica sin nada que la comprobara. MEDIDO con
+        scripts/measure_b9_gate_1_0.py, que DERIVA las veinte del propio roadmap y ejecuta un
+        predicado por cada una: 13 PASS, 6 OPEN, 1 NO_MEASURABLE, 0 NO_MEDIBLE, listo_para_1_0
+        false. EL CONJUNTO SE DERIVA y no esta escrito en el script, asi que una propiedad que no
+        sepa medir sale como NO_MEDIBLE en vez de pasar en verde. LO QUE DESTAPO NO ERA UN NUMERO:
+        medir «concurrencia real certificada» dio OPEN, y en detalle 3 de 8 hijos muertos con 50 de
+        80 filas. El defecto de produccion era el que B2 abrio y no cerro: PRAGMA journal_mode =
+        WAL en cada apertura es idempotente y aun asi TOMA UN LOCK DE ESCRITURA para averiguar que
+        no hace nada, y con ocho procesos a la vez uno moria con database is locked antes de
+        escribir, perdiendo sus escrituras sin excepcion en el padre. B2 lo arreglo con un
+        reintento y el reintento no bastaba, porque journal_mode NO honra el busy_timeout del
+        connect. CERRADO en src/skillgraph/platform/journal.py: preguntar el modo antes de cambiarlo
+        (una lectura no pide el lock), releer entre reintentos y dormir entre ellos. MEDIDO con el
+        escenario que antes fallaba, 40 rondas de ocho procesos abriendo una base nueva a la vez
+        sin un fallo. Y LA SEGUNDA MITAD: lanzar ocho procesos en un bucle no los hace competir,
+        luego los hijos ahora esperan en una puerta que el padre no abre hasta tenerlos a todos, y
+        MEDIDO 0 de 20 y 0 de 25 donde antes eran 4 de 20. CUATRO BUGS DEL PROPIO MEDIDOR, todos
+        hacia el lado de mentir: leer [CERRADO ] con espacio donde B6 lo escribe sin el y devolver
+        PASS sobre cero preguntas; buscar «deselected» para saber que no se ejecuto nada; llamar a
+        construir_parser() cuando es build_parser() y comerse el ImportError en un return (); y
+        contar como abierta la P6 de B5, que declara FUERA DE ALCANCE. HARNESS 6/6 con 6 causas
+        distintas, y tres de las seis salidas fueron fallos de los GUARDS y no de las sondas: uno
+        miraba que el proceso siguiera vivo, otro hacia join() del hilo antes de comprobar, y el
+        tercero decia «ha salido un error» queriendo decir «ha salido ESTE error», porque con el
+        error tragado la excepcion igualmente salia de _migrate(). Y EL HARNESS SE DESTRUYO A SI
+        MISMO: restauraba con `git checkout --`, que restaura DEL INDICE, y con el arreglo sin
+        commitear se llevo el arreglo entero y las cinco sondas siguientes se quedaron sin texto
+        que deformar — lo peor es que PARECIA funcionar, con la base verde y la primera sonda
+        cazada. «Restaurar» y «borrar» son la misma operacion si no hay commit debajo, y por eso
+        ahora se niega a empezar si encuentra cambios sin commitear en lo que va a restaurar. Y
+        UNA PARADOJA QUE QUEDA ESCRITA: el bloque entrega un modulo NUEVO y un instrumento NUEVO, y
+        el SemVer dice PATCH, porque journal.py viajar en un commit fix(platform) al ser el cambio
+        dominante un defecto de produccion. El SemVer lo deriva de los TIPOS de commit, no de su
+        tamano; el mismo trabajo partido en un feat y un fix habria salido MINOR.
     - tag: v0.28.0
       fecha: 2026-10-04
       sha: "cdc45475c19487368e34922b448ebe334da57740"
@@ -1735,6 +1775,54 @@ release:
       instruccion, no un veredicto de averia. Evidencia:
       scripts/measure_b7_operational_ux.py y
       scripts/mutate_b7_operational_ux.py.
+  rationale_b9: >-
+      BLOQUE B9 — El gate de 1.0 deja de ser una lista en prosa, cerrado.
+      SemVer DERIVADO con scripts/derive_semver.py desde v0.28.0:
+      b/f/x/n/d 0/0/2/6/0, la regla pide PATCH -> v0.28.1. Y CONTRADICE LO
+      QUE UNO ESPERARIA, asi que queda dicho aqui: el bloque entrega un
+      modulo NUEVO —src/skillgraph/platform/journal.py— y un instrumento
+      nuevo, y aun asi la regla lee PATCH. No es que la regla falle: es que
+      ese modulo via en un commit `fix(platform)` porque el cambio
+      dominante era cerrar un defecto de produccion. El SemVer lo deriva de
+      los TIPOS de commit, no de su tamano, y esa es la regla del repo. Si
+      el bloque se hubiera partido en dos commits, uno `feat` y otro `fix`,
+      la misma cantidad de trabajo habria salido MINOR. Se deja escrito
+      para que el proximo que lea «B9 fue un PATCH» sepa que fue una
+      consecuencia de COMO se commiteo, no de lo que entrego. MEDIDO con
+      scripts/measure_b9_gate_1_0.py, que DERIVA las veinte propiedades del
+      propio ROADMAP.md y ejecuta un predicado por cada una: 13 PASS, 6 OPEN,
+      1 NO_MEASURABLE, 0 NO_MEDIBLE, listo_para_1_0 false. LO QUE DESTAPO NO
+      ERA UN NUMERO: al medir «concurrencia real certificada» salio OPEN, y
+      en detalle 3 de 8 hijos muerios con 50 de 80 filas. El defecto de
+      produccion era el que B2 abrio y no cerro: `PRAGMA journal_mode =
+      WAL` en cada apertura es idempotente y aun asi TOMA UN LOCK DE
+      ESCRITURA para averiguar que no hace nada. B2 lo arreglo con un
+      reintento y el reintento no bastaba, porque journal_mode NO honra el
+      busy_timeout del connect. CERRADO preguntando el modo antes de
+      cambiarlo —una lectura, que no pide el lock—, releendo entre reintentos
+      y durmiendo entre ellos. MEDIDO con el escenario que antes fallaba:
+      40 rondas de ocho procesos abriendo una base nueva a la vez, sin un
+      fallo. Y la segunda mitad: lanzar ocho procesos en un bucle no los
+      hace competir, luego los hijos ahora esperan en una puerta que el
+      padre no abre hasta tenerlos a todos —0 de 20 y 0 de 25, donde antes
+      eran 4 de 20—. CUATRO BUGS DEL PROPIO MEDIDOR, todos hacia el lado de
+      mentir: leer `[CERRADO ]` con espacio donde B6 lo escribe sin el, y
+      devolver PASS sobre cero preguntas; buscar «deselected» para saber que
+      no se ejecuto nada; llamar a construir_parser() cuando es
+      build_parser() y comerse el ImportError en un return (); y contar como
+      abierta la P6 de B5, que declara FUERA DE ALCANCE. HARNESS 6/6 con 6
+      causas distintas, y tres de las seis salidas fueron fallos de los
+      GUARDS, no de las sondas: uno miraba que el proceso siguiera vivo,
+      otro hacia join() del hilo antes de comprobar, y el tercero decia «ha
+      salido un error» queriendo decir «ha salido ESTE error», porque con el
+      error tragado la excepcion igualmente salia de _migrate(). Y EL HARNESS
+      SE DESTRUYO A SI MISMO: restauraba con `git checkout --`, que restaura
+      DEL INDICE, y con el arreglo sin commitear se llevo el arreglo entero y
+      las cinco sondas siguientes se quedaron sin texto que deformar — lo
+      peor es que PARECIA funcionar, con la base verde y la primera sonda
+      cazada. «Restaurar» y «borrar» son la misma operacion si no hay commit
+      debajo, y por eso ahora se niega a empezar si encuentra cambios sin
+      commitear en lo que va a restaurar.
   rationale_b8: >-
       BLOQUE B8 — EL CONTRATO DE PAQUETE, cerrado y verificado. SemVer
       DERIVADO con scripts/derive_semver.py: desde v0.27.0, b/f/x/n/d
