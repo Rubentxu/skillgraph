@@ -213,7 +213,7 @@ def _sondas() -> tuple[Sonda, ...]:
             despues="        return self  # sonda M6: instalar no registra nada",
             esperados=frozenset(
                 {
-                    "TestElNucleoDelCiclo::test_el_registro_es_inmutable",
+                    "TestRetirarMarcaNoBorra::test_el_registro_es_inmutable",
                     "TestElCicloSeEjecuta::test_el_ciclo_completo_corre_de_punta_a_punta",
                 }
             ),
