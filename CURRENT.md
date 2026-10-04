@@ -1,6 +1,6 @@
 > **Bloque 2026-10-04 (B19) — «NO es reproducible» y «no he podido medirlo» son dos frases distintas.**
-> (vivo: implementado y commiteado en `5bfb2b5`, pendiente de certificar y publicar)
-> Versión activa `0.32.3.dev0`; último tag `v0.32.3`.
+> (cerrado y publicado en `v0.32.4`)
+> Versión activa `0.32.4.dev0`; último tag `v0.32.4`.
 >
 > **ESTE ES EL PRIMER BLOQUE DE LA SERIE QUE NO ES UNA PROPIEDAD FALSA.** B16 y
 > B17 abrieron propiedades que daban verde con el defecto presente. B18 endureció

@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B18** — La frontera del núcleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano
-> Versión activa `0.32.3.dev0` · último tag `v0.32.3` · 3312 tests · 16/16 UAT
+> Bloque vivo: **B19** — «NO es reproducible» y «no he podido medirlo» son la misma frase
+> Versión activa `0.32.4.dev0` · último tag `v0.32.4` · 3318 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
