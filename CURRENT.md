@@ -1,5 +1,5 @@
 > **Bloque 2026-10-04 (B18) — La frontera del núcleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano.**
-> (vivo: implementado y commiteado en `8ccc2c2`, pendiente de certificar y publicar)
+> (cerrado y publicado en `v0.32.3`)
 > Versión activa `0.32.3.dev0`; último tag `v0.32.3`.
 >
 > **ES LA CUARTA DE LAS SIETE QUE B15 NOMBRÓ**, y la que B17 dejó escrita como
