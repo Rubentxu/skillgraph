@@ -320,10 +320,18 @@ def main() -> int:
             print(f"  {linea}")
         return 2
 
-    suites = tuple(dict.fromkeys(s for sonda in SONDAS for s in sonda.suite))
-    print(
-        f"B16 · {len(SONDAS)} sondas sobre {len(SUITES_GATE) + len(SUITES_MIGRACION) + len(SUITES_CONCURRENCIA)} ficheros de test\n"
-    )
+    # MEDIDO: la primera version de esto era
+    # `tuple(dict.fromkeys(s for sonda in SONDAS for s in sonda.suite))`, que
+    # aplana las suites a CADENAS. `_colectados` hacia `objetivos[0]` sobre
+    # una cadena —o sea, "t"— y no encontraba ningun test, luego el harness
+    # se negaba con «la colecta no devolvio ningun test». Fallo cerrado, que
+    # es lo importante, pero es el sintoma de una causa que no era la que el
+    # harness mide: el mensaje habla de la colecta y el problema estaba en como
+    # se le pasaba la lista. Las suites se agrupan por IDENTIDAD, que es lo que
+    # hace hashable la tupla y lo que permite `_colectados(suite)` recibir lo
+    # que espera.
+    suites = tuple(dict.fromkeys(sonda.suite for sonda in SONDAS))
+    print(f"B16 · {len(SONDAS)} sondas sobre {len(suites)} ficheros de test\n")
 
     ids: set[str] = set()
     for suite in suites:
