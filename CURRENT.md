@@ -1,3 +1,94 @@
+> **Bloque 2026-10-04 (B13) — El modelo de amenaza AFIRMABA que no habia fuga. Y habia una.**
+> Versión activa `0.31.0.dev0` (ya fuera del tag `v0.31.0`); último tag
+> `v0.31.0`.
+>
+> **MEDIDO ANTES DE ESCRIBIR NADA** (`/tmp/b13_measure.py`): **0 de 5 preguntas
+> en PASS**. Y la primera no es documental. Se inserta un `DomainPack` del
+> tenant T1 en una base real, se pide desde T2, y **la fila de T1 vuelve**:
+> *T2 recibio `['dp-de-t1']`*. No es un analisis del SQL: es una fila que cruzo.
+>
+> **LA CAUSA, Y POR QUE NADIE LA VIO.** `platform/knowledge_repository.py:196::list_resources`
+> armaba el filtro sin parentesis. En SQL `AND` liga mas fuerte que `OR`, luego la
+> segunda mitad del `OR` se come el `tenant_id` **y** el `project_id`, y devuelve
+> cualquier fila de cualquier tenant con ese `kind`. Y **era alcanzable**:
+> `cli/support.py:299::_build_registry_for_project` llama
+> `list_resources(..., kind="DomainPack")`.
+>
+> **B11 ENCONTRO ESTE DEFECTO Y NO LO ARREGLO**, porque esquivarlo era la
+> decision correcta para su bloque: necesitaba aislamiento fila a fila, y por
+> eso lo comprobo asi. Lo que fallo es que la puerta se quedo abierta y el
+> ADR-0015 —que en S1 decia, textual, *«las queries filtran por tenant_id,
+> project_id en todos los paths verificados», estado OK* — la declaraba
+> CERRADA.
+>
+> > Un modelo de amenaza que llama `OK` a una fuga que existe no es un modelo
+> > caducado: es un modelo que dice lo contrario de la verdad.
+>
+> **LO QUE ENTRA.** (1) La fuga, **arreglada**: dos parentesis, con el porque
+> escrito en el propio metodo y no en un comentario que alguien puede borrar.
+> (2) Un guard **general** sobre el SQL que sale al motor, derivado por
+> `set_trace_callback`: ninguna lectura con un `OR` sin agrupar, y toda lectura
+> mencionando `tenant_id`. (3) Un contrasalto de **cobertura derivado del
+> arbol**: solo 4 superficies combinan `tenant_id` con un filtro `kind` —la
+> unica via por la que un `AND` se vuelve opcional— y una superficie nueva que
+> admita esa combinacion tiene que entrar en la lista.
+>
+> **EL GUARD MIDE LA CONSULTA, NO EL TEXTO.** La primera version recorria
+> literales y daba verde **con la fuga presente**, porque `WHERE` y `OR` estan
+> en literales distintos y la frase solo existe ensamblada. Un guard que
+> busca texto mide el texto.
+>
+> **EL ADR, ADEMAS, SE CONTRAIDIA A SI MISMO:** marcaba el adapter real
+> HTTP/LLM como «E1, sin implementar, fuera de alcance» y a la vez le
+> dedicaba una seccion S8 entera, marcandolo CERRADO. Y no nombraba tres
+> superficies que el producto tiene desde B8: los packs instalables —que
+> admiten contenido de fuera del proyecto, y es una frontera de confianza que
+> el modelo no mencionaba—, la carga de planes y bricks, y el registro de
+> instalaciones. Entran **S9 y S10**, con su amenaza y sus gaps, y una seccion
+> `Superficies` con una fila por cada uno de los **10 paquetes del arbol**,
+> cada una nombrando el fichero de test que la sostiene.
+>
+> **UN PREDICADO DEL GATE QUE MEDIA UNA FOTO.** La vigencia del modelo se
+> comprobaba **comparando un numero de tests**. Un numero caduca con cada
+> commit sin que nadie toque el analisis, y un gate que se pone rojo por
+> causas ajenas al objeto que vigila ensena a ignorarlo. Ahora el predicado
+> **EJECUTA** `tests/test_b13_threat_model.py` y decide por su resultado, y se
+> verifico **en las dos direcciones con causas distintas**: quitar la fila de
+> `packaging` de la tabla da `OPEN` con **1** fallo; reabrir la fuga da `OPEN`
+> con **3** fallos.
+>
+> **CITAS VERIFICADAS** (`fichero.py:LINEA::simbolo`, comprobadas por AST):
+>
+> | cita | que sostiene |
+> |---|---|
+> | `knowledge_repository.py:196::list_resources` | la superficie con la fuga, ya agrupada |
+> | `knowledge_repository.py:241::add_relation` | otra superficie que combina `kind` y `tenant_id` |
+> | `knowledge_repository.py:450::find_entity` | tercera |
+> | `knowledge_repository.py:640::list_resource_refs_for_run` | cuarta: son exactamente 4 |
+> | `test_b13_threat_model.py:39::_or_de_nivel_superior` | el predicado, sobre la consulta ensamblada |
+> | `test_b13_threat_model.py:92::TestLaFugaCrossTenant` | la fuga, **ejecutada**: T1 y T2 de verdad |
+> | `test_b13_threat_model.py:198::test_toda_superficie_con_filtro_de_kind_esta_cubierta` | contrasalto de COBERTURA, derivado del arbol |
+> | `test_b13_threat_model.py:214::test_ninguna_lectura_ejecuta_un_where_con_or_suelto` | el guard general sobre el SQL real |
+> | `test_b13_threat_model.py:251::test_el_predicado_ve_un_or_suelto_y_respeta_un_agrupado` | el contrasalto del propio predicado |
+> | `test_b13_threat_model.py:290::test_todo_paquete_del_arbol_tiene_fila_en_el_adr` | la tabla de superficies no se queda corta |
+> | `test_b13_threat_model.py:301::test_el_adr_no_declara_un_numero_de_tests_como_su_vigencia` | el ADR no repite el error del gate |
+> | `test_b13_threat_model.py:318::test_el_analisis_tiene_una_seccion_de_superficies` | la seccion se comprueba como ENCABEZADO, no como subcadena |
+> | `test_b13_threat_model.py:386::test_cada_superficie_nombra_una_evidencia_que_existe` | cada «OK» nombra su prueba, y existe |
+> | `test_b13_threat_model.py:421::test_el_adapter_no_puede_estar_fuera_de_alcance_y_cerrado` | la contradiccion, resuelta |
+> | `measure_b9_gate_1_0.py:614::_security_threat_model_actualizado` | el gate corre el guard y decide por su rc |
+> | `mutate_b13_threat_model.py:165::_sucios` | la suite verde NO es el arbol restaurado |
+> | `mutate_b13_threat_model.py:129::_colectados` | el harness rechaza arrancar si un diagnostico no existe |
+>
+> **LO QUE ESTE BLOQUE NO AFIRMA HABER MEDIDO.** Que la ausencia de un `OR`
+> suelto cubra el aislamiento entre tenants. El guard es una heuristica sobre
+> el texto de la consulta: no sabe de subtiles, ni de `LEFT JOIN` que
+> reintrodUCE filas, ni de funciones que construyan el filtro dentro. Lo que
+> si se sostiene es la fuga concreta, que se **ejecuta** contra dos tenants
+> reales, y que ninguna superficie nueva pueda entrar sin que su `kind` la
+> haga cubierta por el contrasalto de cobertura.
+>
+> ---
+>
 > **Bloque 2026-10-04 (B12) — La version del esquema era una constante, y por eso el upgrade era imposible.**
 > Versión activa `0.31.0.dev0` (ya fuera del tag `v0.31.0`); último tag
 > `v0.31.0`.

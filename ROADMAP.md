@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B12** — Upgrade entre releases
-> Versión activa `0.30.0.dev0` · último tag `v0.30.0` · 3254 tests · 16/16 UAT
+> Bloque vivo: **B13** — El modelo de amenaza que se sostiene
+> Versión activa `0.31.0.dev0` · último tag `v0.31.0` · 3270 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -62,6 +62,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B10** | Superficies públicas certificadas | Superficie declarada, versionada y sin moverse: núcleo y CLI |
 | **B11** | Ciclo de vida de packs | `install`/`update`/`remove`/`list` sobre el contrato de B8 |
 | **B12** | Upgrade entre releases | La versión del esquema es un hecho consultable, y subir una base vieja tiene nombre |
+| **B13** | El modelo de amenaza que se sostiene | Cada «cerrado» del STRIDE nombra su prueba, y hay una fuga cross-tenant que se arregla |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -717,3 +718,74 @@ el error 32 de WI-113 repetido, y se detectó porque el harness reporta
 `[SIN SONDA]` en vez de contarla como verde.
 
 **Resultado:** gate de 1.0 en **17 PASS / 2 OPEN / 1 NO_MEASURABLE**.
+
+---
+
+## B13 — El modelo de amenaza que se sostiene
+
+**La tercera y última de las `OPEN` que no dependen de credencial ni de
+persona.** El veredicto del gate de 1.0 decía, textual: *«el ADR se aprobó
+describiendo un proyecto de 830 tests y 17 releases; el modelo de amenaza
+describe un producto que ya no es este»*. Se podía leer como «actualiza las
+cifras». **La medición dijo que las cifras son lo de menos.**
+
+**Medido antes de escribir una línea** (`/tmp/b13_measure.py`): **0 de 5
+preguntas en PASS**. Y la primera no es documental: se inserta un `DomainPack`
+del tenant T1 en una base real, se pide desde T2, y **la fila de T1 vuelve**.
+Medido: *T2 recibió `[dp-de-t1]`*. No es un análisis del SQL: es una fila que
+cruzó.
+
+**La causa, y por qué nadie la vio.** `platform/knowledge_repository.py:211`
+armaba el filtro sin paréntesis. En SQL `AND` liga más fuerte que `OR`, luego
+la segunda mitad del `OR` se come el `tenant_id` **y** el `project_id`, y
+devuelve cualquier fila de cualquier tenant con ese `kind`. Y **era alcanzable**:
+`cli/support.py:299` llama `list_resources(..., kind="DomainPack")`.
+
+**B11 encontró este defecto y no lo arregló**, porque esquivarlo era la
+decisión correcta para su bloque: necesitaba aislamiento fila a fila, y por eso
+lo comprobó así. Lo que falló es que la puerta se quedó abierta y el ADR-0015,
+que en S1 decía *«las queries filtran por tenant_id, project_id en todos los
+paths verificados»*, la declaraba **CERRADA**.
+
+> Un modelo de amenaza que llama `OK` a una fuga que existe no es un modelo
+> caducado: es un modelo que dice lo contrario de la verdad.
+
+**Cerrado:**
+
+1. **La fuga, arreglada** — dos paréntesis, con el porqué escrito en el propio
+   método y no en un comentario que alguien puede borrar.
+2. **Un guard general sobre el SQL que sale al motor**, derivado por
+   `set_trace_callback`: exige que ninguna lectura tenga un `OR` sin agrupar y
+   que toda lectura mencione `tenant_id`. La primera versión recorría
+   literales y daba verde **con la fuga presente**, porque `WHERE` y `OR` están
+   en literales distintos: el guard medía el texto, no la consulta.
+3. **Un contrasalto de cobertura derivado del árbol**: solo 4 superficies
+   combinan `tenant_id` con un filtro `kind`, y son la única vía por la que un
+   `AND` se vuelve opcional. Una superficie nueva que admita esa combinación
+   tiene que entrar en la lista, y el guard obliga.
+4. **S9 y S10 en el ADR**, con su amenaza y sus gaps: los packs instalables
+   admiten contenido de fuera del proyecto, y es una frontera de confianza que
+   el modelo no mencionaba.
+5. **Una sección `Superficies` con una fila por cada uno de los 10 paquetes**,
+   cada una nombrando el fichero de test que la sostiene.
+
+**El predicado del gate, reescrito.** La vigencia del modelo se medía
+**comparando un número de tests**. Un número es una foto que caduca con cada
+commit sin que nadie toque el análisis, y un gate que se pone rojo por causas
+ajenas al objeto que vigila enseña a ignorarlo. Ahora el predicado **ejecuta**
+`tests/test_b13_threat_model.py` y decide por su resultado, verificado **en las
+dos direcciones y con causas distintas**: quitar la fila de `packaging` de la
+tabla da `OPEN` con 1 fallo; reabrir la fuga da `OPEN` con 3 fallos.
+
+**Lo que el ADR se decía a sí mismo, y ya no dice.** Marcaba el adapter real
+HTTP/LLM como «E1, sin implementar, fuera de alcance» y a la vez le dedicaba
+una sección S8 entera, marcándolo CERRADO. La contradicción está resuelta y
+escrita con sus dos mitades.
+
+**Harness:** `scripts/mutate_b13_threat_model.py`, 5 sondas, cada una con su
+conjunto de tests diagnósticos.
+
+**Resultado:** gate de 1.0 en **18 PASS / 1 OPEN / 1 NO_MEASURABLE**. Lo que
+queda `OPEN` es el runtime real certificado, que necesita
+`SG_UAT_REAL_PROVIDER=1` y una credencial real: no se resuelve desde el
+repositorio.

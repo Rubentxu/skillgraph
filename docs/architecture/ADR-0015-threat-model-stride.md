@@ -1,6 +1,9 @@
 # ADR-0015 — Modelo de amenaza (STRIDE) y trazabilidad defensiva
 
 Estado: aceptado (sesion 2026-09-25, ciclo STEWARDSHIP-T3-001).
+Revisado en B13 (2026-10-04): se corrigio una fuga cross-tenant que este
+documento declaraba cerrada, y la vigencia paso de medirse con una cifra de
+tests a medirse con la tabla `## Superficies`, derivada del arbol.
 
 ## Contexto
 
@@ -265,6 +268,11 @@ declaraba entero y se aplicaba con `CREATE TABLE IF NOT EXISTS`.
   verifican que la CLI NO expone credenciales, requiere env vars, y
   rechaza valores invalidos con `ValidationError`.
 - `audits/t3-threat-model-2026-09-25.md`: audit inicial con 14 tests.
+- `tests/test_b13_threat_model.py` (B13, 17 tests, cinco conjuntos disjuntos):
+  ejecuta el aislamiento entre tenants, vigila el SQL que sale al motor
+  (`set_trace_callback`), deriva la tabla `## Superficies` del arbol y
+  comprueba que el modelo no se contradiga. Es lo que convierte este
+  documento de una prosa optimista en algo que se sostiene.
 
 ## Consecuencias
 
@@ -273,8 +281,14 @@ declaraba entero y se aplicaba con `CREATE TABLE IF NOT EXISTS`.
 - Los **gaps** abiertos quedan explicitados con el esfuerzo estimado.
 - El operador puede **vetar** el modelo de atacante asumido si su
   contexto difiere (ej. SaaS en vez de local-first).
-- **No introduce cambios de codigo**: el ADR documenta el estado real
-  sin modificar comportamiento.
+- **B13 SI introdujo cambios de codigo**, y esta linea de consecuencias
+  cambio al revisarlo. Antes afirmaba que el ADR se limita a documentar el
+  estado real sin tocar comportamiento, y era verdad hasta que B13
+  **encontro una fuga cross-tenant viva** —S1 la declaraba cerrada— y la
+  arreglo. Un documento que se declara incapaz de tocar el codigo mientras
+  el mismo documento senala una correccion de aislamiento es la misma clase
+  de mentira que S1: decir lo contrario de la verdad. Ver
+  `tests/test_b13_threat_model.py::TestElModeloNoSeContradice`.
 - Tests adicionados son **verificables** (la invariante se mantiene o
   rompe visiblemente).
 

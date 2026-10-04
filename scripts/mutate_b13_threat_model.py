@@ -250,6 +250,24 @@ SONDAS: tuple[Sonda, ...] = (
             }
         ),
     ),
+    Sonda(
+        nombre="M6_el_adr_vuelve_a_decir_que_no_toca_codigo",
+        fichero="docs/architecture/ADR-0015-threat-model-stride.md",
+        antes=(
+            "- **B13 SI introdujo cambios de codigo**, y esta linea de consecuencias\n"
+            "  cambio al revisarlo. Antes afirmaba que el ADR se limita a documentar el\n"
+        ),
+        despues=(
+            "- No introduce cambios de codigo: el ADR documenta el estado real sin\n"
+            "  modificar comportamiento. Esta linea cambio al revisarlo. Antes afirmaba\n"
+            "  que el ADR se limita a documentar el\n"
+        ),
+        esperados=frozenset(
+            {
+                "TestElModeloNoSeContradice::test_el_adr_no_puede_decir_que_no_toca_codigo_mientras_lo_toca",
+            }
+        ),
+    ),
 )
 
 

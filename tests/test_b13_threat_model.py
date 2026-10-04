@@ -316,9 +316,20 @@ class TestElModeloEnumeraTodaSuperficieDelArbol:
         )
 
     def test_el_analisis_tiene_una_seccion_de_superficies(self) -> None:
-        """Sin seccion legible no hay nada que el gate pueda medir sin un numero."""
+        """Sin seccion legible no hay nada que el gate pueda medir sin un numero.
+
+        El encabezado se compara como LINEA COMPLETA, no como subcadena: con
+        un `in` pelado, `## Superficies retiradas` daba verde, y la sonda M4
+        del harness —que renombra el encabezado para deshacerlo— caia por los
+        tests de la tabla y no por este. El harness lo|reporta `[OTRA CAUSA]`
+        en vez de `[CAZADA]`, que es exactamente para lo que existe.
+
+        Tampoco cuenta la mencion en prosa del Contexto, que va dentro de
+        acentos graves y no es un encabezado.
+        """
         texto = ADR.read_text(encoding="utf-8")
-        assert "## Superficies" in texto, (
+        encabezado = re.findall(r"^## Superficies\s*$", texto, re.MULTILINE)
+        assert encabezado, (
             "el ADR necesita una seccion de superficies que el gate pueda leer; "
             "sin ella la vigencia solo se puede medir con un numero, y un numero "
             "se pudre"
@@ -437,3 +448,28 @@ class TestElModeloNoSeContradice:
                     f"EXISTE en el arbol. Lo que se declara fuera de alcance no se "
                     f"analiza, y lo que no se analiza es donde se cuelan las fugas."
                 )
+
+    def test_el_adr_no_puede_decir_que_no_toca_codigo_mientras_lo_toca(self) -> None:
+        """La tercera forma de la misma contradiccion, y la mas discreta.
+
+        Las consecuencias del ADR decian, textual, «**No introduce cambios de
+        codigo**: el ADR documenta el estado real sin modificar
+        comportamiento». Era verdad cuando se escribio y dejo de serlo en el
+        bloque que lo reviso: B13 arreglo una fuga de aislamiento entre
+        tenants precisamente porque este documento la declaraba cerrada.
+
+        No se busca la frase exacta sino la AFIRMACION, porque el modo de
+        fallar no es que la frase vuelva, es que alguien la reescriba con
+        otras palabras y siga diciendo lo mismo. Un guard por literal solo
+        vigila el literal.
+        """
+        texto = ADR.read_text(encoding="utf-8")
+        consecuencias = re.search(r"## Consecuencias(.+?)(?=\n##\s)", texto, re.S)
+        assert consecuencias is not None, "el ADR no tiene seccion de consecuencias legible"
+        afirma = re.search(r"[Nn]o introduce cambios de c[oó]digo", consecuencias.group(1))
+        assert afirma is None, (
+            "las consecuencias del ADR afirman que no introduce cambios de codigo. "
+            "B13 arreglo una fuga cross-tenant que este mismo documento declaraba "
+            "cerrada, luego la afirmacion es falsa, y es la misma clase de mentira "
+            "que S1: un documento que describe un estado que ya no existe."
+        )
