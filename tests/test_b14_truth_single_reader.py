@@ -251,19 +251,20 @@ def _inyectado(texto: str) -> object:
 # =====================================================================
 
 
-def _rechaza(estado_nuevo: str, debe_mencionar: str, que: str) -> None:
-    """El verificador RECHAZA un estado con la forma `estado_nuevo`.
+def _rechaza(estado_nuevo: str, campo: str, que: str) -> None:
+    """El verificador rechaza un valor mal tipado POR EL TIPO, y lo dice.
 
-    «Rechazar» tiene tres salidas legitimas y las tres valen, pero solo si el
-    verificador DIJO por que:
+    **Por que se exige el `ilegible` y no basta `coherente: false`.** La
+    version anterior de este helper aceptaba tres salidas, y con la
+    comprobacion de tipo deshabilitada los tres tests de tipo seguian en
+    verde: `total: 'muchos'` no cuadra con el recuento real, luego el
+    verificador decia `coherente: false` — por el motivo equivocado — y la
+    asercion debil lo contaba como aprobado. MEDIDO con la sonda M3 del
+    harness: `if False:` en la comprobacion de tipo y `3 passed`.
 
-    1. `ilegible`, nombrando el campo — la via de la excepcion.
-    2. `coherente: false`, cuando el valor se pudo leer pero no cuadra.
-    3. salida ilegible — el verificador fallo al leer el estado.
-
-    Lo que NO vale es un `coherente: true`, ni un crash mudo sin decir nada:
-    un verificador que se rompe con un tipo raro no esta rechazando el tipo,
-    esta roto, y las dos cosas se parecen en el codigo de salida.
+    Un verificador al que se rompe una cosa y sigue dando «esto no cuadra» no
+    ha comprobado NADA de la cosa que se rompio. Por eso el rechazo tiene que
+    ser el del TIPO: `ilegible` nombrando el campo.
     """
     with _EstadoRestaurado(), _inyectado(estado_nuevo):
         salida = _ejecuta()[1]
@@ -272,12 +273,16 @@ def _rechaza(estado_nuevo: str, debe_mencionar: str, que: str) -> None:
             f"{que}: el verificador no devolvio JSON. Si fallo al LEER el estado, "
             f"tiene que decirlo con «ilegible», no desaparecer."
         )
-    if "ilegible" in salida:
-        assert debe_mencionar in salida["ilegible"], (
-            f"{que}: el verificador lo rechazo pero sin nombrar el campo: {salida['ilegible']!r}"
+    if "ilegible" not in salida:
+        raise AssertionError(
+            f"{que}: el verificador NO rechazo el valor por su tipo. Djo: {salida}.\n"
+            f"Si hay una contradiccion de otro tipo, el estado no cuadra por otra "
+            f"razon y este test no midio lo que dice medir. Lo que se espera es un "
+            f"«ilegible» que nombre {campo!r}."
         )
-        return
-    assert salida.get("coherente") is not True, f"{que}: el verificador dijo coherente. {salida}"
+    assert campo in salida["ilegible"], (
+        f"{que}: el verificador lo rechazo pero sin nombrar el campo: {salida['ilegible']!r}"
+    )
 
 
 # ====================================================================
