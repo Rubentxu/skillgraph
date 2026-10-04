@@ -1,0 +1,75 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B17",
+  "titulo": "El ciclo de vida de los packs se decidia contando nombres, y el instrumento que lo ejecutaba estaba en disco sin cablear",
+  "release": "0.32.2",
+  "que_es_y_que_no_es": "Es la TERCERA de las siete propiedades que B15 nombro, y la mas facil de las que quedan por una razon que no es de estilo: el instrumento que hace el trabajo ya estaba escrito y no se estaba usando. No reescribe Q1 del instrumento de B11, porque Q1 es una condicion necesaria y barata y lo que no puede hacer es BASTAR. No toca el par de propiedades de UAT, cuya PROPIEDAD es cierta por otra via. No toca TUI operacional, que es de una persona.",
+  "hallazgo_1_la_propiedad_se_decidia_por_nombres": {
+    "que": "pack/controller lifecycle decia «`sg pack` expone el ciclo completo: ['import', 'install', 'list', 'load', 'remove', 'update']», y su unico trabajo era mirar si tres CADENAS estaban en un dict que sale del parser.",
+    "medido": {
+      "deformacion": "se neutraliza el `if` de la DECISION de install —el que levanta ValidationError cuando motivos_de_incompatibilidad devuelve motivos— y NO es_compatible, que es la verdad del dominio",
+      "por_que_no_se_toca_es_compatible": "romper las dos no mediria una sola cosa, mediria «que pasa si el contrato no existe», que es otro bloque",
+      "gate_antes": "PASS",
+      "instrumento_b11_q1_antes": "PASS",
+      "instrumento_b11_q2_antes": "OPEN",
+      "resumen_instrumento": "OPEN: 1 · PASS: 4",
+      "gate_despues": "OPEN, y la evidencia NOMBRA la pregunta que cae",
+      "sobre": "copias del arbol en directorios temporales, con el repo real intacto"
+    },
+    "por_que_no_es_una_mejora_de_forma": "La propiedad declarada es «el ciclo de vida que B8 nombro es install/update/remove», y eso no es un nombre: es que install RECHAZA lo que no encaja, que update exige que la version SUBA, y que remove de algo que no esta lo diga en vez de reventar. Con el ciclo roto el gate daba PASS, luego el ciclo roto no era un ciclo y la propiedad lo decia igualmente."
+  },
+  "hallazgo_2_el_predicado_era_q1_del_propio_instrumento": {
+    "que": "El predicado del gate ERA Q1 de measure_b11_pack_lifecycle.py, y Q1 es la mas debil de las cinco preguntas, porque las otras cuatro EJECUTAN la CLI de verdad en un proyecto temporal.",
+    "por_que_es_incomodo": "El gate llevaba tiempo decidiendo «el ciclo de vida existe» con la unica de las cinco preguntas que no lo prueba. Q1 lo sabe y lo dice en su docstring —«un predicado que comprueba tres nombres fijos dice cumple el dia que alguien escriba los tres en el parser sin que exista el ciclo entero»— y se justifica con que se mide contra el parser y no contra una lista escrita a mano. Es mejor que una lista, y sigue siendo una lista.",
+    "decision": "Q1 NO se toca en este bloque. «¿existen los comandos?» es una condicion necesaria y es barata; lo que no puede hacer es BASTAR, y con las cinco en AND deja de bastar. Cambiarla sin un instrumento que la reemplace seria perder cobertura, y ese es un bloque distinto. Queda escrito en el codigo, en el docstring del predicado y en el next_workitem."
+  },
+  "hallazgo_3_un_defecto_propio_cazado_por_el_guard_al_escribirlo": {
+    "que": "Con el instrumento sin arrancar, el predicado decia «se ha EJECUTADO para saberlo» y «Caen 0 de 0 preguntas». No se habia ejecutado nada: rc=2, «can't open file».",
+    "por_que_importa": "Publicaba una ejecucion que no habia ocurrido, con un recuento que era cero sobre cero, y con la autoridad de quien si la hace. Es la misma clase de defecto que B14 cerro en tests_colectados(), y lo escribi yo unas lineas antes de escribir el test que lo caza.",
+    "el_arreglo": "Se separan dos preguntas que no se pueden sumar: «¿el ciclo de vida se sostiene?» —que se responde OPEN— y «¿puedo medir si se sostiene?» —que se responde NO_MEASURABLE—. La distincion es rc != 0 CON preguntas parseadas frente a rc != 0 SIN preguntas."
+  },
+  "el_harness_y_las_que_no_median": {
+    "sondas": 6,
+    "cazadas": 6,
+    "causas_distintas": 6,
+    "la_sonda_que_importa": "M6 no deforma el gate: deforma el INSTRUMENTO que el gate ejecuta, neutralizando Q2 —la pregunta que EJECUTA install con un pack incompatible— y exige que el gate caiga. Si el unico defecto posible fuera «el gate dejo de mirar», bastaria comprobar que el gate llama al instrumento, y un guard asi solo sabe mirar su propio telefono. M6 cayo, luego la cadena decision -> instrumento -> gate se sostiene entera y no solo el cable.",
+    "las_tres_que_hacen_lo_mismo_por_el_otro_lado": "M1 quita la ejecucion; M4 la deja ejecutar pero ya no mira su codigo de salida; M3 y M5 la dejan ejecutar y mirar el codigo pero pierden el recuento de preguntas. Las cuatro hacen que la propiedad se quede verde con el ciclo roto, y por eso son cuatro y no una: un guard que solo sabe cazar una forma de mentir mide una forma de mentir.",
+    "dos_sondas_del_propio_arnes_que_no_median": [
+      "M1 en su primera version anadia una comprobacion de nombres DELANTE de la llamada y dejaba SEGUIR AL INSTRUMENTO, luego media otra cosa y daba 5 de 5 en verde con el defecto puesto. Es el error 32 de B13: una sonda que no desactiva lo que dice desactivar. Se corrigio poniendo el return ANTES de la llamada.",
+      "las anclas de M1 NO EXISTIAN: partidas en trozos de cadena, el nombre del fichero se quedo sin comillas. La autocomprobacion dijo «el ancla aparece 0 veces» y se negO a arrancar. Sin ella, seis deformaciones que no deformaban nada habrian salido como 6 de 6."
+    ],
+    "por_que_importa_que_el_arnes_se_autocompruebe": "De las cuatro sondas de B17 y B16 que no median asi, todas las escribio la misma persona que las va a contar. Ese es el argumento de por que la autocomprobacion se exige a si misma y no se ofrece."
+  },
+  "resultado": {
+    "gate_de_1_0": "18 PASS / 1 OPEN / 1 NO_MEASURABLE, sin cambios de veredicto",
+    "la_propiedad_de_este_bloque": "PASS, y su clase pasa de derivada a EJECUTADA, y lo reporta el propio gate",
+    "suite": "3303 passed, 3 skipped, 0 failed",
+    "tests_total": "3301 -> 3306, +5, fichero nuevo entero",
+    "harness": "6/6 con 6 causas, y 2 sondas propias cazadas por su autocomprobacion antes de contar"
+  },
+  "lo_que_queda_abierto_y_de_que_clase_es": {
+    "credencial": "runtime real certificado exige SG_UAT_REAL_PROVIDER=1 y ANTHROPIC_API_KEY u OPENAI_API_KEY. No se resuelve desde el repositorio.",
+    "persona": "TUI operacional es una propiedad de alguien usando un terminal. No se resuelve desde el repositorio.",
+    "las_tres_derivada_que_quedan": [
+      "core sin dependencias de impl. externa — su evidencia dice «5 modulos» sobre un paquete que tiene mas, y una cifra que no esta justificada a la vista es la misma clase de cosa que B16 cerro. Primera que habria que mirar.",
+      "blueprint legacy completamente probado — comparte el predicado debil de UAT con la siguiente; su PROPIEDAD es CIERTA por otra via, tests/uat_audit.py tiene una funcion completa por UAT con directorios temporales, la CLI real y aserciones, metida en CI.",
+      "UAT agent-first completa — idem. B15 lo midio y lo dejo anotado con su debilidad, que es informacion y no deuda fingida."
+    ],
+    "la_clase_de_trabajo_que_si_se_puede_y_no_necesita_credenciales": "Comprobar que los instrumentos que YA existen siguen midiendo lo que dicen. Tres bloques seguidos se encontraron los suyos al escribirlos."
+  },
+  "shas": {
+    "nota": "Tomados de git con git log, no escritos a mano. Una entrada con un sha inventado es provenance falsa.",
+    "commits_del_bloque": [
+      "f6a3307 fix(gate): el ciclo de vida de los packs se decide EJECUTANDO, no contando nombres",
+      "f5497d9 chore(gate): el harness de B17, con una sonda que deforma el INSTRUMENTO",
+      "d6961ac fix(gate): las anclas de M1 no existian, y el arnes se negaba a contarlas",
+      "b5cbf5c docs(state): B17 vivo, con lo que el bloque se encontro en si mismo",
+      "b6918b1 build(release): la version pura de v0.32.2, que existe para el tag",
+      "ba92d4e chore(release): el estado de v0.32.2, con su etiqueta ya creada",
+      "f36dd1d docs(state): B17 cerrado y publicado en v0.32.2, con lo que queda nombrado"
+    ],
+    "tag": "v0.32.2",
+    "sha_del_tag": "b6918b1835816a5d3ce8377908c94431727f6adc",
+    "semver_derivado": "b/f/x/n 0/0/2/7 -> PATCH, con la herramienta marcando la etiqueta como ok"
+  }
+}
