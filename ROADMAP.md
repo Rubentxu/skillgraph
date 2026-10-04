@@ -387,6 +387,11 @@ declaraciones de `--format` en siete módulos de comando, y ningún símbolo en
 `src/` que expusiera render. La palabra «las mismas» del gate no tenía a qué
 referirse.
 
+**CERRADO Y PUBLICADO como `v0.27.0`** (MINOR por `0/1/1/2/0`, derivado con
+`scripts/derive_semver.py`, ninguno con marcador de ruptura). Certificación:
+**3085 passed, 3 skipped declarados, 0 failed**. `tests.total` 3088, con el
+desglose medido. Entrega `0d9d423`, tag `v0.27.0` en `683dbfc`.
+
 **Cerrado:** `src/skillgraph/presentation/` con `TableView` y `DetailView` como
 superficie de render, las diez proyecciones puras en `widgets.py`, y
 `--format {text,json}` en `runs list` y `runs show` sobre un único `_emit`.
@@ -395,6 +400,12 @@ superficie de render, las diez proyecciones puras en `widgets.py`, y
 de un terminal y de una interacción humana que el CI no tiene. Lo que sí es
 comprobable sin humano —la pieza de abajo— es lo que este bloque mide; que la
 TUI sea usable se mide cuando haya alguien usándola.
+
+**Estado del ciclo**: `p-b7740b96d79ec013/b7` está en `BLOCKED`, no `CLOSED`.
+Los dos gates de deuda no son evaluables en esta build de SDDK —la detección de
+deuda no está implementada—, así que `verify` no puede pasar a `release`. El
+trabajo **está** entregado, verificado y publicado; lo que no se puede es cerrar
+el ciclo. Mismo bloqueo que `b4` y `b5`.
 
 ---
 

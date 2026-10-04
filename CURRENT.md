@@ -72,6 +72,28 @@
 > y por eso **no** baja el veredicto. Evidencia:
 > `scripts/measure_b7_operational_ux.py` y `scripts/mutate_b7_operational_ux.py`.
 >
+> **CERRADO Y PUBLICADO como `v0.27.0`** (MINOR por `0/1/1/2/0`, derivado con
+> `scripts/derive_semver.py`; ninguno con marcador de ruptura). Entrega
+> `0d9d423`, tag `v0.27.0` en `683dbfc`, cadena de release de cuatro commits
+> con la suite completa en verde dentro de cada hook.
+>
+> El ciclo `p-b7740b96d79ec013/b7` queda **BLOCKED**, no `CLOSED`: los dos
+> gates de deuda no son evaluables en esta build de SDDK y `verify` no puede
+> pasar a `release`. El trabajo **está** entregado y verificado; lo que no se
+> puede es cerrar el ciclo. Mismo bloqueo que `b4` y `b5`.
+>
+> **Y un hallazgo que vale más que el bloque.** El ciclo `b6` llevaba dos
+> sesiones bloqueado en `explore` por un supuesto defecto del framework —
+> «`sddk artifact store` no vincula el artefacto al ciclo»— y **no lo era**.
+> `cycle transition` acepta `--artifact kind=path` **en la propia transición**,
+> y con esa vía la transición se aplica: `b6` quedó desbloqueado y pasó a
+> `specify`.
+>
+> Un `ENGINE_MISSING_ARTIFACT` que **nombra** el artefacto que falta es una
+> instrucción, no un veredicto de avería. Se leyó como avería porque se
+> escribió como avería, y una vez escrito el diagnóstico cada relectura lo
+> confirmaba.
+>
 > ---
 >
 > **Bloque 2026-10-03 (B6) — Cada afirmacion dice QUIEN la afirma.**
