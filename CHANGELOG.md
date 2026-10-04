@@ -14,6 +14,126 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.32.1] - 2026-10-04 — dos propiedades del gate daban PASS sin nada que comparar
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.0`:
+`b/f/x/n/d 0/0/4/4/0`, la regla pide **PATCH -> v0.32.1**. Cuatro `fix` y
+cero `feat`: este bloque no añade superficie, quita dos formas de dar verde
+sin mirar nada, y arregla un defecto de producción que encontró al medir.
+
+**El hallazgo.** B15 dejó nombradas siete propiedades del gate de 1.0 que se
+deciden leyendo el árbol, y cuyos PASS no se pueden retirar solos. Esa lista no
+era una cola de tareas: era **la medida de dónde el gate no sabe lo que dice
+saber**. Esta abre las dos primeras, y no eran débiles. **Eran falsas.** Medido
+antes de escribir una línea, sobre copias del árbol con el repo real intacto:
+
+```
+MEDIDO A · se renombra la constante a _CAPABILITY_VERSION en todo src/
+  veredicto : PASS
+  evidencia : CAPABILITY_VERSION se declara en un solo sitio: []
+
+MEDIDO B · core/ importa DomainPack de verdad
+  veredicto : PASS
+  evidencia : core/ no nombra ningun tipo de recurso: se anaden sin tocarlo
+```
+
+La primera es **un PASS cuya evidencia dice una lista vacía**: un veredicto
+sobre la capacidad de contar del propio instrumento, no sobre el proyecto. La
+propiedad era cierta por suerte del caso —la constante existe en un sitio— y
+no por lo que el gate midió.
+
+La segunda es **la fuga de B13 con el signo cambiado**. Allí el guard leía
+literales en vez de la consulta ensamblada y daba verde **con la fuga
+presente**; aquí leía cadenas en vez de los imports y daba verde **con la
+dependencia presente**. Y lo que se declara es una frontera arquitectónica —el
+núcleo no depende de los recursos, así que añadir un recurso no obliga a
+tocarlo— que **nada vigilaba**.
+
+### Fixed
+
+- **`capabilities deterministas` daba verde con cero declaraciones.** Su lógica
+  era «si hay más de uno, `OPEN`; si no, `PASS`». Ahora cero declarantes es
+  `OPEN` nombrando el hecho, y la detección pasa a ser **AST**: el `re.match`
+  por línea no veía un `AnnAssign` —la forma real de hoy es
+  `CAPABILITY_VERSION: Final[str] = "v1"`—, ni una declaración partida, ni una
+  dentro de una clase.
+
+- **La misma comprobación no exigía el sitio.** La propiedad dice «**el
+  puerto, y solo el**», y la mitad de «y solo el» no estaba medida: bastaba con
+  que no hubiera dos declarantes. Una constante que todos importan desde un
+  fichero que no es el puerto sigue siendo una segunda fuente de verdad, con
+  una palabra menos.
+
+- **`ontology extensible` no veía una dependencia real de `core/`.** Buscaba
+  `^[A-Z][A-Za-z]+Pack$` dentro de **constantes de cadena**, y un
+  `from ... import DomainPack` es un `Name` del AST. Ahora decide sobre
+  **imports**, sobre **atributos** —`packs.DomainPack`, que es la forma
+  indirecta que se escribe cuando ya se sabe que el núcleo no debería saber del
+  recurso— y también sobre las cadenas.
+
+- **Un defecto de producción que no era de este bloque: ocho procesos que
+  abren la misma base se mataban entre ellos.** Lo encontró `concurrencia real
+  certificada` al pasar de `PASS` a `OPEN`, y no era ruido del medidor: cuatro
+  corridas rojas de veinte, y un hijo muerto de treinta con
+
+  ```
+  sqlite3.IntegrityError: UNIQUE constraint failed: schema_version.version
+  ```
+
+  Ocho procesos abren la misma base nueva, los ocho leen `MAX(version) == 0`,
+  los ocho deciden subir, y el segundo `INSERT` se lleva un `UNIQUE` sobre la
+  PRIMARY KEY y **muere antes de escribir un solo evento**. El `timeout` que
+  arregló el `PRAGMA journal_mode` en B2 no lo puede arreglar, y conviene decir
+  por qué: no es un candado esperando, es un `SELECT` seguido de un `INSERT`, y
+  entre los dos cabe otro proceso. La respuesta era la que ya estaba quince
+  líneas más arriba del mismo archivo, en las migraciones: **`INSERT OR
+  IGNORE`**, una sola sentencia idempotente y sin el `DELETE` que abría la
+  ventana. Tasa del test concurrente: **4/20 -> 0/25**.
+
+- **El hijo de la concurrencia no encontraba su propio código.** Calculaba
+  `RAIZ` con `.parent.parent`, correcto mientras vivía en `.pipelinek/` y
+  falso desde que se movió a `tests/fixtures/`: ahí `.parent.parent` es
+  `tests/`, luego metía `tests/src` en el path, que no existe. Solo podía
+  importar `skillgraph` porque el paquete está instalado en el intérprete que
+  lo lanza —una red de seguridad accidental—.
+
+- **El aserto que tiraba el diagnóstico.** El test que mide el solape real
+  descartaba el `stderr` del hijo y se quedaba en «rc=1». Sin él, un
+  `IntegrityError` de la migración se leía como un fallo de concurrencia del
+  arnés.
+
+### Removed
+
+- **Un test que afirmaba reproducir la carrera y no la reproducía.** Se
+  construyó con dos conexiones y con un `set_trace_callback` que mete al
+  hermano entre el `DELETE` y el `INSERT`, y **pasaba con el defecto presente**
+  en los dos casos: con el método simple porque el `DELETE` de este proceso se
+  llevaba la fila del hermano, y con el `trace_callback` porque SQLite
+  **serializa a los escritores** y lo bloquea hasta agotar el `busy_timeout`
+  —medido, 5,07 s frente a 0,15 s—. La carrera es real y **no es alcanzable de
+  forma determinista desde Python**. Un guard que solo sabe dar verde fabrica
+  confianza justo donde no la hay, así que el test se retiró y lo que queda es
+  el guard de **forma**, que sí cae con el defecto puesto.
+
+### Notes
+
+- **El harness del bloque cazó dos sondas suyas que no median**, y las dos son
+  la misma clase de fallo que B13 y B14 cerraron: leer un recuento de una
+  colecta que no terminó —el módulo de test **importa** el hijo, luego el
+  `assert` del hijo tumba la colecta entera y pytest lo reporta como `ERROR`,
+  no como `FAILED`, y un arnés que solo mira `FAILED` convierte «todo ha caído»
+  en «no ha medido nada»— y agrupar las suites como cadenas en vez de como
+  tuplas. Se cuentan porque el número 6/6 no significa nada si el instrumento
+  que lo produce ya se sabe que miente en dos sitios.
+
+- **El estado del gate no cambia de veredicto.** Las dos propiedades reales
+  siguen en `PASS` —con evidencia que ahora sí dice lo que comprueba— y
+  `concurrencia real certificada` pasa a **5 de 5**. Lo que queda abierto es lo
+  de siempre: `runtime real certificado` exige `SG_UAT_REAL_PROVIDER=1` y una
+  credencial real, y `TUI operacional` exige una persona.
+
+- `tests.total` 3294 -> 3301.
+
 ## [0.32.0] - 2026-10-04 — un predicado que se declara leyendo código no sabe cuándo deja de medir
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.31.2`:
