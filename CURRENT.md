@@ -1,3 +1,98 @@
+> **Bloque 2026-10-04 (B19) — «NO es reproducible» y «no he podido medirlo» son dos frases distintas.**
+> (vivo: implementado y commiteado en `5bfb2b5`, pendiente de certificar y publicar)
+> Versión activa `0.32.3.dev0`; último tag `v0.32.3`.
+>
+> **ESTE ES EL PRIMER BLOQUE DE LA SERIE QUE NO ES UNA PROPIEDAD FALSA.** B16 y
+> B17 abrieron propiedades que daban verde con el defecto presente. B18 endureció
+> una que ya era cierta. B19 es de otra clase: **la propiedad es cierta y el
+> defecto está en el verbo del veredicto.**
+>
+> **NACE DE UN OPEN DE 1 DE 8 QUE SALIÓ AL CERTIFICAR B18**, y de un fallo mío
+> que es parte del hallazgo. La primera vez que vi ese OPEN solo leí el nombre de
+> la propiedad en un resumen y volví a ejecutar el gate. **No guardé la
+> evidencia.** El primer instrumento dio 6 de 6 PASS — bien ejecutado, y midió la
+> pregunta equivocada, porque sin el texto del fallo no se sabe qué pregunta
+> hacer—. Guardar la evidencia del fallo es lo que convirtió un número raro en
+> un diagnóstico, y es el mismo requisito que B18 le añadió a su arnés para las
+> deformaciones: **no cuenta lo que no se ha visto caer.**
+>
+> **MEDIDO, Y LA PROPIEDAD ES CIERTA AL REVÉS:**
+>
+> ```
+> 8 construcciones con la condición exacta del predicado → bytes IGUALES 8 de 8
+>   cuatro sin tocar la fecha, cuatro tocándola con os.utime sobre __init__.py
+> 2 sdists con la suite completa de pytest en paralelo → CONTENIDO idéntico
+>   397 ficheros, 0 diferencias
+> ```
+>
+> **EL DEFECTO, Y HAY DOS CAUSAS QUE PIDEN ACCIONES OPUESTAS:**
+>
+> | bytes distintos porque… | quién lo arregla |
+> |---|---|
+> | el build es irreproducible | el **build** |
+> | la entrada cambió entre las dos mediciones | la **medición** |
+>
+> El predicado no las distinguía, y decia «la distribución **NO es
+> reproducible**» en los dos casos. Eso es grave aquí de un modo que no lo era
+> en B16: `distribution reproducible` es la clase de propiedad **más alta de la
+> serie**, `ejecutada`, y es la única que alguien podría citar para decir «el
+> build de este proyecto es irreproducible» sin comprobar nada más.
+>
+> **POR QUÉ NO SE RESUELVE DENTRO DEL ARTEFACTO, MEDIDO: no se puede.** Si un
+> fichero ya versionado cambia entre las dos construcciones, los dos artefactos
+> son coherentes consigo mismos y aun así se construyeron con **entradas
+> distintas**. Hace falta el estado del árbol, y se toma con
+> `_huella_de_entrada` justo antes de cada construcción: HEAD, el estado del
+> árbol y el diff contra HEAD, con separador NUL. **El diff es lo que aporta el
+> contenido de lo modificado**, y sin él la huella sería un `git status` que
+> solo ve nombres.
+>
+> **LO QUE YA EXISTÍA Y CUBRE LA MITAD, Y NO SE TOCA.**
+> `sg_build_sdist_no_versionado`, en `check_package_build.py`: medido, con un
+> fichero sin versionar el veredicto es `OPEN` y la evidencia dice *«el artefacto
+> depende de lo que haya en el árbol de trabajo, no del commit»*. Es un buen
+> guard, y la hipótesis más obvia era la buena. Hay un test que lo comprueba,
+> porque si el arreglo degrada en la frase acusadora un guard que ya era
+> correcto, **se ha roto uno bueno mientras se arreglaba uno malo**.
+>
+> **LA DECISIÓN SE SACA DE LA MEDICIÓN Y POR ESO SE PRUEBA EN
+> MILISEGUNDOS.** `_decide_por_bytes` es pura: dos dicts de hashes y dos
+> huellas. Medido: dejarla dentro del predicado hacía que los tests tardaran
+> **cero**, porque no se puede deformar la decisión sin deformar también la
+> construcción. Un guard que no se puede deformar sin disparar el sistema
+> entero no vigila la decisión: vigila que el sistema entero corra.
+>
+> **TRES FALLOS PROPIOS, Y LOS TRES IMPORTAN MÁS QUE EL ARREGLO:**
+>
+> 1. **El test midiò el repositorio equivocado.** La primera versión lanzaba el
+>    gate del **árbol real** con `cwd` en el clon, y el gate calcula su `RAIZ`
+>    desde `__file__`. El test **falló** —`PASS` en vez de `OPEN`— y por eso se
+>    pudo ver. Un test que hubiera dado verde habría sido el peor de los tres.
+> 2. **El contrasalto de M1 no mediò lo que decía.** Comparaba el árbol limpio
+>    contra el árbol editado, y `git status` **ya cambia** entre esos dos casos.
+>    No aislaba el contenido: mediaba que hay un cambio, que es justo lo que
+>    `git status` ve sin el diff. Para que el diff sea necesario, los dos
+>    árboles tienen que verse **iguales desde git** — que es el caso real de
+>    B19: editar, construir, editar otra vez, construir.
+> 3. **El harness no sabía leer su propia salida.** Daba `0 de 3` sobre tres
+>    sondas que sí habían caído, porque hacía `split()[0]` sobre `FAILED
+>    <fichero>::<clase>::<testo>` y se quedaba con `FAILED`. Un harness que no
+>    sabe contar lo que ha medido da cero con la sensación de que el guard no
+>    funciona.
+>
+> **DONDE SE MIRA, VERIFICADO POR AST:**
+>
+> | cita | que sostiene |
+> |---|---|
+> | `measure_b9_gate_1_0.py:1186::_huella_de_entrada` | la huella de la **entrada**, y por qué el diff es necesario |
+> | `measure_b9_gate_1_0.py:1258::_decide_por_bytes` | la decisión, pura, deformable en milisegundos |
+> | `test_b19_entrada_no_veredicto.py:187::TestLaHuellaMideLaEntradaYNoElCommit` | el contrasalto que exige que los dos árboles se vean **iguales** desde git |
+> | `test_b19_entrada_no_veredicto.py:267::TestElVeredictoDistingueLasDosCausas` | el verbo, y el contrasalto de que siga pudiendo acusar |
+> | `test_b19_entrada_no_veredicto.py:326::TestLoQueYaEstabaCubiertoNoSeRompio` | el guard que ya existía no se degrada |
+> | `mutate_b19_entrada_no_veredicto.py` | 3 sondas, 3/3, y **M3 desincroniza el veredicto de su evidencia** |
+>
+> ---
+>
 > **Bloque 2026-10-04 (B18) — La frontera del núcleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano.**
 > (cerrado y publicado en `v0.32.3`)
 > Versión activa `0.32.3.dev0`; último tag `v0.32.3`.
@@ -80,7 +175,7 @@
 > | `measure_b9_gate_1_0.py:764::_core_sin_dependencias_de_impl_externa` | los tres defectos, escritos en su docstring |
 > | `measure_b9_gate_1_0.py:412::_resuelve_import_relativo` | un relativo se resuelve a nombre absoluto, no a `None` |
 > | `measure_b9_gate_1_0.py:480::_ficheros_de` | los ficheros del recorrido, contados del árbol |
-> | `measure_b9_gate_1_0.py:1343::_MODULOS_ESTANDAR` | se deriva de `sys.stdlib_module_names`, no de trece renglones |
+> | `measure_b9_gate_1_0.py:1476::_MODULOS_ESTANDAR` | se deriva de `sys.stdlib_module_names`, no de trece renglones |
 > | `test_b18_core_frontier.py:148::TestUnImportRelativoNoSeEscapa` | el relativo de nivel 2 es `OPEN`; **y un relativo que no sale no es `OPEN`** |
 > | `test_b18_core_frontier.py:195::TestLaEstandarNoEsUnaListaEscritaAMano` | un módulo de la estándar ausente no da `OPEN`, y la evidencia dice de dónde sale |
 > | `test_b18_core_frontier.py:244::TestLoQueNoSeMiraNoSeDeclaraMirado` | la cifra es la de los **ficheros**, y la evidencia no dice «modulos» cuando mide imports |

@@ -62,6 +62,16 @@ VICTIMA = "docs/blueprint/plan/UAT.md"
 ANCLA = "from __future__ import annotations\n"
 
 
+def _estado_git(destino: Path) -> str:
+    """Lo que `git status --porcelain` ve del clon. Sin esto, un test que compara
+    dos arboles no puede demostrar que los dos se ven IGUALES, que es la
+    precondicion de que este test mida el contenido y no el estado."""
+    salida = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=destino, capture_output=True, text=True, check=True
+    )
+    return salida.stdout.strip()
+
+
 def _carga() -> Any:
     spec = importlib.util.spec_from_file_location("gate_b19", GATE)
     assert spec is not None and spec.loader is not None
@@ -95,6 +105,7 @@ class _ArbolGit:
             check=True,
             capture_output=True,
         )
+        self._originales = self._destino
         self._modulo = _carga()
         self._modulo.RAIZ = self._destino
         return self
@@ -103,19 +114,21 @@ class _ArbolGit:
         self._modulo.RAIZ = self._raiz_real
         self._tmp.cleanup()
 
-    def edita_un_fichero_versionado(self) -> str:
+    def edita_un_fichero_versionado(self, marca: str) -> str:
         """Cambia el CONTENIDO de un fichero que git YA versiona, y solo eso.
 
-        MEDIDO, por que el contenido y no la fecha: el predicado ya toca la
-        fecha de `__init__.py` a proposito, y un cambio de fecha es un camino
-        que el predicado ya recorre. Lo que no recorre es un cambio de
-        contenido en un fichero versionado, y ese es el hueco.
+         MEDIDO, por que el contenido y no la fecha: el predicado ya toca la
+         fecha de `__init__.py` a proposito, y un cambio de fecha es un camino
+         que el predicado ya recorre. Lo que no recorre es un cambio de
+         contenido en un fichero versionado, y ese es el hueco.
+
+         La `marca` va en el contenido, y el fichero se reescribe ENTERO desde su
+         version original: si se anadiese al final cada vez, dos llamadas
+        ilharian tres marcas y el estado creeria que se acumulo trabajo.
         """
+        original = (self._originales / VICTIMA).read_text(encoding="utf-8")
         ruta = self._destino / VICTIMA
-        ruta.write_text(
-            ruta.read_text(encoding="utf-8") + "\n<!-- b19: cambio entre las dos mediciones -->\n",
-            encoding="utf-8",
-        )
+        ruta.write_text(f"{original}\n<!-- b19: {marca} -->\n", encoding="utf-8")
         return VICTIMA
 
     def anade_un_fichero_sin_versionar(self) -> str:
@@ -193,24 +206,46 @@ def test_la_huella_no_cambia_si_no_cambia_nada() -> None:
 def test_la_huella_cambia_si_cambia_el_contenido_de_un_fichero_ya_versionado() -> None:
     """La mitad que `sg_build_sdist_no_versionado` NO ve.
 
-    MEDIDO, y por que este contrasalto es imprescindible: si la huella no
-    mirase el contenido de lo modificado, dos ficheros con el MISMO nombre y
-    distinto contenido darian la misma huella, y el predicado volveria a acusar
-    al proyecto sin poder distinguir de que construyo entradas distintas. Un
-    `git status` a secas —que solo ve NOMBRES— pasaria este test por el motivo
-    equivocado: el nombre no cambia, luego la huella no cambiaria, luego el
-    guard pasaria, y estaria midiendo que el guard sabe que hay un cambio en el
-    arbol sin comprobar nunca que lo haya.
+     **Y POR QUE ESTE TEST COMPARA DOS EDICIONES Y NO UN ARBOL LIMPIO CONTRA UNO
+     EDITADO. MEDIDO, y es un fallo propio que el harness de este bloque cazó
+     antes de contar nada.**
+
+     La primera version comparaba el arbol limpio contra el arbol con un fichero
+     versionado modificado, y la sonda M1 —que quita el `git diff HEAD` de la
+     huella— NO CAYO. Y no cayo por una razon que explica el resto del bloque:
+     `git status` ya cambia entre esos dos casos, de vacio a ` M ruta`. O sea que
+     la comparacion no aislaba lo que dice medir: media «el arbol tiene un
+     cambio», que es justo lo que `git status` ya ve sin el diff.
+
+     Para que el diff sea NECESARIO, los dos arboles tienen que verse IGUALES
+     desde `git status` y ser DISTINTOS de verdad. Y eso no es un artefacto del
+     test: es el caso real de B19. Alguien edita un fichero, construye, lo edita
+     otra vez, construye otra vez. Los dos `git status` dicen ` M ruta`. Los dos
+     contenidos son distintos. Sin el diff, la huella es la misma y el predicado
+     acusa al proyecto de no ser reproducible —que es exactamente el defecto que
+     este bloque arregla—.
+
+     Un contrasalto que semida en la primera version: si `git status` no los
+    hiciera ver iguales, este test estaria probando otra cosa y lo diria.
     """
     with _ArbolGit() as arbol:
+        arbol.edita_un_fichero_versionado("primera edicion, distinta de la segunda")
         antes = arbol.modulo._huella_de_entrada()
-        arbol.edita_un_fichero_versionado()
+        estado_antes = _estado_git(arbol.destino)
+        arbol.edita_un_fichero_versionado("segunda edicion, distinta de la primera")
         despues = arbol.modulo._huella_de_entrada()
-        assert antes != despues, (
-            "un fichero YA VERSIONADO cambio de contenido entre las dos mediciones y la "
-            "huella no se entero. Sin esto, el OPEN accuses al proyecto de un defecto de "
-            "reproducibilidad cuando lo que cambio fue la entrada de la medicion."
-        )
+        estado_despues = _estado_git(arbol.destino)
+    assert estado_antes == estado_despues, (
+        f"los dos arboles tienen que verse IGUALES desde git para que este test mida el "
+        f"contenido y no el estado. Antes: {estado_antes!r}. Despues: {estado_despues!r}. "
+        f"Si esto falla, el test ha cambiado de pregunta sin que nadie se entere."
+    )
+    assert antes != despues, (
+        "el MISMO fichero versionado, con el MISMO estado git, cambio de contenido entre las "
+        "dos mediciones y la huella no se entero. Sin esto, el OPEN acusa al proyecto de un "
+        "defecto de reproducibilidad cuando lo que cambio fue la entrada de la medicion, y no "
+        "hay forma de que nadie lo sepa sin repetir la medicion a mano."
+    )
 
 
 def test_la_huella_es_distinta_entre_ficheros_distintos_y_solo_una_vez() -> None:
@@ -222,7 +257,7 @@ def test_la_huella_es_distinta_entre_ficheros_distintos_y_solo_una_vez() -> None
     """
     with _ArbolGit() as arbol:
         antes = arbol.modulo._huella_de_entrada()
-        arbol.edita_un_fichero_versionado()
+        arbol.edita_un_fichero_versionado("una edicion")
         con_cambio = arbol.modulo._huella_de_entrada()
         assert antes != con_cambio
         assert len(antes) == 64, f"la huella deberia ser un sha256, y mide {len(antes)}: {antes}"

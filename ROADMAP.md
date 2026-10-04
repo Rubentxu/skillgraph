@@ -68,6 +68,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B16** | Dos propiedades del gate daban PASS sin nada que comparar | El vacío no sale verde, el núcleo no puede depender de un recurso, y ocho procesos que abren la misma base no se matan entre ellos |
 | **B17** | El ciclo de vida de los packs se decidía contando nombres | La propiedad se decide ejecutando el ciclo, que el instrumento ya hacía y nadie cableó |
 | **B18** | La frontera del núcleo no miraba la mitad de la superficie | Los relativos se resuelven, la estándar se deriva del intérprete, y la evidencia describe el recorrido |
+| **B19** | «NO es reproducible» y «no he podido medirlo» son la misma frase | La entrada del paquete se mide antes de acusar, y el veredicto no culpa al proyecto de haber medido dos entradas distintas |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -995,6 +996,51 @@ deuda sin verificar, y sin verificar no era deuda.
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
 
+
+## B19 — «NO es reproducible» y «no he podido medirlo» son la misma frase
+
+**Es el primer bloque de la serie que no es una propiedad falsa.** B16 y B17
+abrieron propiedades que daban verde con el defecto presente; B18 endureció una
+que ya era cierta. Aquí la propiedad **es cierta** y el defecto está en el verbo
+del veredicto.
+
+Nace de un `OPEN` de 1 de 8 que salió al certificar B18, con la evidencia
+guardada: *«mismo contenido y distinta fecha dan bytes distintos en 2
+artefacto(s)»*. Y la propiedad es cierta al revés, medido: **ocho
+construcciones con la condición exacta del predicado dan bytes iguales 8 de 8**,
+con y sin tocar la fecha, y dos sdists con la suite completa de pytest en
+paralelo tienen contenido idéntico — 397 ficheros, 0 diferencias.
+
+**El defecto, y hay dos causas que piden acciones opuestas.** Si el build es
+irreproducible se arregla el **build**; si la entrada cambió entre las dos
+mediciones se arregla la **medición**. El predicado no las distinguía y decía
+«la distribución NO es reproducible» en los dos casos. Es grave aquí de un modo
+que no lo era antes: `distribution reproducible` es la clase de propiedad **más
+alta de la serie**, `ejecutada`, y la única que alguien podría citar para decir
+que el build del proyecto es irreproducible sin comprobar nada más.
+
+**Por qué no se resuelve dentro del artefacto: medido, no se puede.** Con un
+fichero ya versionado que cambia entre las dos construcciones, los dos artefactos
+son coherentes consigo mismos y aun así se construyeron con entradas
+distintas. Hace falta el estado del árbol, y se toma con `_huella_de_entrada`
+antes de cada construcción. **El diff es lo que aporta el contenido**: sin él
+la huella sería un `git status` que solo ve nombres.
+
+**Lo que ya existía y cubre la mitad, y no se toca.**
+`sg_build_sdist_no_versionado` ya rechaza un fichero que git no versiona, con un
+mensaje que es exactamente el que haría falta. La hipótesis más obvia era la
+buena, y hay un test que lo comprueba: si el arreglo degrada un guard que ya
+era correcto, se ha roto uno bueno mientras se arreglaba uno malo.
+
+**La decisión es pura y por eso se prueba en milisegundos.** Medido: dejarla
+dentro del predicado hacía que los tests tardaran cero, porque no se puede
+deformar la decisión sin deformar también la construcción.
+
+**Tres fallos propios, que importan más que el arreglo.** El test midió el
+repositorio equivocado —y **falló**, que es como se pudo ver—. El contrasalto
+de la sonda no aislaba el contenido, porque `git status` ya cambia entre «árbol
+limpio» y «árbol editado». Y el harness no sabía leer su propia salida: dio
+0 de 3 sobre tres sondas que sí habían caído.
 
 ## B18 — La frontera del núcleo no miraba la mitad de la superficie
 

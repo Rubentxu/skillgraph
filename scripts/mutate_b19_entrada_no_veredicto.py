@@ -134,11 +134,20 @@ def pytest_de(una_sonda: str) -> tuple[int, set[str]]:
         text=True,
         check=False,
     )
-    caidas = {
-        linea.split(" ")[0]
-        for linea in proc.stdout.splitlines()
-        if linea.startswith("FAILED ") or linea.startswith("ERROR ")
-    }
+    # MEDIDO, Y FALLO PROPIO DEL HARNES: la primera version hacia
+    # `linea.split(" ")[0]` sobre las lineas `FAILED ...`, y por eso todo
+    #aso caia en el nombre `FAILED` y el harness decia «cayo con otros
+    # diagnosticos» sobre tres sondas que SI habian caido. El separador de
+    # pytest es «FAILED <fichero>::<clase>::<testo>», luego el nombre es el
+    # segundo campo y no el primero. Un harness que no sabe leer su propia
+    # salida no puede contar lo que ha medido, y da 0 de 3 con la sensacion de
+    # que el guard no funciona.
+    caidas = set()
+    for linea in proc.stdout.splitlines():
+        for prefijo in ("FAILED ", "ERROR "):
+            if linea.startswith(prefijo):
+                caidas.add(linea[len(prefijo) :].split(" ")[0])
+                break
     return proc.returncode, caidas
 
 
