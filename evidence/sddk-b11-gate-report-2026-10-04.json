@@ -5,10 +5,13 @@
   "instrumento": "scripts/measure_b9_gate_1_0.py",
   "ciclo_sddk": {
     "cycle_id": "p-b7740b96d79ec013/b11",
-    "estado": "OPEN",
+    "estado": "PAUSED",
     "fase": "explore",
     "path": "A-full",
-    "lease": "owner=mavis-b11 fencing_token=1"
+    "lease": "owner=mavis-b11 fencing_token=2 (readquirido: el token 1 habia expirado)",
+    "transicion": "cycle.pause -> PAUSED, sequence 2, event evt-05428eb6-e52c-4a9a-938a-3de4e521d733",
+    "artefacto": "art-8626e2c61551-a388a12b (gate-report, sha256 8626e2c6)",
+    "por_que_no_closes": "El ciclo NO se puede llevar a CLOSED en esta build: los gates debt-severity-assigned y debt-priority-assigned necesitan `sddk debt report`, que no esta implementado. Es la MISMA limitacion queDeja a b4..b10 abiertos, y no es de B11. Tampoco se marca BLOCKED, porque BLOCKED diria que hay un bloqueo externo y no lo hay: el bloque esta entregado, certificado y publicado. Queda PAUSED, que es lo que el unico terminal legal desde Open/Explore permitia sin mentir."
   },
   "antes": {
     "PASS": 15,
@@ -36,6 +39,18 @@
     "linea_base": "5 de 5 preguntas ABIERTAS",
     "linea_final": "5 de 5 PASS",
     "sondas": "6/6 cazadas, 6 causas distintas"
+  },
+  "publicacion": {
+    "commits": [
+      "524ca3e",
+      "0fb0617",
+      "6ec0ba3",
+      "29698cd"
+    ],
+    "tag": "v0.30.0 -> 0fb0617 (objeto de etiqueta 4d620a4 en el remoto)",
+    "origin_main": "29698cd8f391f4e46712c639f2c7e05db55f2229",
+    "commits_sin_publicar": 0,
+    "verificado_con": "git ls-remote origin main refs/tags/v0.30.0"
   },
   "certificacion": {
     "tests_total_declarado": 3233,

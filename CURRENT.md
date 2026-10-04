@@ -2,6 +2,15 @@
 > Versión activa `0.30.0.dev0` (ya fuera del tag `v0.30.0`); último tag
 > `v0.30.0`.
 >
+> **CERRADO, CERTIFICADO Y PUBLICADO.** `v0.30.0` sale en `0fb0617`;
+> `origin/main` en `29698cd`, verificado con `git ls-remote`, con 0
+> commits sin publicar. Suite sobre el árbol ya commiteado: **3230
+> passed, 3 skipped, 0 failed**. Gate de 1.0: 15 PASS / 4 OPEN / 1
+> NO_MEASURABLE → **16 / 3 / 1**. Evidencia:
+> `evidence/sddk-b11-gate-report-2026-10-04.json`. Ciclo SDDK
+> `p-b7740b96d79ec013/b11` en **PAUSED** (no CLOSED ni BLOCKED: los gates
+> de deuda no son evaluables en esta build, y no hay bloqueo externo).
+>>
 > **B11 cierra la primera de las cuatro `OPEN` que piden CODIGO, no
 > certificacion.** El predicado del gate decia, textual: `sg pack` expone
 > `['import', 'load']` y no `['install', 'update', 'remove']`. B8 entrego el
