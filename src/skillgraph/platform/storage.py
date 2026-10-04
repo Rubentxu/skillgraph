@@ -37,6 +37,7 @@ from skillgraph.knowledge.graph import (
     OutcomeTrace,
     Source,
 )
+from skillgraph.platform import journal
 from skillgraph.platform.ports import (
     StoredBudget,
     StoredClaim,
@@ -229,47 +230,27 @@ class Storage(
             timeout=self._BUSY_TIMEOUT_S,
         )
         self._conn.row_factory = sqlite3.Row
-        # MEDIDO en B2: el `PRAGMA journal_mode = WAL` NO era gratis, y
-        # por eso se ha apartado de la ruta de apertura.
-        #
-        # El PRAGMA es idempotente —si la base ya esta en WAL, no cambia
-        # nada— pero **toma un lock de escritura para averiguarlo**. Con
-        # diez procesos abriendo la misma base a la vez, uno esperaba a
-        # que otro soltara ese lock y, si no lo lograba dentro del
-        # `busy_timeout`, moria con `database is locked` ANTES de
+        # MEDIDO en B2 y corregido en B9: el `PRAGMA journal_mode = WAL` NO
+        # era gratis. El PRAGMA es idempotente —si la base ya esta en WAL,
+        # no cambia nada— y aun asi **toma un lock de escritura para
+        # averiguar que no hace nada**. Con diez procesos abriendo la misma
+        # base a la vez, uno moria con `database is locked` ANTES de
         # escribir una sola fila. Sus escrituras se perdian sin dejar
         # rastro: sin excepcion en el padre, sin log, y con un run que
         # «funciona» al que solo le falta un evento.
         #
         # Poner `timeout` en el `connect` de arriba es necesario pero no
         # suficiente: el default de `sqlite3.connect` ya son 5 s, y el
-        # fallo seguia apareciendo en ~1 de cada 6 corridas. El
-        # `busy_timeout` no cubre esta ventana porque el bloqueo ocurre
-        # DENTRO de la conversion del journal, no en la espera por un
-        # lock de escritura normal.
+        # fallo seguia apareciendo. El `busy_timeout` no cubre esta
+        # ventana porque el bloqueo ocurre DENTRO de la conversion del
+        # journal, no en la espera por un lock de escritura normal.
         #
-        # La solucion no es esperar mas: es **no preguntar**. Una base
-        # creada por `Storage` ya esta en WAL —el PRAGMA y
-        # `executescript(_SCHEMA_SQL)` de este mismo `__init__` la dejan
-        # ahi, y nada en el repositorio la devuelve a `delete`—. Reafirmar
-        # el modo en cada apertura compra una garantia que ya tenemos y
-        # paga un lock que no hace falta.
-        #
-        # Lo que se hace, entonces, es **reintentarlo una vez** si aun
-        # asi se bloquea. MEDIDO, con el reintento retirado: 4 de 6
-        # corridas fallaban. Con el reintento: 12 de 12 verdes sobre el
-        # mismo `/tmp`. La diferencia es del reintento, no del suerte: sin
-        # el, el fallo es la norma y con el, la excepcion.
-        #
-        # Y lo que NO se hace es tragarse el error y seguir como si la
-        # base estuviera en WAL sin comprobarlo — eso si seria mentir
-        # sobre el modo de journal. Si el segundo intento tambien falla,
-        # la excepcion sube: preferimos un fallo visible a una base en
-        # `delete` que nadie sabe que esta en `delete`.
-        try:
-            self._conn.execute("PRAGMA journal_mode = WAL")
-        except sqlite3.OperationalError:
-            self._conn.execute("PRAGMA journal_mode = WAL")
+        # El arreglo —preguntar el modo antes de cambiarlo, releer entre
+        # reintentos y dormir entre ellos— vive en `platform.journal`, no
+        # aqui: es una politica de la base y no de la fachada, y ahi no
+        # cabe sin romper el umbral de WI-65. El porque de cada parte esta
+        # escrito alli, con las mediciones que la sostienen.
+        journal.asegura_wal(self._conn)
         self._conn.execute("PRAGMA foreign_keys = ON")
         # WI-56 cortes 1-2: cache de los componentes reales del
         # cluster runs y del cluster policy/budget (lazy en sus

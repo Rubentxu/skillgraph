@@ -53,8 +53,10 @@ que B2 quiere certificar—.
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -64,6 +66,20 @@ RAIZ = Path(__file__).resolve().parent.parent
 # hace que los cinco tests de este modulo fallen con FileNotFoundError.
 # Un test que solo funciona en la maquina donde se escribio no es un test.
 CHILD = Path(__file__).resolve().parent / "fixtures" / "b2_concurrency_child.py"
+
+#: Los valores de la espera se IMPORTAN del hijo y no se reescriben aqui.
+#: El padre y el hijo tienen que esperar lo mismo, y dos constantes con el
+#: mismo numero en dos ficheros son dos numeros que divergen el dia que
+#: uno se cambia. Importarlo de mas tiene un efecto secundario que vale:
+#: si el hijo dejara de ser importable, este modulo ni siquiera carga, y el
+#: fallo se ve al arrancar y no tres minutos despues dentro del arnes.
+_especificacion = importlib.util.spec_from_file_location("_b2_hijo", CHILD)
+assert _especificacion is not None and _especificacion.loader is not None
+_hijo = importlib.util.module_from_spec(_especificacion)
+sys.modules[_especificacion.name] = _hijo
+_especificacion.loader.exec_module(_hijo)
+PUERTA_TIMEOUT_S: float = _hijo.PUERTA_TIMEOUT_S
+SONDEO_S: float = _hijo.SONDEO_S
 
 # Procesos y escrituras por proceso. Ocho x diez = 80 filas esperadas.
 #
@@ -85,7 +101,27 @@ def _procesos(db: Path, n: int, modo: str = "escribir") -> list[tuple[int, str, 
     `communicate` despues es lo que hace que compitan de verdad. Lanzarlos
     en serie —uno, esperar, otro— serializaria el test y no probaria
     nada.
+
+    **LA PUERTA, Y POR QUE NO BASTA CON LANZARLOS A LA VEZ.** Lanzar ocho
+    procesos en un bucle NO los hace competir: los hace empezar, y cada uno
+    tarda lo que tarde en arrancar el interprete e importar
+    `skillgraph.platform.storage`. Ese arranque es el mismo para todos en
+    teoria y en la practica no lo es, y la diferencia crece con la carga
+    de la maquina. MEDIDO en B9: con los ocho hijos esperando en una puerta
+    comun y soltados a la vez, el solape es estructural. Sin ella, el test
+    de solape fallo 1 de las 5 corridas del medidor del gate de 1.0 con la
+    maquina ocupada, y 0 de 10 en solitario. Un fallo que solo aparece
+    cuando la maquina esta ocupada es un fallo, y la puerta lo quita en
+    vez de taparlo con una ventana mas ancha.
+
+    La puerta es un directorio: cada hijo escribe su fichero de «listo» y
+    espera a que aparezca `abre`. El padre no abre hasta que estan todos, o
+    hasta que se acaba el plazo, en cuyo caso abre igual: asi un hijo que
+    no llega produce un fallo que NOMBRA al hijo que falta, en vez de un
+    cuelgue del arnes.
     """
+    puerta = db.parent / f"puerta-{modo}"
+    puerta.mkdir(parents=True, exist_ok=True)
     procs = [
         subprocess.Popen(
             [
@@ -99,6 +135,8 @@ def _procesos(db: Path, n: int, modo: str = "escribir") -> list[tuple[int, str, 
                 str(POR_PROCESO),
                 "--modo",
                 modo,
+                "--puerta",
+                str(puerta),
             ],
             cwd=RAIZ,
             stdout=subprocess.PIPE,
@@ -107,11 +145,30 @@ def _procesos(db: Path, n: int, modo: str = "escribir") -> list[tuple[int, str, 
         )
         for i in range(n)
     ]
+    _abre_la_puerta(puerta, n)
     salidas = []
     for p in procs:
         out, err = p.communicate(timeout=180)
         salidas.append((p.returncode, out, err))
     return salidas
+
+
+def _abre_la_puerta(puerta: Path, esperados: int) -> bool:
+    """Espera a que los `esperados` hijos esten listos y abre la puerta.
+
+    Devuelve si llegaron todos. El valor no se usa para decidir el
+    veredicto: el veredicto lo dan los hijos, que si uno no llego fallara
+    al no tener ventana o al morirse. Aqui solo se decide si abrir ya o
+    seguir esperando.
+    """
+    limite = time.monotonic() + PUERTA_TIMEOUT_S
+    while time.monotonic() < limite:
+        if len(list(puerta.glob("listo-*"))) >= esperados:
+            break
+        time.sleep(SONDEO_S)
+    todos = len(list(puerta.glob("listo-*"))) >= esperados
+    (puerta / "abre").write_text("abre\n", encoding="utf-8")
+    return todos
 
 
 def _filas(db: Path) -> int:

@@ -61,6 +61,30 @@ sys.path.insert(0, str(RAIZ / "src"))
 # que se gana o se pierde.
 PAUSA_S = 0.01
 
+#: Cada cuanto se mira si la puerta se ha abierto. Es el unico sitio donde
+#: hay espera, y espera a un FICHERO de otro proceso, no a un reloj.
+SONDEO_S = 0.002
+
+#: Cuanto se espera a la puerta antes de rendirse. Es un techo, no una
+#: medida: si un hijo no llega, el padre abre la puerta igualmente y el
+#: test falla luego por el hijo que falta, que es el fallo que dice algo.
+PUERTA_TIMEOUT_S = 120.0
+
+
+def _espera_en_la_puerta(puerta: Path, tag: str) -> None:
+    """Anuncia que este hijo esta listo y espera a que el padre lo suelte.
+
+    El fichero de listo se escribe ANTES de esperar, y el padre no abre la
+    puerta hasta tener todos: asi la espera no depende de cuando llego el
+    ultimo, sino de que llego.
+    """
+    (puerta / f"listo-{tag}").write_text("listo\n", encoding="utf-8")
+    limite = time.monotonic() + PUERTA_TIMEOUT_S
+    while not (puerta / "abre").exists():
+        if time.monotonic() > limite:
+            return
+        time.sleep(SONDEO_S)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="hijo que escribe N eventos en la base compartida")
@@ -68,9 +92,17 @@ def main() -> int:
     ap.add_argument("--tag", required=True, help="identificador unico de este hijo")
     ap.add_argument("--n", type=int, default=10)
     ap.add_argument("--modo", default="escribir", choices=["escribir", "leer"])
+    ap.add_argument(
+        "--puerta",
+        default=None,
+        help="Directorio donde esperar a que el padre suelte a todos los hijos a la vez.",
+    )
     args = ap.parse_args()
 
     from skillgraph.platform.storage import Storage
+
+    if args.puerta is not None:
+        _espera_en_la_puerta(Path(args.puerta), args.tag)
 
     # La ventana temporal de este hijo, para que el padre pueda medir si
     # hubo SOLAPE real entre procesos. Sin esto, «8 procesos en paralelo»
@@ -78,6 +110,11 @@ def main() -> int:
     # lanzara en serie por accidente, el test de escritorias pasaria
     # igual —y pasaria por serializacion, que es justo lo que daria un
     # sistema que NO soporta concurrencia.
+    #
+    # Se toma DESPUES de la puerta, a proposito. Si se tomara antes, cada
+    # hijo mediria desde su propio arranque y las ocho ventanas seguirian
+    # dependiendo de cuando arranco cada uno, que es exactamente la carrera
+    # que la puerta viene a quitar.
     inicio = time.monotonic()
     storage = Storage(args.db)
     try:
