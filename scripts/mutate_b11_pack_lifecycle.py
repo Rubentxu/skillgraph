@@ -202,8 +202,8 @@ def _sondas() -> tuple[Sonda, ...]:
             despues='        sql = "SELECT * FROM installed_packs"  # sonda M5: sin WHERE, sin aislamiento',
             esperados=frozenset(
                 {
-                    "TestElRegistroPersisteYAisla::test_el_registro_no_enseña_packs_de_otro_proyecto",
-                    "TestElRegistroPersisteYAisla::test_el_registro_no_enseña_packs_de_otro_tenant",
+                    "TestElRegistroPersisteYAisla::test_el_registro_no_muestra_packs_de_otro_proyecto",
+                    "TestElRegistroPersisteYAisla::test_el_registro_no_muestra_packs_de_otro_tenant",
                 }
             ),
         ),

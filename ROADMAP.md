@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B10** — Superficies públicas certificadas
-> Versión activa `0.29.0.dev0` · último tag `v0.28.1` · 3195 tests · 16/16 UAT
+> Bloque vivo: **B11** — Ciclo de vida de packs
+> Versión activa `0.30.0.dev0` · último tag `v0.29.0` · 3233 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -60,6 +60,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B8** | Ecosistema y distribución | Packs, SDK, instalación, upgrades y compatibilidad |
 | **B9** | Certificación 1.0 | Release reproducible y production-ready local-first |
 | **B10** | Superficies públicas certificadas | Superficie declarada, versionada y sin moverse: núcleo y CLI |
+| **B11** | Ciclo de vida de packs | `install`/`update`/`remove`/`list` sobre el contrato de B8 |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -559,6 +560,73 @@ certificado`, que necesita `SG_UAT_REAL_PROVIDER=1` y una credencial), o de
 una decisión de redacción (`security/threat model actualizado`: el ADR-0015
 se aprobó describiendo un proyecto de 830 tests y 17 releases, y el árbol de
 hoy colecta 3195).
+
+---
+
+## B11 — Ciclo de vida de packs
+
+**La primera de las `OPEN` que piden código, no certificación.** El
+predicador del gate decía, textual: `sg pack` expone `['import', 'load']` y
+no `['install', 'update', 'remove']`. B8 entregó el **contrato**; faltaba la
+mitad: saber **qué hay instalado**.
+
+**Medido antes de escribir nada** (`scripts/measure_b11_pack_lifecycle.py`):
+**5 de 5 preguntas abiertas**. El instrumento **ejecuta** la CLI en un
+proyecto de verdad en vez de mirar nombres — un predicado que comprueba tres
+nombres fijos dice «cumple» el día que alguien escriba los tres en el parser
+sin que exista el ciclo entero. Al final: **5 PASS**.
+
+**Cerrado:**
+
+1. `skillgraph.packaging.registry` — el registro, con `instalar`, `actualizar`
+   y `retirar` como funciones **puras** sobre un valor inmutable.
+2. `sg pack install|update|remove|list`. `install` **rechaza** un pack
+   incompatible nombrando la cláusula que falló; `update` exige que la
+   versión **suba**, y la compara **por número** (`0.10.0` > `0.9.0` como
+   número y `<` como texto); `remove` de lo que no está lo dice con la lista
+   de lo que sí; `list` responde versión y aislamiento.
+3. La tabla `installed_packs` y su repositorio, con el patrón lazy+cacheado
+   de ADR-0016/WI-56.
+
+**Un defecto de producción, y es el que hacía el `update` imposible.**
+MEDIDO: `upsert_resource` **rechaza** cambiar el `spec` bajo la misma
+identidad con `IdentityConflictError` —deliberado, es lo que hace un recurso
+inmutable—, y un update de pack es por definición un `spec` distinto bajo la
+misma identidad. No es un bug heredado: es que **una instalación no es un
+recurso**. El recurso es el *contenido* del pack; la instalación es el *hecho*
+de que ese pack esté vivo en este proyecto, y ese hecho tiene su propio ciclo.
+
+**`retirar` no borra: marca.** Un `DELETE` perdería la única respuesta que
+existe a «¿este proyecto ha tenido alguna vez este pack?», porque el único
+sitio donde vive la respuesta es la fila que se borra. Marcar es el `DELETE`
+más su historia.
+
+**Y un hallazgo sobre un filtro que no filtra.** `list_resources` construye
+su filtro de `kind` como `AND api_version || '/' || kind = ? OR kind = ?`,
+**sin paréntesis**, luego el `OR` se come el `AND` que lo precede. Delegar el
+aislamiento en ese filtro habría costado una fuga entre tenants; por eso se
+comprueba fila a fila, y hay dos guards que lo verifican en las dos
+direcciones.
+
+**Harness 6/6 con 6 causas distintas**, y **tres de sus fallos fueron del
+harness, no del código**: `MUTABLES` no incluía el repositorio, así que esa
+sonda mutó el fichero y no lo restauró — y el harness reportó «árbol
+restaurado» porque **la suite seguía verde**, que es el fallo de B9 repetido
+con otro disfraz. Por eso el veredicto final mira ahora las dos cosas: que
+la suite pase *y* que `git status` de los mutables esté limpio. Además, la
+sonda que apuntaba al filtro de estado del SQL —**redundante**, porque
+`RegistroDePacks.instalados` vuelve a filtrar— no tenía nada que un test
+pudiera ver, y dos expectativas estaban mal escritas, una nombrando la clase
+equivocada.
+
+**Un hueco de cobertura real**, que la sonda de compatibilidad destapó: el
+recorrido de la CLI instalaba packs *compatibles*, luego el camino que ve el
+operador no estaba cubierto para el caso que duele. Dos tests lo cubren.
+
+Fuera de alcance y registrado: la instalación **no declara los tipos** del
+pack —de eso se encarga `sg pack load`, que ya existe—. Uno administra la
+*instalación* y el otro el *contenido*, porque dos comandos que hacen lo
+mismo con nombres distintos son la trampa de «conectar no es contener».
 
 ---
 

@@ -418,7 +418,7 @@ class TestElRegistroPersisteYAisla:
         assert len(registro) == 1, "una fila por pack, no una fila por instalacion"
         assert registro.buscar("acme").manifiesto.version == "0.2.0"
 
-    def test_el_registro_no_enseña_packs_de_otro_proyecto(self, tmp_path: Path) -> None:
+    def test_el_registro_no_muestra_packs_de_otro_proyecto(self, tmp_path: Path) -> None:
         """Aislamiento. Un `list` que cruza proyectos es una fuga."""
         st = Storage(tmp_path / "p.db")
         repo = st.installed_packs_repository()
@@ -436,7 +436,7 @@ class TestElRegistroPersisteYAisla:
         st.close()
         assert p1.nombres_instalados() == ("de-p1",), p1.nombres_instalados()
 
-    def test_el_registro_no_enseña_packs_de_otro_tenant(self, tmp_path: Path) -> None:
+    def test_el_registro_no_muestra_packs_de_otro_tenant(self, tmp_path: Path) -> None:
         st = Storage(tmp_path / "p.db")
         repo = st.installed_packs_repository()
         repo.guardar(

@@ -1,6 +1,91 @@
+> **Bloque 2026-10-04 (B11) — El ciclo de vida de los packs, que era un nombre en un gate.**
+> Versión activa `0.29.0.dev0`; último tag `v0.29.0`. B11 cierra aqui y
+> la release `0.30.0` se etiqueta despues, con sus cuatro eslabones.
+>
+> **B11 cierra la primera de las cuatro `OPEN` que piden CODIGO, no
+> certificacion.** El predicado del gate decia, textual: `sg pack` expone
+> `['import', 'load']` y no `['install', 'update', 'remove']`. B8 entrego el
+> CONTRATO —`PackManifest`, `Requires`, seis tipos, tres niveles de
+> aislamiento, `es_compatible` con MOTIVOS—; faltaba la mitad: saber QUE hay
+> instalado.
+>
+> **MEDIDO ANTES DE ESCRIBIR NADA** (`scripts/measure_b11_pack_lifecycle.py`):
+> **5 de 5 preguntas ABIERTAS**, y 5 PASS al final. El instrumento EJECUTA la
+> CLI en un proyecto de verdad en vez de mirar nombres, porque un predicado
+> que comprueba tres nombres fijos dice «cumple» el dia que alguien escriba
+> los tres en el parser sin que exista el ciclo entero.
+>
+> **UN DEFECTO DE PRODUCCION, Y ES EL QUE HACIA EL UPDATE IMPOSIBLE.**
+> MEDIDO: `upsert_resource` RECHAZA cambiar el `spec` bajo la misma identidad
+> con `IdentityConflictError` —deliberado, es lo que hace un recurso
+> inmutable—, y un update de pack es por definicion un `spec` distinto bajo
+> la misma identidad. No es un bug heredado: es que **UNA INSTALACION NO ES
+> UN RECURSO**. El recurso es el CONTENIDO del pack; la instalacion es el
+> HECHO de que ese pack este vivo en este proyecto, y ese hecho tiene su
+> propio ciclo. De ahi la tabla `installed_packs` y su repositorio propio.
+>
+> **`retirar` NO borra: MARCA.** Un `DELETE` perderia la unica respuesta que
+> existe a «¿este proyecto ha tenido alguna vez este pack?», porque el unico
+> sitio donde vive la respuesta es la fila que se borra. Marcar es el
+> `DELETE` mas su historia.
+>
+> **Y UN HALLAZGO SOBRE UN FILTRO QUE NO FILTRA.** `list_resources` construye
+> su filtro de kind como `AND api_version || '/' || kind = ? OR kind = ?`,
+> SIN parentesis: el `OR` se come el `AND` que lo precede. Delegar el
+> aislamiento ahi habria costado una fuga entre tenants, asi que se comprueba
+> fila a fila y hay dos guards que lo verifican en las dos direcciones.
+>
+> **EL HARNESS VOLVIO A DESTRUCTIRSE, Y POR ESO LLEVA UN GUARD NUEVO.**
+> `MUTABLES` no incluia `installed_packs_repository.py`, luego esa sonda muto
+> el fichero y no lo restauro — y el harness reporto «arbol restaurado y
+> ejecutando como estaba» porque **LA SUITE SEGUIA VERDE**. Es el fallo de B9
+> repetido con otro disfraz, y la leccion de ahi era que comprobar la suite no
+> basta: el veredicto final mira ahora LAS DOS COSAS, que la suite pase y que
+> `git status` de los mutables este limpio. Dos sondas mas salieron del
+> harness y no del codigo: una apuntaba al filtro de ESTADO del SQL, que es
+> REDUNDANTE porque `RegistroDePacks.instalados` vuelve a filtrar, luego no
+> habia nada que un test pudiera ver; y dos expectativas estaban mal
+> escritas, una nombrando la clase equivocada, que hace que una sonda salga
+> PARCIAL aunque el fallo este detectado a la perfeccion.
+>
+> **UN HUECO DE COBERTURA REAL**, que la sonda de compatibilidad destapo: el
+> recorrido de la CLI instalaba packs COMPATIBLES, luego el camino que ve el
+> operador no estaba cubierto para el caso que duele. Dos tests lo cubren.
+>
+> **RESULTADO: 6/6 sondas con 6 causas distintas, 3233 tests, y el gate de
+> 1.0 pasa de 15 PASS / 4 OPEN a 15 PASS / 3 OPEN** (`pack/controller
+> lifecycle` sale de la lista; `roadmap/state/docs coherentes` entra y sale
+> con el `tests.total` del final de bloque).
+>
+> Instrumento: `scripts/measure_b11_pack_lifecycle.py`. Harness:
+> `scripts/mutate_b11_pack_lifecycle.py` (6/6, 6 causas distintas). Guards:
+> `tests/test_b11_pack_lifecycle.py` (20 tests, cinco conjuntos disjuntos).
+>
+> installed_packs_repository.py:53::listar      el WHERE de verdad, con tenant y proyecto
+> installed_packs_repository.py:81::guardar     la constraint decide, no el codigo
+> installed_packs_repository.py:112::marcar_retirado  devuelve cuantas filas cambio
+> pack.py:249::cmd_pack_install
+> pack.py:265::cmd_pack_remove
+> pack.py:290::cmd_pack_list
+> test_b11_pack_lifecycle.py:285::test_update_compara_por_numero_y_no_por_texto
+> test_b11_pack_lifecycle.py:340::test_la_fila_sigue_ahi_despues_de_retirar
+> test_b11_pack_lifecycle.py:439::test_el_registro_no_muestra_packs_de_otro_tenant
+> test_b11_pack_lifecycle.py:492::test_la_tabla_nace_en_una_base_creada_por_el_esquema_anterior
+> measure_b11_pack_lifecycle.py:385::preguntar   ejecuta la CLI, no mira nombres
+> mutate_b11_pack_lifecycle.py:111::_sucios     la suite verde NO es el arbol restaurado
+>
+> NOTA SOBRE LO QUE NO SE CITA: `packaging/registry.py` —donde viven
+> `instalar`, `actualizar`, `retirar` y la comparacion de versiones— NO
+> aparece en la tabla, y es a proposito: el guard de WI-92 resuelve por
+> BASENAME y hay dos `registry.py` en el arbol (`resources/` y `packaging/`),
+> luego la cita seria ambigua y el guard la rechaza. Es el mismo caso que
+> `core/__init__.py` en B10, con catorce `__init__.py`. Las propiedades las
+> comprueban los tests, que si tienen nombre unico.
+>
+> ---
+>
 > **Bloque 2026-10-04 (B10) — Las superficies públicas, declaradas y certificadas.**
-> Versión activa `0.29.0.dev0`; último tag `v0.28.1` (esta release aún sin
-> publicar: se etiqueta al cerrar el bloque).
+> (cerrado; ver arriba el bloque vivo B11)
 >
 > **B10 cierra las dos `OPEN` que estaban abiertas SOLO por falta de
 > certificacion.** B9 dejo el gate en 13 PASS / 6 OPEN / 1 NO_MEASURABLE.
