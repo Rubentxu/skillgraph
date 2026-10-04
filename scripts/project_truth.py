@@ -304,6 +304,29 @@ def tests_colectados() -> int:
         text=True,
         check=False,
     )
+    # **Por que se mira el codigo de salida y no solo el numero.** MEDIDO: con
+    # `src/skillgraph/__init__.py` mutilado, pytest no llega a acabar la
+    # colecta, imprime «2867 tests collected, 27 errors», sale con rc=2 — y el
+    # numero ese es REAL: son los tests que llego a ver. El problema es que no
+    # es EL recuento, y este tool lo publicaba como si lo fuera:
+    #
+    #     tests: STATE declara 3284, el arbol colecta 2867
+    #
+    # Sin 417 tests, sin decir por que, y con la autoridad de quien conto. Un
+    # recuento parcial no es un recuento: es el numero de otra cosa. La lectura
+    # honesta es negarse, que es lo que hace el raise de abajo.
+    #
+    # El arbol real da rc=0 (MEDIDO), luego esto no cambia la respuesta de
+    # ningun estado sano: solo quita la de los que no se pudieron medir.
+    if proc.returncode != 0:
+        parcial = _COLECTADOS.search(proc.stdout)
+        raise VerdadNoLegible(
+            "la colecta de tests no terminó, y su numero NO es el recuento real: "
+            f"pytest salio con rc={proc.returncode}. Conteo parcial: "
+            f"{parcial.group(0) if parcial else '(sin linea de conteo)'}\n"
+            "Un numero de tests que no se pudo colectar no se puede comparar con el "
+            "que declara el estado: no son la misma magnitud."
+        )
     m = _COLECTADOS.search(proc.stdout)
     if m is None:
         raise VerdadNoLegible(

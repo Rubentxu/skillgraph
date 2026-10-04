@@ -224,6 +224,26 @@ SONDAS: tuple[Sonda, ...] = (
         esperados=frozenset({"TestLosTiposNoSeAdelantan::test_un_tag_sin_la_v_se_rechaza"}),
     ),
     Sonda(
+        nombre="M6_la_colecta_interrumpida_vuelve_a_publicar_un_recuento",
+        fichero="scripts/project_truth.py",
+        # Quita la mirada al codigo de salida de pytest. El numero que sale en
+        # la salida («2867 tests collected, 27 errors») es real —son los tests
+        # que llego a ver— pero no es EL recuento, y sin esta comprobacion el
+        # verificador lo publicaba con su nombre.
+        # El ancla lleva la primera linea del raise para ser UNICA: hay otra
+        # comprobacion de `returncode` en `_tag_declarado`, que devuelve `None`
+        # y no tiene nada que ver. Un ancla repetida deshaceria el texto
+        # equivocado sin que se notara —M4 de B13— y aqui la autocomprobacion
+        # del harness lo rechaza antes de tocar nada.
+        antes=("    if proc.returncode != 0:\n        parcial = _COLECTADOS.search(proc.stdout)"),
+        despues=("    if False:\n        parcial = _COLECTADOS.search(proc.stdout)"),
+        esperados=frozenset(
+            {
+                "TestUnRecuentoQueNoSeTerminoNoSePublica::test_una_colecta_interrumpida_no_publica_un_recuento"
+            }
+        ),
+    ),
+    Sonda(
         nombre="M5_el_workitem_deja_de_comprobar_que_no_esta_vacio",
         fichero="scripts/project_truth.py",
         antes="    if not isinstance(workitem, str) or not workitem:",

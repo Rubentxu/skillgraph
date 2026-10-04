@@ -363,6 +363,43 @@ class TestLosTiposNoSeAdelantan:
 
 
 # =====================================================================
+class TestUnRecuentoQueNoSeTerminoNoSePublica:
+    """Lo UNICO que mide: que un numero que no se pudo medir no se publique.
+
+    **Por que NO es un no-op.** El fallo que este test vigila va en la
+    direccion «dice que no cuadra» cuando el estado SI cuadra. B14 cierra la
+    direccion contraria, «dice que cuadra» cuando no, que es la peligrosa; este
+    no la invierte, la que ya era. Se incluye porque se ha MEDIDO en el
+    instrumento de este mismo bloque, y porque un verificador que afirma un
+    numero que no conto es del mismo GENERO que uno que afirma una coherencia
+    que no midio: los dos son la autoridad de coherencia hablando de algo que
+    no sabe.
+
+    MEDIDO: con `src/skillgraph/__init__.py` mutilado, pytest no termina la
+    colecta, imprime «2867 tests collected, 27 errors» y sale con rc=2. El
+    numero es real —son los tests que llego a ver— pero no es EL recuento, y
+    el verificador lo publicaba con su nombre: «tests: STATE declara 3284, el
+    arbol colecta 2867». Sin 417 tests y sin decir por que.
+    """
+
+    def test_una_colecta_interrumpida_no_publica_un_recuento(self) -> None:
+        init = RAIZ / "src" / "skillgraph" / "__init__.py"
+        original = init.read_bytes()
+        try:
+            init.write_text('__version__ = "7.7.7"\n', encoding="utf-8")
+            _, salida, crudo = _ejecuta()
+        finally:
+            init.write_bytes(original)
+        assert salida is not None, crudo[:250]
+        contras = salida.get("contradicciones") or []
+        assert not any(c.startswith("tests:") for c in contras), (
+            f"el verificador publico un recuento de una colecta que no termino: {contras}. "
+            f"El numero de una colecta interrumpida es el numero de otra magnitud, y "
+            f"compararlo con el que declara el estado es comparar dos cosas distintas."
+        )
+
+
+# =====================================================================
 class TestLoQueYaFuncionabaSigueFuncionando:
     """CONTRA-SALTO de la direccion contraria: que el arreglo no rompa nada.
 
