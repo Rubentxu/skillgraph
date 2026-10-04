@@ -52,6 +52,15 @@
 > **ejecuta** el medidor y decide por su codigo de salida, y se verifico en las
 > dos direcciones: capacidad entera da `PASS`, libro roto da `OPEN 3/5`.
 >
+> **CERRADO, CERTIFICADO Y PUBLICADO.** `v0.31.0` sale en `2567532`;
+> `origin/main` en `afce3e8`, verificado con `git ls-remote`, con 0
+> commits sin publicar. Suite sobre el árbol ya commiteado: **3251
+> passed, 3 skipped, 0 failed**. Evidencia:
+> `evidence/sddk-b12-gate-report-2026-10-04.json` (artefacto SDDK
+> `art-ef6c915f8ba8-e9bc0dd0`). Ciclo `p-b7740b96d79ec013/b12` en
+> **PAUSED**, no CLOSED ni BLOCKED: los gates de deuda no son evaluables
+> en esta build y no hay bloqueo externo.
+>
 > **GATE DE 1.0: 16 PASS / 3 OPEN / 1 NO_MEASURABLE -> 17 / 2 / 1.** Quedan
 > `runtime real certificado` (credencial), `security/threat model actualizado`
 > (reescribir un ADR) y `TUI operacional` (NO_MEASURABLE).
