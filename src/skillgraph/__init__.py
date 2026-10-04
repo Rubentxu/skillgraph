@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.30.0.dev0"  # entre releases: HEAD ya no esta en el tag v0.30.0
+__version__ = "0.31.0"  # version pura de la release v0.31.0
 
 from skillgraph.core.errors import (
     IdentityConflictError,

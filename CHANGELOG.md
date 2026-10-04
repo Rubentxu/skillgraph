@@ -14,6 +14,78 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.31.0] - 2026-10-04 — la versión del esquema era una constante, y por eso el upgrade era imposible
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.30.0`:
+`b/f/x/n/d 0/1/1/5/0`, la regla pide **MINOR → v0.31.0`.
+
+Es la segunda de las `OPEN` del gate de 1.0 que piden **código, no
+certificación**. El predicado decía, textual: *«no existe ninguna función
+de upgrade o de migración de datos entre releases: no hay de dónde subir una
+base creada por una versión anterior»*.
+
+La medición dijo que el problema era más profundo que «falta la función».
+`SCHEMA_VERSION` era `1` desde WI-65, con 73 releases encima; se escribía
+con `INSERT OR IGNORE` y **no se leía en ningún sitio de `platform/`**. Y el
+dato que resume el bloque: **borrar la tabla `schema_version` entera de una
+base y abrirla no daba ningún error**, porque el código la recreaba. Una
+versión que se regenera cuando falta es un `DEFAULT`, no un hecho.
+
+**Medido antes de escribir una línea: 0 de 5 preguntas abiertas.** Al final,
+**5 de 5**, con un instrumento que **ejecuta** y no mira nombres.
+
+### La decisión de diseño: el libro registra, no gobierna
+
+`sincroniza` ejecuta **todas** las migraciones y anota las que faltaban.
+Podría haber guardado ejecutando solo las pendientes, y sería más eficiente.
+Se eligió lo contrario por el caso que de verdad duele: una base restaurada
+de una copia parcial tiene el libro atrasado **y** el esquema con una columna
+que falta a la vez, y un libro que gobierna se creería que está bien y no
+repararía nada.
+
+El límite de la decisión está escrito en el código: una migración que
+transforme **datos** en vez de comprobar una precondición sería cara de correr
+en cada apertura, y cuando llegue tendrá que marcar su propio criterio de
+«ya aplicada» en vez de que `sincroniza` vuelva a hacer de puerta sin avisar.
+
+### Una regresión que este bloque introdujo y corrigió, medida
+
+La primera versión hacía `DELETE FROM schema_version` + `INSERT` **siempre**.
+Antes era `INSERT OR IGNORE`, que tras la primera apertura no escribe nada,
+luego abrir una base era una *lectura*. Con el `DELETE` incondicional, ocho
+procesos concurrentes se repartían mal el turno de escritura: *«se esperaban
+8 autores distintos y hay 7»*. Medido antes de arreglar: tres corridas dan
+verde, verde y **rojo**.
+
+El contrasalto que lo vigila mide `total_changes`, que es **determinista** —
+abrir una base al día da 0, subir una atrasada da 1 — porque contar
+ejecuciones verdes de un test de concurrencia sería una tirada, no una prueba.
+
+### Un predicado del gate que mentía en la dirección contraria
+
+«upgrade desde releases soportadas» buscaba `def upgrade` con un regex. La
+capacidad se llama `sincroniza`, luego este bloque habría entregado la
+capacidad **y el gate habría seguido diciendo `OPEN`**: un falso **negativo**,
+la misma clase que el falso positivo de B9 con el signo cambiado. Ahora el
+predicado **ejecuta** el medidor y decide por su código de salida, y se
+verificó en las dos direcciones: capacidad entera da `PASS`, libro roto da
+`OPEN 3/5`.
+
+### Lo que este bloque **no** dice que haya medido
+
+Que una base creada por una release de hace dos años conserve su contenido. La
+base «vieja» del medidor se **reconstruye** quitando lo que esa release no
+conocía; no es una base real de una release real. Lo que sí se mide es que se
+abre, se sube, se versiona y no pierde filas. La distancia entre «una base
+vieja se abre» y «una base vieja conserva lo que tenía» es la que un upgrade
+mal hecho pierde sin avisar.
+
+**Gate de 1.0: 16 PASS / 3 OPEN / 1 NO_MEASURABLE → 17 / 2 / 1.**
+`tests.total` 3254, +21 con el desglose medido por diff de ids. Harness 5/5
+con 5 causas distintas, y **una sonda nació rota** — M4 apuntaba a una línea
+que `ruff format` había movido, y el harness la reportó `[SIN SONDA]` en vez
+de contarla como verde.
+
 ## [0.30.0] - 2026-10-04 — el ciclo de vida de los packs, que era un nombre en un gate
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.29.0`:

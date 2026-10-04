@@ -1,0 +1,206 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B12",
+  "release": "v0.31.0",
+  "instrumento": "scripts/measure_b9_gate_1_0.py",
+  "medidor_del_bloque": "scripts/measure_b12_schema_upgrade.py",
+  "mutacion": "scripts/mutate_b12_schema_upgrade.py",
+  "ciclo_sddk": {
+    "cycle_id": "p-b7740b96d79ec013/b12",
+    "path": "A-full",
+    "lease": "owner=mavis-b12 fencing_token=1",
+    "nota": "El ciclo no puede pasar a CLOSED en esta build: los gates de deuda necesitan `sddk debt report`, que no esta implementado. Misma limitacion que b4..b10. Tampoco se marca BLOCKED, porque no hay bloqueo externo: el bloque esta entregado y certificado. El unico terminal legal desde Open/Explore es cycle.pause."
+  },
+  "antes": {
+    "PASS": 16,
+    "OPEN": 3,
+    "NO_MEASURABLE": 1
+  },
+  "despues": {
+    "PASS": 17,
+    "OPEN": 2,
+    "NO_MEASURABLE": 1
+  },
+  "listo_para_1_0": false,
+  "total_propiedades": 20,
+  "cerradas_por_b12": [
+    {
+      "nombre": "upgrade desde releases soportadas",
+      "antes": "OPEN",
+      "despues": "PASS",
+      "por_que_cerrada": "No era que faltara una funcion: SCHEMA_VERSION era 1 desde WI-65 con 73 releases encima, se escribia con INSERT OR IGNORE y NO SE LEIA en ningun sitio de platform/, y borrar la tabla schema_version entera de una base hacIA que el codigo la recreara en silencio. Una version que se regenera cuando falta es un DEFAULT, no un hecho.",
+      "linea_base": "0 de 5 preguntas ABIERTAS (/tmp/b12_measure.py)",
+      "linea_final": "5 de 5 PASS (scripts/measure_b12_schema_upgrade.py)"
+    }
+  ],
+  "el_predicado_que_mentia_en_la_direccion_contraria": {
+    "que_era": "buscaba `def (upgrade|migrate_up|actualizar_schema)` con un regex en src/**.py y contaba PASS el primer nombre encontrado",
+    "por_que_es_defecto": "Mide el NOMBRE y no la capacidad: se podia escribir `def upgrade(): pass` y daba verde. La capacidad de B12 se llama `sincroniza`, luego B12 habria entregado la capacidad completa y el gate habria seguido diciendo OPEN. Es un falso NEGATIVO, la misma clase que el falso positivo de B9 con el signo cambiado.",
+    "como_quedo": "el predicado CORRE scripts/measure_b12_schema_upgrade.py y decide por su codigo de salida",
+    "verificado_en_las_dos_direcciones": [
+      "capacidad entera -> PASS ('ejecutado ...: 5/5 PASS')",
+      "libro roto (no ejecuta migraciones) -> OPEN ('no esta completa: 3/5 PASS')",
+      "restaurado -> PASS ('5/5 PASS')"
+    ]
+  },
+  "decision_de_diseno": {
+    "titulo": "EL LIBRO REGISTRA, NO GOBIERNA",
+    "el_que": "sincroniza ejecuta TODAS las migraciones y anota las que faltaban",
+    "la_alternativa": "ejecutar solo las migraciones no anotadas, que es mas eficiente",
+    "por_que_no_la_alternativa": "Una base restaurada de una copia PARCIAL tiene las dos cosas rotas a la vez: el libro atrasado y el esquema con una columna que falta. Un libro que gobierna se creeria que la base esta bien y no repararia nada. Un libro que registra repara siempre, y su coste son unas cuantas comprobaciones de precondicion por abrir.",
+    "limite_declarado": "Una migracion que transforme DATOS en vez de comprobar una precondicion seria cara de correr en cada apertura. Cuando llegue, tendra que marcar su propio criterio de «ya aplicada» y dejarlo explicito, no que sincroniza vuelva a hacer de puerta sin avisar. Hoy las dos migraciones son comprobaciones de precondicion, que es lo que hace que la decision salga gratis."
+  },
+  "regresion_introducida_y_corregida": {
+    "que": "La primera version de sincroniza hacia DELETE FROM schema_version + INSERT SIEMPRE. Antes era INSERT OR IGNORE, que tras la primera apertura no escribe nada, luego abrir una base era una LECTURA.",
+    "sintoma": "test_b2_real_concurrency: «se esperaban 8 autores distintos y hay 7»",
+    "medido_antes_de_arreglar": "tres corridas del test dan verde, verde y ROJO",
+    "por_que_escapaba": "Ocho procesos concurrentes y un bloqueo de escritura: se manifestaba de forma intermitente, asi que una tirada de N ejecuciones verdes no es una prueba.",
+    "arreglo": "la tabla ya dice la version correcta, y reescribirla no responde nada: solo se escribe cuando la respuesta cambia",
+    "contrasalto": "mide total_changes, que es DETERMINISTA: abrir una base al dia da 0 y subir una atrasada da 1. Los dos lados se miden, porque un contrasalto que pasara por no escribir nunca no estaria vigilando nada."
+  },
+  "certificacion": {
+    "tests_total_declarado": 3254,
+    "desglose_medido_por_diff_de_ids": "3233 -> 3254, +21 contra 858a45a: +18 de test_b12_schema_upgrade.py (el fichero nuevo entero) y +3 de test_wi47_broad_except_guard.py, que se parametriza sobre SRC.rglob(\"*.py\") y por eso recoge migrations.py. Septima vez que se cumple la prediccion de B6.",
+    "el_desglose_salio_mal_primero": "El diff decia +10 en test_b2_real_crash.py, que este bloque no toca. Resulto ser que ese fichero no colecciona en un worktree de comparacion, porque importa un harness por ruta. Un desglose medido con una base que no colecciona tambien mide mal su propia medida: hay que comprobar que la base mide antes de creerse su medida.",
+    "suite_sobre_el_arbol_commiteado": "3251 passed, 3 skipped, 0 failed"
+  },
+  "tests_ajenos_que_cambiaron_y_por_que_no_es_maquillar": [
+    {
+      "test": "tests/test_wi87_state_vocabulary_single_source.py",
+      "que_decia": "assert SCHEMA_VERSION == 1",
+      "que_dice_ahora": "que NO exista una migracion para el cambio de vocabulario",
+      "por_que": "Era un PROXY de la propiedad, y un proxy se rompe cuando la propiedad sigue valiendo: la version subio a 2 por la migracion de claims.assertion_origin, que no tiene nada que ver con el vocabulario de promocion. Fijar un numero vuelve a hacer lo mismo, y es justo lo que el guard de B12 existe para que deje de ser verdad."
+    },
+    {
+      "test": "tests/test_wi65_storage_facade_delegations.py",
+      "que_decia": "EXPECTED_PUBLIC = 75",
+      "que_dice_ahora": "EXPECTED_PUBLIC = 77",
+      "por_que": "B12 anade version_esquema y migraciones_aplicadas. Se sube A PROPOSITO con el motivo escrito, igual que B11 subio a 75 al anadir un cluster. Preguntar el estado de un proyecto es parte de usar un proyecto."
+    }
+  ],
+  "harness": {
+    "sondas": "5/5 cazadas",
+    "causas_distintas": 5,
+    "sonda_nacida_rota": "M4 apuntaba a una linea que `ruff format` habia movido al refactorizar `sincroniza` en `_reescribe_version_si_cambia`. El harness la reporto [SIN SONDA] en vez de contarla como verde. Es el error 32 de WI-113 repetido: una sonda se verifica contra el texto real DESPUES de formatear, no antes.",
+    "veredicto_final_exige_las_dos_cosas": "suite verde Y git status limpio de los mutables. La suite verde con el arbol sucio es el falso verde de B11."
+  },
+  "lo_que_este_bloque_no_afirma": "Que una base creada por una release de hace dos anos conserve su contenido. La base «vieja» del medidor se RECONSTRUYE quitando lo que esa release no conocia: no es una base real de una release real. Lo que si se mide es que se abre, se sube, se versiona y no pierde filas. La distancia entre «una base vieja se abre» y «una base vieja conserva lo que tenia» es la que un upgrade mal hecho pierde sin avisar.",
+  "bloqueos_no_resolubles_desde_el_repo": [
+    "runtime real certificado: requiere SG_UAT_REAL_PROVIDER=1 y una credencial real.",
+    "TUI operacional: NO_MEASURABLE, requiere persona y terminal.",
+    "sddk debt report: no implementado en esta build, luego los gates debt-severity-assigned y debt-priority-assigned no son evaluables."
+  ],
+  "siguiente_bloque": {
+    "propiedad_que_queda_y_pide_trabajo": [
+      "security/threat model actualizado"
+    ],
+    "nota": "Es reescribir docs/architecture/ADR-0015-threat-model-stride.md, que se aprobo describiendo un proyecto de 830 tests y 17 releases y el arbol de hoy colecta 3254. Es trabajo de redaccion con medibles, no de codigo.",
+    "deuda_abierta_que_no_es_de_b12": [
+      "Nombres de test no-ASCII: queda UNO, tests/test_b3_capability_kernel.py:508. La convencion «nombres de test en ASCII» existe pero NO es ejecutable, y por eso reaparece. Necesita un guard con contrasalto en las dos direcciones.",
+      "PRE-PUSH: STATE.yaml afirmaba que el pre-push corre la suite antes de publicar. MEDIDO: es FALSO; el pre-push activo es un identity-guard de emails corporativos y el scripts/hooks/pre-push versionado no lo invoca nadie. El push de B11 quedo certificado por el proceso, no por el hook.",
+      "Conflicto de tag v0.7.1: la etiqueta local (8b63db6) y la remota (b0476c2) apuntan a commits distintos, ambos ancestros de origin/main."
+    ]
+  },
+  "propiedades": [
+    {
+      "nombre": "roadmap/state/docs coherentes",
+      "veredicto": "PASS",
+      "evidencia": "project_truth.py rc=0, 0 contradicciones; bloque B11, version 0.30.0.dev0, 3254 tests declarados == 3254 reales"
+    },
+    {
+      "nombre": "resource/controller API estable",
+      "veredicto": "PASS",
+      "evidencia": "la superficie del nucleo esta declarada, versionada y no se ha movido desde su snapshot, segun scripts/check_public_surfaces.py"
+    },
+    {
+      "nombre": "blueprint legacy completamente probado",
+      "veredicto": "PASS",
+      "evidencia": "los 16 UAT del blueprint tienen test que los nombra"
+    },
+    {
+      "nombre": "Graph Diff Gate operativo",
+      "veredicto": "PASS",
+      "evidencia": "Graph Diff Gate: 5 cerradas, 0 abiertas, 1 declaradas FUERA DE ALCANCE (no bajan el veredicto)"
+    },
+    {
+      "nombre": "runtime real certificado",
+      "veredicto": "OPEN",
+      "evidencia": "el UAT del proveedor real se salta: exige SG_UAT_REAL_PROVIDER=1 y una credencial en el entorno. Resumen: 3 skipped in 0.06s"
+    },
+    {
+      "nombre": "ontology extensible",
+      "veredicto": "PASS",
+      "evidencia": "core/ no nombra ningun tipo de recurso: se anaden sin tocarlo"
+    },
+    {
+      "nombre": "crash/recovery real certificado",
+      "veredicto": "PASS",
+      "evidencia": "crash y recovery ejecutados de verdad: 18 passed in 1.25s"
+    },
+    {
+      "nombre": "provenance fuerte",
+      "veredicto": "PASS",
+      "evidencia": "provenance: 5 cerradas, 0 abiertas"
+    },
+    {
+      "nombre": "concurrencia real certificada",
+      "veredicto": "PASS",
+      "evidencia": "5 de 5 corridas verdes; ultima: 5 passed in 1.41s"
+    },
+    {
+      "nombre": "capabilities deterministas",
+      "veredicto": "PASS",
+      "evidencia": "CAPABILITY_VERSION se declara en un solo sitio: ['src/skillgraph/platform/ports/capabilities.py']"
+    },
+    {
+      "nombre": "core sin dependencias de impl. externa",
+      "veredicto": "PASS",
+      "evidencia": "core/ solo importa de si mismo y de la estandar (5 modulos)"
+    },
+    {
+      "nombre": "CLI estable",
+      "veredicto": "PASS",
+      "evidencia": "la superficie de la CLI esta declarada, versionada y no se ha movido desde su snapshot, segun scripts/check_public_surfaces.py"
+    },
+    {
+      "nombre": "TUI operacional",
+      "veredicto": "NO_MEASURABLE",
+      "evidencia": "«operacional» es una propiedad de una persona usando un terminal: no hay forma de medirla ejecutando el repo. B7 la registro como P4 fuera de alcance."
+    },
+    {
+      "nombre": "migrations probadas",
+      "veredicto": "PASS",
+      "evidencia": "migracion contra base previa ejecutada: 3 passed, 20 deselected in 0.09s"
+    },
+    {
+      "nombre": "pack/controller lifecycle",
+      "veredicto": "PASS",
+      "evidencia": "`sg pack` expone el ciclo completo: ['import', 'install', 'list', 'load', 'remove', 'update']"
+    },
+    {
+      "nombre": "backups/restore probados",
+      "veredicto": "PASS",
+      "evidencia": "backups y restore ejecutados: 39 passed in 0.21s"
+    },
+    {
+      "nombre": "upgrade desde releases soportadas",
+      "veredicto": "PASS",
+      "evidencia": "ejecutado scripts/measure_b12_schema_upgrade.py: 5/5 PASS. El veredicto es el del instrumento, no la presencia de un nombre."
+    },
+    {
+      "nombre": "security/threat model actualizado",
+      "veredicto": "OPEN",
+      "evidencia": "el ADR se aprobo describiendo un proyecto de 830 tests y 17 releases; el arbol de hoy colecta 3254. El modelo de amenaza describe un producto que ya no es este"
+    },
+    {
+      "nombre": "distribution reproducible",
+      "veredicto": "PASS",
+      "evidencia": "el wheel y el sdist se construyen y llevan lo que declaran"
+    },
+    {
+      "nombre": "UAT agent-first completa",
+      "veredicto": "PASS",
+      "evidencia": "los 16 UAT del blueprint estan cubiertos por tests. Lo que NO mide esta propiedad es si el agente PUELA conocimiento: B6 lo dejo como P5 fuera de alcance porque necesita un proveedor real"
+    }
+  ]
+}
