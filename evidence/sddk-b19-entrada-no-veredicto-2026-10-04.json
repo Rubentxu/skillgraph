@@ -1,0 +1,99 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B19",
+  "titulo": "«NO es reproducible» y «no he podido medirlo» son la misma frase",
+  "release": "0.32.4",
+  "que_es_y_que_no_es": "Es el PRIMER bloque de la serie que no es una propiedad falsa. B16 y B17 abrieron propiedades que daban PASS con el defecto presente; B18 endurecio una que ya era cierta. Aqui la PROPIEDAD ES CIERTA y el defecto esta en el VERBO del veredicto. NO cambia el veredicto de la propiedad —sigue siendo PASS— y no anade superficie: lo que cambia es lo que un veredicto AFIRMA cuando no puede sostener lo que afirmaba.",
+  "como_nace": {
+    "que": "De un OPEN de 1 de 8 que salio al CERTIFICAR B18, con la evidencia capturada: «mismo contenido y distinta fecha dan bytes distintos en 2 artefacto(s) — wheel: 8612ab04ee18 vs dc5789082776; sdist: 673d9c2cc5f5 vs eb37bbcbabf2».",
+    "el_fallo_mio_que_es_parte_del_hallazgo": "La primera vez que vi ese OPEN solo lei el nombre de la propiedad en un resumen y volvi a ejecutar el gate. NO GUARDE LA EVIDENCIA. El primer instrumento dio 6 de 6 PASS — bien ejecutado, y midio la pregunta equivocada, porque sin el texto del fallo no se sabe que pregunta hacer. Guardar la evidencia del fallo es lo que convirtio un numero raro en un diagnostico, y es el mismo requisito que B18 anadio a su arnes: NO CUENTA LO QUE NO SE HA VISTO CAER."
+  },
+  "la_propiedad_es_cierta_al_reves": {
+    "medido": [
+      "ocho construcciones con la condicion EXACTA del predicado dan bytes IGUALES 8 de 8: cuatro sin tocar la fecha y cuatro tocandola con os.utime sobre src/skillgraph/__init__.py, que es lo que hace el predicado para delatar un build que se embeba el mtime",
+      "dos sdists con la suite completa de pytest corriendo en paralelo tienen CONTENIDO IDENTICO: 397 ficheros, 0 solo en el primero, 0 solo en el segundo, 0 comunes con contenido distinto"
+    ],
+    "conclusion": "la distribucion ES reproducible"
+  },
+  "el_defecto_y_las_dos_causas": {
+    "el_veredicto_antes": "«la distribucion NO es reproducible»",
+    "por_que_es_peor_que_en_b16": "distribution reproducible es la clase de propiedad MAS ALTA de la serie —«ejecutada»— y es la UNICA que alguien podria citar para decir «el build de este proyecto es irreproducible» sin comprobar nada mas. Un OPEN de una propiedad ejecutada se lee como un hecho medido.",
+    "las_dos_causas": {
+      "a_el_build_es_irreproducible": "se arregla el BUILD",
+      "b_la_entrada_cambio_entre_las_dos_mediciones": "se arregla la MEDICION"
+    },
+    "el_problema": "acciones OPUESTAS, y el predicado no las distinguia"
+  },
+  "por_que_no_se_resuelve_dentro_del_artefacto": {
+    "medido": "Con un fichero YA VERSIONADO que cambia entre las dos construcciones, los dos artefactos son coherentes consigo mismos y aun asi se construyeron con ENTRADAS DISTINTAS. Comparar el contenido de los dos paquetes no alcanza: hace falta el estado del ARBOL, y lo medido del contenido no distingue las dos causas.",
+    "el_arreglo": "_huella_de_entrada, derivada de git y tomada INMEDIATAMENTE ANTES de cada construccion —no una vez al principio, porque la pregunta es si cada construccion recibio la misma entrada—. Son tres hechos de git, no una lista escrita a mano: HEAD, `git status --porcelain -z` y `git diff HEAD`, con separador NUL.",
+    "por_que_el_diff_es_imprescindible": "Porque es lo que aporta el CONTENIDO de lo modificado. Sin el, la huella seria un `git status` que solo ve NOMBRES, y dos ficheros con el mismo nombre y distinto contenido darian la misma huella. MEDIDO, y con un test que lo exige: los dos arboles tienen que verse IGUALES desde git, que es el caso real de B19 — editar, construir, editar otra vez, construir otra vez—."
+  },
+  "lo_que_ya_existia_y_no_se_toca": {
+    "que": "sg_build_sdist_no_versionado, en scripts/check_package_build.py",
+    "medido": "Con un fichero sin versionar en el arbol, el veredicto es OPEN y la evidencia dice «el artefacto depende de lo que haya en el arbol de trabajo, no del commit». Es un buen guard y cubre la mitad del problema.",
+    "por_que_importa_decirlo": "La hipotesis mas obvia era la buena, y decirla es parte del bloque: un hallazgo que se apoya en refutar un defecto que no existe es un hallazgo mas debil de lo que parece, aunque el arreglo sea real.",
+    "el_test_que_lo_vigila": "Si el arreglo degrada en la frase acusadora un guard que ya era correcto, se ha roto uno bueno mientras se arreglaba uno malo. Es el ERROR de B16, que mejoro un predicado y dejo otro affirmative cuando no miraba nada."
+  },
+  "la_decision_es_pura": {
+    "que": "_decide_por_bytes: dos dicts de hashes y dos huellas. Sin disco, sin reloj.",
+    "por_que_importa": "Medido: dejarla dentro de _distribution_reproducible hacia que los tests tardaran CERO, porque no se puede deformar la decision sin deformar tambien la construccion. Un guard que no se puede deformar sin disparar el sistema entero no vigila la decision: vigila que el sistema entero corra."
+  },
+  "los_cuatro_fallos_propios": {
+    "por_que_importan": "Porque son mas informativos que el arreglo, y porque los tres primeros los encontro las herramientas del propio bloque antes de contar nada. Es la sexta vez que pasa en esta serie: B16, B17, B18, B19. Y el patron no es que los tests sean malos, es que un guard se parece muchisimo a un test cuando ambos dan verde.",
+    "f1_el_test_midio_el_repositorio_equivocado": {
+      "que": "lanzaba el gate del ARBOL REAL con cwd en el clon, y el gate calcula su RAIZ desde __file__",
+      "como_se_vio": "FALLO —PASS en vez de OPEN—, y por eso se pudo ver",
+      "por_que_es_el_peor_de_los_cuatro": "Un test que hubiera dado verde habria sido un guard que pasa porque midiò donde no toca. Fallar fue la mejor noticia del bloque."
+    },
+    "f2_el_contrasalto_de_m1_no_media_lo_que_decia": {
+      "que": "comparaba el arbol limpio contra el arbol con un fichero versionado modificado, y `git status` YA cambia entre esos dos casos, de vacio a ` M ruta`",
+      "por_que": "Luego no aislaba el contenido: media que hay un cambio, que es justo lo que `git status` ya ve sin el diff. Para que el diff sea NECESARIO los dos arboles tienen que verse IGUALES desde git. El test ahora lo exige con una asercion que lo dice."
+    },
+    "f3_el_harness_no_sabia_leer_su_propia_salida": {
+      "que": "hacia split()[0] sobre «FAILED <fichero>::<clase>::<testo>» y se quedaba con «FAILED»",
+      "consecuencia": "dio 0 de 3 sobre tres sondas que SI habian caido con su propio diagnostico, que es peor que no correr: 0 de 3 con la sensacion de que el guard no funciona."
+    },
+    "f4_m3_no_parseaba": {
+      "que": "la deformacion partia la sangria de un `return (` y el modulo no parseaba",
+      "por_que_no_se_vio_antes": "Es el requisito que B18 anadio a su arnes, y que aqui se pago en la PRIMERA sonda: los seis tests caian como ERROR de colecta y M3 se habria contado como la sonda mas fuerte de las tres sin haber medido nada. Se reescribio para desincronizar el VEREDICTO de su propia evidencia, que es un defecto peor y mas real."
+    }
+  },
+  "el_harness_al_final": {
+    "sondas": 3,
+    "cazadas": 3,
+    "causas_distintas": 3,
+    "cada_una_cae_solo_su_diagnostico": "M1 quita el diff de la huella; M2 devuelve la acusacion sin mirar si la entrada era la misma; M3 devuelve PASS con la evidencia de «NO es reproducible» — un veredicto desincronizado de su propia evidencia, que es peor que uno que se equivoca porque el que lo lee se lleva las dos cosas—.",
+    "los_diagnosticos_se_verifican_contra_el_arbol": "Con pytest --collect-only, no contra una lista escrita en el harness. La primera version comparaba contra si misma y decia «3 nombres existen» sin comprobar nada: si un test se renombraba, el harness seguia diciendo que existian y luego contaba un 0 de 3 con la explicacion equivocada. Es el error de WI-114 y el de B16 aplicados a un harness."
+  },
+  "resultado": {
+    "gate_de_1_0": "18 PASS / 1 OPEN / 1 NO_MEASURABLE, medido en ARBOL QUIETO",
+    "la_propiedad_de_este_bloque": "PASS, sin cambios, y la clase sigue siendo «ejecutada». Lo que ha cambiado es que ahora ese PASS se puede citar: se ha medido la precondicion que lo sostenia.",
+    "suite": "3315 passed passed, 3 skipped skipped, 0 failed",
+    "tests_total": "3312 -> 3318, +6, fichero nuevo entero",
+    "harness": "3/3 con 3 causas, y 4 fallos propios cazados antes de contar",
+    "un_fallo_mio_en_la_documentacion": "Al cerrar B19, la linea de estado del ROADMAP seguia diciendo «Bloque vivo: B18» y «3312 tests» con el bloque ya siendo B19 y la cifra ya siendo 3318. Dos lineas de un fichero que nadie mira porque cambian cada bloque, y que se habian quedado en el anterior. Un ROADMAP que dice «bloque vivo: B18» cuando el bloque vivo es B19 es justo el tipo de verdad vieja que el guard de coherencia no puede ver: la coherencia interna del fichero se sostiene."
+  },
+  "lo_que_queda_abierto_y_de_que_clase_es": {
+    "credencial": "runtime real certificado exige SG_UAT_REAL_PROVIDER=1 y ANTHROPIC_API_KEY u OPENAI_API_KEY",
+    "persona": "TUI operacional es una propiedad de alguien usando un terminal",
+    "las_dos_derivada_que_no_se_abren": "blueprint legacy completamente probado y UAT agent-first completa comparten el mismo predicado debil de UAT, y su PROPIEDAD es CIERTA por otra via: tests/uat_audit.py tiene una funcion completa por UAT con directorios temporales, la CLI real y aserciones, metida en CI. Reescribir un instrumento que funciona para que un guard vuelva a mirarlo es trabajo sin propiedad.",
+    "la_clase_de_trabajo_que_si_se_puede": "Comprobar que los instrumentos que YA existen siguen midiendo lo que dicen. SEIS bloques seguidos se han encontrado instrumentos al escribirlos, y B19 es el que mas haazoo: cuatro en un solo bloque, tres de ellos en las herramientas del propio bloque antes de contar nada.",
+    "producto": "S9 y S10 del ADR-0015 siguen siendo decisiones de producto"
+  },
+  "shas": {
+    "nota": "Tomados de git con git log y git rev-list. Una entrada con un sha inventado es provenance falsa.",
+    "commits_del_bloque": [
+      "8970e65 docs(release): el registro de v0.32.4, con el sha de git y el bump de la herramienta",
+      "62cbe51 chore(release): el estado de v0.32.4, con su etiqueta ya creada",
+      "64bd309 build(release): la version pura de v0.32.4, con su CHANGELOG desde el principio",
+      "f6f52de fix(b19): el ultimo nodeid esperado llevaba la clase de un conjunto que no existe",
+      "356a630 fix(b19): el harness contaba diagnosticos contra una lista escrita a mano",
+      "d91231a docs(state): B19 vivo, con los tres fallos propios que importan mas que el arreglo",
+      "5bfb2b5 fix(gate): «NO es reproducible» y «no he podido medirlo» son dos frases distintas"
+    ],
+    "tag": "v0.32.4",
+    "sha_del_tag": "64bd309c7ccc50039eea0384e0f9a74d6e5987d1",
+    "semver_derivado": "b/f/x/n/d 0/0/3/6/0 -> PATCH, con la herramienta marcando la etiqueta como ok"
+  }
+}
