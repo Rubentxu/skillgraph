@@ -76,7 +76,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -92,13 +92,141 @@ Estado = Literal[Veredicto, "NO_MEDIBLE"]
 Predicado = Callable[[], "tuple[Veredicto, str]"]
 
 
+#: Las dos clases de evidencia que puede tener una propiedad. No es una escala
+#: de calidad: las dos son validas, y lo que se declara es CUAL es cada una.
+#:
+#: - ``ejecutada``: el veredicto salio de CORRER algo —un subproceso, un
+#:   subproceso que construye un paquete— y mirar lo que devolvio. Si el
+#:   proyecto cambia, el veredicto cambia solo.
+#: - ``derivada``: el veredicto salio de LEER el arbol. Es una afirmacion
+#:   sobre lo que el codigo dice, no sobre lo que hace.
+#:
+#: Las dos son legítimas y hay que decirlo, porque hasta B15 no habia manera de
+#: saber cual era cual: los dieciocho PASS salian en la misma lista y con la
+#: misma tipografía. Un PASS ``ejecutada`` se cae solo cuando el proyecto se
+#: rompe; un PASS ``derivada`` solo se cae si alguien vuelve a medirlo.
+ClaseEvidencia = Literal["ejecutada", "derivada"]
+
+
+#: Nombres de funcion que lanzan un programa. La lista es corta a proposito: lo
+#: que se busca es «sale un proceso hijo», y anadir nombres de mas convertiria
+#: una clasificacion en una lista de sinónimos que hay que mantener.
+_LANZA_PROCESO = frozenset({"run", "check_output", "check_call", "Popen", "call"})
+
+
+def _grafo_del_modulo() -> dict[str, frozenset[str]]:
+    """Quien llama a quien, **dentro de este fichero**.
+
+    Se construye desde el AST y no desde una lista: un predicado puede llegar a
+    lanzar un proceso a traves de un helper, y un helper a traves de otro. Si
+    el grafo se escribiera a mano, bastaria con que un helper dejara de
+    nombrar al proceso para que un ``ejecutada`` se declarara ``derivada`` sin
+    que nadie lo decidiera.
+    """
+    arbol = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    definidos = {
+        nodo.name
+        for nodo in ast.walk(arbol)
+        if isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    grafo: dict[str, frozenset[str]] = {}
+    for nodo in ast.walk(arbol):
+        if not isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        llama: set[str] = set()
+        for sub in ast.walk(nodo):
+            if not isinstance(sub, ast.Call):
+                continue
+            func = sub.func
+            nombre = None
+            if isinstance(func, ast.Name):
+                nombre = func.id
+            elif isinstance(func, ast.Attribute) and func.attr in _LANZA_PROCESO:
+                # `subprocess.run(...)` y `subprocess.check_output(...)`:
+                # el atributo ES la senal de que sale un proceso.
+                valor = func.value
+                if isinstance(valor, ast.Name) and valor.id == "subprocess":
+                    llama.add("subprocess")
+            if nombre in definidos:
+                llama.add(nombre)
+        grafo[nodo.name] = frozenset(llama) & (definidos | {"subprocess"})
+    return grafo
+
+
+def _alcanza_proceso(nombre: str, grafo: dict[str, frozenset[str]], visto: frozenset[str]) -> bool:
+    """Si desde `nombre` se llega a `subprocess`, por muchas capas que sean."""
+    if nombre in visto:
+        return False
+    for siguiente in grafo.get(nombre, frozenset()):
+        if siguiente == "subprocess" or _alcanza_proceso(siguiente, grafo, visto | {nombre}):
+            return True
+    return False
+
+
+#: Los predicados se registran en `PREDICADOS` con un `_` delante del slug.
+#: MEDIDO: la primera version de esta funcion buscaba el slug a secas, no lo
+#: encontraba, y devolvia "derivada" **por defecto** — veinte de veinte, con la
+#: autoridad de un `print` y ninguna advertencia. Era falso: seis de esos
+#: predicados lanzan subproceso. Un fallo de busqueda que devuelve un valor en
+#: vez de decir «no lo se» es el mismo defecto que este bloque persigue, y lo
+#: primero que produjo fue, exactamente, el falso que venia a cerrar.
+PREFIJO_PREDICADO = "_"
+
+
+def _funcion_del_predicado(slug: str, grafo: dict[str, frozenset[str]]) -> str:
+    """El nombre de la funcion que implementa este slug, o LVE.
+
+    Levanta en vez de devolver un valor por defecto. La razon esta en la
+    docstring de arriba: un nombre que no se encuentra NO es «no ejecuta», es
+    «no lo se», y las dos cosas tienen que verse distinto en la salida.
+    """
+    candidatos = (PREFIJO_PREDICADO + slug, slug)
+    for nombre in candidatos:
+        if nombre in grafo:
+            return nombre
+    raise LookupError(
+        f"el slug {slug!r} no corresponde a ninguna funcion de este modulo. Los "
+        f"predicados se registran en PREDICADOS como {PREFIJO_PREDICADO!r} + slug; "
+        f"buscar solo uno de los dos, y no beiden, devuelve una clase equivocada sin "
+        f"avisar. Es el fallo que MEDIDO dio veinte 'derivada' sobre una mitad de "
+        f"predicados que si ejecutan."
+    )
+
+
+def clase_de_evidencia(slug: str) -> ClaseEvidencia:
+    """Si el predicado de esta propiedad EJECUTA o solo DERIVA. Del arbol.
+
+    **Por que esto no es una lista escrita a mano.** Dieciocho lineas de
+    ``"roadmap_estable": "ejecutada"`` serian una segunda fuente de verdad que
+    divergiria de la primera en cuanto alguien anadiera un helper, y divergiria
+    en silencio: el gate seguiria imprimiendo PASS con una clase que ya no
+    describe lo que hace. Es la trampa de WI-106 y la de WI-99, dos veces mas.
+
+    Y por que LVE si no encuentra el predicado, en vez de asumir `derivada`:
+    asumir es exactamente el fallo medido en la primera version de esta
+    funcion.
+    """
+    grafo = _grafo_del_modulo()
+    funcion = _funcion_del_predicado(slug, grafo)
+    return "ejecutada" if _alcanza_proceso(funcion, grafo, frozenset()) else "derivada"
+
+
 @dataclass(frozen=True, slots=True)
 class Propiedad:
-    """Una propiedad del gate y lo que el instrumento pudo decir de ella."""
+    """Una propiedad del gate y lo que el instrumento pudo decir de ella.
+
+    ``clase_evidencia`` NO se pasa: sale de ``clase_de_evidencia`` sobre el
+    propio slug. Que el dataclass la derive y no la reciba es lo que hace
+    imposible que un ``ejecutada`` se declare a mano.
+    """
 
     nombre: str
     veredicto: Estado
     evidencia: str
+    clase_evidencia: ClaseEvidencia = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "clase_evidencia", clase_de_evidencia(_slug(self.nombre)))
 
 
 # --------------------------------------------------------------------------
