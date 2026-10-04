@@ -156,14 +156,36 @@ SONDAS: tuple[Sonda, ...] = (
     Sonda(
         nombre="M1_vuelve_un_reader_por_regex_del_estado",
         fichero="scripts/project_truth.py",
-        # Se sustituye el CUERPO de `release_declarada` por la version con
+        # Se sustituye el CUERPO de `tests_declarados` por la version con
         # regex, que es como estaba antes de B14. Definir la constante sin
         # usarla no seria sonda: desactivaria el modulo sin cambiar lo que el
         # codigo hace, y el guard mide si queda alguien LEYENDO por regex.
+        #
+        # MEDIDO: la primera version de esta sonda mutaba `release_declarada`
+        # a `_TAG_STATE.search(...)`, y `_TAG_STATE` es una constante que B14
+        # BORRO. El modulo reventaba con NameError, caian los DIEZ tests que
+        # ejecutan el verificador, y ninguno era el diagnostico declarado: el
+        # harness lo clasifico como INVALIDA, que es exactamente lo que
+        # distingue a una sonda que mide de una que rompe. Una sonda que rompe
+        # el modulo no prueba el guard que dice vigilar — la pasaria igual
+        # cualquier reader por regex, y tambien un `import` roto —.
+        #
+        # Por eso la sonda reinsta un reader FUNCIONAL: mismo dato, patron
+        # propio sobre el fichero crudo. Lo unico que cambia es que vuelve a
+        # haber dos maneras de leer el estado, que es lo que mide el guard.
         antes=(
-            '    release = _seccion("release")\n    if release is None or "tag" not in release:'
+            '    tests = _seccion("tests")\n'
+            '    if tests is None or "total" not in tests:\n'
+            '        raise VerdadNoLegible("STATE.yaml.tests no declara `total`")\n'
+            '    total = tests["total"]'
         ),
-        despues=('    m = _TAG_STATE.search(_lee("STATE.yaml"))\n    if m is None:'),
+        despues=(
+            '    _TOTAL = re.compile(r"^\\s*total:\\s*(\\S+)", re.MULTILINE)\n'
+            '    m = _TOTAL.search(_lee("STATE.yaml"))\n'
+            "    if m is None:\n"
+            '        raise VerdadNoLegible("STATE.yaml.tests no declara `total`")\n'
+            "    total = int(m.group(1))"
+        ),
         esperados=frozenset(
             {"TestElEstadoSeLeeDeUnaSolaManera::test_no_queda_ningun_regex_sobre_state_yaml"}
         ),
