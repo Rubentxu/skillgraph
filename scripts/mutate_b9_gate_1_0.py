@@ -186,8 +186,12 @@ def _sondas() -> tuple[Sonda, ...]:
         Sonda(
             nombre="M4_el_error_final_se_traga",
             fichero="src/skillgraph/platform/journal.py",
-            antes='    conexion.execute("PRAGMA journal_mode = WAL")\n',
+            antes=(
+                "    # fallo visible a una base en `delete` que nadie sabe que esta en `delete`.\n"
+                '    conexion.execute("PRAGMA journal_mode = WAL")\n'
+            ),
             despues=(
+                "    # fallo visible a una base en `delete` que nadie sabe que esta en `delete`.\n"
                 "    try:\n"
                 '        conexion.execute("PRAGMA journal_mode = WAL")\n'
                 "    except sqlite3.OperationalError:\n"

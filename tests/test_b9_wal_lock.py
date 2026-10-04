@@ -322,9 +322,13 @@ class TestLaBarreraDeLosHijos:
             # distingue de «esperando».
             #
             # Lo que los separa es si ha escrito algo: la puerta esta
-            # cerrada, luego un hijo que la respeta tiene cero filas. Cero
-            # filas es una afirmacion sobre el estado, y el estado no
-            # depende de cuando se mire.
+            # cerrada, luego un hijo que la respeta tiene cero filas. Y se
+            # espera un segundo antes de mirar, porque el hijo sin puerta
+            # necesita abrir la base antes de poder escribir: mirarlo en el
+            # instante en que anuncia «listo» seria medir el arranque, no
+            # la espera. Un segundo es de sobra para lo que se quiere
+            # distinguir y no hace el test intermitente.
+            time.sleep(1.0)
             assert _filas(db) == 0, (
                 f"el hijo escribio {_filas(db)} filas con la puerta CERRADA: no esta "
                 "esperando a que el padre lo suelte, y su ventana empieza desde su "
@@ -374,11 +378,19 @@ class TestLaBarreraDeLosHijos:
         hilo.start()
         try:
             padre._abre_la_puerta(puerta, 3)
+            # **EL ESTADO SE MIRA EN EL INSTANTE DEL RETORNO, NO DESPUES.**
+            # MEDIDO: la primera version hacia `hilo.join()` en el `finally`
+            # y comprobaba despues. Con eso el hilo ya habia escrito su
+            # fichero para cuando se miraba, y la sonda M5 —que hace que el
+            # padre rompa el bucle en la primera iteracion— pasaba en verde.
+            # Un guard que espera a que pase lo que quiere medir, mide que lo
+            # que quiere medir ya ha pasado.
+            tercero_llego = (puerta / "listo-h2").exists()
         finally:
             hilo.join()
 
         assert (puerta / "abre").exists(), "el padre nunca abrio la puerta: el arnes se cuelga"
-        assert (puerta / "listo-h2").exists(), (
+        assert tercero_llego, (
             "el padre abrio y volvio ANTES de que el tercer hijo anunciara "
             "estar listo: el que no ha llegado sale cuando le de la gana, que "
             "es la carrera original. Con dos de tres, el padre tiene que "
