@@ -149,6 +149,21 @@
 > medición no registraba nada y el test principal pasaba por la razón
 > equivocada. Dos mutaciones sobre producción, ambas cazadas.
 >
+> **Y UN SEGUNDO DEFECTO PROPIO, QUE INTRODUJE YO AL ESCRIBIR EL ARREGLO.** El
+> comentario que explicaba el `omit` llevaba acentos graves, y el heredoc de
+> `coverage.sh` va **sin comillas** porque tiene que expandir `$REPO_ROOT`.
+> Bash los trató como **sustitución de comando**: la configuración salió
+> ilegible y la etapa murió en el primer `coverage erase`, un segundo y medio
+> después de empezar.
+>
+> Lo importante no es el error: es que **los tests del guard no lo cazaron.**
+> Leían el **texto** del heredoc, que estaba perfecto — lo que estaba mal era
+> lo que el shell **produce** de él. *Un guard que lee el fuente mide el
+> fuente, y lo que se usa es lo que el shell escribe.* Por eso el guard ahora
+> **genera** la configuración ejecutando el heredoc y exige que coverage la
+> pueda leer. Tres mutaciones cazadas en total: quitar el `omit`, cambiarlo por
+> uno que no cubre `/tmp`, y reponer un acento grave dentro del heredoc.
+>
 > **DONDE SE MIRA, VERIFICADO POR AST:**
 >
 > | cita | que sostiene |
@@ -160,9 +175,10 @@
 > | `test_b20_ontologia_contradictoria.py:95::PENDIENTES_POR_DECLARAR` | el techo **nombrado**, que es lo que lo hace rompible |
 > | `test_b20_ontologia_contradictoria.py:216::TestElGateNoSeContradiceASiMismo` | el invariante que cierra la contradicción |
 > | `mutate_b20_ontologia_contradictoria.py` | 3 sondas, 3/3, y **M1 y M2 declaran dos diagnósticos cada una** |
-> | `test_b20_coverage_omit.py:66::_rc_generada` | la configuración se **deriva** del script, no se copia en el guard |
-> | `test_b20_coverage_omit.py:153::TestLaConfiguracionNoMideFueraDelRepo` | la propiedad **ejecutada**, con su contrasalto que dio rojo al escribirlo |
-> | `test_b20_coverage_omit.py:202::TestElArregloNoRelajaElSuelo` | un arreglo que apaga el umbral no es un arreglo |
+> | `test_b20_coverage_omit.py:85::_rc_generada` | la configuración se **genera ejecutando** el heredoc, no se lee |
+> | `test_b20_coverage_omit.py:181::TestLaConfiguracionNoMideFueraDelRepo` | la propiedad **ejecutada**, con su contrasalto que dio rojo al escribirlo |
+> | `test_b20_coverage_omit.py:230::TestElArregloNoRelajaElSuelo` | un arreglo que apaga el umbral no es un arreglo |
+> | `test_b20_coverage_omit.py:250::TestLaConfiguracionEsLegible` | lo que el shell **produce** tiene que ser una configuración |
 > | `check_coverage_floors.py:159::informe` | la **segunda** consumer, que también se rompía |
 >
 > ---

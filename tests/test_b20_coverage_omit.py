@@ -49,10 +49,12 @@ El contrasalto va en las dos direcciones. Sin el, este test pasaria con el
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -63,8 +65,8 @@ COVERAGE_SH = REPO_ROOT / "scripts" / "coverage.sh"
 _HEREDOC = re.compile(r"<<EOF\n(.*?)\nEOF\n", re.DOTALL)
 
 
-def _rc_generada() -> str:
-    """La configuracion que `coverage.sh` escribe, derivada del propio script.
+def _cuerpo_del_heredoc() -> str:
+    """El texto que `coverage.sh` mete en el heredoc, tal cual, SIN expandir.
 
     Se extrae el heredoc en vez de reescribirlo aqui. Si el script cambia, esto
     cambia con el; si el test copiara la configuracion, dos ficheros podrian
@@ -77,13 +79,39 @@ def _rc_generada() -> str:
         "Si el mecanismo cambio, este guard se esta midiendo a si mismo y hay "
         "que rehacerlo contra el mecanismo nuevo, no relajar el aserto."
     )
-    rc = cuerpos[0].replace("$REPO_ROOT", str(REPO_ROOT))
-    assert "data_file" in rc, "la configuracion derivada no dice donde esta el dato"
-    return rc
+    return cuerpos[0]
+
+
+def _rc_generada() -> str:
+    """La configuracion tal cual la escribe el shell: EXPANDIDA, no leida.
+
+    MEDIDO AL ESCRIBIR ESTE GUARD, y es su propio agujero: la primera version
+    leia el texto del heredoc y comprobaba sobre el. El texto estaba bien; lo
+    que estaba mal era lo que el shellProduce de el. Con acentos graves en un
+    comentario —el heredoc va SIN comillas porque necesita expandir
+    $REPO_ROOT— bash los trato como sustitucion de comando, la configuracion
+    salio ilegible y este guard paso en verde. Un guard que lee el fuente
+    mide el fuente, y lo que se usa es lo que el shell escribe.
+    """
+    cuerpo = _cuerpo_del_heredoc()
+    destino = Path(tempfile.mkdtemp(prefix="sg_b20_rc_")) / "generada.rc"
+    proc = subprocess.run(
+        ["sh", "-c", f'cat >"{destino}" <<EOF\n{cuerpo}\nEOF\n'],
+        cwd=REPO_ROOT,
+        env={**os.environ, "REPO_ROOT": str(REPO_ROOT)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, (
+        "el heredoc de coverage.sh no se puede generar:\n"
+        f"stdout={proc.stdout!r}\nstderr={proc.stderr!r}"
+    )
+    return destino.read_text(encoding="utf-8")
 
 
 def _rc_para(datos: Path, sin_omit: bool) -> Path:
-    """La RC derivada, apuntando al dato del test y con/sin el `omit`."""
+    """La RC generada, apuntando al dato del test y con/sin el `omit`."""
     rc = _rc_generada()
     rc = re.sub(r"^data_file = .*$", f"data_file = {datos}", rc, flags=re.MULTILINE)
     rc = re.sub(r"^parallel = true$", "parallel = false", rc, flags=re.MULTILINE)
@@ -219,6 +247,58 @@ class TestElArregloNoRelajaElSuelo:
         )
 
 
+class TestLaConfiguracionEsLegible:
+    """Lo que el shell escribe tiene que ser una configuracion, no texto.
+
+    MEDIDO AL ESCRIBIR ESTE GUARD: el comentario que explicaba el `omit`
+    llevo acentos graves, y el heredoc va SIN comillas porque necesita
+    expandir `$REPO_ROOT`. Bash los trato como sustitucion de comando, la
+    configuracion salio ilegible, y la etapa fallo en el primer
+    `coverage erase` —un segundo y medio despues de empezar—. Los tests de
+    abajo NO lo cazaron, porque leian el TEXTO del heredoc, que estaba
+    perfecto: lo que estaba mal era lo que el shell produce de el. Este test
+    se mide sobre el resultado, no sobre el fuente.
+    """
+
+    def test_coverage_puede_leer_la_configuracion_generada(self) -> None:
+        destino = Path(tempfile.mkdtemp(prefix="sg_b20_legible_")) / "rc"
+        destino.write_text(_rc_generada(), encoding="utf-8")
+        # `coverage debug config` no acepta `--rcfile`: MEDIDO, responde
+        # «takes no additional arguments» y sale con rc=1. La via que si vale
+        # es la variable de entorno, y discrimina de verdad — con una RC rota
+        # da rc=1 y con una legible rc=0.
+        proc = subprocess.run(
+            [sys.executable, "-m", "coverage", "debug", "config"],
+            cwd=REPO_ROOT,
+            env={**os.environ, "COVERAGE_RCFILE": str(destino)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, (
+            "la configuracion que escribe coverage.sh no la puede leer coverage.\n"
+            "MEDIDO en B20: un acento grave en un comentario de dentro del heredoc "
+            "—que va sin comillas porque tiene que expandir $REPO_ROOT— lo "
+            "interpreta el shell como sustitucion de comando.\n"
+            f"stdout={proc.stdout[-500:]!r}\nstderr={proc.stderr[-500:]!r}"
+        )
+
+    def test_el_heredoc_no_trae_acentos_graves(self) -> None:
+        """CONTRASALTO barato, en la otra direccion.
+
+        El test de arriba es correcto pero caro de entender cuando falla. Este
+        senala la causa concreta, que es lo que un verificador que dice «falso»
+        sin decir «donde» es un callejon.
+        """
+        cuerpo = _cuerpo_del_heredoc()
+        assert "`" not in cuerpo, (
+            "el heredoc de coverage.sh lleva un acento grave y va SIN comillas: "
+            "el shell lo va a ejecutar como comando. Nombra el codigo en el "
+            "comentario de ARRIBA del heredoc, que el shell no toca.\n"
+            f"Trozo sospechoso: {cuerpo[cuerpo.index(chr(96)) - 40 : cuerpo.index(chr(96)) + 40]!r}"
+        )
+
+
 def test_la_configuracion_derivable_no_es_una_copia() -> None:
     """Lo que este fichero mide es lo que `coverage.sh` escribe.
 
@@ -231,9 +311,9 @@ def test_la_configuracion_derivable_no_es_una_copia() -> None:
         "scripts/coverage.sh ya no escribe la configuracion con un heredoc <<EOF. "
         "Este guard deriva de ahi, luego ahora mediria su propia reconstruccion."
     )
-    # Y la derivacion tiene que ser de ESTE repo, no de un texto suelto.
+    # Y lo generado tiene que apuntar a este arbol, no a un texto suelto.
     assert str(REPO_ROOT) in _rc_generada(), (
-        "la configuracion derivada no apunta a este arbol: el `$REPO_ROOT` no "
+        "la configuracion generada no apunta a este arbol: el `$REPO_ROOT` no "
         "se ha expandido y el guard mediria una ruta que no existe"
     )
 

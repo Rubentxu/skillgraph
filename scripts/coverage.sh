@@ -108,6 +108,45 @@ fi
 # paralelos. Un nombre con guion lo dejaba sin ignorar y ensuciaba el
 # arbol, que es requisito del checklist de release.
 RC="$REPO_ROOT/.coverage.rc"
+
+# --- por que la configuracion omite /tmp (MEDIDO en B20, al certificar) -----
+#
+# Sin el `omit` de mas abajo, la etapa unit-tests termina con rc=1 DESPUES de
+# que la suite entera haya pasado: 3321 passed, 93,68 % sobre un suelo de 80, y
+# luego «No source for code: '/tmp/b17_16r3_ise/src/skillgraph/__init__.py'».
+#
+# MEDIDO sobre el dato real: de las 376 rutas del fichero de datos, 282 eran
+# de /tmp, y NINGUNA existia ya cuando llegaba el informe.
+#
+# De donde sale. La clase _ArbolCopiado, en tests/test_b17_pack_lifecycle_exec.py,
+# abre un TemporaryDirectory con prefijo "b17_", copia src/ dentro y levanta el
+# paquete de ahi como subproceso. El hook .pth del punto 1 mide ese subproceso
+# con la misma destreza con la que mide cualquier otro. La copia se borra al
+# terminar el test, y para cuando llega el informe la ruta ya no existe:
+# coverage no puede abrir el fichero y aborta el informe ENTERO.
+#
+# Rompia las DOS consumidoras: coverage report, aqui, y coverage json, en
+# check_coverage_floors.py, que es la etapa SIGUIENTE de la receta. Parchear
+# la una habria dejado la otra roja.
+#
+# POR QUE NO SE RESUELVE CON [paths]. Los temporales no tienen un solo layout:
+# conviven /tmp/b17_*/src/ y /tmp/b19_*/repo/src/. Remapearlos obligaria a
+# enumerarlos, y enumerar layouts es la misma lista encubierta por forma que
+# B20 denuncia en el predicado de la ontologia: decide COMO SE ESCRIBE la
+# ruta en vez de A QUE CONJUNTO PERTENECE. La regla es una y no necesita
+# lista: lo que vive fuera del arbol del repo no es codigo de este repo.
+#
+# NO RELAJA EL SUELO. MEDIDO: con el omit puesto, subir fail_under a 95 o a 99
+# sobre el 94 % real sigue dando rc=2. Lo que se deja de exigir es que
+# coverage sepa abrir ficheros que ya no existen, que no es una propiedad del
+# proyecto.
+#
+# OJO AL ESCRIBIR DENTRO DE ESTE HEREDOC: va SIN COMILLAS, porque necesita
+# expandir $REPO_ROOT. Un acento grave aqui no es decoracion, es una
+# SUSTITUCION DE COMANDO. MEDIDO: con acentos graves en un comentario, la
+# configuracion salio ilegible y la etapa fallo en el primer `coverage erase`,
+# un segundo y medio despues de empezar. Si hay que nombrar codigo dentro,
+# se pone en el comentario de aqui arriba, que es donde el shell no lo toca.
 cat >"$RC" <<EOF
 [run]
 branch = true
@@ -115,29 +154,8 @@ source = skillgraph
 parallel = true
 sigterm = true
 data_file = $REPO_ROOT/.coverage.parallel
-# MEDIDO en B20, al certificar: sin esto, la etapa unit-tests falla con
-# «No source for code: /tmp/.../src/skillgraph/__init__.py» y rc=1, DESPUÉS
-# de que la suite entero haya pasado.
-#
-# De donde sale: varios tests ejecutan el paquete desde una COPIA en un
-# temporal —`test_b17_pack_lifecycle_exec.py` abre un
-# `TemporaryDirectory(prefix="b17_")` y lo levanta como subproceso—, y el
-# hook .pth del punto 1 mide ese subproceso con la destreza de medir
-# cualquier otro. La copia se borra al terminar el test, y para cuando llega
-# `coverage report` la ruta ya no existe: coverage no puede abrir el fichero
-# y aborta el informe entero.
-#
-# MEDIDO: de las 376 rutas del fichero de datos, 282 eran de /tmp. Y no es un
-# solo layout —conviven `/tmp/b17_*/src/` y `/tmp/b19_*/repo/src/`—, asi que
-# un remapeo con `[paths]` habria tenido que enumerarlos. Eso seria una lista
-# de layouts en vez de una regla, que es la misma trampa por forma que B20
-# denuncia en otro sitio. La regla es una: lo que vive fuera del arbol del
-# repo no es codigo de este repo y no se mide.
-#
-# No relaja el suelo: `fail_under` sigue aplicando al informe, y con
-# `--ignore-errors` de comprobacion, subirlo a 95 o 99 sigue dando rc=2
-# sobre el 94 % real. Lo que se deja de exigir es que coverage sepa abrir
-# ficheros que ya no existen.
+# Lo que vive fuera del arbol del repo no es codigo de este repo, y no se
+# mide. El motivo, medido, esta en el comentario de este script, encima.
 omit =
     /tmp/*
 
