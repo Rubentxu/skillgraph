@@ -1,3 +1,77 @@
+> **Bloque 2026-10-04 (B17) — El ciclo de vida de los packs se decidía contando nombres, y el instrumento que lo ejecutaba estaba en disco sin cablear.**
+> (cerrado; publicación en curso)
+> Versión activa `0.32.1.dev0`; último tag `v0.32.1`.
+>
+> **ES LA TERCERA DE LAS SIETE QUE B15 NOMBRÓ**, y es la más fácil de las que
+> quedan **por una razón que no es de estilo: el instrumento que hace el trabajo
+> ya estaba escrito y no se estaba usando.**
+>
+> **MEDIDO ANTES DE ESCRIBIR UNA LÍNEA**, sobre copias del árbol con el repo real
+> intacto. Se rompe la **decisión**, no el sitio donde se mira: el `if` que levanta
+> `ValidationError` cuando `motivos_de_incompatibilidad` devuelve motivos —y **no**
+> `es_compatible`, que es la verdad del dominio y que no se toca, porque romper las
+> dos no mediría una, mediría otra cosa—:
+>
+> ```
+> MEDIDO A · install deja de rechazar un pack incompatible
+>   gate   : PASS    <- leía NOMBRES
+>   B11 Q1 : PASS    <- leía NOMBRES, y es LITERALMENTE el predicado del gate
+>   B11 Q2 : OPEN    <- EJECUTABA install con un pack incompatible
+>   resumen: OPEN: 1 · PASS: 4
+> ```
+>
+> **El ciclo de vida estaba roto y la propiedad que lo declara estaba en verde.**
+> La evidencia del gate era entera una lista:
+> `` `sg pack` expone el ciclo completo: ['import', 'install', 'list', ...] ``
+>
+> **Y EL HALLAZGO MÁS INCÓMODO NO ES DEL GATE.** El predicado **era Q1 del propio
+> instrumento de B11**, y Q1 es la más débil de las cinco —las otras cuatro ejecutan
+> la CLI de verdad—. O sea que el gate llevaba tiempo decidiendo «el ciclo de vida
+> existe» con **la única de las cinco preguntas que no lo prueba**. Q1 lo sabe y lo
+> dice en su propio docstring; no es que esté equivocado, es que estaba solo.
+>
+> **QUÉ ENTREGA.** El predicado **ejecuta** `measure_b11_pack_lifecycle.py` y decide
+> por su código de salida — la forma de B12 para `upgrade desde releases
+> soportadas`—, y la evidencia pasa a ser el veredicto de las cinco preguntas
+> nombrando cuál cae. La clase de la propiedad pasa de `derivada` a **`ejecutada`**.
+> **Q1 no se toca**: «¿existen los comandos?» es una condición necesaria y es
+> barata; lo que no puede hacer es **bastar**, y con las cinco en AND deja de
+> bastar. Cambiarla sin un instrumento que la reemplace sería perder cobertura.
+>
+> **UN DEFECTO PROPIO QUE EL GUARD DE ESTE BLOQUE CAZÓ AL ESCRIBIRLO.** Con el
+> instrumento sin arrancar, el predicado decía *«se ha EJECUTADO para saberlo»* y
+> *«Caen 0 de 0 preguntas»*. No se había ejecutado nada: `rc=2`, «can't open file».
+> Publicaba una ejecución que no había ocurrido, con la autoridad de quien sí la
+> hace. Ahora se separa, y la separación es la de B14 en `tests_colectados()`: dos
+> preguntas distintas —**«¿el ciclo se sostiene?»** y **«¿puedo medir si se
+> sostiene?»**— que no se pueden sumar.
+>
+> **DONDE SE MIRA, VERIFICADO POR AST:**
+>
+> | cita | que sostiene |
+> |---|---|
+> | `measure_b9_gate_1_0.py:795::_pack_controller_lifecycle` | ejecuta el instrumento y decide por su rc |
+> | `measure_b9_gate_1_0.py:892::_preguntas_del_instrumento` | la instrumentación viene de lo que el instrumento DICE |
+> | `measure_b11_pack_lifecycle.py:161::q2_install_rechaza_incompatible` | la pregunta que EJECUTA install con un pack incompatible |
+> | `test_b17_pack_lifecycle_exec.py:146::TestUnNombreDeSubcomandoNoEsUnCicloDeVida` | la deformación medida, y el contrasalto del texto |
+> | `test_b17_pack_lifecycle_exec.py:247::TestElInstrumentoNoSeDeclaraMedibleCuandoNoLoEs` | no afirmar una ejecución que no ocurrió |
+> | `mutate_b17_pack_lifecycle_exec.py` | 6 sondas, 6/6, y **M6 deforma el instrumento, no el gate** |
+>
+> **Y POR QUÉ M6 ES LA SONDA QUE IMPORTA.** Las otras cinco deforman el gate.
+> **M6 deforma el instrumento que el gate ejecuta**, neutralizando Q2, y exige que
+> el gate caiga. Si el único defecto posible fuera «el gate dejó de mirar»,
+> bastaría con comprobar que el gate llama al instrumento, y un guard así solo
+> sabe mirar su propio teléfono. M6 cayó, luego la cadena **decisión → instrumento →
+> gate** se sostiene entera y no solo el cable.
+>
+> **RESULTADO:** harness **6/6 con 6 causas**, y su autocomprobación cazó una sonda
+> **cuya ancla no existía** —la partida en trozos de cadena había dejado el nombre
+> del fichero sin comillas— y una que **medía otra cosa**. Sin el «el ancla aparece
+> 0 veces», el 6/6 habría sido un número sobre seis deformaciones que no
+> deformaron nada. `tests.total` 3301 -> 3306.
+>
+> ---
+
 > **Bloque 2026-10-04 (B16) — Dos propiedades del gate daban PASS sin nada que comparar.**
 > (cerrado y publicado en `v0.32.1`)
 > Versión activa `0.32.1.dev0`; último tag `v0.32.1`.

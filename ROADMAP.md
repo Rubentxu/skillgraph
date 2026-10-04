@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B16** — Dos propiedades del gate daban PASS sin nada que comparar
-> Versión activa `0.32.1.dev0` · último tag `v0.32.1` · 3301 tests · 16/16 UAT
+> Bloque vivo: **B17** — El ciclo de vida de los packs se decidía contando nombres, y el instrumento que lo ejecutaba estaba sin cablear
+> Versión activa `0.32.1.dev0` · último tag `v0.32.1` · 3306 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -66,6 +66,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B14** | La autoridad de coherencia se puede engañar | El estado tiene una sola lectura, y una clave repetida ya no pasa por alto |
 | **B15** | Un predicado que se declara leyendo código no sabe cuándo deja de medir | El gate dice de qué tipo es la evidencia de sus veinte propiedades, y la reproducibilidad se comprueba en vez de afirmarse |
 | **B16** | Dos propiedades del gate daban PASS sin nada que comparar | El vacío no sale verde, el núcleo no puede depender de un recurso, y ocho procesos que abren la misma base no se matan entre ellos |
+| **B17** | El ciclo de vida de los packs se decidía contando nombres | La propiedad se decide ejecutando el ciclo, que el instrumento ya hacía y nadie cableó |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -993,6 +994,48 @@ deuda sin verificar, y sin verificar no era deuda.
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
 
+
+## B17 — El ciclo de vida de los packs se decidía contando nombres
+
+**Es la tercera de las siete que B15 nombró**, y la más fácil de las que quedan
+por una razón que no es de estilo: el instrumento que hace el trabajo ya estaba
+escrito y no se estaba usando.
+
+`scripts/measure_b11_pack_lifecycle.py` responde cinco preguntas y **cada una
+ejecuta la CLI de verdad** en un proyecto temporal, con su propio código de
+salida. El gate no lo llamaba: decía «`sg pack` expone el ciclo completo» y su
+único trabajo era mirar si tres cadenas estaban en un `dict` que sale del
+parser.
+
+Medido antes de escribir una línea, con la **decisión** de `install` rota en una
+copia del árbol —y no `es_compatible`, que es la verdad del dominio:
+
+```
+MEDIDO A · install deja de rechazar un pack incompatible
+  gate   : PASS    <- leía NOMBRES
+  B11 Q1 : PASS    <- leía NOMBRES, y es LITERALMENTE el predicado del gate
+  B11 Q2 : OPEN    <- EJECUTABA install con un pack incompatible
+```
+
+El ciclo de vida estaba roto y la propiedad que lo declara estaba en verde.
+
+**Y el hallazgo más incómodo no es del gate:** el predicado **era Q1 del propio
+instrumento**, y Q1 es la más débil de las cinco. El gate decidía «el ciclo de
+vida existe» con la única pregunta que no lo prueba. No se reimplementa el
+instrumento, se ejecuta —la forma de B12— y Q1 no se toca: es una condición
+necesaria y barata, y lo que no puede hacer es bastar.
+
+**Lo que entra.** El predicado ejecuta el instrumento y decide por su código de
+salida; la evidencia pasa a ser el veredicto de las cinco preguntas nombrando
+cuál cae; la clase de la propiedad pasa de `derivada` a `ejecutada`. Y una
+separación que este bloque se encontró al escribirlo: un instrumento que no
+arranca no es un ciclo roto, y decirlo como si lo fuera es afirmar una
+ejecución que no ocurrió.
+
+**La sonda que importa.** M6 no deforma el gate: deforma el **instrumento**, y
+exige que el gate caiga. Si el único defecto posible fuera «el gate dejó de
+mirar», bastaría comprobar que el gate llama al instrumento. M6 cayó, luego la
+cadena decisión → instrumento → gate se sostiene entera.
 
 ## B16 — Dos propiedades del gate daban PASS sin nada que comparar
 
