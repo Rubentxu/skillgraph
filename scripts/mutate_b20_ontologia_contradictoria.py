@@ -134,7 +134,19 @@ SONDAS: tuple[Sonda, ...] = (
         despues="        for sentencia in cuerpo[:1]:  # deformacion: solo el primero",
         esperados=frozenset(
             {
-                "tests/test_b20_ontologia_contradictoria.py::test_un_docstring_que_nombra_un_recurso_no_abre_el_veredicto"
+                "tests/test_b20_ontologia_contradictoria.py::"
+                "test_un_docstring_que_nombra_un_recurso_no_abre_el_veredicto",
+                # Y ESTE, POR LA MISMA RAZON MEDIDA que en M1: al perder la
+                # clasificacion de la documentacion suelta, `WorkflowPlan`
+                # aparece como dependencia de core/ en un arbol SANO, y entonces
+                # `ontology extensible` da OPEN donde `core sin dependencias` da
+                # PASS — la contradiccion PROHIBIDA, construida desde dentro del
+                # propio clasificador. Un OPEN falso en estado sano no rompe solo
+                # la honestidad del veredicto: rompe la RELACION entre las dos
+                # propiedades, que es justo lo que este bloque mide.
+                "tests/test_b20_ontologia_contradictoria.py::"
+                "TestElGateNoSeContradiceASiMismo::"
+                "test_un_tipo_de_recurso_que_las_dos_ven_no_puede_ser_un_solo_pass",
             }
         ),
     ),
