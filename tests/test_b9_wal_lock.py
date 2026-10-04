@@ -49,7 +49,6 @@ import sqlite3
 import stat
 import sys
 import time
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +94,18 @@ def _modo(db: Path) -> str:
     try:
         fila = conn.execute("PRAGMA journal_mode").fetchone()
         return str(fila[0]).lower() if fila is not None else ""
+    finally:
+        conn.close()
+
+
+def _filas(db: Path) -> int:
+    """Cuantas filas hay en `runtime_events`, o 0 si la tabla aun no existe."""
+    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        fila = conn.execute("SELECT COUNT(*) FROM runtime_events").fetchone()
+        return int(fila[0]) if fila is not None else 0
+    except sqlite3.OperationalError:
+        return 0
     finally:
         conn.close()
 
@@ -301,25 +312,46 @@ class TestLaBarreraDeLosHijos:
                 )
                 time.sleep(0.01)
             assert (puerta / "listo-h0").exists(), "el hijo no anuncio que estaba listo"
-            assert proc.poll() is None, (
-                "el hijo se fue sin esperar a que el padre abriera la puerta: "
-                "eso es medir desde su propio arranque, que es la carrera"
+
+            # **POR QUE SE MIDE LA BASE Y NO EL PROCESO.** La primera
+            # version comprobaba `proc.poll() is None`: que el hijo siga
+            # vivo. Y la sonda M6 —que le quita la espera al hijo— NO la
+            # cazo, porque un hijo sin puerta tarda ~30 ms en terminar sus
+            # tres escrituras y el test lo mira antes. Un hijo vivo que ya
+            # esta trabajando es justo lo que hay que cazar, y «vivo» no lo
+            # distingue de «esperando».
+            #
+            # Lo que los separa es si ha escrito algo: la puerta esta
+            # cerrada, luego un hijo que la respeta tiene cero filas. Cero
+            # filas es una afirmacion sobre el estado, y el estado no
+            # depende de cuando se mire.
+            assert _filas(db) == 0, (
+                f"el hijo escribio {_filas(db)} filas con la puerta CERRADA: no esta "
+                "esperando a que el padre lo suelte, y su ventana empieza desde su "
+                "propio arranque, que es la carrera que la puerta viene a quitar"
             )
         finally:
             (puerta / "abre").write_text("abre\n", encoding="utf-8")
             proc.communicate(timeout=60)
 
-    def test_el_padre_no_abre_antes_de_tener_todos(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Con dos de tres listos, la puerta sigue cerrada.
+    def test_el_padre_no_abre_antes_de_tener_todos(self, tmp_path: Path) -> None:
+        """Con dos de tres, el padre SIGUE ESPERANDO, y se mide que espera.
 
-        Sin este contrasalto, un padre que abre en cuanto ve al primero
-        pasaria el test de arriba —el hijo h0 si llega a esperar— y perderia
-        justo la propiedad que importa, que es la de los queTodavia no han
-        llegado.
+        **POR QUE SE MIDE CON UN HILO Y NO CON EL VALOR DE RETORNO.** La
+        primera version solo comprobaba que `_abre_la_puerta` devolviera
+        `False` con dos de tres. Y la sonda M5 —que hace que el padre rompa
+        el bucle en la primera iteracion— NO la cazo, porque el valor de
+        retorno es el MISMO: se mide cuantos ficheros hay al terminar, y eso
+        no cambia por abrir antes. Un guard que mide el resultado de una
+        funcion y no su comportamiento mide la mitad de la funcion.
+
+        Asi que el tercero llega TARDE, desde un hilo, y lo que se mide es
+        si al volver el padre ya lo tiene delante. Si abre en cuanto ve a
+        los dos primeros, vuelve antes de que el hilo escriba, y el
+        `listo-h2` no esta.
         """
         import importlib.util
+        import threading
 
         especificacion = importlib.util.spec_from_file_location(
             "_b2_padre", RAIZ / "tests" / "test_b2_real_concurrency.py"
@@ -334,18 +366,21 @@ class TestLaBarreraDeLosHijos:
         for etiqueta in ("listo-h0", "listo-h1"):
             (puerta / etiqueta).write_text("listo\n", encoding="utf-8")
 
-        espera: Callable[[], bool] = padre._abre_la_puerta
-        # Se le da un plazo diminuto a proposito: si el padre no espera a los
-        # tres, devuelve de inmediato y el fichero `abre` aparece con solo dos.
-        original_timeout = padre.PUERTA_TIMEOUT_S
-        padre.PUERTA_TIMEOUT_S = 0.05
+        def llega_tarde() -> None:
+            time.sleep(0.3)
+            (puerta / "listo-h2").write_text("listo\n", encoding="utf-8")
+
+        hilo = threading.Thread(target=llega_tarde)
+        hilo.start()
         try:
-            completo = espera(puerta, 3)
+            padre._abre_la_puerta(puerta, 3)
         finally:
-            padre.PUERTA_TIMEOUT_S = original_timeout
+            hilo.join()
 
         assert (puerta / "abre").exists(), "el padre nunca abrio la puerta: el arnes se cuelga"
-        assert not completo, (
-            "el padre dio por abierta una puerta con 2 de 3 hijos listos: el "
-            "tercero sale cuando le de la gana, que es la carrera original"
+        assert (puerta / "listo-h2").exists(), (
+            "el padre abrio y volvio ANTES de que el tercer hijo anunciara "
+            "estar listo: el que no ha llegado sale cuando le de la gana, que "
+            "es la carrera original. Con dos de tres, el padre tiene que "
+            "seguir esperando."
         )

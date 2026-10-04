@@ -188,8 +188,10 @@ def _sondas() -> tuple[Sonda, ...]:
             fichero="src/skillgraph/platform/journal.py",
             antes='    conexion.execute("PRAGMA journal_mode = WAL")\n',
             despues=(
-                "    with suppress(sqlite3.OperationalError):\n"
+                "    try:\n"
                 '        conexion.execute("PRAGMA journal_mode = WAL")\n'
+                "    except sqlite3.OperationalError:\n"
+                "        pass\n"
             ),
             esperados=frozenset(
                 {"TestLaEsperaEsDelProcesoYNoDelDriver::test_el_error_final_no_se_traga"}
