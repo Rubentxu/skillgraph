@@ -162,7 +162,8 @@ def _sondas() -> tuple[Sonda, ...]:
             esperados=frozenset(
                 {
                     "TestElNucleoDelCiclo::test_instalar_rechaza_incompatible_con_el_motivo",
-                    "TestElCicloSeEjecuta::test_el_ciclo_completo_corre_de_punta_a_punta",
+                    "TestElCicloSeEjecuta::"
+                    "test_install_por_la_cli_rechaza_un_pack_incompatible_diciendo_por_que",
                 }
             ),
         ),
