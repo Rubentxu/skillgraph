@@ -164,6 +164,34 @@
 > pueda leer. Tres mutaciones cazadas en total: quitar el `omit`, cambiarlo por
 > uno que no cubre `/tmp`, y reponer un acento grave dentro del heredoc.
 >
+> **Y CUANDO POR FIN PUDO INFORMAR, DIJO QUE SEIS MÓDULOS NO CUMPLÍAN SU
+> SUELO.** La etapa `coverage-floors` no es una lista de excepciones: el suelo
+> se **deriva** de si el módulo cuelga de un paquete, y lo único declarado a
+> mano es `platform/paths.py` al 60 % porque AGENTS §6.3 lo exonera.
+>
+> | módulo | antes | después | suelo |
+> |---|---|---|---|
+> | `cli/commands/pack.py` | 46,43 % | **91,07 %** | 70 % |
+> | `platform/installed_packs_repository.py` | 78,57 % | **100,00 %** | 90 % |
+> | `packaging/registry.py` | 77,86 % | **98,47 %** | 90 % |
+> | `presentation/views.py` | 79,26 % | **98,52 %** | 90 % |
+> | `governance/graph_diff.py` | 80,00 % | **99,13 %** | 90 % |
+> | `resources/status.py` | 75,31 % | **92,59 %** | 90 % |
+>
+> **Y NO ES DEUDA QUE HAYAS CREADO EL ARREGLO ANTERIOR**, que es lo que había
+> que descartar antes de mirar un solo test. MEDIDO: las 282 rutas de `/tmp`
+> eran **copias** de estos mismos ficheros en otra ruta, y coverage cuenta los
+> statements al fichero que se ejecuta — ejecutar `/tmp/.../pack.py` no puede
+> sumar ni una línea a `src/.../pack.py`. Quitar esas rutas no bajó la
+> cobertura de nadie: solo dejó de romper el informe. **Los seis
+> incumplimientos ya estaban ahí y no los miraba nadie.**
+>
+> **LO QUE NO SE HACE ES BAJAR UN SUELO** para que la etapa pase. El suelo es
+> el que AGENTS §6.3 declara; lo que se cubre es el código que lo incumplía.
+> El más grande era `pack.py`, con `install`, `update`, `remove` y `list`
+> **enteros sin ejecutar**: el ciclo ya se probaba de punta a punta por
+> subproceso, y el cuerpo de los comandos no lo ejecutaba nadie.
+>
 > **DONDE SE MIRA, VERIFICADO POR AST:**
 >
 > | cita | que sostiene |
