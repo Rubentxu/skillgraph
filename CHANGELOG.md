@@ -14,6 +14,90 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.32.4] - 2026-10-04 — «NO es reproducible» y «no he podido medirlo» son la misma frase
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.3`:
+`b/f/x/n/d 0/0/3/6/0`, la regla pide **PATCH -> v0.32.4**.
+
+**Es el primer bloque de la serie que no es una propiedad falsa.** B16 y B17
+abrieron propiedades que daban `PASS` con el defecto presente; B18 endureció una
+que ya era cierta. Aquí la propiedad **es cierta** y el defecto está en el
+**verbo** del veredicto.
+
+### Fixed
+
+- **`distribution reproducible` acusaba al proyecto de algo que no había
+  hecho.** Construye dos veces y compara los bytes; si difieren, decía «la
+  distribución NO es reproducible». Y hay dos razones por las que pueden
+  diferir que piden **acciones opuestas**:
+
+  | bytes distintos porque… | quién lo arregla |
+  |---|---|
+  | el build es irreproducible | el **build** |
+  | la entrada cambió entre las dos mediciones | la **medición** |
+
+  Nace de un `OPEN` de 1 de 8 que salió al certificar B18, con la evidencia
+  guardada: *«mismo contenido y distinta fecha dan bytes distintos en 2
+  artefacto(s)»*. Y **la propiedad es cierta al revés**, medido: ocho
+  construcciones con la condición exacta del predicado dan **bytes iguales 8 de
+  8** —cuatro sin tocar la fecha y cuatro tocándola con `os.utime` sobre
+  `src/skillgraph/__init__.py`—, y dos sdists con la suite completa de `pytest`
+  corriendo en paralelo tienen **contenido idéntico**: 397 ficheros, 0
+  diferencias.
+
+  Es grave aquí de un modo que no lo era en B16: `distribution reproducible` es
+  la clase de propiedad **más alta de la serie**, `ejecutada`, y la única que
+  alguien podría citar para decir que el build del proyecto es irreproducible
+  sin comprobar nada más.
+
+- **No se puede resolver dentro del artefacto.** Con un fichero ya versionado
+  que cambia entre las dos construcciones, los dos artefactos son coherentes
+  consigo mismos y aun así se construyeron con **entradas distintas**. Hace
+  falta el estado del árbol, y se toma con `_huella_de_entrada` justo antes de
+  cada construcción: `HEAD`, el estado del árbol y el diff contra `HEAD`, con
+  separador NUL. **El diff es lo que aporta el contenido** de lo modificado; sin
+  él la huella sería un `git status` que solo ve nombres, y dos ficheros con el
+  mismo nombre y distinto contenido darían la misma huella.
+
+### Notes
+
+- **Lo que ya existía y cubre la mitad, y no se toca.**
+  `sg_build_sdist_no_versionado`, en `scripts/check_package_build.py`, rechaza
+  que el paquete lleve un fichero que git no versiona, con un mensaje que es
+  exactamente el que haría falta: *«el artefacto depende de lo que haya en el
+  árbol de trabajo, no del commit»*. Medido, con un fichero sin versionar el
+  veredicto es `OPEN` y lo dice. **La hipótesis más obvia era la buena**, y hay
+  un test que lo comprueba: si el arreglo degrada en la frase acusadora un guard
+  que ya era correcto, se ha roto uno bueno mientras se arreglaba uno malo.
+
+- **La decisión se saca de la medición y por eso se prueba en milisegundos.**
+  `_decide_por_bytes` es pura: dos dicts de hashes y dos huellas, sin disco ni
+  reloj. Medido: dejarla dentro del predicado hacía que los tests tardaran
+  **cero**, porque no se puede deformar la decisión sin deformar también la
+  construcción. Un guard que no se puede deformar sin disparar el sistema
+  entero no vigila la decisión: vigila que el sistema entero corra.
+
+- **Tres fallos propios, que importan más que el arreglo.** El test **midió el
+  repositorio equivocado** —lanzaba el gate del árbol real con `cwd` en el clon,
+  y el gate calcula su `RAIZ` desde `__file__`— y **falló**, que es como se pudo
+  ver. El contrasalto de M1 **no medía lo que decía**: comparaba el árbol limpio
+  contra el editado, y `git status` ya cambia entre esos dos casos, luego no
+  aislaba el contenido. Y el harness **no sabía leer su propia salida**: dio
+  0 de 3 sobre tres sondas que sí habían caído, porque hacía `split()[0]` sobre
+  `FAILED <fichero>::<clase>::<testo>`.
+
+- **Un fallo mío que es parte del hallazgo.** La primera vez que vi el `OPEN`
+  solo leí el nombre de la propiedad en un resumen y volví a ejecutar el gate:
+  **no guardé la evidencia**. El primer instrumento dio 6 de 6 `PASS` — bien
+  ejecutado, midiendo la pregunta equivocada, porque sin el texto del fallo no
+  se sabe qué preguntar. Guardar la evidencia del fallo es lo que convirtió un
+  número raro en un diagnóstico.
+
+- Harness **3/3 con 3 causas**, cada una cayendo solo su diagnóstico, y con los
+  diagnósticos verificados contra `pytest --collect-only` y no contra una lista
+  escrita en el propio harness. Gate: **18 PASS / 1 OPEN / 1 NO_MEASURABLE**.
+  `tests.total` 3312 -> 3318.
+
 ## [0.32.3] - 2026-10-04 — la frontera del núcleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.2`:
