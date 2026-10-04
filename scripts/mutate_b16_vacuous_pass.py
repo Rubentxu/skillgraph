@@ -130,7 +130,26 @@ def _limpia_cache() -> None:
         shutil.rmtree(cache, ignore_errors=True)
 
 
-def _pytest(objetivos: tuple[str, ...]) -> tuple[int, set[str]]:
+def _pytest(objetivos: tuple[str, ...]) -> tuple[int, set[str], bool]:
+    """Corre la suite y devuelve (rc, caidos, la_suite_no_colecto).
+
+    **MEDIDO, Y ES EL FALLO DE ESTE HARNESS.** La primera version contaba solo
+    las lineas `FAILED`, y M6 —que devuelve al hijo su `RAIZ` roto— salio
+    «SIN CAZAR» con la lista de caidas Vacia. Pero la mutacion si ponia el
+    guard en rojo, y mas rojo todavia: el modulo de test **importa** el hijo
+    (linea 76, para leer sus constantes sin reescribirlas), luego el `assert`
+    del hijo corre al importar y tumba la COLECTA entera. pytest lo reporta
+    como `ERROR`, no como `FAILED`, y un harness que solo mira `FAILED`
+    convierte «todo ha caido» en «no ha medido nada».
+
+    Eso es la direccion del falso verde —la mas dificil de ver, porque el
+    numero sale igual— y es el mismo defecto que B14 cerro en
+    `tests_colectados()`: leer un recuento de una colecta que no termino.
+
+    Por eso se cuentan las dos formas y se distinguen al reportar. Las dos son
+    rojo legitimo; lo que no se puede es contarlas como lo mismo y que el
+    recuento de «cazadas» no diga cual de las dos fue.
+    """
     proc = subprocess.run(
         [PY, "-m", "pytest", "-q", "--no-header", "-p", "no:cacheprovider", *objetivos],
         cwd=RAIZ,
@@ -142,9 +161,17 @@ def _pytest(objetivos: tuple[str, ...]) -> tuple[int, set[str]]:
     caidos = {
         linea.split("::", 1)[1].split(" ")[0]
         for linea in proc.stdout.splitlines()
-        if linea.startswith("FAILED ")
+        if linea.startswith("FAILED ") and "::" in linea
     }
-    return proc.returncode, caidos
+    errores = {
+        linea.split(" ", 1)[1].split(" ")[0]
+        for linea in proc.stdout.splitlines()
+        if linea.startswith("ERROR ") and " " in linea
+    }
+    # Una suite que no colecto no ha dado veredicto sobre NADA: se marca aparte
+    # para no contarla como si los tests hubieran corrido y hubieran fallado.
+    no_colecto = bool(errores) or "Interrupted" in proc.stdout or proc.returncode in (2, 3)
+    return proc.returncode, caidos | errores, no_colecto
 
 
 def _colectados(objetivos: tuple[str, ...]) -> set[str]:
@@ -372,10 +399,10 @@ def main() -> int:
     print(f"anclas verificadas: {len(SONDAS)} textos unicos\n")
 
     for suite in suites:
-        rc, caidos = _pytest(suite)
-        if rc != 0 or caidos:
+        rc, caidos, no_colecto = _pytest(suite)
+        if rc != 0 or caidos or no_colecto:
             print(f"VERDE DE PARTIDA FALSA: {suite[0]} ya esta rojo sin mutar nada.")
-            print(f"  rc={rc}  caidos={sorted(caidos)}")
+            print(f"  rc={rc}  caidos={sorted(caidos)}  no_colecto={no_colecto}")
             return 2
         print(f"linea base: {suite[0]} verde sin mutar")
 
@@ -388,21 +415,31 @@ def main() -> int:
         texto = ruta.read_text(encoding="utf-8")
         try:
             ruta.write_text(texto.replace(sonda.antes, sonda.despues, 1), encoding="utf-8")
-            rc, caidos = _pytest(sonda.suite)
+            rc, caidos, no_colecto = _pytest(sonda.suite)
         finally:
             ruta.write_text(texto, encoding="utf-8")
-        if not sonda.esperados <= caidos:
+        # Las DOS formas de ponerse en rojo valen. Si los diagnosticos
+        # nombrados cayeron, se cuenta con su nombre; y si la suite no pudo
+        # NI COLECTAR —porque la deformacion tumbo el modulo entero— tambien
+        # es rojo, y se dice cual de las dos fue para que el numero no los
+        # mezcle. MEDIDO: M6 cae por la segunda, y con la primera version de
+        # `_pytest` salia «caida=[]», que es el falso verde que B14 cerro en
+        # `tests_colectados()`.
+        if not sonda.esperados <= caidos and not no_colecto:
             invalidas.append(
                 f"{sonda.nombre}: cayo {sorted(caidos)}, pero no sus diagnosticos "
                 f"{sorted(sonda.esperados)}"
             )
             print(f"  [SIN CAZAR] {sonda.nombre}")
             continue
-        if len(caidos) == len(sonda.esperados):
-            print(f"  [CAZADA]    {sonda.nombre}  (solo sus diagnosticos)")
+        if no_colecto and not sonda.esperados <= caidos:
+            forma = "la suite no pudo colectar"
+        elif len(caidos) == len(sonda.esperados):
+            forma = "solo sus diagnosticos"
         else:
-            print(f"  [CAZADA]    {sonda.nombre}  (+{sorted(caidos - sonda.esperados)})")
+            forma = f"+{sorted(caidos - sonda.esperados)}"
             compartidas.append(sonda.nombre)
+        print(f"  [CAZADA]    {sonda.nombre}  ({forma})")
         causa_de[sonda.nombre] = ", ".join(sorted(sonda.esperados))
 
     if invalidas:
