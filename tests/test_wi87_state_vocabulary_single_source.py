@@ -84,11 +84,30 @@ class TestPromotionVocabularyIsDerived:
             "core.runtime_types.PROMOTION_STATUSES."
         )
 
-    def test_schema_version_unchanged(self) -> None:
-        """El conjunto de valores aceptados no cambia: no hay migracion."""
-        from skillgraph.platform.schema import SCHEMA_VERSION
+    def test_el_cambio_de_vocabulario_no_anno_una_migracion(self) -> None:
+        """El conjunto de valores no cambia, luego no HACE FALTA una migracion.
 
-        assert SCHEMA_VERSION == 1
+        Este test decia `assert SCHEMA_VERSION == 1`, y B12 lo rompio —la
+        version pasaron a 2— por un motivo que no tiene nada que ver con el
+        vocabulario: la migracion de `claims.assertion_origin` y la que
+        registra `installed_packs`. El numero era un *proxy* de la
+        propiedad, y un proxy se rompe cuando la propiedad sigue valiendo.
+
+        La propiedad real, y la que sigueinteresting: **no hay ninguna
+        migracion para este cambio**. Se comprueba contra el libro, que es
+        donde vive ahora la verdad del esquema. Fijar un numero habria
+        vuelto a hacer lo mismo: convertia una afirmacion sobre ESTE cambio
+        en una afirmacion sobre el numero entero de la release, que es
+        justo lo que el guard de B12 existe para que deje de ser verdad.
+        """
+        from skillgraph.platform.migrations import MIGRACIONES
+
+        ids = [m.id for m in MIGRACIONES]
+        ofensores = [i for i in ids if "promocion" in i or "promotion" in i or "vocab" in i]
+        assert ofensores == [], (
+            f"hay una migracion para el vocabulario de promocion ({ofensores}), "
+            "pero el CHECK se deriva de la ADT y no lo necesita"
+        )
 
     def test_database_rejects_a_status_outside_the_vocabulary(self) -> None:
         """El CHECK lo hace cumplir SQLite, no solo el texto.

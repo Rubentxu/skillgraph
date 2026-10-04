@@ -57,6 +57,23 @@ class IntegrityError(SkillGraphError):
     code = "sg_integrity"
 
 
+class SchemaTooNewError(SkillGraphError):
+    """La base de datos declara un esquema MAS NUEVO que este codigo.
+
+    B12. Antes de B12 esto no podia ocurrir porque la version no se movia
+    nunca: `SCHEMA_VERSION` era 1 desde WI-65 y se escribia con
+    `INSERT OR IGNORE` sin que nadie lo leyera. Una base «del futuro» era
+    indistinguible de una de ayer, y el codigo la abria en silencio —que es
+    la forma barata de perder datos en la siguiente escritura—.
+
+    Se traduce a `EXIT_DOMAIN` (10) por la tabla de WI-109: es un error de
+    dominio, y su `code` es propio para que un `code` compartido no lo
+    vuelva indistinguible de otro.
+    """
+
+    code = "sg_schema_too_new"
+
+
 class NotFoundError(SkillGraphError):
     """Un recurso o fixture solicitada no existe."""
 

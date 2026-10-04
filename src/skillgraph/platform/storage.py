@@ -37,7 +37,7 @@ from skillgraph.knowledge.graph import (
     OutcomeTrace,
     Source,
 )
-from skillgraph.platform import journal
+from skillgraph.platform import journal, migrations
 from skillgraph.platform.ports import (
     StoredBudget,
     StoredClaim,
@@ -467,67 +467,43 @@ class Storage(
 
     # ----- ciclo de vida -----
 
-    @staticmethod
-    def _anade_column_claims_assertion_origin(cur: sqlite3.Cursor) -> None:
-        """Anade `claims.assertion_origin` si la tabla ya existia sin ella (B6).
-
-        `CREATE TABLE IF NOT EXISTS` NO anade columnas a una tabla que ya
-        existe: es un no-op silencioso. Medido: abriendo una base creada con
-        el esquema anterior, la columna no aparecia y todos los `SELECT`
-        que la nombran fallaban. Una base nueva funciona y una vieja no,
-        y el fallo aparece en produccion y no en los tests, porque los
-        tests construyen la base desde cero cada vez.
-
-        Por que NO es check-then-act otra vez: B2 ya sufrio por aqui, con
-        ocho procesos concurrentes perdiendo escrituras. SQLite no tiene
-        `ADD COLUMN IF NOT EXISTS`, asi que no se puede resolver por
-        constraint como el resto. Lo que se hace es que el `ALTER` este
-        dentro de la transaccion de `_migrate` y que el error de «columna
-        duplicada» —que es lo que daria el segundo proceso— se traguen
-        SOLO si la columna existe ya. Se distingue la causa en el nombre
-        del error, no se captura a pelo: capturar `sqlite3.OperationalError`
-        entero se tragaria tambien un disco lleno.
-        """
-        columnas = {fila[1] for fila in cur.execute("PRAGMA table_info(claims)")}
-        if "assertion_origin" in columnas:
-            return
-        try:
-            cur.execute(
-                "ALTER TABLE claims ADD COLUMN assertion_origin "
-                "TEXT NOT NULL DEFAULT 'observed' CHECK (assertion_origin IN ("
-                "'observed','derived-deterministically','agent-inferred',"
-                "'human-asserted'))"
-            )
-        except sqlite3.OperationalError as exc:
-            # Solo la carrera de dos procesos anadiendo la misma columna.
-            if "duplicate column name" not in str(exc).lower():
-                raise
-
     def _migrate(self) -> None:
+        """Abre la base al dia: comprueba, sube lo que falte y lo anota.
+
+        El orden importa y no es libre. Primero el DDL —que crea lo que
+        falta con `CREATE TABLE IF NOT EXISTS` y por eso es idempotente—,
+        luego la comprobacion de que la base no sea MAS NUEVA que el codigo,
+        y por ultimo el libro. La comprobacion va despues del DDL y no antes
+        porque una base de una release anterior no tiene las tablas nuevas y
+        `version_de_la_base` las lee de `schema_version`, que el DDL acaba de
+        crear si faltaba.
+
+        Lo que queda dentro de la transaccion, y por que: si una migracion
+        falla a mitad, el `rollback` de sqlite deshace tambien el `INSERT` del
+        libro, de modo que una migracion a medio aplicar no queda marcada como
+        aplicada. Es lo que hace que el libro pueda presumir de que una fila
+        anotada significa «esta migración se aplico entera».
+        """
         with self._tx() as cur:
             cur.executescript(_SCHEMA_SQL)
-            self._anade_column_claims_assertion_origin(cur)
-            # MEDIDO en B2: esto era `SELECT` y, si no habia fila,
-            # `INSERT`. Es un **check-then-act**: dos procesos que abren
-            # la base nueva a la vez ven ambos que `schema_version` esta
-            # vacia, y los dos insertan. El `UNIQUE(version)` que
-            # declara el propio esquema convierte la carrera en un
-            # `IntegrityError` en el segundo, y ese proceso muere al
-            # construirse —perdiendose todas sus escrituras, sin que
-            # nadie lo note—. Con ocho procesos concurrentes, la
-            # mayoria de las corridas fallaban.
-            #
-            # `INSERT OR IGNORE` no evita la carrera: la sigue habiendo.
-            # Lo que hace es dejar que la **constraint** la resuelva, que
-            # es la regla del repositorio (`AGENTS.md §8`: «idempotencia
-            # por constraint, no por codigo»). El `SELECT` desaparece
-            # porque era el que hacia la decision, y la decision no hace
-            # falta: insertar la version dos veces da el mismo resultado
-            # que insertarla una.
-            cur.execute(
-                "INSERT OR IGNORE INTO schema_version(version) VALUES (?)",
-                (SCHEMA_VERSION,),
-            )
+            migrations.comprueba_que_no_sea_mas_nueva(cur)
+            migrations.sincroniza(cur)
+
+    def version_esquema(self) -> int:
+        """¿Qué version de esquema tiene ESTA base? La pregunta de B12.
+
+        Se responde leyendo la tabla, no la constante del modulo. Preguntar
+        a una base recien creada y a una ya subida tiene que dar lo mismo, y
+        si se respondiera leyendo `SCHEMA_VERSION` la segunda respuesta seria
+        tautologica: no estaria preguntando a la base.
+        """
+        with self._tx() as cur:
+            return migrations.version_de_la_base(cur)
+
+    def migraciones_aplicadas(self) -> tuple[str, ...]:
+        """Que migraciones dice esta base que se le aplicaron, en orden."""
+        with self._tx() as cur:
+            return migrations.migraciones_anotadas(cur)
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Cursor]:

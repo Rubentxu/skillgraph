@@ -201,7 +201,17 @@ class TestPublicSurfacePreserved:
     #: la alternativa —meter el registro de packs dentro de
     #: `knowledge_repository`— seria mas pequena en apariencia y mentira en
     #: el sitio, porque una instalacion no es un recurso.
-    EXPECTED_PUBLIC = 75
+    #:
+    #: B12 la subio a 77 con `version_esquema` y `migraciones_aplicadas`. No
+    #: son un cluster mas: son la capacidad del bloque. Sin ellos, «que
+    #: version tiene este proyecto» solo se responde leyendo la constante
+    #: del modulo, y esa respuesta es tautologica —no le pregunta a la base—.
+    #: Se podrian haber dejado en `platform.migrations` como funciones sueltas
+    #: sobre un cursor, y entonces habria que abrir la conexion a mano para
+    #: preguntar, que es como se abre a mano la mayoria de las API que no exponen su
+    #: estado. Preguntar por el estado de un proyecto es parte de usar un
+    #: proyecto, asi que va en la fachada.
+    EXPECTED_PUBLIC = 77
     # Solo los privados no-dunder: `__init__`/`__enter__`/`__exit__`
     # estan cubiertos por LIVE_SQL_METHODS y por `close`/`uow`.
     EXPECTED_PRIVATE = 5

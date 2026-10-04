@@ -15,19 +15,33 @@ atomicos (`_tx`, `_atomic`, `_insert_event_in_tx`,
 ADR-0015: el unico punto del DDL que **expresa vocabulario de dominio** es
 el `CHECK` de `promotion_outbox.status`, y se genera desde
 `core.runtime_types.PROMOTION_STATUSES` en vez de escribirse a mano. El
-conjunto de valores aceptados es identico, asi que `SCHEMA_VERSION` sigue
-en 1 y no hay migracion. Consecuencia practica: la base de datos y el
-validador de entrada no pueden divergir porque salen de la misma
-expresion.
+conjunto de valores aceptados es identico, asi que ese cambio NODLE NECESITA
+migracion, y el numero se mantiene con `SCHEMA_VERSION` DERIVADO de
+`MIGRACIONES`.
+
+B12: `SCHEMA_VERSION` era `1` escrito a mano y no se movia desde WI-65. MEDIDO
+en `.pipelinek/b12_preflight.md` §6: se escribia con `INSERT OR IGNORE` y no
+se leia en ningun sitio de `platform/`, y borrar la tabla entera de una base
+hacia que el codigo la recreara en silencio —una version que se regenera
+cuando falta es un DEFAULT, no un hecho—. Ahora sale de
+`platform.migrations.version_declarada()`, que es `len(MIGRACIONES)`, y por
+eso no se puede olvidar subirlo: no hay ningun numero que mantener.
+
+Consecuencia practica del ADR-0015, intacta: la base de datos y el validador
+de entrada no pueden divergir porque salen de la misma expresion.
 """
 
 from __future__ import annotations
 
 from skillgraph.core.runtime_types import PROMOTION_STATUSES
+from skillgraph.platform.migrations import MIGRACIONES, version_declarada
 
-__all__ = ["SCHEMA_SQL", "SCHEMA_VERSION"]
+__all__ = ["MIGRACIONES", "SCHEMA_SQL", "SCHEMA_VERSION"]
 
-SCHEMA_VERSION = 1
+#: Derivada, no literal. El guard de B12 lo comprueba por AST precisamente
+#: porque leer `SCHEMA_VERSION == 2` no diria nada: solo `len(MIGRACIONES)`
+#: garantiza que la version y la lista no se puedan separar.
+SCHEMA_VERSION: int = version_declarada()
 
 #: El `CHECK` de promocion, generado desde la ADT de dominio. `sorted`
 #: porque un frozenset no tiene orden estable entre procesos y el DDL debe
@@ -37,6 +51,15 @@ _PROMOTION_STATUS_SQL = ", ".join(f"'{status}'" for status in sorted(PROMOTION_S
 SCHEMA_SQL = f"""
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
+);
+
+-- B12: el libro de migraciones. UNA fila por migracion aplicada, con su
+-- identificable estable. `schema_version` responde «que version tiene este
+-- proyecto»; esta tabla responde «que se le hizo a esta base», que es la
+-- pregunta que hace falta cuando algo va mal y la version sola no basta.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    migration_id TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS resources (
