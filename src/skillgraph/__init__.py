@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.32.2.dev0"  # entre releases: HEAD ya no esta en el tag v0.32.2
+__version__ = "0.32.3"  # version PURA, que existe para que el tag v0.32.3 apunte a un commit con numero y no con .dev0
 
 from skillgraph.core.errors import (
     IdentityConflictError,

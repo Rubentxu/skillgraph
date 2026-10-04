@@ -14,6 +14,101 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.32.3] - 2026-10-04 — la frontera del núcleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.2`:
+`b/f/x/n/d 0/0/1/5/0`, la regla pide **PATCH -> v0.32.3**.
+
+**Es la cuarta de las siete propiedades que B15 nombró**, y la que B17 dejó
+escrita como «la primera que habría que mirar de las que quedan». El predicado
+es `core sin dependencias de impl. externa`, y es el único del gate cuya
+mirada está **declarada en su propia evidencia** — lo que declara no era lo que
+miraba.
+
+### Fixed
+
+- **Los imports relativos no se miraban.** `_imports_de` exigía
+  `nodo.level == 0`, y como `core/` está en `src/skillgraph/core/`, un
+  `from ..platform.storage import Storage` tiene nivel 2 y **sale de `core/`
+  entero**. Medido, con ese import de verdad en una copia del árbol y el repo
+  real intacto, el veredicto era `PASS` con una evidencia **byte a byte
+  idéntica** a la del caso limpio:
+
+  ```
+  MEDIDO A · se añade a core/ un `from ..platform.storage import Storage` (relativo, nivel 2)
+    veredicto : PASS
+    evidencia : core/ no depende de fuera de si mismo, MEDIDO sobre ... (5 modulos)
+    — byte a byte IDÉNTICA a la del caso limpio
+  ```
+
+  Un veredicto que no puede distinguir «el núcleo está limpio» de «no he mirado
+  la mitad de la superficie» no es un veredicto. Y medido también: `core/` **no
+  usa hoy ningún relativo**. La superficie estaba vacía, y una superficie vacía
+  no se mira porque no hay nada que mirar — el defecto era invisible no porque
+  fuera difícil de ver, sino porque no había nada que lo activara.
+
+- **La estándar eran trece renglones escritos a mano; el intérprete sabe de
+  290.** Faltaban `pathlib`, `contextlib`, `abc`, `io`, `warnings` y `copy`, y
+  un `import pathlib` legítimo en `core/` producía un `OPEN` sobre una frontera
+  que se estaba respetando. Una propiedad que se pone roja por lo contrario
+  entrena a su lector a no creerla, y eso es un fallo aunque salga del lado
+  conservador. **Y la lista no contenía ni un nombre falso: era correcta y
+  estaba vieja.** Una lista de trece que se queda vieja no avisa: simplemente
+  empieza a dar veredictos que nadie revisó.
+
+- **La evidencia decía «(5 modulos)» sobre un paquete de cuatro ficheros.**
+  Contaba nombres de import **distintos**, no módulos, y no decía cuántos
+  ficheros se habían recorrido. Una evidencia que no describe lo que recorrió
+  no permite saber si el recorrido estaba completo.
+
+  Los tres son la misma cosa escrita de tres maneras: el predicado no sabía
+  qué superficie recorría ni de dónde salía su verdad. Ahora los relativos se
+  resuelven a nombre **absoluto**, `_MODULOS_ESTANDAR` se **deriva** de
+  `sys.stdlib_module_names`, y la evidencia dice cuántos ficheros se
+  recorrieron y de dónde sale la lista. La de `core` pasa a ser:
+
+  ```
+  core/ no depende de fuera de si mismo, MEDIDO sobre 4 ficheros y 5 imports
+  ABSOLUTOS Y RELATIVOS, ya resueltos a su nombre: todos son de skillgraph.core
+  o de la estandar segun sys.stdlib_module_names, el conjunto que declara el
+  propio interprete (Python 3.13) (193 modulos de estandar reconocidos)
+  ```
+
+### Notes
+
+- **Lo que este predicado no hace, a propósito: no prohíbe los relativos.**
+  Que `core/` escriba `from .errors import ...` es **correcto**, y obligarle a
+  escribir la forma absoluta para que un predicado lo vea es *cambiar el código
+  para que el guard quede bien*. Lo que faltaba era mirarlos. Un predicado que
+  obliga al código a la forma que él sabe leer no vigila la frontera: la vigila
+  él.
+
+- **Dos defectos propios, cazados por el guard de este bloque al escribirlo, y
+  que habrían pasado un 6/6.** El filtro de privados se llevaba `__future__` —
+  un falso `OPEN` visible **solo gracias a la evidencia nueva**, que por una
+  vez describía lo que había recorrido; sin ella habría sido indescifrable —, y
+  `_paquete_de` devolvía el **módulo** en vez del **paquete**, con lo que el
+  recuento se movía de 5 a 6 y el defecto quedaba entero, con un número que
+  parecía correcto.
+
+- **Requisito nuevo del harness: la deformación tiene que parsear.** Una
+  deformación que rompe la sintaxis hace caer la suite **por no importar**, no
+  por detectar — parece la sonda más fuerte y no ha detectado nada. El mismo
+  error ha salido en B16, B17 y B18 con tres síntomas distintos, y el más caro
+  de B18 fue silencioso. Un error que se repite tres veces con distinta
+  apariencia no es un error: es una clase de error, y se cierra con un
+  requisito del arnés, no con cuidado. Harness **3/3 con 3 causas**, cada una
+  cayendo solo su diagnóstico.
+
+- **La clase de la propiedad no cambia, y es lo correcto.** Sigue siendo
+  `derivada`: el predicado sigue decidiendo leyendo el árbol. B18 endurece una
+  medición que **ya era cierta** — `core/` no dependía de fuera de sí mismo
+  hoy, con o sin estos cambios —, no una propiedad que fuera falsa como las de
+  B16. Gate: **17 PASS / 2 OPEN / 1 NO_MEASURABLE**.
+
+- `tests.total` 3306 -> 3312. Suite certificada: **3309 passed, 3 skipped** en
+  281,80 s.
+
 ## [0.32.2] - 2026-10-04 — el ciclo de vida de los packs se decidía contando nombres
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.1`:
