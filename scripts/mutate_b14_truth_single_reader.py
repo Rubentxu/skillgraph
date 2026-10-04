@@ -170,10 +170,11 @@ SONDAS: tuple[Sonda, ...] = (
     Sonda(
         nombre="M2_yaml_tolera_las_claves_duplicadas_en_silencio",
         fichero="scripts/project_truth.py",
+        # El ancla es la linea EXACTA que escribio ruff format. Comprobado
+        # despues del ultimo `ruff format`, no antes: el error 32 de WI-113.
         antes=(
-            "_SinClavesDuplicadas.add_constructor(\n"
-            "    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construye\n"
-            ")"
+            "_SinClavesDuplicadas.add_constructor("
+            "yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construye)"
         ),
         despues="# Sonda M2: sin este constructor, YAML se queda con la ultima clave en silencio.",
         esperados=frozenset(
