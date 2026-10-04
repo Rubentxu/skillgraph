@@ -193,9 +193,16 @@ SONDAS: tuple[Sonda, ...] = (
         # delante y la dejaba SEGUIR AL INSTRUMENTO, asi que media otra cosa y
         # daba 5 de 5 en verde con el defecto puesto. Es el error 32 de B13:
         # una sonda que no desactiva lo que dice desactivar.
+        # MEDIDO, y lo cazo la autocomprobacion de este mismo harness: la
+        # primera version de estas dos anclas las partio en trozos de cadena y
+        # el nombre del fichero se quedo SIN comillas, luego el ancla no
+        # existia en el fichero. Sin el «el ancla aparece 0 veces» la sonda se
+        # habria aplicado a la nada, la deformacion no habria ocurrido, los
+        # tests habrian pasado y el 6/6 habria sido un numero sobre seis
+        # deformaciones que no deformaron nada.
         antes=(
             '    proc = _corre([sys.executable, str(RAIZ / "scripts" / '
-            'measure_b11_pack_lifecycle.py")])\n'
+            '"measure_b11_pack_lifecycle.py")])\n'
             "    salida = (proc.stdout + proc.stderr).strip()"
         ),
         despues=(
@@ -206,7 +213,7 @@ SONDAS: tuple[Sonda, ...] = (
             '        return "OPEN", f"`sg pack` expone {sorted(existentes)} y no {list(faltan)}"\n'
             '    return "PASS", f"`sg pack` expone el ciclo completo: {sorted(existentes)}"\n'
             '    proc = _corre([sys.executable, str(RAIZ / "scripts" / '
-            'measure_b11_pack_lifecycle.py")])\n'
+            '"measure_b11_pack_lifecycle.py")])\n'
             "    salida = (proc.stdout + proc.stderr).strip()"
         ),
         esperados=frozenset(
