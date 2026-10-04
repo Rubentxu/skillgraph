@@ -74,6 +74,50 @@
 > invertida la lista queda **vacía**: cero caben en tres. Un guard sin con qué
 > enterarse no es un guard que no se entere.
 >
+> **Y, AL CERTIFICAR, EL GATE QUE CORRE NO ERA EL DECLARADO.** El hook instalado
+> en `.git/hooks/pre-commit` **diverge** de `scripts/hooks/pre-commit`: el
+> declarado corre pytest **solo sobre los `.py` staged** —el filtro de WI-100,
+> un cambio de 12x— y el instalado corría la **suite entera**. MEDIDO, el hook que
+> anunciaba «smoke, N files staged» estaba lanzando los 3321 tests.
+>
+> **LO NUEVO ES LA DIVERGENCIA, NO LA AUSENCIA.** `.git/hooks/pre-push` tampoco
+> estaba instalado, y eso **ya lo tenía medido y escrito el propio hook** en su
+> docstring: «en la máquina donde se operaba, este hook NO estaba instalado»,
+> con la conclusión de que instalarlo es decisión del operador. No es un
+> hallazgo de B20 y no se reclama como tal. Lo que sí es de B20 es la otra
+> mitad: un hook **instalado y desfasado**, que es peor que uno ausente
+> porque uno ausente no hace nada y del que corre se puede estar esperando
+> que filtre.
+>
+> Eso no lo ve ningún guard porque `test_hooks_system.py` lee la copia
+> **versionada** (`HOOK_PATH`): todas sus propiedades son ciertas del fichero
+> que está en el repo y **silenciosas sobre el fichero que git ejecuta**. WI-100
+> añadió el test de que «los ficheros staged llegan a pytest», y pasaba, con la
+> puerta antigua corriendo. Es la forma de B19 un nivel más arriba: **la
+> medición era correcta sobre el artefacto al que apuntaba, y el artefacto en
+> uso era otro.**
+>
+> **POR QUÉ NO ES UN TEST, y es el mismo motivo por el que WI-97 se niega a
+> comprobar `dist/`.** El hook instalado es estado **por clon** —no está en git,
+> porque `.git/` no se versiona—, así que un test que lo comprobara estaría
+> afirmando sobre el árbol de trabajo y no sobre el checker, y saldría rojo en
+> cada clon recién hecho hasta que alguien corra el instalador. Paridad
+> restaurada con `scripts/install-hooks.sh`: los dos hooks coinciden byte a byte.
+> **Deuda que se registra y no se abre:** nada en el repo informa del desvío
+> entre el hook declarado y el instalado.
+>
+> **UN FALLO PROPIO MÁS, Y UNO QUE NO ES MÍO.** Al certificar, un run dio «5
+> failed» y a mí solo se me enseñaron **dos** líneas `FAILED`. Lo atribuí a que el
+> hook imprime `tail -40` del log, y casi lo «arreglo». MEDIDO: `tail -40`
+> enseña la lista **completa** incluso con 14 fallos, porque pytest las imprime
+> justo antes de la línea de recuento; lo que me recortó a mí fue la captura de
+> salida de mi propia herramienta. El cambio se revirtió: no iba a sostener una
+> modificación con una medición que acababa de desmentir. Y los dos tests que
+> azonearon en aquella corrida —`test_wi96…test_el_script_esta_versionado…` y
+> `test_wi97…test_el_artefacto_cumple_el_contrato`— han pasado en **todas** las
+> posteriores: dos sueltas y dos completas. **Causa no establecida, y no se
+> afirma ninguna.**
+>
 > **DONDE SE MIRA, VERIFICADO POR AST:**
 >
 > | cita | que sostiene |
