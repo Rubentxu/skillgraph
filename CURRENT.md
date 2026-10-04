@@ -1,4 +1,98 @@
+> **Bloque 2026-10-04 (B12) — La version del esquema era una constante, y por eso el upgrade era imposible.**
+> Versión activa `0.30.0.dev0`; último tag `v0.30.0`. La release `0.31.0` se
+> emite al cerrar el bloque.
+>
+> **MEDIDO ANTES DE ESCRIBIR NADA** (`/tmp/b12_measure.py`, y despues
+> `scripts/measure_b12_schema_upgrade.py`): **0 de 5 preguntas en PASS**, y
+> **5 de 5** al final. Lo que encontro, textual:
+>
+> - `SCHEMA_VERSION = 1`, sin moverse en **73 releases**.
+> - Se escribia con `INSERT OR IGNORE` y **no se leia en ningun sitio de
+>   `platform/`**. El unico `SELECT version FROM schema_version` del repo
+>   esta en `resources/catalog.py`, que es otro store.
+> - **Borrar la tabla `schema_version` entera de una base y abrirla no daba
+>   ningun error**: el codigo la recreaba en silencio. Una version que se
+>   regenera cuando falta es un `DEFAULT`, no un hecho.
+> - La unica migracion que existia era una funcion escrita a mano **para una
+>   tabla**, porque SQLite no tiene `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`.
+>
+> **LO QUE ENTRA:** un libro de migraciones con identificadores estables; la
+> version **derivada** de la lista, luego no se puede olvidar subirla; la
+> migracion de `claims.assertion_origin` convertida de metodo privado del
+> facade en la primera del libro —**el metodo se borra y hay un test que lo
+> comprueba**—; `Storage.version_esquema()` y
+> `Storage.migraciones_aplicadas()`, que responden «¿qué versión tiene este
+> proyecto?» por el DATO de la base; y `SchemaTooNewError` para que una base
+> mas nueva que el codigo **falle** en vez de abrirse en silencio.
+>
+> **LA DECISION DE DISENO, que es lo que mas se discutira: EL LIBRO
+> REGISTRA, NO GOBIERNA.** `sincroniza` ejecuta *todas* las migraciones y
+> anota las que faltaban. Podria haber guardado ejecutando solo las
+> pendientes, y seria mas eficiente. Se eligio lo contrario por el caso que
+> de verdad duele: una base restaurada de una copia parcial tiene el libro
+> atrasado **y** el esquema con una columna que falta a la vez, y un libro que
+> gobierna se creeria que esta bien y no repararia nada.
+>
+> **UNA REGRESION QUE EL BLOQUE INTRODUJO Y CORRIGIO, MEDIDA.** La primera
+> version hacia `DELETE FROM schema_version` + `INSERT` SIEMPRE. Antes era
+> `INSERT OR IGNORE`, que tras la primera apertura no escribe nada, luego
+> abrir una base era una LECTURA. Con el `DELETE` incondicional, ocho procesos
+> concurrentes se repartian mal el turno de escritura: *«se esperaban 8 autores
+> distintos y hay 7»*. MEDIDO antes de arreglar: tres corridas dan verde,
+> verde y ROJO. El contrasalto que lo vigila mide `total_changes`, que es
+> determinista —abrir una base al dia da 0, subir una atrasada da 1— porque
+> contar ejecuciones verdes de un test de concurrencia seria una tirada, no
+> una prueba.
+>
+> **UN PREDICADO DEL GATE QUE MENTIA EN LA DIRECCION CONTRARIA.**
+> «upgrade desde releases soportadas» buscaba `def upgrade` con un regex. La
+> capacidad se llama `sincroniza`, luego B12 habria entregado la capacidad y
+> el gate habria seguido diciendo `OPEN`: un falso **negativo**, la misma clase
+> que el falso positivo de B9 con el signo cambiado. Ahora el predicado
+> **ejecuta** el medidor y decide por su codigo de salida, y se verifico en las
+> dos direcciones: capacidad entera da `PASS`, libro roto da `OPEN 3/5`.
+>
+> **GATE DE 1.0: 16 PASS / 3 OPEN / 1 NO_MEASURABLE -> 17 / 2 / 1.** Quedan
+> `runtime real certificado` (credencial), `security/threat model actualizado`
+> (reescribir un ADR) y `TUI operacional` (NO_MEASURABLE).
+>
+> **CITAS VERIFICADAS** (`fichero.py:LINEA::simbolo`, comprobadas por AST):
+>
+> | cita | que sostiene |
+> |---|---|
+> | `migrations.py:111::MIGRACIONES` | la lista, en orden de aplicacion |
+> | `migrations.py:117::version_declarada` | la version es `len(...)`, no un literal |
+> | `migrations.py:147::comprueba_que_no_sea_mas_nueva` | una base mas nueva falla |
+> | `migrations.py:164::sincroniza` | el libro REGISTRA, no gobierna |
+> | `migrations.py:211::_reescribe_version_si_cambia` | abrir una base al dia no escribe |
+> | `schema.py:44::SCHEMA_VERSION` | la version derivada |
+> | `storage.py:470::_migrate` | DDL, comprobar, y luego el libro |
+> | `storage.py:492::version_esquema` | la pregunta, respondida por el dato |
+> | `storage.py:503::migraciones_aplicadas` | que migraciones tiene la base |
+> | `errors.py:60::SchemaTooNewError` | el fallo es del dominio, no de sqlite3 |
+> | `test_b12_schema_upgrade.py:250::test_abrir_una_base_al_dia_no_escribe_nada` | contrasalto de la regresion |
+> | `test_b12_schema_upgrade.py:385::test_una_base_sin_esa_columna_la_recupera` | el libro REPARA, no solo anota |
+> | `test_b12_schema_upgrade.py:397::test_storage_no_tiene_ya_el_metodo_ado_hoc` | el caso especial desaparece del facade |
+> | `measure_b12_schema_upgrade.py:81::preguntar` | el medidor EJECUTA, no mira nombres |
+> | `mutate_b12_schema_upgrade.py:114::_sucios` | la suite verde NO es el arbol restaurado |
+> | `measure_b9_gate_1_0.py:571::_upgrade_desde_releases_soportadas` | el gate corre el medidor y decide por su rc |
+>
+> **HARNESS: 5/5 sondas cazadas, 5 causas distintas, y UNA NACIO ROTA.** M4
+> apuntaba a una linea que `ruff format` habia movido al refactorizar, y el
+> harness la reporto `[SIN SONDA]` en vez de contarla como verde. Es el error
+> 32 de WI-113 repetido, detectado por el harness y no por una suposicion.
+>
+> **LO QUE ESTE BLOQUE NO AFIRMA HABER MEDIDO.** Que una base creada por una
+> release de hace dos años conserve su contenido. La base «vieja» del medidor
+> se RECONSTRUYE quitando lo que esa release no conocia; no es una base real
+> de una release real. Lo que si se mide es que se abre, se sube, se
+> versiona y no pierde filas.
+>
+> ---
+>
 > **Bloque 2026-10-04 (B11) — El ciclo de vida de los packs, que era un nombre en un gate.**
+> (cerrado y publicado en `v0.30.0`; evidencia en
+> `evidence/sddk-b11-gate-report-2026-10-04.json`)
 > Versión activa `0.30.0.dev0` (ya fuera del tag `v0.30.0`); último tag
 > `v0.30.0`.
 >

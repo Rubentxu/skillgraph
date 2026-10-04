@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B11** — Ciclo de vida de packs
-> Versión activa `0.30.0.dev0` · último tag `v0.29.0` · 3233 tests · 16/16 UAT
+> Bloque vivo: **B12** — Upgrade entre releases
+> Versión activa `0.30.0.dev0` · último tag `v0.30.0` · 3254 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -61,6 +61,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B9** | Certificación 1.0 | Release reproducible y production-ready local-first |
 | **B10** | Superficies públicas certificadas | Superficie declarada, versionada y sin moverse: núcleo y CLI |
 | **B11** | Ciclo de vida de packs | `install`/`update`/`remove`/`list` sobre el contrato de B8 |
+| **B12** | Upgrade entre releases | La versión del esquema es un hecho consultable, y subir una base vieja tiene nombre |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -647,3 +648,72 @@ como si lo fueran:
 `CURRENT.md` y `STATE.yaml` no desaparecen: se vuelven **verificables**. Es
 la diferencia entre una segunda fuente de verdad y una ventana que se
 contrasta con la primera.
+
+---
+
+## B12 — Upgrade entre releases
+
+**La segunda de las `OPEN` que piden código.** El predicado del gate decía,
+textual: *«no existe ninguna función de upgrade o de migración de datos entre
+releases: no hay de dónde subir una base creada por una versión anterior»*. La
+medición dijo que el problema era más profundo que «falta la función».
+
+**Medido antes de escribir nada** (`/tmp/b12_measure.py`, y después
+`scripts/measure_b12_schema_upgrade.py`): **0 de 5 preguntas en PASS**.
+
+| hecho | dónde | por qué importa |
+|---|---|---|
+| `SCHEMA_VERSION = 1` | `platform/schema.py` | sin moverse en 73 releases |
+| `INSERT OR IGNORE INTO schema_version` | `platform/storage.py` | se escribe y **nadie lo lee** en `platform/` |
+| base sin `schema_version` | se abre igual | el código la recrea: la reparación es invisible |
+| `_anade_column_claims_assertion_origin` | `platform/storage.py` | una función escrita a mano **para una tabla** |
+
+El dato que resume el bloque: **borrar la tabla `schema_version` entera de una
+base y abrirla no daba ningún error.** Una versión que se regenera cuando
+falta es un `DEFAULT`, no un hecho.
+
+**Cerrado:**
+
+1. `platform/migrations.py` — cada migración tiene un identificador **estable**
+   y es idempotente por precondición.
+2. `SCHEMA_VERSION = version_declarada()` = `len(MIGRACIONES)`. **Derivada**:
+   no hay número que mantener en dos sitios, y un guard por AST lo vigila.
+3. La migración de `claims.assertion_origin` deja de ser un método privado del
+   facade y pasa a ser la primera del libro. El método **se borra**, y hay un
+   test que lo comprueba.
+4. `Storage.version_esquema()` y `Storage.migraciones_aplicadas()`: «¿qué
+   versión tiene este proyecto?» se responde por el **dato** de la base.
+5. `SchemaTooNewError`: una base **más nueva** que el código falla en vez de
+   abrirse en silencio.
+
+**La decisión de diseño, que es lo que más se discutirá:** el libro
+**registra, no gobierna**. `sincroniza` ejecuta *todas* las migraciones y anota
+las que faltaban. Podría haber guardado ejecutando solo las pendientes, y sería
+más eficiente. Se eligió lo contrario por el caso que de verdad duele: una base
+restaurada de una copia parcial tiene el libro atrasado **y** el esquema con una
+columna que falta a la vez, y un libro que gobierna se creería que está bien y
+no repararía nada. El límite de la decisión está escrito en el código.
+
+**Regresión que el bloque introdujo y corrigió, medida:** la primera versión
+hacía `DELETE FROM schema_version` + `INSERT` siempre. Antes era
+`INSERT OR IGNORE`, que tras la primera apertura no escribe nada, luego abrir
+una base era una *lectura*. Con el `DELETE` incondicional, ocho procesos
+concurrentes se repartían mal el turno de escritura: *«se esperaban 8 autores
+distintos y hay 7»*. El contrasalto que lo vigila mide `total_changes`, que es
+determinista; contar ejecuciones verdes de un test de concurrencia sería una
+tirada, no una prueba.
+
+**Un predicado del gate que mentía en la dirección contraria.**
+«upgrade desde releases soportadas» buscaba `def upgrade` con un regex. La
+capacidad se llama `sincroniza`, así que B12 habría entregado la capacidad y el
+gate habría seguido diciendo `OPEN`: un falso **negativo**, la misma clase que el
+falso positivo de B9 con el signo cambiado. Ahora el predicador **ejecuta** el
+medidor y decide por su código de salida, y se verificó en las dos direcciones
+—con la capacidad entera da `PASS`, con el libro roto da `OPEN 3/5`—.
+
+**Harness:** 5/5 sondas cazadas, 5 causas distintas. Una de ellas, **M4, nació
+rota**: su texto ancla apuntaba a una línea que `ruff format` había movido. Es
+el error 32 de WI-113 repetido, y se detectó porque el harness reporta
+`[SIN SONDA]` en vez de contarla como verde.
+
+**Resultado:** gate de 1.0 en **17 PASS / 2 OPEN / 1 NO_MEASURABLE**.
