@@ -1,0 +1,94 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B18",
+  "titulo": "La frontera del nucleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano",
+  "release": "0.32.3",
+  "que_es_y_que_no_es": "Es la CUARTA de las siete propiedades que B15 nombro, y la que B17 dejo escrita como «la primera que habria que mirar de las que quedan». El predicado es `core sin dependencias de impl. externa`, y es el unico del gate cuya mirada esta DECLARADA en su propia evidencia — lo que declara no era lo que miraba. NO es una mejora de forma y NO cambia el veredicto de la propiedad: la clase sigue siendo `derivada` porque el predicado sigue decidiendo leyendo el arbol. Lo que cambia es QUE PARTE del arbol mira, y de donde sale la lista de la que se apoya.",
+  "hallazgo_1_los_relativos_no_se_miraban": {
+    "que": "_imports_de exigia nodo.level == 0, luego los imports RELATIVOS eran invisibles. Y como core/ esta en src/skillgraph/core/, un `from ..platform.storage import Storage` tiene nivel 2 y SALE de core/ entero.",
+    "medido": {
+      "deformacion": "se anade a core/ un `from ..platform.storage import Storage` de verdad",
+      "gate_antes": "PASS",
+      "evidencia_antes": "core/ no depende de fuera de si mismo ... (5 modulos) — BYTE A BYTE IDENTICA a la del caso limpio",
+      "por_que_es_el_defecto_mas_grave_de_los_tres": "Un veredicto que no puede distinguir «el nucleo esta limpio» de «no he mirado la mitad de la superficie» no es un veredicto: es una palabra. Y la frontera que declara es la que permite anadir una capacidad sin tocar el nucleo.",
+      "medido_tambien": "core/ NO USA HOY NINGUN import relativo. La superficie estaba VACIA, y una superficie vacia no se mira porque no hay nada que mirar: el defecto era invisible no porque fuera dificil de ver, sino porque no habia nada que lo activara.",
+      "sobre": "copias del arbol en directorios temporales, con el repo real intacto"
+    },
+    "el_arreglo": "_paquete_de + _resuelve_import_relativo resuelven el relativo a nombre ABSOLUTO, de modo que `from ..platform.storage import Storage` se mide como lo que es en vez de desaparecer."
+  },
+  "hallazgo_2_la_estandar_era_una_lista_escrita_a_mano": {
+    "que": "_MODULOS_ESTANDAR eran trece renglones escritos a mano. El interprete sabe de 290. Faltaban pathlib, contextlib, abc, io, warnings y copy.",
+    "medido": {
+      "deformacion": "se anade a core/ un `import pathlib`, de la estandar, ausente de la lista",
+      "gate_antes": "OPEN",
+      "por_que_es_un_defecto_y_no_un_exceso": "Produce un OPEN sobre una frontera que se estaba respetando. Una propiedad que se pone roja por lo contrario entrena a su lector a no creerla, y eso es un fallo aunque salga del lado conservador: cuando nadie exige el lado conservador, el OPEN se vuelve ruido y el PASS un adorno.",
+      "y_lo_que_no_era": "La lista NO contenia ni un nombre falso. Era correcta y estaba vieja. Una lista de trece que se queda vieja no avisa: simplemente empieza a dar veredictos que nadie reviso, que es la forma mas silenciosa de estar equivocado.",
+      "sobre": "copias del arbol en directorios temporales, con el repo real intacto"
+    },
+    "el_arreglo": "_MODULOS_ESTANDAR se deriva de sys.stdlib_module_names, menos los privados de un solo guion bajo —que no son API—. Y _MODULOS_ESTANDAR_ORIGEN dice en la evidencia de donde sale la lista, para que el dia que esto se separe del interprete se note.",
+    "por_que_no_se_escribe_a_mano": "«Que es de la estandar» es un HECHO DEL INTERPRETE, y los hechos del interprete se leen. Escrito a mano se queda viejo en silencio."
+  },
+  "hallazgo_3_la_evidencia_no_describia_el_recorrido": {
+    "que": "La evidencia decia «(5 modulos)» sobre un paquete de CUATRO ficheros: contaba nombres de import DISTINTOS, no modulos, y no decia cuantos ficheros se habian recorrido.",
+    "por_que_es_la_misma_queja_que_los_dos_primeros": "Los tres son la misma cosa escrita de tres maneras: el predicado no sabia que superficie recorria ni de donde salia su verdad. Una evidencia que no describe lo que recorrio no permite saber si el recorrido estaba completo — y sin esa cifra, un recorrido parcial y uno total son el mismo veredicto.",
+    "el_arreglo": "_ficheros_de cuenta los ficheros del recorrido desde el ARBOL, y la evidencia dice cuantos son y cuantos imports se miraron, en absolutos y relativos. El recuento se muevio de «5 modulos» a «4 ficheros y 5 imports», y los dos numeros son distintos porque miden cosas distintas."
+  },
+  "lo_que_el_predicado_no_hace_y_por_que": {
+    "no_prohibe_relativos": "Que core/ escriba `from .errors import ...` es CORRECTO, y obligarle a escribir `from skillgraph.core.errors import ...` para que un predicado lo vea es cambiar el codigo para que el guard quede bien — que es el defecto moral de todo guard que se ajusta la realidad. Lo que faltaba era MIRARLOS, y ahora se miran. Un predicado que obliga al codigo a la forma que el sabe leer no vigila la frontera: la vigila el."
+  },
+  "los_dos_defectos_propios_que_el_guard_cazo_al_escribirlo": {
+    "por_que_importa": "Porque los dos habrian pasado un 6/6. Es el patron de B16 y B17 —los bloques que encontraron sus propios instrumentos al escribirlos, y B18 lo ha llevado a un bloque cuyo objeto era encontrar miraradas que no miran: el bloque se encontro a si mismo mirando mal.",
+    "d1_el_filtro_se_llevaba_dunder_future": {
+      "que": "El filtro de privados excluia solo los de doble guion bajo, y se llevaba __future__",
+      "sintoma": "falso OPEN sobre core/, por un import que no sale de core/ en absoluto",
+      "por_que_fue_visible": "SOLO gracias a la evidencia nueva, que por una vez describia lo que habia recorrido. Sin esa evidencia, un OPEN falso en core/ habria sido indescifrable: un falso OPEN que nadie puede explicar es peor que un falso PASS, porque el lector sospecha del codigo en vez de del instrumento."
+    },
+    "d2_paquete_de_devolvia_el_modulo": {
+      "que": "_paquete_de devolvia el MODULO en vez del PAQUETE",
+      "sintoma": "el recuento se movia de 5 a 6 y el DEFECTO QUEDABA ENTERO, con un numero que parecia correcto. Un 5 cuando eran 6 se lee como una redaccion descuidada; un 6 cuando eran 5 se lee como verdad, y por eso el defecto sobre vivio."
+    }
+  },
+  "el_harness_y_el_requisito_nuevo": {
+    "sondas": 3,
+    "cazadas": 3,
+    "causas_distintas": 3,
+    "cada_una_cae_solo_su_diagnostico": "M1 devuelve los relativos a ignorarse; M2 devuelve la estandar a trece renglones; M3 cierra la evidencia con un numero sin nombre. Ninguna de las tres cae por la misma causa, y eso es lo que distingue un arnes de una lista de bool.",
+    "requisito_nuevo_el_arnes_exige_que_la_deformacion_parsee": {
+      "que": "Antes de contar una sonda, el arnes hace ast.parse de la deformacion",
+      "por_que": "Una deformacion que rompe la sintaxis hace caer la suite POR NO IMPORTAR, no por detectar. Parece la sonda mas fuerte de las tres y no ha detectado nada: los seis tests de B18 caian como ERROR de colecta y la sonda seeria contada como la que funciona. Un guard que cae porque el arbol se rompio no ha medido nada.",
+      "de_donde_viene": "El mismo error ha salido en B16, B17 y B18 con tres sintomas distintos, y el mas caro de B18 fue SILENCIOSO. Un error que se repite tres veces con distinta apariencia no es un error: es una clase de error, y se cierra con un requisito del arnes, no con cuidado."
+    }
+  },
+  "resultado": {
+    "gate_de_1_0": "17 PASS / 2 OPEN / 1 NO_MEASURABLE, sin cambios de veredicto en la propiedad de este bloque",
+    "la_propiedad_de_este_bloque": "PASS, y su clase NO cambia: se queda en `derivada`. Es lo correcto y hay que decirlo: B18 endurece una medicion que ya era CIERTA —core/ no dependia de fuera de si mismo hoy, con o sin estos cambios—, no una propiedad que fuera falsa como las de B16. Un bloque que se adjudicara la clase sin tocar la naturaleza de la evidencia estaria midiendo su propio entusiasmo.",
+    "la_evidencia_de_core_ahora": "«core/ no depende de fuera de si mismo, MEDIDO sobre 4 ficheros y 5 imports ABSOLUTOS Y RELATIVOS, ya resueltos a su nombre: todos son de skillgraph.core o de la estandar segun sys.stdlib_module_names, el conjunto que declara el propio interprete (Python 3.13) (193 modulos de estandar reconocidos)»",
+    "suite": "3309 passed passed, 3 skipped skipped, 0 failed",
+    "el_run_anterior_y_su_unico_fallo": "El primer run dio «2 failed, 3307 passed, 3 skipped in 300.08s» y LOS DOS FALLOS SON ESTE CAMPO: STATE declaraba 3306 y el arbol colectaba 3312. No habia ningun otro fallo, y ambos guards —B0 y WI-115— decian la misma cosa con la cifra buena en el mensaje. Un guard que se pone rojo al escribir la cifra nueva, y cuya asercion dice «ponle 3312», es un guard que funciona en las dos direcciones.",
+    "tests_total": "3306 -> 3312, +6, fichero nuevo entero: test_b18_core_frontier.py",
+    "harness": "3/3 con 3 causas, cada una cayendo solo su diagnostico, y arbol limpio al terminar"
+  },
+  "lo_que_queda_abierto_y_de_que_clase_es": {
+    "credencial": "runtime real certificado exige SG_UAT_REAL_PROVIDER=1 y ANTHROPIC_API_KEY u OPENAI_API_KEY. No se resuelve desde el repositorio.",
+    "persona": "TUI operacional es una propiedad de alguien usando un terminal.",
+    "las_dos_derivada_que_quedan_y_por_que_no_se_abren": [
+      "blueprint legacy completamente probado y UAT agent-first completa comparten el mismo predicado debil de UAT, y su PROPIEDAD es CIERTA por otra via: tests/uat_audit.py tiene una funcion completa por UAT con directorios temporales, la CLI real y aserciones, metida en CI. B15 ya lo midio y lo dejo anotado. Abrirlas sin cambiar el predicado seria reescribir un instrumento que funciona para que un guard lo vuelva a mirar."
+    ],
+    "la_clase_de_trabajo_que_si_se_puede_y_no_necesita_credenciales": "Comprobar que los instrumentos que YA existen siguen midiendo lo que dicen. Cuatro bloques seguidos se han encontrado instrumentos al escribirlos —B16 cazo dos sondas suyas que no median, B17 una que media otra cosa y otra cuya ancla no existia, B18 un filtro que se llevaba __future__ y un helper que devolvia el modulo—, y ese patron es informacion, no retanca: un arnes que no se autocomprueba tiene un numero que no significa nada, y las sondas las escribio la misma persona que las va a contar.",
+    "producto": "S9 y S10 del ADR-0015 siguen siendo decisiones de producto; abrirlas sin especificacion seria inventar requisitos."
+  },
+  "shas": {
+    "nota": "Tomados de git con git log, no escritos a mano. Una entrada con un sha inventado es provenance falsa.",
+    "commits_del_bloque": [
+      "f8f1d64 docs(state): B18 cerrado y publicado en v0.32.3, con lo que queda nombrado",
+      "4baaae8 chore(release): el estado de v0.32.3, con su etiqueta ya creada",
+      "3622389 build(release): la version pura de v0.32.3, que existe para el tag",
+      "a7fe9e4 docs(state): la cifra, escrita DESPUES del run, con los dos guards que la exigian",
+      "1035316 docs(state): B18 vivo, con los tres defectos que el guard se encontro al mirar",
+      "8ccc2c2 fix(gate): la frontera del nucleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano"
+    ],
+    "tag": "v0.32.3",
+    "sha_del_tag": "36223896448f90b3c5553e1805035026177d4850",
+    "semver_derivado": "b/f/x/n 0/0/1/4 -> PATCH, con la herramienta marcando la etiqueta como ok"
+  }
+}
