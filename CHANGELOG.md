@@ -14,6 +14,88 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.30.0] - 2026-10-04 — el ciclo de vida de los packs, que era un nombre en un gate
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.29.0`:
+`b/f/x/n/d 0/1/2/5/0`, la regla pide **MINOR → v0.30.0**.
+
+Es la primera de las cuatro `OPEN` que quedaban del gate de 1.0 y que piden
+**código, no certificación**. El predicado del gate decía, textual: `sg pack`
+expone `['import', 'load']` y no `['install', 'update', 'remove']`. B8 entregó
+el **contrato** —`PackManifest`, `Requires`, seis tipos, tres niveles de
+aislamiento, `es_compatible` con **motivos**—; faltaba la mitad: saber **qué
+hay instalado**.
+
+### Un defecto de producción, y es el que hacía el `update` imposible
+
+`upsert_resource` **rechaza** cambiar el `spec` bajo la misma identidad con
+`IdentityConflictError` —deliberado, es lo que hace un recurso inmutable—, y
+un update de pack es por definición un `spec` distinto bajo la misma
+identidad. Con el registro encima de `resources`, el `update` no tendría dónde
+escribir.
+
+No es un bug heredado: es que **una instalación no es un recurso**. El recurso
+es el *contenido* del pack; la instalación es el *hecho* de que ese pack esté
+vivo en este proyecto, y ese hecho tiene su propio ciclo. De ahí la tabla
+`installed_packs` y su repositorio propio.
+
+`retirar` **no borra: marca**. Un `DELETE` perdería la única respuesta que
+existe a «¿este proyecto ha tenido alguna vez este pack?», porque el único
+sitio donde vive la respuesta es la fila que se borra.
+
+### Y un filtro que no filtra
+
+`list_resources` construye su filtro de `kind` como
+`AND api_version || '/' || kind = ? OR kind = ?`, **sin paréntesis**: el `OR`
+se come el `AND` que lo precede. Delegar el aislamiento ahí habría costado una
+fuga entre tenants, así que se comprueba fila a fila y hay dos guards que lo
+verifican en las dos direcciones.
+
+### Qué se entrega
+
+- `sg pack install|update|remove|list`. `install` rechaza un pack incompatible
+  **nombrando la cláusula**; `update` exige que la versión suba y la compara
+  **por número** (`0.10.0` > `0.9.0` como número y `<` como texto); `remove` de
+  lo que no está lo dice **con la lista de lo que sí**; `list` responde
+  versión y aislamiento.
+- `skillgraph.packaging.registry` con `instalar`, `actualizar` y `retirar` como
+  funciones **puras** sobre un registro inmutable.
+- El manifiesto de B8 viaja en `spec.manifest` del propio pack: `spec` es la
+  única parte que el tipo `DomainPack` acepta, y así se unifican los dos
+  contratos en vez de crear un tercero.
+- 20 tests, y un harness de mutación **6/6 con 6 causas distintas**.
+
+### El harness volvió a destructirse, y por eso lleva un guard nuevo
+
+`MUTABLES` no incluía `installed_packs_repository.py`, así que esa sonda mutó el
+fichero y no lo restauró — y el harness reportó **«árbol restaurado y ejecutando
+como estaba»** porque **la suite seguía verde**. Es el fallo de B9 repetido con
+otro disfraz, y la lección de allí era que comprobar la suite no basta. El
+veredicto final mira ahora **las dos cosas**: que la suite pase *y* que
+`git status` de los mutables esté limpio.
+
+Dos sondas más salieron del harness, no del código: una apuntaba al filtro de
+estado del SQL, que es **redundante** porque `RegistroDePacks.instalados` vuelve
+a filtrar, así que no había nada que un test pudiera ver; y dos expectativas
+estaban mal escritas, una nombrando la clase equivocada, lo que hace que una
+sonda salga `PARCIAL` aunque el fallo esté detectado a la perfección.
+
+### Un hueco de cobertura real
+
+La sonda de compatibilidad destapó que el recorrido de la CLI instalaba packs
+*compatibles*: el camino que ve el operador no estaba cubierto para el caso que
+duele. Dos tests lo cubren ahora, exigiendo que el mensaje nombre la cláusula y
+que nada quede instalado tras el rechazo.
+
+### Lo que NO se hace aquí
+
+La instalación **no declara los tipos** del pack: de eso se encarga
+`sg pack load`, que ya existe. Uno administra la *instalación* y el otro el
+*contenido*, porque dos comandos que hacen lo mismo con nombres distintos son la
+trampa de «conectar no es contener».
+
+---
+
 ## [0.29.0] - 2026-10-04 — las superficies públicas, declaradas y certificadas
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.28.1`:
