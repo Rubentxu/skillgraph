@@ -14,6 +14,104 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.31.2] - 2026-10-04 — la autoridad de coherencia se podía engañar, y se engañó
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.31.1`:
+`b/f/x/n/d 0/0/7/11`, la regla pide **PATCH → v0.31.2**. B14 no añade
+capacidad: endurece el verificador del que dependen B0..B13, y un arreglo de
+integridad del instrumento es lo que un PATCH describe.
+
+**Qué era, medido, no hipotético.** Al cerrar B13 se añadió una segunda clave
+`current_workitem` en `STATE.yaml`. Seis ficheros de test leían el estado con
+`yaml.safe_load` —que se queda con la clave repetida por la última— y
+`scripts/project_truth.py` lo leía entero con regex —que se queda con la
+primera—:
+
+```
+yaml.safe_load          -> B13_cerrado
+regex de project_truth  -> B13
+project_truth           -> coherente: true, contradicciones: []
+```
+
+Un verificador que dice «coherente» cuando no lo está es **peor que no tener
+verificador**, porque las dos mitades de la propiedad se apoyan en él.
+
+### Fixed
+
+- **`STATE.yaml` tiene UNA lectura.** Se lee una vez con `yaml.safe_load`, en
+  vez de con tres regex que cada una puede encontrar otra cosa. Un loader
+  **rechaza claves duplicadas en el punto de lectura** —no después con un guard,
+  que sería un segundo lector, que es el problema—, y comprueba el **tipo** de
+  `release.tag`, `tests.total` y `roadmap.current_workitem`.
+
+  Con el constructor retirado, el mecanismo **no lanzaba nunca**: `_construye`
+  llamaba a `construct_mapping(...)` y luego miraba `Mapping.items()`, y
+  `construct_mapping` ya devuelve un dict donde la clave repetida se colapsó.
+  El bucle veía **una** clave, no dos.
+- **Un recuento de una colecta que no terminó no se publica.** Con
+  `src/skillgraph/__init__.py` mutilado, pytest imprime «2867 tests collected,
+  27 errors» y sale con `rc=2`. Ese número es real —son los tests que llegó a
+  ver— pero no es **el** recuento, y `tests_colectados()` lo publicaba con su
+  nombre: *«tests: STATE declara 3284, el arbol colecta 2867»*. Sin 417 tests y
+  sin decir por qué. Ahora se niega a leerlo.
+
+### Added
+
+- `tests/test_b14_truth_single_reader.py` — **14 tests** en cinco conjuntos
+  disjuntos. El contrato de la clave duplicada es **ILEGIBLE nombrando la
+  clave**, no «el veredicto cambia»: sin el constructor el verificador elige una
+  de las dos declaraciones y la publica como la verdad, atribuuyendo la otra a
+  otro fichero, y un test de «cambia el veredicto» pasa.
+- `scripts/mutate_b14_truth_single_reader.py` — **6 sondas, 6/6 cazadas con 6
+  causas distintas**. El harness rechaza arrancar si un diagnóstico no existe o
+  si un ancla no es única, y ahora también **dice qué intérprete necesita**
+  cuando se lanza con uno que no es el del proyecto.
+- `scripts/measure_b14_truth_single_reader.py --autocomprobacion` — deforma el
+  verificador de verdad y exige que las preguntas se caigan. **3/3 cazadas**.
+  Sin esto, un 8/8 que no puede ponerse en rojo no es un 8/8.
+
+### Changed
+
+- **La línea base de B14 era 7 de 8 y ahora es 8 de 8**, y el instrumento que
+  la produce tiene su propia contramutación.
+- El gate de 1.0 queda **sin cambios: 18 PASS / 1 OPEN / 1 NO_MEASURABLE**, que
+  es lo correcto: B14 endurece la autoridad de coherencia de B0, no una
+  propiedad de 1.0.
+
+### Lo que el bloque encontró en sí mismo, y que importa más que el arreglo
+
+Cinco instrumentos se satisfacían por una causa ajena a la que decían medir, y
+un instrumento dejó el verificador cojo. Ninguno de los seis salió de una
+lectura del código: los manifestó el harness o la sonda.
+
+- **Dos guards de los tests atados a `current_workitem: B13` escrito a mano.**
+  Al mover el bloque vivo a B14 los dos dejaron de mutar nada. Un contrasalto
+  que se desactiva al cambiar el calendario ya no es un contrasalto.
+- **La medición tenía tres mutaciones no-op** e imprimía 5/8 diciendo que el
+  arreglo recién hecho no funcionaba. Lo que estaba roto era el instrumento.
+- **Tres de sus ocho preguntas pedían «no es coherente»**, que lo cumple un
+  módulo roto igual que un módulo que dejó de mirar.
+- **`RAIZ` era una ruta absoluta de esta máquina**: el instrumento mutaba
+  ficheros de un árbol que podía no ser el suyo.
+- **La sonda M1 no medía el guard que decía vigilar**: referenciaba una
+  constante que B14 había borrado, el módulo reventaba con `NameError` y caían
+  los diez tests, ninguno el diagnosticado. El harness la declaró INVÁLIDA.
+- **La primera ejecución de `--autocomprobacion` reventó a mitad y dejó
+  `project_truth.py` sin el constructor**, con el repo entero en
+  `coherente: false`. La red que verifica por sha256 no cubría el fichero que el
+  instrumento más deforma; ahora `scripts/project_truth.py` entra en `MUTABLES`.
+
+Con la deformación puesta, la sonda 3 deja ver el defecto central a la vista:
+
+```
+"coherente": true,  "contradicciones": [],
+"workitem_current": "B14",  "workitem_state": "B99"
+```
+
+El verificador publicando como coherente un estado en el que `STATE` y
+`CURRENT` dicen cosas distintas. Eso, y no el arreglo del loader, es lo que B14
+existía para cerrar.
+
 ## [0.31.1] - 2026-10-04 — el modelo de amenaza afirmaba que no había fuga, y había una
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.31.0`:
