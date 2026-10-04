@@ -509,15 +509,56 @@ def _ontology_extensible() -> tuple[Veredicto, str]:
     con AST, no con grep, para que un nombre de recurso en el docstring de
     un modulo no conta como dependencia.
     """
-    tipos: set[str] = set()
+    tipos: dict[str, set[str]] = {}
     for modulo in sorted((RAIZ / "src" / "skillgraph" / "core").rglob("*.py")):
+        rel = str(modulo.relative_to(RAIZ))
         arbol = ast.parse(modulo.read_text(encoding="utf-8"), filename=str(modulo))
+        # (1) Los IMPORTS. MEDIDO: la version anterior de este predicado miraba
+        #     solo constantes de CADENA, y un `from ... import DomainPack` es un
+        #     `Name` del AST, no una cadena. Anadido ese import de verdad a un
+        #     modulo de core/, el gate decia «core/ no nombra ningun tipo de
+        #     recurso». Es la fuga de B13 con el signo cambiado: alli el guard
+        #     leia literales en vez de la consulta ensamblada y daba verde CON LA
+        #     FUGA PRESENTE; aqui leia cadenas en vez de los imports y daba verde
+        #     CON LA DEPENDENCIA PRESENTE. Una frontera arquitectonica que nada
+        #     vigila no es una frontera.
+        for nodo in ast.walk(arbol):
+            if isinstance(nodo, ast.ImportFrom) and nodo.module:
+                for alias in nodo.names:
+                    if _ES_TIPO_DE_RECURSO(alias.name):
+                        tipos.setdefault(alias.name, set()).add(f"{rel} (import de {nodo.module})")
+            elif isinstance(nodo, ast.Import):
+                for alias in nodo.names:
+                    for trozo in alias.name.split("."):
+                        if _ES_TIPO_DE_RECURSO(trozo):
+                            tipos.setdefault(trozo, set()).add(f"{rel} (import de {alias.name})")
+            # Y los ATRIBUTOS: `skillgraph.resources.packs.DomainPack` llega al
+            # nucleo como atributo, no como nombre importado, y un predicado que
+            # solo mira imports dejaria pasar justo la forma mas indirecta.
+            elif isinstance(nodo, ast.Attribute) and _ES_TIPO_DE_RECURSO(nodo.attr):
+                tipos.setdefault(nodo.attr, set()).add(f"{rel} (atributo)")
+
+        # (2) Las CADENAS, que es lo que la version anterior miraba, y que
+        #         siguen mirandose: un docstring que explica un tipo de recurso
+        #         tambien es un nucleo que lo nombra.
         for nodo in ast.walk(arbol):
             if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str):
-                tipos.update(re.findall(r"^[A-Z][A-Za-z]+Pack$", nodo.value))
+                for encontrado in re.findall(r"\b[A-Z][A-Za-z]*Pack\b", nodo.value):
+                    tipos.setdefault(encontrado, set()).add(f"{rel} (cadena)")
     if tipos:
-        return "OPEN", f"core/ nombra tipos de recurso: {sorted(tipos)}"
-    return "PASS", "core/ no nombra ningun tipo de recurso: se anaden sin tocarlo"
+        detalle = "; ".join(
+            f"{tipo} en {sorted(donde)[0]}" for tipo, donde in sorted(tipos.items())
+        )
+        return (
+            "OPEN",
+            f"core/ nombra {len(tipos)} tipo(s) de recurso — {detalle}. El nucleo "
+            f"depende de los recursos, y la propiedad dice que no depende: anadir "
+            f"un recurso pasaria a obligar a tocar el nucleo",
+        )
+    return "PASS", (
+        "core/ no nombra ningun tipo de recurso, ni por import ni por atributo ni "
+        "por cadena: se anaden sin tocarlo"
+    )
 
 
 def _crash_recovery_real_certificado() -> tuple[Veredicto, str]:
@@ -541,23 +582,85 @@ def _concurrencia_real_certificada() -> tuple[Veredicto, str]:
     return "PASS", f"5 de 5 corridas verdes; ultima: {resumenes[-1]}"
 
 
+#: Que cuenta como «tipo de recurso» para la frontera del nucleo. Es un
+#: PREFIJO de sufijo, no un nombre: la lista de tipos que existen hoy seria una
+#: segunda fuente de verdad que dejaria de ser verdad el dia que alguien anada
+#: uno, y el nucleo pasaria a depender de un recurso sin que nadie se entere.
+#: MEDIDO: la version anterior de `_ontology_extensible` usaba
+#: `^[A-Z][A-Za-z]+Pack$` con `re.findall` sobre el valor, lo que exige que el
+#: tipo este SOLO en la cadena; aqui se busca el nombre entero para que tambien
+#: aparezca dentro de una frase.
+_TIPO_DE_RECURSO = re.compile(r"^[A-Z][A-Za-z]*Pack$")
+
+
+def _ES_TIPO_DE_RECURSO(nombre: str) -> bool:
+    return bool(_TIPO_DE_RECURSO.match(nombre))
+
+
+#: Donde la version de las capabilities TIENE que vivir. El nombre de la
+#: propiedad dice «el puerto, y solo el»; medir solo «que no haya dos» deja
+#: abierta la mitad de la frase, que es la que importa: una constante que
+#: todos importan desde un sitio que no es el puerto sigue siendo una
+#: segunda fuente de verdad, solo que con una palabra menos.
+#:
+#: MEDIDO: la version anterior de este predicado solo contaba declarantes y
+#: decia PASS con «se declara en un solo sitio: []» cuando no habia ninguno. Un
+#: veredicto cuyo texto dice una lista vacia no es un veredicto sobre el
+#: proyecto: es sobre su propia capacidad de contar.
+PUERTO_DE_CAPABILITIES = "src/skillgraph/platform/ports/capabilities.py"
+
+
+def _declara_la_version(modulo: Path) -> bool:
+    r"""Si este modulo ASIGNA `CAPABILITY_VERSION`. Por AST, no por regex.
+
+    MEDIDO: la busqueda por linea con `re.match(r"\s*CAPABILITY_VERSION\s*[:=]")`
+    no ve una declaracion partida en varias lineas, ni una que lleve anotacion de
+    tipo, ni una dentro de una clase. Es el mismo defecto que B13 cerro en el
+    guard de SQL —mirar una forma del codigo que no es la que se ejecuta—.
+    """
+    arbol = ast.parse(modulo.read_text(encoding="utf-8"), filename=str(modulo))
+    for nodo in ast.walk(arbol):
+        if isinstance(nodo, ast.AnnAssign):
+            objetivo = nodo.target
+        elif isinstance(nodo, ast.Assign):
+            objetivo = nodo.targets[0] if nodo.targets else None
+        else:
+            continue
+        for hijo in ast.walk(objetivo) if objetivo is not None else ():
+            if isinstance(hijo, ast.Name) and hijo.id == "CAPABILITY_VERSION":
+                return True
+    return False
+
+
 def _capabilities_deterministas() -> tuple[Veredicto, str]:
     """La version de una capability la declara EL PUERTO, y solo el.
 
     Si un adaptador vuelve a declarar su propia version, la determinista es
     mentira: dos adaptadores del mismo puerto pueden dejar de declarar lo
-    mismo. Se mide contando quien escribe la constante.
+    mismo. Y si NADIE la declara, tambien: no hay version que sea
+    determinista porque no hay version.
     """
-    declarantes: list[str] = []
-    for modulo in sorted((RAIZ / "src" / "skillgraph").rglob("*.py")):
-        texto = modulo.read_text(encoding="utf-8")
-        for linea in texto.splitlines():
-            if re.match(r"\s*CAPABILITY_VERSION\s*[:=]", linea):
-                declarantes.append(str(modulo.relative_to(RAIZ)))
-    unicos = sorted(set(declarantes))
-    if len(unicos) > 1:
-        return "OPEN", f"CAPABILITY_VERSION se declara en mas de un sitio: {unicos}"
-    return "PASS", f"CAPABILITY_VERSION se declara en un solo sitio: {unicos}"
+    declarantes = sorted(
+        str(modulo.relative_to(RAIZ))
+        for modulo in (RAIZ / "src" / "skillgraph").rglob("*.py")
+        if _declara_la_version(modulo)
+    )
+    if not declarantes:
+        return (
+            "OPEN",
+            "NADIE declara CAPABILITY_VERSION: no hay version que pueda ser "
+            "determinista, y este predicado antes de B16 devolvia PASS con la "
+            "evidencia «se declara en un solo sitio: []»",
+        )
+    if len(declarantes) > 1:
+        return "OPEN", f"CAPABILITY_VERSION se declara en mas de un sitio: {declarantes}"
+    if declarantes[0] != PUERTO_DE_CAPABILITIES:
+        return (
+            "OPEN",
+            f"CAPABILITY_VERSION se declara en {declarantes[0]}, y la propiedad "
+            f"dice que la declara EL PUERTO ({PUERTO_DE_CAPABILITIES})",
+        )
+    return "PASS", f"CAPABILITY_VERSION la declara solo el puerto: {declarantes[0]}"
 
 
 def _core_sin_dependencias_de_impl_externa() -> tuple[Veredicto, str]:
