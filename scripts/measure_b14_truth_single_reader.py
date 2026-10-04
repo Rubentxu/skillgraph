@@ -36,7 +36,21 @@ from pathlib import Path
 # Derivado de donde ESTA el script. Escrito a mano, el instrumento medía
 # un arbol que puede no ser el suyo, y mutaba ficheros de otra maquina.
 RAIZ = Path(__file__).resolve().parent.parent
-MUTABLES = ("STATE.yaml", "ROADMAP.md", "CURRENT.md", "src/skillgraph/__init__.py")
+#: `scripts/project_truth.py` entra aqui por la autocomprobacion, que lo DEFORMA.
+#: MEDIDO: sin el, la primera ejecucion de `--autocomprobacion` revento a mitad
+#: y dejo el verificador sin el constructor de claves duplicadas, y el arbol se
+#: fue a `coherente: false` sin que nadie lo dijera. La red existia —
+#: `restaura()` verifica por sha256— pero no cubria el fichero que este script
+#: mas manipula, que es justo el que no puede quedar sucio: es la autoridad de
+#: coherencia del repo, y un verificador cojo no avisa, dice cualquier cosa con
+#: la misma autoridad.
+MUTABLES = (
+    "STATE.yaml",
+    "ROADMAP.md",
+    "CURRENT.md",
+    "src/skillgraph/__init__.py",
+    "scripts/project_truth.py",
+)
 
 
 def _sha(p: Path) -> str:
@@ -223,7 +237,11 @@ PREGUNTAS: list[dict[str, object]] = [
 SONDAS_AUTOCOMPROBACION: tuple[tuple[str, str, str, frozenset[int]], ...] = (
     (
         "sin el constructor de claves duplicadas",
-        "    _SinClavesDuplicadas.add_constructor("
+        # Sin los 4 espacios de delante: en `project_truth` la llamada esta a
+        # nivel de modulo. Con ellos el ancla no aparecia NINGUNA vez y el
+        # instrumento se negaba a arrancar, que es lo correcto para una ancla
+        # mal escrita, pero delata que el fallo es del ancla y no del codigo.
+        "_SinClavesDuplicadas.add_constructor("
         "yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construye)",
         "# Autocomprobacion: sin este constructor, YAML elige una de las dos.",
         frozenset({1}),
@@ -232,13 +250,33 @@ SONDAS_AUTOCOMPROBACION: tuple[tuple[str, str, str, frozenset[int]], ...] = (
         "el total deja de comprobar que es un entero",
         "    if not isinstance(total, int) or isinstance(total, bool):",
         "    if False:",
-        frozenset({2, 5}),
+        # SOLO la 5. La 2 es «un total que NO CUADRA con el arbol» y la
+        # comprobacion de tipo no tiene nada que ver con la aritmetica:
+        # MEDIDO con el tipo sin comprobar, un `total: 9999` sigue siendo
+        # detectado, porque lo que se compara es el numero con el recuento y
+        # 9999 no es un entero valido sino uno que no cuadra. Declarar la 2 aqui
+        # era una expectativa mia, no una propiedad: la autocomprobacion la
+        # marco como [SIN CAZAR] y por eso esta acotada a lo que el defecto
+        # rompe de verdad.
+        frozenset({5}),
     ),
     (
         "el workitem deja de cruzarse con CURRENT.md",
         '    if v["workitem_state"] != v["workitem_current"]:',
         "    if False:",
-        frozenset({3, 4, 7}),
+        # La 3 (el workitem se detecta) y la 7 (la contradiccion se NOMBRA).
+        # La 4 es la de la version, que esta sonda no toca, y declararla aqui
+        # fue un numero de mas: la autocomprobacion dio [SIN CAZAR] [4] y lo
+        # correcto era preguntar si la 4 tiene que caer, no si se puede hacer
+        # caer. MEDIDO con esta deformacion puesta, el verificador dice, textual:
+        #
+        #     "coherente": true,  "contradicciones": [],
+        #     "workitem_current": "B14",  "workitem_state": "B99"
+        #
+        # Es el defecto central de B14 a la vista, con la deformacion puesta:
+        # el verificador publica como coherente un estado en el que STATE y
+        # CURRENT dicen cosas distintas. Las preguntas 3 y 7 lo cazan.
+        frozenset({3, 7}),
     ),
 )
 
@@ -270,7 +308,14 @@ def _autocomprobacion() -> int:
 
     fallos: list[str] = []
     for nombre, ancla, deformado, indices in SONDAS_AUTOCOMPROBACION:
-        with Arbol() as arbol:
+        # La restauracion la hace el `with`, UNA vez, y la verifica por sha256.
+        # MEDIDO: la primera version restauraba otra vez FUERA del `with` —que ya
+        # lo habia hecho y habia borrado la copia— y reventaba con
+        # FileNotFoundError; como la restauracion del verificador venia
+        # DESPUES, la excepcion se comio esa restauracion y el verificador se
+        # quedo deformado en el arbol. Una red que no cubre el fichero que este
+        # script deforma no es una red, es decoracion.
+        with Arbol():
             ruta.write_text(original.replace(ancla, deformado, 1), encoding="utf-8")
             _mide()
         siguen = [i for i in sorted(indices) if PREGUNTAS[i]["cumple"]]
@@ -279,8 +324,6 @@ def _autocomprobacion() -> int:
             print(f"  [SIN CAZAR] {nombre}: {siguen} siguen en PASS")
         else:
             print(f"  [CAZADA]    {nombre}: preguntas {sorted(indices)} en OPEN")
-        arbol.restaura()
-        ruta.write_text(original, encoding="utf-8")
 
     if ruta.read_text(encoding="utf-8") != original:
         print("ABORTA: el verificador no volvio a su texto original.")
@@ -380,7 +423,29 @@ def _mide() -> None:
 
         # 5. Version activa incoherente con el tag.
         original_init = texto("src/skillgraph/__init__.py")
-        muta("src/skillgraph/__init__.py", '__version__ = "7.7.7"\n')
+        # SOLO el valor, no el fichero entero. MEDIDO: la primera version
+        # reescribia `__init__.py` a una linea, y ese modulo es el que reexporta
+        # las APIs publicas: 27 ficheros de test dejaban de importar, la colecta
+        # se rompia, y el verificador salia con rc=2 sin llegar a mirar la
+        # version. La pregunta se ponia en OPEN —por la causa equivocada— en el
+        # mismo commit que introduce el «no cuentes una colecta a medias». Dos
+        # instrumentos rompidos por la misma mutation, que es la clase de
+        # defecto que este bloque persigue: uno que se satisface por lo que no
+        # es. La pregunta que se quiere es «¿la version incoherente se NOMBRA?»,
+        # y para eso el resto del arbol tiene que estar sano.
+        init_mudado, cambios = re.subn(
+            r'^__version__ = "[^"]*"',
+            '__version__ = "7.7.7"',
+            original_init,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if cambios != 1:
+            raise SystemExit(
+                "ABORTA: src/skillgraph/__init__.py ya no declara `__version__` con esa "
+                "forma, y la pregunta de la version no mutaria nada."
+            )
+        muta("src/skillgraph/__init__.py", init_mudado)
         rc, salida = _corre()
         c = _coherente(salida)
         contras5 = _contradicciones(salida)
