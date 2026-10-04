@@ -58,7 +58,12 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
-CHILD = RAIZ / ".pipelinek" / "b2_concurrency_child.py"
+# El hijo se LITERALMENTE tiene que estar junto a este test, y en el
+# arbol de git. Antes vivia en `.pipelinek/`, que esta en `.gitignore`:
+# el test estaba versionado pero su hijo no, y MEDIDO clon en limpio eso
+# hace que los cinco tests de este modulo fallen con FileNotFoundError.
+# Un test que solo funciona en la maquina donde se escribio no es un test.
+CHILD = Path(__file__).resolve().parent / "fixtures" / "b2_concurrency_child.py"
 
 # Procesos y escrituras por proceso. Ocho x diez = 80 filas esperadas.
 #

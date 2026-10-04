@@ -1,5 +1,5 @@
 > **Bloque 2026-10-04 (B8) — El contrato de paquete, y lo que de él depende.**
-> Versión activa `0.28.0`; último tag `v0.28.0`.
+> Versión activa `0.28.0.dev0`; último tag `v0.28.0`.
 >
 > **B8: el enunciado enumera siete frentes, y esa es la decisión del
 > bloque.** `ROADMAP.md` §B8 lista seis tipos de paquete, aislamiento

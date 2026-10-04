@@ -27,6 +27,7 @@ la prosa seria inventarse un problema.
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -394,3 +395,287 @@ class TestLaRespuestaNoSeFabrica:
             assert carga.get("contradicciones"), "salir con 1 sin nombrar contradiccion"
         if codigo == 0:
             assert carga.get("coherente") is True
+
+
+#: Extensiones con las que un literal de cadena es una RUTA a un fichero.
+#: Sin esta lista, `tmp_path / "plan.md"` y `RAIZ / "ROADMAP.md"` serian la
+#: misma cosa, y solo uno de los dos es una dependencia del repo. Lo que los
+#: separa no es la forma: es que uno esta en el arbol y el otro lo crea el
+#: propio test al correr.
+EXTENSIONES_DE_FICHERO = frozenset(
+    {
+        ".cfg",
+        ".ini",
+        ".json",
+        ".kts",
+        ".md",
+        ".py",
+        ".sh",
+        ".sql",
+        ".toml",
+        ".txt",
+        ".yaml",
+        ".yml",
+    }
+)
+
+
+def _partes_de_ruta(nodo: ast.AST) -> tuple[tuple[str, ...], bool]:
+    """Las constantes de una cadena de `/`, y si hay alguna parte opaca.
+
+    `RAIZ / "scripts" / "x.py"` da `("scripts", "x.py")` y una parte opaca,
+    porque `RAIZ` es un `Name` y no una constante. La parte opaca no se
+    descarta: se **declara**, porque quien lee tiene que saber que la
+    resolucion es parcial y que por eso la comprobacion se hace probando
+    bases, en vez de adivinando una.
+    """
+    if isinstance(nodo, ast.BinOp) and isinstance(nodo.op, ast.Div):
+        izq, izq_opaca = _partes_de_ruta(nodo.left)
+        der, der_opaca = _partes_de_ruta(nodo.right)
+        return (*izq, *der), izq_opaca or der_opaca
+    if isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Name):
+        if nodo.func.id == "Path" and len(nodo.args) == 1 and not nodo.keywords:
+            # `Path("tests") / "fixtures" / "x.py"`: el `Call` de `Path`
+            # aporta su unico argumento. Sin esta rama se pierde el primer
+            # segmento y el fichero no llega a resolverse nunca.
+            return _partes_de_ruta(nodo.args[0])
+        return (), True
+    if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str):
+        return (nodo.value,), False
+    return (), True
+
+
+def _ficheros_versionados(raiz: Path) -> frozenset[str]:
+    """Lo que git tiene, segun git, relativo a `raiz`.
+
+    Se pregunta al **indice**, no a `HEAD`: el indice es lo que git va a
+    grabar en el proximo commit, y un fichero a medio anadir es justo el
+    caso que este guard tiene que ver rojo.
+
+    Y se pregunta a git en vez de deducirlo del arbol: un `.gitignore` puede
+    excluir directorios enteros sin que se note mirando la lista de ficheros.
+    """
+    proc = subprocess.run(
+        ["git", "ls-files"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=raiz,
+    )
+    if proc.returncode != 0:  # pragma: no cover - solo sin git
+        raise RuntimeError(
+            f"no se pudo preguntar a git por lo versionado en {raiz}: {proc.stderr.strip()}"
+        )
+    return frozenset(linea for linea in proc.stdout.splitlines() if linea)
+
+
+def _relativa(raiz: Path, ruta: Path) -> str | None:
+    """`ruta` relativa a `raiz`, o `None` si se sale de `raiz`."""
+    try:
+        return ruta.resolve().relative_to(raiz.resolve()).as_posix()
+    except ValueError:
+        # Se sale del arbol: un `..` que sube por encima de la raiz no puede
+        # ser una dependencia del repo, y fingir que lo seria inventarse un
+        # problema que no existe.
+        return None
+
+
+def _dependencias_no_versionadas(raiz: Path) -> tuple[tuple[str, int, str], ...]:
+    """Ficheros que un test nombra, que existen, y que git no lleva.
+
+    La propiedad en una frase: **si un test resuelve una ruta a un fichero que
+    esta en el arbol, ese fichero tiene que estar en git.** Y en ese orden,
+    que es el orden en que se decide: primero se resuelve la ruta y se
+    comprueba que el fichero existe, y solo entonces se pregunta a git.
+
+    MEDIDO al escribir esto. La primera version de este guard no resolvia
+    rutas: recorria el texto linea a linea buscando un directorio prohibido y
+    preguntaba si ese *directorio* tenia algo versionado. Dos agujeros, y los
+    dos importan:
+
+    - **Un solo fichero versionado lo desactiva entero.** La pregunta era
+      «¿hay algo de git bajo `.pipelinek/`?», no «¿esta en git el fichero que
+      este test necesita?». Bastaba un `.gitkeep` para que todos los que de
+      verdad estaban rotos pasaran.
+    - **No sabia ver rojo.** Su unico contrasalto era `assert lista_no_vacia`,
+      que no puede fallar salvo que alguien borre la lista.
+
+    Por eso la pregunta se hace **por fichero** y sobre el **arbol**, y el
+    conjunto de rutas sale de las cadenas de `/` del AST. Mencionar un nombre
+    de fichero en un docstring no es depender de el porque un docstring no es
+    un operando de `/`: la distincion sale de la estructura, no de una
+    heuristica sobre el texto. Es la misma frontera que cerro WI-108, donde un
+    guard que buscaba con regex contaba su propia documentacion.
+
+    **LIMITE DECLARADO.** Solo se ven las rutas montadas con `/` sobre
+    literales. Un `subprocess.run([sys.executable, "scripts/x.py"])` escrito
+    como literal suelto, o una ruta dentro de un f-string, se escapan. Se
+    declara en vez de dejarlo para que lo descubra el primero que lopea.
+    """
+    versionados = _ficheros_versionados(raiz)
+    hallazgos: list[tuple[str, int, str]] = []
+    for test in sorted((raiz / "tests").rglob("*.py")):
+        arbol = ast.parse(test.read_text(encoding="utf-8"), filename=str(test))
+        for nodo in ast.walk(arbol):
+            if not (isinstance(nodo, ast.BinOp) and isinstance(nodo.op, ast.Div)):
+                continue
+            partes, _opaca = _partes_de_ruta(nodo)
+            if not partes or not partes[-1].endswith(tuple(EXTENSIONES_DE_FICHERO)):
+                continue
+            if any(Path(parte).is_absolute() for parte in partes):
+                continue
+            for base in (raiz, test.parent):
+                destino = base.joinpath(*partes)
+                # La clave se busca **relativa a la raiz**, siempre, sea cual
+                # sea la base que haya resuelto. MEDIDO al escribir esto: con
+                # la ruta relativa a `base`, `tests/fixtures/x.py` se
+                # comparaba contra el indice de git como `fixtures/x.py`, que
+                # ahi no existe, y salia culpable un fichero que si viajaba.
+                # Las ocho falsas de la primera corrida eran esta linea.
+                relativa = _relativa(raiz, destino)
+                if relativa is None or not destino.is_file():
+                    continue
+                if relativa not in versionados:
+                    hallazgos.append((str(test.relative_to(raiz)), nodo.lineno, relativa))
+                break
+    return tuple(dict.fromkeys(hallazgos))
+
+
+class TestLoQueLosTestsUsanTambienViaja:
+    """Un test que depende de un fichero que no viaja, no es un test.
+
+    MEDIDO en B8, y no es hipotetico. Los cinco tests de
+    `test_b2_real_concurrency.py` lanzan un hijo como proceso aparte, y ese
+    hijo vivia en `.pipelinek/` — que esta en `.gitignore`. El modulo de
+    tests estaba versionado; su hijo no.
+
+    Las dos consecuencias, y las dos son malas:
+
+    - En un clon limpio, los cinco tests fallan con `FileNotFoundError`.
+    - Pasan aqui, en la maquina donde se escribieron, porque el fichero
+      esta en disco aunque no este en git.
+
+    No habia guard, y el contrato de build (WI-97) construye un sdist que si
+    incluye `tests/`: un sdist con los tests dentro y sin su hijo no se parece
+    a nada que se pueda detectar sin ejecutar los tests dentro.
+
+    **Por que aqui y no en un modulo propio.** Es una contradiccion del repo
+    consigo mismo —«el repo afirma tener estos tests» contra «los tests no se
+    pueden ejecutar»— y este fichero es el que existe para que la verdad sea
+    una.
+    """
+
+    def test_ningun_test_depende_de_un_fichero_que_no_viaja(self) -> None:
+        culpables = _dependencias_no_versionadas(RAIZ)
+        assert not culpables, (
+            "estos tests dependen de ficheros que estan en disco pero NO en "
+            "git, luego fallan en un clon limpio:\n  "
+            + "\n  ".join(f"{f}:{n} -> {r}" for f, n, r in culpables)
+            + "\n\nSe arregla anadiendo el fichero al proximo commit, no "
+            "anadiendo su path a una lista de excepciones."
+        )
+
+
+class TestElGuardDeLoQueViajaSeSabeVer:
+    """Contra-saltos, sobre un repo de mentira construido en `tmp_path`.
+
+    El guard no se puede comprobar contra el repo real: aqui todo esta
+    versionado, y un detector de algo que no esta pasaria en verde igual si
+    detectara que si. La unica forma de saber que el detector detecta es
+    construir el defecto, y por eso cada contrasalto monta su propio
+    `git init`.
+    """
+
+    @staticmethod
+    def _repo(tmp_path: Path, hijo_versionado: bool) -> Path:
+        """Repo minimo con un test que depende de un hijo, y con el hijo.
+
+        Monta ademas un segundo test que depende de un fichero que SI viaja:
+        sin el, un detector que solo supiera dar rojo tambien pasaria el
+        contrasalto de mas abajo.
+        """
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / ".gitignore").write_text(".pipelinek/\n", encoding="utf-8")
+        (tmp_path / ".pipelinek").mkdir()
+        (tmp_path / ".pipelinek" / "hijo.py").write_text("PASA = True\n", encoding="utf-8")
+        (tmp_path / "scripts").mkdir()
+        (tmp_path / "scripts" / "ayuda.py").write_text("PASA = True\n", encoding="utf-8")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "fixtures").mkdir()
+        (tmp_path / "tests" / "fixtures" / "ayuda.py").write_text("PASA = True\n", encoding="utf-8")
+        (tmp_path / "tests" / "test_algo.py").write_text(
+            '"""El hijo vivia en .pipelinek, que esta ignorado."""\n'
+            "from __future__ import annotations\n"
+            "from pathlib import Path\n"
+            "RAIZ = Path(__file__).resolve().parent.parent\n"
+            'CHILD = RAIZ / ".pipelinek" / "hijo.py"\n',
+            encoding="utf-8",
+        )
+        (tmp_path / "tests" / "test_ayuda.py").write_text(
+            '"""Un docstring que menciona scripts/ayuda.py sin depender de el."""\n'
+            "from __future__ import annotations\n"
+            "from pathlib import Path\n"
+            "RAIZ = Path(__file__).resolve().parent.parent\n"
+            'AYUDA = RAIZ / "scripts" / "ayuda.py"\n'
+            # Esta resuelve contra `Path(__file__).parent`, no contra la raiz:
+            # es la base que se try-broke en la primera corrida, y sin esta
+            # linea el contrasalto de abajo no la tocaria.
+            'AYUDA_2 = Path(__file__).parent / "fixtures" / "ayuda.py"\n',
+            encoding="utf-8",
+        )
+        if hijo_versionado:
+            subprocess.run(["git", "add", "-f", ".pipelinek/hijo.py"], cwd=tmp_path, check=True)
+        subprocess.run(
+            ["git", "add", ".gitignore", "scripts/ayuda.py", "tests/fixtures/ayuda.py"],
+            cwd=tmp_path,
+            check=True,
+        )
+        return tmp_path
+
+    def test_ve_rojo_cuando_el_hijo_que_el_test_necesita_no_viaja(self, tmp_path: Path) -> None:
+        """La direccion que importa: el defecto se ve.
+
+        Sin esto, la ausencia de hallazgos del test de arriba seria
+        indistinguible de un detector que no detecta nada.
+        """
+        culpables = _dependencias_no_versionadas(self._repo(tmp_path, hijo_versionado=False))
+        assert [ruta for _, _, ruta in culpables] == [".pipelinek/hijo.py"], (
+            f"el hijo sin versionar no se ve: {culpables}"
+        )
+        assert culpables[0][0] == "tests/test_algo.py"
+
+    def test_no_ve_rojo_cuando_el_hijo_si_viaja(self, tmp_path: Path) -> None:
+        """La direccion que la primera version de este guard no tenia.
+
+        Anadir `.pipelinek/hijo.py` al indice **deja de ser un defecto**, y es
+        el comportamiento correcto: lo que se prohibe es depender de algo que
+        no viaja, no depender de `.pipelinek`.
+
+        Esta es la sonda que mata el agujero del `.gitkeep`: un guard que
+        decide por directorio pondria este caso en rojo, y este caso esta
+        bien. Si lo que se quisiera fuera «`.pipelinek` no se usa nunca», la
+        regla seria otra y habria que escribirla.
+        """
+        assert _dependencias_no_versionadas(self._repo(tmp_path, hijo_versionado=True)) == ()
+
+    def test_una_dependencia_que_si_viaja_no_se_confunde_con_una_que_no(
+        self, tmp_path: Path
+    ) -> None:
+        """El mismo repo, con las dos rutas: solo se nombra la rota.
+
+        Si el detector confundiera «nombrar un fichero versionado» con
+        «depender de uno sin versionar», este test veria dos hallazgos.
+        """
+        rutas = [
+            ruta
+            for _, _, ruta in _dependencias_no_versionadas(
+                self._repo(tmp_path, hijo_versionado=False)
+            )
+        ]
+        assert "scripts/ayuda.py" not in rutas, (
+            f"un fichero que SI viaja salio como culpable: {rutas}"
+        )
+        assert "tests/fixtures/ayuda.py" not in rutas, (
+            "un fichero que SI viaja y se resuelve contra `Path(__file__).parent` "
+            f"salio como culpable: {rutas}"
+        )
