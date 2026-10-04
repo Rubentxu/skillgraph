@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B15** — Un predicado que se declara leyendo código no sabe cuándo deja de medir
-> Versión activa `0.31.1.dev0` · último tag `v0.31.1` · 3284 tests · 16/16 UAT
+> Bloque vivo: **B16** — Dos propiedades del gate daban PASS sin nada que comparar
+> Versión activa `0.32.0.dev0` · último tag `v0.32.0` · 3301 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -65,6 +65,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B13** | El modelo de amenaza que se sostiene | Cada «cerrado» del STRIDE nombra su prueba, y hay una fuga cross-tenant que se arregla |
 | **B14** | La autoridad de coherencia se puede engañar | El estado tiene una sola lectura, y una clave repetida ya no pasa por alto |
 | **B15** | Un predicado que se declara leyendo código no sabe cuándo deja de medir | El gate dice de qué tipo es la evidencia de sus veinte propiedades, y la reproducibilidad se comprueba en vez de afirmarse |
+| **B16** | Dos propiedades del gate daban PASS sin nada que comparar | El vacío no sale verde, el núcleo no puede depender de un recurso, y ocho procesos que abren la misma base no se matan entre ellos |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -992,6 +993,48 @@ deuda sin verificar, y sin verificar no era deuda.
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
 
+
+## B16 — Dos propiedades del gate daban PASS sin nada que comparar
+
+**Es la primera de las siete que B15 dejó nombradas**, y no era una mejora de
+forma: dos de ellas **daban verde sin mirar nada**.
+
+Medido antes de escribir una línea, sobre copias del árbol con el repo real
+intacto:
+
+```
+MEDIDO A · se renombra la constante a _CAPABILITY_VERSION en todo src/
+  veredicto : PASS
+  evidencia : CAPABILITY_VERSION se declara en un solo sitio: []
+
+MEDIDO B · core/ importa DomainPack de verdad
+  veredicto : PASS
+  evidencia : core/ no nombra ningun tipo de recurso: se anaden sin tocarlo
+```
+
+La primera es **un PASS cuya evidencia dice una lista vacía**. La segunda es **la
+fuga de B13 con el signo cambiado**: allí el guard leía literales en vez de la
+consulta ensamblada y daba verde con la fuga presente; aquí leía cadenas en vez
+de los imports y daba verde con la dependencia presente. Y lo declarado era una
+frontera arquitectónica —el núcleo no depende de los recursos— que nada
+vigilaba.
+
+**Lo que encontró al medir, y que no era de B16.** `concurrencia real
+certificada` pasó de PASS a OPEN y no era ruido del medidor: cuatro corridas
+rojas de veinte, y un hijo muerto de treinta con
+`sqlite3.IntegrityError: UNIQUE constraint failed: schema_version.version`. Ocho
+procesos abren la misma base nueva, los ocho leen que hay que subir, y el
+segundo `INSERT` se lleva un UNIQUE sobre la PRIMARY KEY y muere antes de
+escribir un solo evento. El `timeout` que arregló el `PRAGMA journal_mode` en B2
+no lo puede arreglar, porque no es un candado esperando: es un `SELECT` seguido
+de un `INSERT`, y entre los dos cabe otro proceso. La respuesta era la que ya
+estaba en el mismo archivo, quince líneas más arriba, en las migraciones:
+`INSERT OR IGNORE`.
+
+**Y lo que no se pudo hacer, medido y escrito en el código.** La carrera **no es
+reproducible de forma determinista**, y el test que afirmaba reproducirla se
+retiró en vez de quedarse mintiendo. Un guard que solo sabe dar verde fabrica
+confianza justo donde no la hay.
 
 ## B15 — Un predicado que se declara leyendo código no sabe cuándo deja de medir
 

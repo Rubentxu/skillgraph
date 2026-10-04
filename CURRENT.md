@@ -1,3 +1,84 @@
+> **Bloque 2026-10-04 (B16) — Dos propiedades del gate daban PASS sin nada que comparar.**
+> (cerrado; publicación en curso)
+> Versión activa `0.32.0.dev0`; último tag `v0.32.0`.
+>
+> **ESTE ES UN BLOQUE HACÍA 1.0, Y ES LA PRIMERA DE LAS SIETE.** B15 dejó
+> escrito que siete de las veinte propiedades del gate se deciden leyendo el
+> árbol, y que sus PASS no se pueden retirar solos. Esa lista no era una cola de
+> tareas: era **la medida de dónde el gate no sabe lo que dice saber**. Esta
+> abre las dos primeras, y no eran débiles. **Eran falsas.**
+>
+> **MEDIDO ANTES DE ESCRIBIR UNA LÍNEA**, sobre copias del árbol con el repo
+> real intacto:
+>
+> ```
+> MEDIDO A · se renombra la constante a _CAPABILITY_VERSION en todo src/
+>   veredicto : PASS
+>   evidencia : CAPABILITY_VERSION se declara en un solo sitio: []
+>
+> MEDIDO B · core/ importa DomainPack de verdad
+>   veredicto : PASS
+>   evidencia : core/ no nombra ningun tipo de recurso: se anaden sin tocarlo
+> ```
+>
+> La primera es **un PASS cuya evidencia dice una lista vacía**: un veredicto
+> sobre la capacidad de contar del propio instrumento, no sobre el proyecto. La
+> propiedad era cierta por suerte del caso —la constante existe en un sitio— y
+> no por lo que el gate midió. Un repo donde nadie declarase la constante
+> tendría el mismo veredicto.
+>
+> La segunda es **la fuga de B13 con el signo cambiado**. Allí el guard leía
+> literales en vez de la consulta ensamblada y daba verde **con la fuga
+> presente**; aquí leía cadenas en vez de los imports y daba verde **con la
+> dependencia presente**. Y lo que se declara es una frontera arquitectónica
+> —el núcleo no depende de los recursos, así que añadir un recurso no obliga a
+> tocarlo— que **nada vigilaba**.
+>
+> **LO QUE EL BLOQUE ENCONTRÓ AL MEDIR, Y QUE NO ERA DE B16.**
+> `concurrencia real certificada` pasó de PASS a OPEN y **no era ruido del
+> medidor**: MEDIDO, 4 corridas rojas de 20 del `test_b2_real_concurrency`, y un
+> hijo muerto de 30 con su stderr a la vista —
+> `sqlite3.IntegrityError: UNIQUE constraint failed: schema_version.version`.
+> Ocho procesos abren la misma base nueva, los ocho leen `MAX(version) == 0`, los
+> ocho deciden subir, y el segundo `INSERT` se lleva un UNIQUE sobre la PRIMARY
+> KEY y **muere antes de escribir un solo evento**. El `timeout` que arregló el
+> `PRAGMA journal_mode` en B2 no lo puede arreglar: no es un candado esperando,
+> es un `SELECT` seguido de un `INSERT`, y entre los dos cabe otro proceso. La
+> respuesta es la que ya estaba quince líneas más arriba del mismo archivo, en
+> las migraciones: **`INSERT OR IGNORE`**, una sola sentencia idempotente, y sin
+> el `DELETE` que abría la ventana.
+>
+> **Y LO QUE NO SE PUDO HACER, MEDIDO Y ESCRITO.** La carrera **no es
+> reproducible de forma determinista**: «el hermano sube y luego este sube»
+> pasa con el defecto presente, y meter al hermano entre el `DELETE` y el
+> `INSERT` con un `set_trace_callback` tampoco, porque SQLite serializa a los
+> escritores y lo bloquea hasta agotar el `busy_timeout` —5,07 s frente a 0,15 s,
+> y pasa igual con el defecto puesto—. El test que afirmaba reproducirlo sin
+> reproducirlo **se ha retirado**: un guard que solo sabe dar verde fabrica
+> confianza justo donde no la hay. Lo que queda es el guard de FORMA, que cae
+> con el defecto puesto, y la tasa del test concurrente, de 4/20 a **0/25**.
+>
+> **DONDE SE MIRA, VERIFICADO POR AST:**
+>
+> | cita | que sostiene |
+> |---|---|
+> | `measure_b9_gate_1_0.py:635::_capabilities_deterministas` | el vacio no puede salir verde, y se exige EL PUERTO |
+> | `measure_b9_gate_1_0.py:504::_ontology_extensible` | decide sobre imports y atributos, no sobre cadenas |
+> | `migrations.py:211::_reescribe_version_si_cambia` | una sola sentencia idempotente, sin ventana |
+> | `test_b16_vacuous_pass.py:122::TestUnPassSinNadaQueCompararNoEsUnPass` | el vacio, y el contrasalto de que no se rompa |
+> | `test_b12_schema_upgrade.py:315::TestDosProcesosQueSubenLaMismaVersionNoSeMateN` | por que solo se mide la forma, y por que se puede |
+> | `mutate_b16_vacuous_pass.py` | 6 sondas, 6/6, y dos de ellas no son de B16 |
+>
+> **RESULTADO:** las dos propiedades reales siguen en **PASS** y el gate no
+> cambia de veredicto. Harness **6/6 con 6 causas**, y su propia autocomprobación
+> cazó dos sondas que no median: una por leer `ERROR` como «no ha caído» y otra
+> por agrupar las suites como cadenas. `tests.total` 3294 -> 3301.
+>
+> **LO QUE ESTE BLOQUE NO ABRE.** No sube las otras cinco `derivada`: cada una
+> es un bloque, y nombrarlas es el orden.
+>
+> ---
+
 > **Bloque 2026-10-04 (B15) — Un predicado que se declara leyendo código no sabe cuándo deja de medir.**
 > (cerrado y publicado en `v0.32.0`)
 > Versión activa `0.32.0.dev0`; último tag `v0.32.0`.
@@ -66,7 +147,7 @@
 > |---|---|
 > | `measure_b9_gate_1_0.py:122::_grafo_del_modulo` | la clase sale de seguir el grafo, no de una lista |
 > | `measure_b9_gate_1_0.py:189::_funcion_del_predicado` | una busqueda que no encuentra LEVANTA |
-> | `measure_b9_gate_1_0.py:819::_construye_en` | construye para comparar, no para declarar |
+> | `measure_b9_gate_1_0.py:922::_construye_en` | construye para comparar, no para declarar |
 > | `test_b15_evidence_kind.py:119::TestLaClaseSigueAlCodigo` | contrasalto en las dos direcciones |
 > | `mutate_b15_evidence_kind.py` | 6 sondas, 6/6, que el harness se autocomprueba |
 >
