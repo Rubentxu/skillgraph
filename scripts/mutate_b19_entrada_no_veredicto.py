@@ -80,7 +80,7 @@ SONDAS: tuple[Sonda, ...] = (
         despues="    if False:",
         esperados=frozenset(
             {
-                "TestElVeredictoDistingueLasDosCausas::test_con_la_entrada_cambiada_no_acusa_al_proyecto"
+                "tests/test_b19_entrada_no_veredicto.py::test_con_la_entrada_cambiada_no_acusa_al_proyecto"
             }
         ),
     ),
