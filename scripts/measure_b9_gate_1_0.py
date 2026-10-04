@@ -71,10 +71,15 @@ gate que no se puede apagar no es una medida.
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -797,15 +802,103 @@ def _security_threat_model_actualizado() -> tuple[Veredicto, str]:
     )
 
 
+#: El fichero que se toca entre las dos construcciones. Solo cambia su FECHA:
+#: el contenido es identico, y se comprueba antes y despues.
+_FICHERO_DE_FECHA = "src/skillgraph/__init__.py"
+
+
+def _construye_en(destino: Path) -> dict[str, str]:
+    """Construye la distribucion en `destino` y devuelve {artefacto: sha256}.
+
+    No se usa `dist/` del repositorio: el gate se ejecuta con frecuencia y
+    escribir ahi dejaria el arbol del proyecto con un estado que nadie pidio.
+    """
+    shutil.rmtree(destino, ignore_errors=True)
+    destino.mkdir(parents=True)
+    proc = _corre(["uv", "build", "--out-dir", str(destino)], timeout=900)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"uv build devolvio {proc.returncode}: {(proc.stderr or proc.stdout)[-400:]}"
+        )
+    return {
+        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(destino.iterdir())
+        if p.is_file() and not p.name.startswith(".")
+    }
+
+
 def _distribution_reproducible() -> tuple[Veredicto, str]:
-    """Se construye el paquete de verdad. Si no se puede construir, no se distribuye."""
+    """La distribucion es REPRODUCIBLE: mismas entradas, mismos bytes.
+
+    **Por que construir dos veces y no una.** MEDIDO antes de escribir esto:
+    este predicado ejecutaba `check_package_build.py`, que construye el wheel y
+    el sdist, y devolvia PASS con la evidencia *«el wheel y el sdist se
+    construyen y llevan lo que declaran»*. Eso prueba que SE CONSTRUYEN.
+    Reproducible es otra cosa: que las mismas entradas den los mismos bytes.
+    Un unico build no puede Distinguir «reproducible» de «esta vez salio bien»,
+    y el gate declaraba la primera sin haber medido la segunda.
+
+    **Por que se toca la FECHA de un fuente entre medias.** Construir dos veces
+    seguidas no prueba nada: si el reloj no tick entre las dos, los timestamps
+    que se meten en el zip coinciden aunque el build sea irreproducible, y el
+    gate passaria con un defecto real. Tocando el mtime —contenido identico— la
+    unica variable que queda es la que hace que un build NO sea reproducible, y
+    si los bytes siguen igual, es que de verdad no depende de ella.
+    """
+    # Primero, lo de siempre: que el paquete se pueda construir y llevar lo que
+    # declara. Sin esto, un fallo de construccion se presentaria como un fallo
+    # de REPRODUCIBILIDAD, que es otra cosa y pide otra accion.
     proc = _corre([sys.executable, "scripts/check_package_build.py"], timeout=900)
     if proc.returncode != 0:
         return (
             "OPEN",
             f"scripts/check_package_build.py rc={proc.returncode}: {proc.stdout.strip()[-300:]}",
         )
-    return "PASS", "el wheel y el sdist se construyen y llevan lo que declaran"
+
+    fuente = RAIZ / _FICHERO_DE_FECHA
+    contenido = fuente.read_bytes()
+    mtime = fuente.stat().st_mtime
+    try:
+        with tempfile.TemporaryDirectory(prefix="gate1_a_") as da:
+            primera = _construye_en(Path(da))
+            # La fecha se separa de forma VISIBLE: dos segundos. Si el build
+            # embebiese el mtime, dos segundos bastarian para que se notara.
+            time.sleep(2.1)
+            futuro = time.time() + 5
+            os.utime(fuente, (futuro, futuro))
+            assert fuente.read_bytes() == contenido, "tocar la fecha no puede cambiar el texto"
+            with tempfile.TemporaryDirectory(prefix="gate1_b_") as db:
+                segunda = _construye_en(Path(db))
+    except RuntimeError as exc:
+        return "OPEN", f"no se pudo construir dos veces para comparar: {exc}"
+    finally:
+        os.utime(fuente, (mtime, mtime))
+        fuente.write_bytes(contenido)
+
+    if not primera or not segunda:
+        return "OPEN", "una de las dos construcciones no produjo artefactos"
+    if set(primera) != set(segunda):
+        return (
+            "OPEN",
+            f"las dos construcciones no producen los MISMOS artefactos: "
+            f"solo en la primera {sorted(set(primera) - set(segunda))}, "
+            f"solo en la segunda {sorted(set(segunda) - set(primera))}",
+        )
+    distintos = sorted(n for n in primera if primera[n] != segunda[n])
+    if distintos:
+        detalle = "; ".join(f"{n}: {primera[n][:12]} vs {segunda[n][:12]}" for n in distintos)
+        return (
+            "OPEN",
+            f"la distribucion NO es reproducible: mismo contenido y distinta fecha dan "
+            f"bytes distintos en {len(distintos)} artefacto(s) — {detalle}",
+        )
+    return (
+        "PASS",
+        f"la distribucion es REPRODUCIBLE, medido: {len(primera)} artefactos "
+        f"construidos dos veces con la fuente tocada entre medias (contenido identico, "
+        f"fecha distinta) y los {len(primera)} sha256 coinciden. Ademas el paquete "
+        f"construye y lleva lo que declara. {', '.join(sorted(primera))}",
+    )
 
 
 def _uat_agent_first_completa() -> tuple[Veredicto, str]:
