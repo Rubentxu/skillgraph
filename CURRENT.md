@@ -1,6 +1,6 @@
 > **Bloque 2026-10-04 (B20) — El gate se contradecía a sí mismo, y la razón era un sufijo.**
-> (vivo: implementado y commiteado, pendiente de certificar y publicar)
-> Versión activa `0.32.4.dev0`; último tag `v0.32.4`.
+> (cerrado y publicado en `v0.32.5`)
+> Versión activa `0.32.5.dev0`; último tag `v0.32.5`.
 >
 > **ES EL HALLAZGO MÁS INCÓMODO DE LA SERIE, Y NO ES UN `PASS` FALSO NI UN
 > `OPEN` FALSO.** B16 abrió propiedades que daban verde con el defecto

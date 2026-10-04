@@ -14,6 +14,88 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.32.5] - 2026-10-05 — El gate se contradecía a sí mismo, y la razón era un sufijo
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.4`:
+`b/f/x/n/d 0/0/5/11/0`, la regla pide **PATCH -> v0.32.5**.
+
+**Es el hallazgo más incómodo de la serie, y no es un `PASS` falso ni un
+`OPEN` falso.** B16 abrió propiedades que daban verde con el defecto presente.
+B18 endureció una que ya era cierta. B19 arregló un veredicto que afirmaba más
+de lo que podía sostener. B20 es otra cosa: **el gate se contradice a sí mismo.**
+
+`ontology extensible` y `core sin dependencias de impl. externa` son dos
+propiedades del mismo gate sobre la **misma frontera**. Con un solo import en
+`core/` la primera daba `PASS` («no nombra ningún tipo de recurso») y la segunda
+`OPEN` («depende de fuera de sí mismo»). MEDIDO sobre la superficie real, no
+sobre casos inventados: **7 contradicciones de 9**.
+
+La causa tenía las dos caras. El predicado era
+`_TIPO_DE_RECURSO = ^[A-Z][A-Za-z]*Pack$`: un patrón por **forma**. No veía lo
+que importa —de los ocho tipos que el proyecto *declara de verdad*, el patrón
+veía **cero**, y `PackManifest` es el manifiesto de un pack, el tipo central
+del proyecto— y veía lo que no importa, que era `FilaDePack`, una **fila** de
+la tabla de packs. **Un patrón por forma es una lista**, más corta y peor:
+decide cómo se escribe un nombre en vez de a qué conjunto pertenece.
+
+### Fixed
+
+- **El conjunto de tipos de recurso se deriva del árbol**, de los paquetes que
+  el proyecto llama recursos, y la evidencia publica cuántos son y de dónde
+  salen. Los docstrings que nombran un recurso se **dicen** sin abrir veredicto:
+  documentar la frontera es lo contrario de depender de ella.
+- **El techo se nombra, no se cuenta.** Tres contradicciones quedan en
+  `PENDIENTES_POR_DECLARAR`, porque «qué es un recurso» no es un concepto que
+  el código contenga. Antes se comprobaba `len(rotas) <= 3`, que no era
+  rompible: con la implicación invertida la lista queda vacía y cero caben en
+  tres.
+- **Dos defectos del clasificador de docstrings**, que son el mismo defecto dos
+  veces: `id(ast.get_docstring(nodo))` es el id de un *string* y no del nodo, y
+  mirar solo `body[0]` pierde la documentación de los `NewType` —con lo cual el
+  veredicto daba `OPEN` sobre un árbol **sano**.
+- **`STATE.yaml` seguía declarando B19 mientras `CURRENT.md` declaraba B20**,
+  lo que rompía la autoridad de coherencia en dos tests de la suite.
+- **Los tests del guard de B16 deformaban la frontera con código que no existe.**
+  `skillgraph.resources.packs` no es un módulo y `DomainPack` no es un símbolo:
+  es el `kind` de un recurso escrito como cadena, un **dato de disco** tratado
+  como tipo de Python. Endurecer el predicado no rompió el guard: lo destapó.
+- **El hook instalado en `.git/hooks/` divergía del declarado** en
+  `scripts/hooks/`: el instalado corría la suite entera y el declarado corre
+  pytest solo sobre los `.py` staged. El gate que se estaba usando no era el que
+  el repositorio declara, y ningún guard lo ve porque todos leen la copia
+  versionada.
+- **La medición de cobertura estaba contaminada**: 282 de las 376 rutas del
+  fichero de datos eran de `/tmp`, y ninguna existía ya cuando llegaba el
+  informe. Eso rompía `coverage report` y `coverage json` **después** de que la
+  suite entera hubiera pasado. Lo que vive fuera del árbol del repo no es
+  código de este repo, y no se mide.
+
+### Changed
+
+- **Seis módulos cumplían por debajo del suelo que su propia ubicación declara**,
+  y la etapa que lo comprueba llevaba tiempo sin poder informar. Cubierto el
+  código, no bajado el suelo:
+
+  | módulo | antes | después | suelo |
+  |---|---|---|---|
+  | `cli/commands/pack.py` | 46,43 % | **91,07 %** | 70 % |
+  | `platform/installed_packs_repository.py` | 78,57 % | **100,00 %** | 90 % |
+  | `packaging/registry.py` | 77,86 % | **98,47 %** | 90 % |
+  | `presentation/views.py` | 79,26 % | **98,52 %** | 90 % |
+  | `governance/graph_diff.py` | 80,00 % | **99,13 %** | 90 % |
+  | `resources/status.py` | 75,31 % | **92,59 %** | 90 % |
+
+  Cobertura global **93,68 % -> 95,87 %**.
+
+### Verified
+
+- Receta canónica: **9/9 etapas**, `3407 passed, 3 skipped`, run
+  `fa382620-ad2c-48fd-85af-42d64f1f8097` con su receipt verificado.
+- `tests.total` 3318 -> 3410.
+- Guard de B20 con 3 sondas y 3 causas; guard de la cobertura con 3 mutaciones
+  sobre producción, todas cazadas, y un contrasalto que dio **rojo al escribirlo**
+  porque el guard leía el texto del heredoc en vez de lo que el shell produce de él.
+
 ## [0.32.4] - 2026-10-04 — «NO es reproducible» y «no he podido medirlo» son la misma frase
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.3`:
