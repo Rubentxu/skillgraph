@@ -218,18 +218,30 @@ class TestLaEsperaEsDelProcesoYNoDelDriver:
         )
 
     def test_el_error_final_no_se_traga(self, tmp_path: Path) -> None:
-        """Si el modo no se puede cambiar, la excepcion sube.
+        """Si el modo no se puede cambiar, la excepcion sale de AQUI.
 
         Es la frontera que el arreglo declara: tragarse el error y seguir
         seria afirmar que la base esta en WAL sin haberlo comprobado, que es
         la clase de mentira que este bloque mide.
 
-        Se fuerza con una base **de solo lectura y en modo `delete`**, que
-        es la unica combinacion donde el cambio de modo falla de verdad sin
-        necesitar otro proceso: hay que cambiarlo y no se puede. Y el modo
-        se pone a mano, no con `Storage`, para que el fallo sea del cambio de
-        modo y no de otra cosa.
+        Se mide sobre `journal.asegura_wal` y **no** sobre `Storage(db)`, y
+        la razon es un fallo mio medido: la primera version abria `Storage`
+        y comprobaba que saliera una `OperationalError`. Con el error
+        tragado, esa asercion se cumple IGUAL, porque `_migrate()` va
+        despues a ejecutar el DDL sobre el mismo fichero de solo lectura y
+        revienta ahi. La excepcion salia, pero no la que se queria, y la
+        sonda M4 pasaba en verde.
+
+        Un guard que comprueba «ha salido un error» cuando lo que quiere
+        decir es «ha salido ESTE error» esta midiendo la mitad, que es el
+        mismo defecto que hacia que M5 y M6 no cazaran.
+
+        El caso: base en modo `delete` y de solo lectura, que es la unica
+        combinacion donde hay que cambiar el modo y no se puede, sin
+        necesitar otro proceso.
         """
+        from skillgraph.platform import journal
+
         db = tmp_path / "p.sqlite"
         conexion = sqlite3.connect(str(db))
         try:
@@ -239,11 +251,16 @@ class TestLaEsperaEsDelProcesoYNoDelDriver:
         finally:
             conexion.close()
         os.chmod(db, stat.S_IRUSR)  # type: ignore[arg-type]
+        conexion = sqlite3.connect(str(db))
         try:
-            assert _modo(db) == "delete", "el caso de prueba no esta en delete"
+            assert journal.modo_de_journal(conexion) == "delete", (
+                "el caso de prueba no esta en delete, y sin esto no se esta "
+                "midiendo el cambio de modo sino nada"
+            )
             with pytest.raises(sqlite3.OperationalError):
-                Storage(db)
+                journal.asegura_wal(conexion, intentos=2, espera_s=0.0)
         finally:
+            conexion.close()
             os.chmod(db, stat.S_IRUSR | stat.S_IWUSR)  # type: ignore[arg-type]
 
 
