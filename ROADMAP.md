@@ -30,7 +30,7 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B7** — UX operacional
+> Bloque vivo: **B8** — Ecosistema y distribución
 > Versión activa `0.25.0.dev0` · último tag `v0.25.0` · 3053 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
@@ -432,6 +432,37 @@ requires:
   capabilities:
     - code.analysis.v1
 ```
+
+**Bloque vivo. El enunciado enumera siete frentes y este es el primero.**
+
+Este bloque mide y entrega **el manifiesto**, que es la pieza de la que los
+otros seis cuelgan: sin `requires` declarado no hay versión que comparar, sin
+un contrato versionado no hay `upgrade`, y sin contrato no hay
+`install`/`update`/`remove` que valga como algo más que copiar ficheros.
+
+Medido antes de escribir nada (`scripts/measure_b8_package_contract.py`):
+**5 de 5 preguntas abiertas**. No había manifiesto —solo un `Brick` con
+`kind="DomainPack"`, que es el contrato de *tipos*, no el de *paquete*.
+
+**Entregado:** `src/skillgraph/packaging/` con `PackManifest`, `Requires`,
+`CapabilityRequirement`, los seis tipos en `PACK_KINDS` **derivados por
+`get_args`**, los tres niveles de aislamiento **en orden creciente**, y
+`es_compatible` / `exigir_compatible` que responden **con motivos y no con un
+`bool`**.
+
+La costura ya estaba puesta: B3 dejó `CAPABILITY_VERSION` en el puerto con un
+docstring que dice que está ahí «para que `requires.capabilities` de B8 tenga
+algo que versionar».
+
+**Abierto, y no baja el veredicto:** que un pack se instale de verdad en una
+instalación real (P6). Depende de un registro remoto y de una política de
+fijación que el CI no tiene. Lo comprobable sin red es el contrato.
+
+**Siguen abiertos para los siguientes bloques del mismo roadmap:** la
+distribución real (`mise`/`asdf`/`uv tool`/PyPI), el `upgrade` sobre este
+contrato, el `install`/`update`/`remove` de packs, la matriz de compatibilidad
+—que este manifiesto ya puede generar— y el aislamiento *ejecutable*
+(`subprocess` y `sandbox` son hoy campos declarados, no mechanisms).
 
 ---
 

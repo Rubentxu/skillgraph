@@ -1,3 +1,96 @@
+> **Bloque 2026-10-04 (B8) — El contrato de paquete, y lo que de él depende.**
+> Versión activa `0.27.0.dev0`; último tag `v0.27.0`.
+>
+> **B8: el enunciado enumera siete frentes, y esa es la decisión del
+> bloque.** `ROADMAP.md` §B8 lista seis tipos de paquete, aislamiento
+> progresivo, `mise`/`asdf`/`uv tool`/PyPI, upgrade, install/update/remove,
+> matriz de compatibilidad y un formato `requires`. Siete no es un bloque:
+> son siete, y medirlos juntos daría un veredicto que no dice por dónde
+> empezar. Este bloque mide y entrega **el manifiesto**, que es la pieza de
+> la que los otros seis cuelgan.
+>
+> Medido antes de escribir nada (`scripts/measure_b8_package_contract.py`):
+> **5 de 5 preguntas abiertas**. Y lo que encuentra es que no había
+> manifiesto —solo un `Brick` con `kind="DomainPack"`, que es el contrato de
+> *tipos*, no el de *paquete*.
+>
+> ```
+> packaging/manifest.py:63::PACK_KINDS      los seis, DERIVADO por get_args
+> packaging/manifest.py:69::ISOLATION_LEVELS  declarative -> subprocess -> sandbox
+> packaging/manifest.py:105::IncompatiblePackError   code sg_incompatible_pack
+> packaging/manifest.py:167::PackManifest    el manifiesto, frozen y comparable
+> packaging/manifest.py:357::es_compatible   devuelve MOTIVOS, no un bool
+> packaging/manifest.py:399::exigir_compatible  la version que lanza
+> ```
+>
+> **La costura ya estaba puesta y es lo que hace el bloque posible.** B3
+> dejó `CAPABILITY_VERSION: Final[str] = "v1"` en el puerto con un
+> docstring que dice, literalmente, que está ahí «para que
+> `requires.capabilities` de B8 tenga algo que versionar». Si la versión
+> viviera en cada adaptador, cada uno inventaría la suya y no habría nada
+> que comparar. Tres años de docstring y por fin se usó.
+>
+> **Tres decisiones, y las tres son correcciones de cosas que ya existían.**
+>
+> 1. **`PACK_KINDS` se deriva por `get_args`, nunca se escribe a mano.** Un
+>    conjunto literal se queda corto en cuanto el `Literal` crece, y
+>    entonces el validador rechaza el valor nuevo que el propio tipo
+>    acepta. Es el error de QW-E, pagado una vez en B6.
+> 2. **La versión de la capability la hereda del puerto.** Es la decisión
+>    que B3 dejó anotada y B8 ejecutó.
+> 3. **`ISOLATION_LEVELS` es una tupla ORDENADA, no un conjunto.** El orden
+>    es el contenido: «cada nivel es al menos tan aislado como el anterior»
+>    es lo que hace que «progresivo» sea una propiedad comprobable
+>    (`es_al_menos`) y no un adjetivo.
+>
+> **Y `es_compatible` devuelve MOTIVOS, no un `bool`.** En un pack que se
+> está instalando, el «por qué» es la mitad del trabajo: `no encaja` no le
+> dice al operador si le falta una capability o si su SkillGraph es viejo.
+> Los motivos van ordenados y deterministas, porque un mensaje de error
+> que cambia de orden entre ejecuciones no se puede comparar ni copiar.
+>
+> **Dos defectos reales que los tests cazaron, y los dos son del código:**
+>
+> - **El parser rechazaba el formato del propio gate.** El enunciado
+>   escribe `">=0.30,<1"`, que **mezcla** `>=0.30` —dos componentes— y `<1`
+>   —uno solo—. Mi regex exigía `X.Y` o SemVer completo, así que ninguno
+>   de los dos requisitos se aceptaba y **ningún pack encajaba contra el
+>   formato que el gate define**. Lo cazaron seis tests a la vez.
+> - **La capability larga se rompía en silencio.** `{type_name, version}`
+>   devolvía `"a.b.v2@v2"` como `type_name` y se construía la requirement
+>   con la versión pegada al nombre y la del puerto en el campo `version`.
+>   Una requirement con la versión pegada no se puede comparar con un
+>   `CapabilitySpec` instalado, que los tiene separados. Todo lo demás
+>   parecía funcionar, que es lo que hace un fallo silencioso.
+>
+> **Y un defecto del harness, que es el más instructive.** «Árbol restaurado
+> byte a byte» **no** es «el árbol está como estaba». Al restaurar, el
+> `mtime` del `.py` puede no avanzar lo suficiente y Python sigue ejecutando
+> el `.pyc` de la versión mutada: el árbol estaba restaurado y ejecutando
+> la versión equivocada a la vez. Se vio porque M5 cazaba los tests de M4, no
+> los suyos. El harness ahora borra `__pycache__` y **vuelve a pasar la
+> suite al final**, que es la comprobación que faltaba.
+>
+> **Y un test mío que no podía fallar.** El test de alias mutaba
+> `requires.skillgraph` en el dict de origen —los strings son inmutables en
+> Python, así que eso no puede cambiar un `frozen` dataclass—. Era un test
+> verde por construcción. Se quitó esa aserción y la sonda se movió a
+> `metadatos`, donde el alias sí es posible. Un test que no puede fallar no
+> mide nada: ocupa el sitio de una comprobación que sí podría.
+>
+> **Verificación:** 66 tests, cobertura del 100% del paquete nuevo (el suelo
+> de §6.3 es 90%). Contra-saltos **5/5 con 5 conjuntos distintos de tests**,
+> 0 sin sonda, árbol restaurado byte a byte **y ejecutando como estaba**.
+> `tests.total` 3161, con el desglose medido pieza a pieza.
+>
+> **Fuera de alcance y registrado:** P6 —que un pack se instale de verdad en
+> una instalación real—, porque depende de un registro remoto y de una
+> política de fijación que el CI no tiene. Se mide el contrato, que es
+> comprobable sin red. Evidencia: `scripts/measure_b8_package_contract.py` y
+> `scripts/mutate_b8_package_contract.py`.
+>
+> ---
+>
 > **Bloque 2026-10-04 (B7) — Las vistas que CLI y TUI compartirian.**
 > Versión activa `0.27.0.dev0`; último tag `v0.27.0`.
 >
