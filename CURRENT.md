@@ -1,6 +1,6 @@
 > **Bloque 2026-10-04 (B12) — La version del esquema era una constante, y por eso el upgrade era imposible.**
-> Versión activa `0.31.0` (versión pura, a la espera del tag `v0.31.0`);
-> último tag `v0.30.0`. La release se etiqueta al cerrar el bloque.
+> Versión activa `0.31.0.dev0` (ya fuera del tag `v0.31.0`); último tag
+> `v0.31.0`.
 >
 > **MEDIDO ANTES DE ESCRIBIR NADA** (`/tmp/b12_measure.py`, y despues
 > `scripts/measure_b12_schema_upgrade.py`): **0 de 5 preguntas en PASS**, y
