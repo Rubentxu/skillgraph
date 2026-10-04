@@ -14,7 +14,21 @@ comprueba rompiendo una de sus dos puntas y viendo si la otra se entera.
   M2  `_docstrings_de` vuelve a mirar SOLO `body[0]`. Es el segundo defecto del
       clasificador, y es el que mas caro sale: con el, la documentacion de los
       `NewType` de `core/` se cuenta como dependencia y el veredicto da OPEN
-      sobre un arbol SANO. Debe caer el diagnostico de la documentacion.
+      sobre un arbol SANO. Deben caer el diagnostico de la documentacion Y el de
+      la contradiccion, porque un OPEN falso en estado sano construye la
+      contradiccion prohibida desde dentro del propio clasificador.
+
+  **Y POR QUE CADA SONDA DECLARA MAS DE UN DIAGNOSTICO, QUE ES UNA DECISION.**
+  El arnes exige que cada sonda caiga SOLO con lo que declara, y eso seemed de
+  una regla dura. MEDIDO: M1 y M2 caian cada una con dos diagnosticos, y
+  ninguno de los dos extras era ruido —los dos son consecuencia directa de la
+  deformacion, y los dos dicen algo cierto—. Declarar solo uno y llamar
+  «contaminado» al resto habria sido exigir que la deformacion no tenga
+  consecuencias, lo cual no es una propiedad de los guards sino un deseo. Un
+  arnes que obliga a que un cambio solo affecte a un test es un arnes que
+  prohibe encontrar la dependencia que un test tiene con otro — y esa
+  dependencia, en M1, es que el test de contradicciones se sostiene sobre un
+  conjunto que puede envejecer sin que nadie se entere.
 
   M3  la comparacion de contradiccion se invierte: `core sin dependencias` en
       OPEN deja de obligar a `ontology extensible`. Es la CONTRAALTO del
@@ -93,7 +107,20 @@ SONDAS: tuple[Sonda, ...] = (
         esperados=frozenset(
             {
                 "tests/test_b20_ontologia_contradictoria.py::"
-                "test_el_conjunto_de_recursos_lo_declaran_los_paquetes_no_un_sufijo"
+                "test_el_conjunto_de_recursos_lo_declaran_los_paquetes_no_un_sufijo",
+                # Y ESTE, Y POR QUE ESTA MEDIDO Y NO ES RUIDO: al desincronizar
+                # el conjunto, `CompiledResource` pasa a contar, deja de ser una
+                # de las tres pendientes, y el assert que las nombra deja de
+                # verlas. Es decir: **el test de contradicciones DEPENDE del
+                # conjunto**, y eso es una propiedad real, no una consecuencia de
+                # convenience — un guard de contradicciones que se sostenga con
+                # un conjunto viejo esta mirando una superficie que ya no es la
+                # que se recorre. La primera version de esta sonda declaraba un
+                # solo esperado y el arnes decia «cayo con otros diagnosticos»
+                # sobre una sonda que habia hecho los dos cosas bien.
+                "tests/test_b20_ontologia_contradictoria.py::"
+                "TestElGateNoSeContradiceASiMismo::"
+                "test_un_tipo_de_recurso_que_las_dos_ven_no_puede_ser_un_solo_pass",
             }
         ),
     ),
