@@ -14,6 +14,86 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.32.0] - 2026-10-04 — un predicado que se declara leyendo código no sabe cuándo deja de medir
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.31.2`:
+`b/f/x/n/d 0/2/1/7`, la regla pide **MINOR → v0.32.0**. Dos `feat`: el gate
+declara la clase de su propia evidencia, y existe el medidor que la mide.
+
+**El hallazgo.** El gate de 1.0 declara veinte propiedades, y sus veinte PASS
+salían en la misma lista y con la misma tipografía. **No había manera de saber
+cuáles estaban respaldados por algo que se ejecuta y cuáles por una lectura del
+árbol.** La diferencia no es estética: es si el veredicto **puede volverse falso
+sin que nadie vuelva a mirarlo**. Medido, derivado del AST del propio gate:
+
+```
+ejecutada  13      derivada  7
+```
+
+### Fixed
+
+- **`distribution reproducible` decía PASS sin comprobar que fuera
+  reproducible.** Su evidencia entera era *«el wheel y el sdist se construyen y
+  llevan lo que declaran»*, y eso prueba que **se construyen**. Reproducible es
+  que las mismas entradas den los mismos bytes, y un único build no puede
+  distinguir «reproducible» de «esta vez salió bien».
+
+  Medido antes de arreglar, con una prueba que tiene dientes: se construye, se
+  espera a que el reloj avance, se toca el mtime de un fuente con contenido
+  **idéntico** y se construye otra vez. Los sha256 coinciden —hatchling normaliza
+  las fechas—. La propiedad **era cierta**; lo que no existía era nada que
+  pudiera quitársela.
+
+  Y por qué la prueba toca la fecha, que es lo que la hace no ser decoración:
+  construir dos veces seguidas no prueba nada. Si el reloj no tick entre las
+  dos, los timestamps coinciden aunque el build sea irreproducible.
+
+### Added
+
+- `Propiedad.clase_evidencia` — cada propiedad del gate declara si su evidencia
+  es `ejecutada` o `derivada`, y la clase se **deriva** siguiendo el grafo de
+  llamadas del módulo hasta un `subprocess`. El campo es `init=False`: no hay
+  forma de declararla a mano. Veinte líneas escritas a mano serían una segunda
+  fuente de verdad que divergiría en silencio — WI-106 y WI-99, dos veces más.
+- `scripts/measure_b15_evidence_kind.py` — mide la línea base y deja **nombrada**
+  la lista de las siete propiedades que no se pueden retirar solas, que es lo que
+  permite ordenar el trabajo siguiente sin inventarlo. Con
+  `--autocomprobacion`: **13 de 20 clases giran** al quitarle el `subprocess` al
+  módulo entero.
+- `scripts/mutate_b15_evidence_kind.py` — **6 sondas, 6/6 cazadas con 6 causas**.
+- `tests/test_b15_evidence_kind.py` — **9 tests** en cuatro conjuntos disjuntos.
+
+### Changed
+
+- Gate de 1.0 **sin cambios de veredicto**: 18 PASS / 1 OPEN / 1 NO_MEASURABLE,
+  ahora con la clase de cada una. `tests.total` 3285 → 3294, +9, fichero nuevo
+  entero; lo falló el propio guard de WI-115 con el texto `tests: STATE declara
+  3285, el arbol colecta 3294`, que es exactamente para lo que existe.
+
+### Lo que el bloque encontró en su propia casa
+
+La primera versión de la derivación devolvió **veinte de veinte `derivada`**, con
+la autoridad de un `print` y sin una sola advertencia. Los predicados se
+registran en `PREDICADOS` como `_` + slug, la función buscaba el slug a secas, no
+lo encontraba, y **devolvía un valor por defecto** en vez de decir «no lo sé».
+Seis de esos predicados sí lanzan subproceso.
+
+> Es el mismo hallazgo que B13 cerró en el guard de SQL —que leía literales en vez
+> de la consulta ensamblada— y que B14 encontró en los guards atados a un valor
+> vivo y en las tres mutaciones no-op de su medidor. **Un guard que se declara
+> leyendo el código no sabe cuándo deja de medir.** Y aquí apareció en el código
+> del propio bloque, y lo primero que produjo fue, en su casa, el falso que venía
+> a cerrar.
+
+**Y un dato de la misma línea, medido.** Al buscar un PASS falso
+—`blueprint legacy completamente probado`, que cuenta cobertura de UAT con un
+`re.findall` sobre el texto de los tests— se construyeron cuatro sondeos para
+comprobarlo. **Los cuatro fallaron, cada uno en una dirección distinta**, y tres
+de ellos dieron `0 de 12`, `9 de 12` y `3 de 12`. El PASS era cierto:
+`tests/uat_audit.py` tiene una función completa por UAT, con directorios
+temporales, la CLI de verdad y aserciones. El predicado es débil; la propiedad es
+cierta, y queda anotado con su debilidad, que es información y no deuda fingida.
+
 ## [0.31.2] - 2026-10-04 — la autoridad de coherencia se podía engañar, y se engañó
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.31.1`:
