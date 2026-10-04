@@ -1,74 +1,104 @@
-> **Bloque 2026-10-04 (B17) — El ciclo de vida de los packs se decidía contando nombres, y el instrumento que lo ejecutaba estaba en disco sin cablear.**
-> (cerrado y publicado en `v0.32.2`)
+> **Bloque 2026-10-04 (B18) — La frontera del núcleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano.**
+> (vivo: implementado y commiteado en `8ccc2c2`, pendiente de certificar y publicar)
 > Versión activa `0.32.2.dev0`; último tag `v0.32.2`.
 >
-> **ES LA TERCERA DE LAS SIETE QUE B15 NOMBRÓ**, y es la más fácil de las que
-> quedan **por una razón que no es de estilo: el instrumento que hace el trabajo
-> ya estaba escrito y no se estaba usando.**
+> **ES LA CUARTA DE LAS SIETE QUE B15 NOMBRÓ**, y la que B17 dejó escrita como
+> «la primera que habría que mirar de las que quedan». Tres bloques seguidos
+> encontraron sus propios instrumentos al escribirlos; este encontró algo peor:
+> **un instrumento que miraba menos de lo que declaraba, y una lista de verdad
+> escrita a dedo**.
 >
 > **MEDIDO ANTES DE ESCRIBIR UNA LÍNEA**, sobre copias del árbol con el repo real
-> intacto. Se rompe la **decisión**, no el sitio donde se mira: el `if` que levanta
-> `ValidationError` cuando `motivos_de_incompatibilidad` devuelve motivos —y **no**
-> `es_compatible`, que es la verdad del dominio y que no se toca, porque romper las
-> dos no mediría una, mediría otra cosa—:
+> intacto. El predicado es `core sin dependencias de impl. externa`:
 >
 > ```
-> MEDIDO A · install deja de rechazar un pack incompatible
->   gate   : PASS    <- leía NOMBRES
->   B11 Q1 : PASS    <- leía NOMBRES, y es LITERALMENTE el predicado del gate
->   B11 Q2 : OPEN    <- EJECUTABA install con un pack incompatible
->   resumen: OPEN: 1 · PASS: 4
+> MEDIDO A · se añade a core/ un `from ..platform.storage import Storage` (relativo, nivel 2)
+>   veredicto : PASS
+>   evidencia : core/ no depende de fuera de si mismo, MEDIDO sobre ... (5 modulos)
+>   — byte a byte IDÉNTICA a la del caso limpio
+>
+> MEDIDO B · se añade a core/ un `import pathlib` (estándar, no estaba en la lista)
+>   veredicto : OPEN
+>   evidencia : core/ depende de fuera de si mismo: ['pathlib']
+>   — un OPEN sobre una frontera que se estaba respetando
 > ```
 >
-> **El ciclo de vida estaba roto y la propiedad que lo declara estaba en verde.**
-> La evidencia del gate era entera una lista:
-> `` `sg pack` expone el ciclo completo: ['import', 'install', 'list', ...] ``
+> **TRES DEFECTOS CON UNA RAÍZ, y la raíz es que el predicado no sabía qué
+> superficie estaba mirando ni de dónde salía su propia verdad:**
 >
-> **Y EL HALLAZGO MÁS INCÓMODO NO ES DEL GATE.** El predicado **era Q1 del propio
-> instrumento de B11**, y Q1 es la más débil de las cinco —las otras cuatro ejecutan
-> la CLI de verdad—. O sea que el gate llevaba tiempo decidiendo «el ciclo de vida
-> existe» con **la única de las cinco preguntas que no lo prueba**. Q1 lo sabe y lo
-> dice en su propio docstring; no es que esté equivocado, es que estaba solo.
+> 1. **No miraba los imports RELATIVOS.** `_imports_de` exigía `nodo.level == 0`.
+>    Y como `core/` está en `src/skillgraph/core/`, un `from ..platform.storage
+>    import Storage` tiene `level == 2` y **sale de `core/` entero**. Con ese
+>    import de verdad, la evidencia era **byte a byte idéntica** a la del caso
+>    limpio: un veredicto que no puede distinguir «el núcleo está limpio» de
+>    «no he mirado la mitad de la superficie». Y medido: `core/` **no usa hoy
+>    ningún relativo**, luego la superficie estaba vacía y una superficie vacía
+>    no se mira porque no hay nada que mirar.
 >
-> **QUÉ ENTREGA.** El predicado **ejecuta** `measure_b11_pack_lifecycle.py` y decide
-> por su código de salida — la forma de B12 para `upgrade desde releases
-> soportadas`—, y la evidencia pasa a ser el veredicto de las cinco preguntas
-> nombrando cuál cae. La clase de la propiedad pasa de `derivada` a **`ejecutada`**.
-> **Q1 no se toca**: «¿existen los comandos?» es una condición necesaria y es
-> barata; lo que no puede hacer es **bastar**, y con las cinco en AND deja de
-> bastar. Cambiarla sin un instrumento que la reemplace sería perder cobertura.
+> 2. **La estándar eran trece renglones a mano; el intérprete sabe de 290.**
+>    Faltaban `pathlib`, `contextlib`, `abc`, `io`, `warnings` y `copy` — todos
+>    de la estándar—, luego un import legítimo de cualquiera de ellos en `core/`
+>    habría producido un `OPEN` **sobre una frontera que se estaba respetando**.
+>    Una propiedad que se pone roja por lo contrario entrena a su lector a no
+>    creerla, y eso es un fallo aunque salga del lado conservador. **La lista no
+>    contenía ni un nombre falso: era correcta y estaba vieja.** Una lista de
+>    trece que se queda vieja no avisa: simplemente empieza a dar veredictos que
+>    nadie revisó.
 >
-> **UN DEFECTO PROPIO QUE EL GUARD DE ESTE BLOQUE CAZÓ AL ESCRIBIRLO.** Con el
-> instrumento sin arrancar, el predicado decía *«se ha EJECUTADO para saberlo»* y
-> *«Caen 0 de 0 preguntas»*. No se había ejecutado nada: `rc=2`, «can't open file».
-> Publicaba una ejecución que no había ocurrido, con la autoridad de quien sí la
-> hace. Ahora se separa, y la separación es la de B14 en `tests_colectados()`: dos
-> preguntas distintas —**«¿el ciclo se sostiene?»** y **«¿puedo medir si se
-> sostiene?»**— que no se pueden sumar.
+> 3. **La evidencia decía «(5 modulos)» sobre un paquete de cuatro ficheros.**
+>    Eran los nombres de import **distintos**, no módulos, y no decía cuántos
+>    ficheros se habían recorrido. Una evidencia que no describe lo que recorrió
+>    no permite saber si el recorrido estaba completo.
+>
+> **QUÉ ENTREGA.** `_paquete_de` + `_resuelve_import_relativo` resuelven los
+> relativos a nombre absoluto, así que un relativo se mide como lo que es;
+> `_MODULOS_ESTANDAR` se **deriva de `sys.stdlib_module_names`** (menos los
+> privados de un solo guion bajo, que no son API); y `_ficheros_de` +
+> `_MODULOS_ESTANDAR_ORIGEN` hacen que la evidencia **describa el recorrido** y
+> diga de dónde sale la lista. Nada de esto se escribe a mano, porque escrito a
+> mano se queda viejo en silencio.
+>
+> **LO QUE ESTE PREDICADO NO HACE, A PROPÓSITO.** No **prohíbe** los imports
+> relativos. Que `core/` escriba `from .errors import ...` es correcto, y
+> obligarle a escribir `from skillgraph.core.errors import ...` para que un
+> predicado lo vea es **cambiar el código para que el guard quede bien**. Lo que
+> faltaba era mirarlos, y ahora se miran.
+>
+> **DOS DEFECTOS PROPIOS QUE EL GUARD DE ESTE BLOQUE CAZÓ AL ESCRIBIRLO**, y que
+> importan porque los dos habrían pasado un 6/6:
+>
+> - El filtro se llevaba `__future__` —falso `OPEN` visible **gracias a la
+>   evidencia nueva**, que por una vez describía lo que había recorrido—. Sin esa
+>   evidencia, un `OPEN` falso en `core/` habría sido indescifrable.
+> - `_paquete_de` **devolvía el módulo en vez del paquete**: el recuento se movía
+>   de 5 a 6 y el defecto quedaba entero, con un número que parecía correcto.
 >
 > **DONDE SE MIRA, VERIFICADO POR AST:**
 >
 > | cita | que sostiene |
 > |---|---|
-> | `measure_b9_gate_1_0.py:795::_pack_controller_lifecycle` | ejecuta el instrumento y decide por su rc |
-> | `measure_b9_gate_1_0.py:892::_preguntas_del_instrumento` | la instrumentación viene de lo que el instrumento DICE |
-> | `measure_b11_pack_lifecycle.py:161::q2_install_rechaza_incompatible` | la pregunta que EJECUTA install con un pack incompatible |
-> | `test_b17_pack_lifecycle_exec.py:146::TestUnNombreDeSubcomandoNoEsUnCicloDeVida` | la deformación medida, y el contrasalto del texto |
-> | `test_b17_pack_lifecycle_exec.py:247::TestElInstrumentoNoSeDeclaraMedibleCuandoNoLoEs` | no afirmar una ejecución que no ocurrió |
-> | `mutate_b17_pack_lifecycle_exec.py` | 6 sondas, 6/6, y **M6 deforma el instrumento, no el gate** |
+> | `measure_b9_gate_1_0.py:764::_core_sin_dependencias_de_impl_externa` | los tres defectos, escritos en su docstring |
+> | `measure_b9_gate_1_0.py:412::_resuelve_import_relativo` | un relativo se resuelve a nombre absoluto, no a `None` |
+> | `measure_b9_gate_1_0.py:480::_ficheros_de` | los ficheros del recorrido, contados del árbol |
+> | `measure_b9_gate_1_0.py:1343::_MODULOS_ESTANDAR` | se deriva de `sys.stdlib_module_names`, no de trece renglones |
+> | `test_b18_core_frontier.py:148::TestUnImportRelativoNoSeEscapa` | el relativo de nivel 2 es `OPEN`; **y un relativo que no sale no es `OPEN`** |
+> | `test_b18_core_frontier.py:195::TestLaEstandarNoEsUnaListaEscritaAMano` | un módulo de la estándar ausente no da `OPEN`, y la evidencia dice de dónde sale |
+> | `test_b18_core_frontier.py:244::TestLoQueNoSeMiraNoSeDeclaraMirado` | la cifra es la de los **ficheros**, y la evidencia no dice «modulos» cuando mide imports |
+> | `mutate_b18_core_frontier.py` | 3 sondas, 3/3, cada una cayendo **solo su diagnóstico** |
 >
-> **Y POR QUÉ M6 ES LA SONDA QUE IMPORTA.** Las otras cinco deforman el gate.
-> **M6 deforma el instrumento que el gate ejecuta**, neutralizando Q2, y exige que
-> el gate caiga. Si el único defecto posible fuera «el gate dejó de mirar»,
-> bastaría con comprobar que el gate llama al instrumento, y un guard así solo
-> sabe mirar su propio teléfono. M6 cayó, luego la cadena **decisión → instrumento →
-> gate** se sostiene entera y no solo el cable.
+> **Y UN REQUISITO NUEVO DEL HARNESS.** Una deformación que rompe la sintaxis hace
+> caer la suite por **no importar**, no por detectar: parece la sonda más fuerte y
+> no ha detectado nada. Por eso este harness **exige que la deformación parsee**
+> (`ast.parse`) antes de contarla. Es la generalización de un error que ha salido
+> en B16, B17 y B18 con tres síntomas distintos, y el más caro de B18 fue
+> silencioso.
 >
-> **RESULTADO:** harness **6/6 con 6 causas**, y su autocomprobación cazó una sonda
-> **cuya ancla no existía** —la partida en trozos de cadena había dejado el nombre
-> del fichero sin comillas— y una que **medía otra cosa**. Sin el «el ancla aparece
-> 0 veces», el 6/6 habría sido un número sobre seis deformaciones que no
-> deformaron nada. `tests.total` 3301 -> 3306.
+> **DONDE ESTÁ EL VEREDICTO HOY:** 17 PASS / 2 OPEN / 1 NO_MEASURABLE, con
+> `core sin dependencias de impl. externa` en **PASS** —la clase **no cambia**, y
+> es lo correcto: B18 endurece una medición que ya era cierta, no una propiedad
+> que fuera falsa—. `roadmap/state/docs coherentes` sale `OPEN` porque `STATE`
+> declara 3306 y el árbol colecta 3312 (+6, sus seis tests nuevos), que se escribe
+> **después** del run.
 >
 > ---
 

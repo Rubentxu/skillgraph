@@ -30,7 +30,7 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B17** — El ciclo de vida de los packs se decidía contando nombres, y el instrumento que lo ejecutaba estaba sin cablear
+> Bloque vivo: **B18** — La frontera del núcleo no miraba la mitad de la superficie, y su verdad estaba escrita a mano
 > Versión activa `0.32.2.dev0` · último tag `v0.32.2` · 3306 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
@@ -67,6 +67,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B15** | Un predicado que se declara leyendo código no sabe cuándo deja de medir | El gate dice de qué tipo es la evidencia de sus veinte propiedades, y la reproducibilidad se comprueba en vez de afirmarse |
 | **B16** | Dos propiedades del gate daban PASS sin nada que comparar | El vacío no sale verde, el núcleo no puede depender de un recurso, y ocho procesos que abren la misma base no se matan entre ellos |
 | **B17** | El ciclo de vida de los packs se decidía contando nombres | La propiedad se decide ejecutando el ciclo, que el instrumento ya hacía y nadie cableó |
+| **B18** | La frontera del núcleo no miraba la mitad de la superficie | Los relativos se resuelven, la estándar se deriva del intérprete, y la evidencia describe el recorrido |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -994,6 +995,50 @@ deuda sin verificar, y sin verificar no era deuda.
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
 
+
+## B18 — La frontera del núcleo no miraba la mitad de la superficie
+
+**Es la cuarta de las siete que B15 nombró**, y la que B17 dejó escrita como la
+primera que habría que mirar de las que quedan. El predicado es
+`core sin dependencias de impl. externa`, y sus tres defectos tienen una raíz: no
+sabía qué superficie estaba mirando ni de dónde salía su propia verdad.
+
+Medido antes de escribir una línea, con el repo real intacto:
+
+```
+MEDIDO A · se añade a core/ un `from ..platform.storage import Storage` (relativo, nivel 2)
+  veredicto : PASS
+  evidencia : core/ no depende de fuera de si mismo, MEDIDO sobre ... (5 modulos)
+  — byte a byte IDÉNTICA a la del caso limpio
+
+MEDIDO B · se añade a core/ un `import pathlib` (estándar, no estaba en la lista)
+  veredicto : OPEN
+  evidencia : core/ depende de fuera de si mismo: ['pathlib']
+  — un OPEN sobre una frontera que se estaba respetando
+```
+
+`_imports_de` exigía `nodo.level == 0`, así que un relativo de nivel 2 —que sale
+de `core/` entero— era invisible y su evidencia era idéntica a la del caso
+limpio. Y la estándar eran trece renglones escritos a mano sobre 290 que el
+intérprete conoce: `pathlib`, `contextlib`, `abc`, `io`, `warnings` y `copy`
+faltaban, luego un import legítimo producía un `OPEN` falso. **La lista no tenía
+ni un nombre falso: era correcta y estaba vieja**, y una lista vieja no avisa,
+simplemente empieza a dar veredictos que nadie revisó.
+
+**Lo que entra.** Los relativos se resuelven a nombre absoluto; `_MODULOS_ESTANDAR`
+se deriva de `sys.stdlib_module_names`; y la evidencia dice **cuántos ficheros se
+recorrieron** y **de dónde sale la lista** —antes decía «(5 modulos)» sobre un
+paquete de cuatro ficheros, contando nombres de import distintos, y no decía
+cuántos ficheros había recorrido.
+
+**Lo que no hace, a propósito.** No prohíbe los relativos: que `core/` escriba
+`from .errors import ...` es correcto, y obligarle a escribir la forma absoluta
+para que un predicado lo vea es cambiar el código para que el guard quede bien.
+Lo que faltaba era mirarlos.
+
+**El veredicto hoy.** 17 PASS / 2 OPEN / 1 NO_MEASURABLE, con esta propiedad en
+**PASS** y **la clase sin cambios**, que es lo correcto: B18 endurece una
+medición que ya era cierta, no una propiedad que fuera falsa.
 
 ## B17 — El ciclo de vida de los packs se decidía contando nombres
 
