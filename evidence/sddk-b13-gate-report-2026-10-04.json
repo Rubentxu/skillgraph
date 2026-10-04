@@ -1,0 +1,168 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B13",
+  "titulo": "El modelo de amenaza que se sostiene",
+  "release": "0.31.1",
+  "instrumento": "tests/test_b13_threat_model.py (17 tests, cinco conjuntos disjuntos)",
+  "medidor_del_bloque": "scripts/measure_b9_gate_1_0.py::_security_threat_model_actualizado",
+  "mutacion": "scripts/mutate_b13_threat_model.py (6 sondas)",
+  "ciclo_sddk": {
+    "cycle_id": "p-b7740b96d79ec013/b13",
+    "path": "A-full",
+    "lease": "mavis-b13",
+    "nota": "PAUSED al cerrar, igual que b4..b12: `sddk debt report` no esta implementado en esta build, luego los gates de deuda no son evaluables y el ciclo no puede pasar a CLOSED. No hay bloqueo externo."
+  },
+  "antes": { "PASS": 17, "OPEN": 2, "NO_MEASURABLE": 1 },
+  "despues": { "PASS": 18, "OPEN": 1, "NO_MEASURABLE": 1 },
+  "listo_para_1_0": false,
+  "total_propiedades": 20,
+  "cerradas_por_b13": [
+    "security/threat model actualizado"
+  ],
+
+  "el_hallazgo_que_no_era_documental": {
+    "que_se_ia_a_poner": "actualizar las cifras del ADR-0015, que se aprobo describiendo un proyecto de 830 tests y 17 releases",
+    "que_se_cerro_en_realidad": "una fuga cross-tenant VIVA y alcanzable desde la CLI",
+    "medido": "T2 pidio kind='DomainPack' y recibio ['dp-de-t1']",
+    "causa": "platform/knowledge_repository.py:196::list_resources armaba 'AND api_version || '/' || kind = ? OR kind = ?' sin parentesis. En SQL AND liga mas fuerte que OR, luego la segunda mitad del OR se come el tenant_id Y el project_id.",
+    "alcanzable_desde": "cli/support.py:299::_build_registry_for_project llama list_resources(..., kind='DomainPack')",
+    "por_que_no_lo_vio_nadie": "el ADR-0015 declaraba esa consulta CERRADA en S1, textual: 'las queries filtran por tenant_id, project_id en todos los paths verificados'",
+    "b11_lo_encuentro_y_no_lo_arreglo": "esquivarlo era la decision correcta para su bloque, que necesitaba aislamiento fila a fila y por eso lo comprobo asi. Lo que fallo es que la puerta se quedo abierta."
+  },
+
+  "el_guard_que_midia_texto_y_no_la_consulta": {
+    "primera_version": "recorria los literales del fichero buscando 'OR'",
+    "por_que_daba_verde_con_la_fuga_presente": "WHERE y OR estan en literales DISTINTOS; la frase solo existe ensamblada, y la consulta se compone por concatenacion",
+    "como_quedo": "set_trace_callback sobre la conexion: se captura el SQL que LLEGA AL MOTOR",
+    "el_predicado": "tests/test_b13_threat_model.py:39::_or_de_nivel_superior, sobre profundidad de parentesis despues del WHERE",
+    "contrasalto_del_contrasalto": "test_el_predicado_ve_un_or_suelto_y_respeta_un_agrupado: un OR suelto se ve, un OR agroupado no"
+  },
+
+  "el_contrasalto_de_cobertura_derivado_del_arbol": {
+    "por_que": "solo hay una via por la que un AND se vuelve opcional: combinar tenant_id con un filtro de kind",
+    "superficies_que_la_cumplen": [
+      "list_resources",
+      "add_relation",
+      "find_entity",
+      "list_resource_refs_for_run"
+    ],
+    "como_se_deriva": "el guard no tiene la lista escrita: busca en el arbol las superficies que aceptan tenant_id y un kind, y obliga a que esten cubiertas",
+    "por_que_importa": "una superficie nueva que admita esa combinacion no puede entrar sin que alguien mire su SQL"
+  },
+
+  "la_vigencia_del_gate_dejo_de_medir_un_numero": {
+    "que_era": "comparar el numero de tests de tests/test_b13_threat_model.py con una constante",
+    "por_que_es_defecto": "un numero es una foto: caduca con cada commit sin que nadie toque el analisis, y un gate que se pone rojo por causas ajenas al objeto que vigila ensena a ignorarlo",
+    "como_quedo": "el predicado EJECUTA el fichero y decide por su codigo de salida",
+    "verificado_en_las_dos_direcciones": {
+      "quitar_la_fila_de_packaging": "OPEN con 1 fallo",
+      "reabrir_la_fuga": "OPEN con 3 fallos",
+      "causas_distintas": "si las dos direcciones dieran la misma causa, el gate no distinguiria un fallo de otro"
+    }
+  },
+
+  "las_tres_contradicciones_del_adr": {
+    "1_el_adapter": {
+      "que_decia": "el adapter HTTP/LLM es 'E1, sin implementar', FUERA del alcance, y a la vez marcado CERRADO con una seccion S8 entera",
+      "como_quedo": "las dos mitades escritas, y una correccion que dice explicitamente que el Handoff completo viaja al proveedor y eso NO se analiza como frontera de red saliente",
+      "guard": "TestElModeloNoSeContradice::test_el_adapter_no_puede_estar_fuera_de_alcance_y_cerrado",
+      "contrasalto_por_la_otra_via": "test_la_seccion_de_alcance_no_excluye_lo_que_esta_implementado: quitar la contradiccion borrando la frase del gap en vez de la de alcance tambien cae"
+    },
+    "2_el_numero_de_tests": {
+      "que_decia": "la vigencia del modelo seostenia con una cifra de tests verdes",
+      "por_que_es_la_misma_clase": "una cifra se pudre por razones que no tienen nada que ver con la seguridad",
+      "como_quedo": "la tabla de Superficies, derivada del arbol, y un guard que el ADR no vuelva a declarar esa cifra"
+    },
+    "3_la_que_no_se_contradecia_consigo_misma": {
+      "que_decia": "las consecuencias afirmaban que el ADR 'no introduce cambios de codigo'",
+      "por_que_la_mas_discreta": "no se contradice con otra frase del propio ADR: se contradice con lo que el repositorio hizo, y B13 ARREGLO una fuga",
+      "el_guard_cazo_su_propia_correccion": "la primera redaccion de la correccion CITABA la frase falsa para explicarla, y el test la cazo. Hubo que explicar el cambio sin reproducir la frase.",
+      "por_que_no_un_literal": "el modo de fallar no es que la frase vuelva, es que alguien la reescriba con otras palabras y siga diciendo lo mismo",
+      "guard": "TestElModeloNoSeContradice::test_el_adr_no_puede_decir_que_no_toca_codigo_mientras_lo_toca"
+    }
+  },
+
+  "superficies_anadidas_al_analisis": {
+    "S9_packs_instalables": "contenido de fuera del proyecto. Se anadio porque B8 lo entrego y el modelo no lo mencionaba. Gap abierto: no hay firma de pack, y un manifiesto editado a mano es indistinguible de uno firmado.",
+    "S10_libro_de_migraciones": "una migracion escribe sobre el esquema al abrir una base, sin que nadie la pida. Gap abierto y declarado: el libro no tiene rollback.",
+    "tabla_De_Superficies": "una fila por cada uno de los 10 paquetes de src/skillgraph/, cada una nombrando el fichero de evidencia que la sostiene. Anadir un paquete rompe el guard hasta que alguien decida que piensa de el."
+  },
+
+  "certificacion": {
+    "tests_total_declarado": 3271,
+    "desglose_medido": "+17 sobre 3254, y es el fichero nuevo entero: tests/test_b13_threat_model.py",
+    "wi47_no_se_mueve": "B13 no anade ningun modulo nuevo en src/ —arregla una linea de SQL y reescribe un ADR—, y eso CONFIRMA por el lado contrario la medicion de B12: los +3 de WI-47 venian del modulo nuevo, no de que el bloque tocara tests",
+    "suite_sobre_el_arbol_commiteado": "3268 passed, 3 skipped, 0 failed (dentro del hook de pre-commit, sobre el commit dcf1f58)",
+    "corridas_de_control_para_descartar_el_rojo_del_hook": 5
+  },
+
+  "un_rojo_que_no_se_ha_explicado": {
+    "que": "una corrida del hook de pre-commit sobre este arbol dio '3 failed, 3264 passed, 3 skipped'",
+    "que_se_hizo": "cinco corridas completas posteriores sobre el MISMO arbol, incluida una con el indice sucio, que es el estado en que estaba el hook",
+    "resultado": "0 failed en las cinco",
+    "estado": "NO REPRODUCE, CAUSA NO IDENTIFICADA",
+    "por_que_se_deja_escrito": "un verde posterior no borra un rojo anterior, y llamar 'intermitente' a algo que no se ha dejado de ver seria sustituir una incognita por una palabra"
+  },
+
+  "harness": {
+    "sondas": 6,
+    "causas_distintas": 6,
+    "sondas_que_nacieron_rotas": [
+      {
+        "sonda": "M5",
+        "defecto": "los dos diagnosticos se declaraban como TestElModeloNoSecontradice, y la clase se llama TestElModeloNoSeContradice",
+        "por_que_pasaba": "caidos & esperados no esta vacio mientras caiga UNO de los dos, luego un nombre inexistente no produce un fallo sino una causa mas corta. Un contador de sondas cazadas no lo nota.",
+        "arreglo": "el harness colecta la suite ANTES de mutar y rechaza arrancar si algun nombre de algun esperados no existe"
+      },
+      {
+        "sonda": "M4",
+        "defecto": "el ancla '## Superficies' aparece dos veces: como encabezado y dentro de una mencion en prosa con acentos graves",
+        "por_que_pasaba": "replace(..., 1) se come la primera, que era la prosa, y el test de la seccion seguia verde porque la subcadena se conservaba en el encabezado renombrado",
+        "arreglo_doble": "el ancla lleva los saltos de linea, Y el harness rechaza arrancar si un ancla no es unica. Ademas el test paso a comparar la linea completa en vez de una subcadena, que era mas debil de lo que afirmaba."
+      }
+    ],
+    "el_harness_se_comprueba_a_si_mismo": "es el mismo defecto que vigila un nivel mas abajo, y por eso se comprueba como tal",
+    "veredicto_final_exige_las_dos_cosas": "suite verde Y git status limpio de los MUTABLES. Comprobar la suite NO es comprobar que el arbol volvio."
+  },
+
+  "lo_que_este_bloque_no_afirma": [
+    "Que la ausencia de un OR suelto cubra el aislamiento entre tenants. El predicado es una heuristica sobre el texto de la consulta: no sabe de subtiles, ni de LEFT JOIN que reintroduce filas, ni de funciones que construyan el filtro dentro.",
+    "Que el modelo de amenaza sea CORRECTO. Que cada 'OK' diga de que depende es una condicion necesaria, no suficiente: un OK puede estar equivocado y seguir nombrando una prueba real.",
+    "Que B11 estuviera mal. Esquivar la fuga era correcto para el alcance de B11; lo que fallo fue que nadie volvio a mirarla porque el documento que deberia mirarla la daba por cerrada."
+  ],
+
+  "bloqueos_no_resolubles_desde_el_repo": [
+    "runtime real certificado: OPEN de verdad. Exige SG_UAT_REAL_PROVIDER=1 y una credencial (ANTHROPIC_API_KEY u OPENAI_API_KEY) que no puede estar en el repo.",
+    "TUI operacional: NO_MEASURABLE. 'Operacional' es una propiedad de una persona usando un terminal; declararla PASS seria la unica forma de mentir."
+  ],
+
+  "deuda_abierta_que_no_es_de_b13": [
+    "S9: firma de pack. Cerrarlo es una decision de producto (que firma, con que clave, y que se rompe al rotar), no un olvido. Registrado, no abierto.",
+    "S10: rollback del libro de migraciones. Aceptable mientras las migraciones sean aditivas; dejara de serlo en la primera que transforme datos. Registrado antes de necesitarlo.",
+    "Grieta A workflow_runs<->runtime_events del ADR: sigue abierta y no es de este bloque.",
+    "Los doce dicts mutables dentro de dataclasses frozen que dejo WI-111: no se tocan, no hay ni un sitio que los mute."
+  ],
+
+  "propiedades": [
+    { "nombre": "blueprint legacy completamente probado", "veredicto": "PASS", "nota": "los 16 UAT del blueprint tienen test que los nombra" },
+    { "nombre": "core sin dependencias de impl. externa", "veredicto": "PASS", "nota": "core/ solo importa de si mismo y de la estandar (5 modulos)" },
+    { "nombre": "ontology extensible", "veredicto": "PASS", "nota": "core/ no nombra ningun tipo de recurso: se anaden sin tocarlo" },
+    { "nombre": "resource/controller API estable", "veredicto": "PASS", "nota": "certificada en B10" },
+    { "nombre": "CLI estable", "veredicto": "PASS", "nota": "certificada en B10; snapshot generado del arbol, no escrito a mano" },
+    { "nombre": "capabilities deterministas", "veredicto": "PASS", "nota": "CAPABILITY_VERSION se declara en un solo sitio" },
+    { "nombre": "provenance fuerte", "veredicto": "PASS", "nota": "5 cerradas, 0 abiertas" },
+    { "nombre": "Graph Diff Gate operativo", "veredicto": "PASS", "nota": "5 cerradas, 0 abiertas, 1 declarada FUERA DE ALCANCE (no baja el veredicto)" },
+    { "nombre": "migrations probadas", "veredicto": "PASS", "nota": "migracion contra base previa ejecutada: 3 passed" },
+    { "nombre": "crash/recovery real certificado", "veredicto": "PASS", "nota": "crash y recovery ejecutados de verdad: 18 passed" },
+    { "nombre": "concurrencia real certificada", "veredicto": "PASS", "nota": "5 de 5 corridas verdes" },
+    { "nombre": "backups/restore probados", "veredicto": "PASS", "nota": "backups y restore ejecutados: 39 passed" },
+    { "nombre": "pack/controller lifecycle", "veredicto": "PASS", "nota": "cerrada en B11" },
+    { "nombre": "upgrade desde releases soportadas", "veredicto": "PASS", "nota": "cerrada en B12; el predicado EJECUTA el medidor" },
+    { "nombre": "security/threat model actualizado", "veredicto": "PASS", "nota": "CERRADA POR B13. El predicado ejecuta tests/test_b13_threat_model.py: 17 passed." },
+    { "nombre": "roadmap/state/docs coherentes", "veredicto": "PASS", "nota": "project_truth.py coherente: true" },
+    { "nombre": "distribution reproducible", "veredicto": "PASS", "nota": "sdist sin ficheros sin versionar" },
+    { "nombre": "UAT agent-first completa", "veredicto": "PASS", "nota": "16/16 cubiertos por tests" },
+    { "nombre": "runtime real certificado", "veredicto": "OPEN", "nota": "BLOQUEO EXTERNO: credencial real" },
+    { "nombre": "TUI operacional", "veredicto": "NO_MEASURABLE", "nota": "requiere persona y terminal" }
+  ]
+}

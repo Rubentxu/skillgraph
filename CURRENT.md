@@ -75,9 +75,51 @@
 > | `test_b13_threat_model.py:318::test_el_analisis_tiene_una_seccion_de_superficies` | la seccion se comprueba como ENCABEZADO, no como subcadena |
 > | `test_b13_threat_model.py:386::test_cada_superficie_nombra_una_evidencia_que_existe` | cada «OK» nombra su prueba, y existe |
 > | `test_b13_threat_model.py:421::test_el_adapter_no_puede_estar_fuera_de_alcance_y_cerrado` | la contradiccion, resuelta |
+> | `test_b13_threat_model.py:452::test_el_adr_no_puede_decir_que_no_toca_codigo_mientras_lo_toca` | la TERCERA contradiccion, la mas discreta: decir que no se toca codigo |
 > | `measure_b9_gate_1_0.py:614::_security_threat_model_actualizado` | el gate corre el guard y decide por su rc |
 > | `mutate_b13_threat_model.py:165::_sucios` | la suite verde NO es el arbol restaurado |
 > | `mutate_b13_threat_model.py:129::_colectados` | el harness rechaza arrancar si un diagnostico no existe |
+>
+> **CERRADO Y CERTIFICADO. GATE DE 1.0: 17 PASS / 2 OPEN / 1 NO_MEASURABLE
+> -> 18 / 1 / 1.** Lo unico que queda `OPEN` es `runtime real certificado`,
+> que exige `SG_UAT_REAL_PROVIDER=1` y una credencial real: no se resuelve
+> desde el repositorio. `TUI operacional` sigue `NO_MEASURABLE` porque
+> «operacional» es una propiedad de una persona usando un terminal.
+>
+> **HARNESS: 6/6 sondas cazadas, 6 causas distintas.** Dos NACIERON ROTAS y
+> las cazó el propio harness antes de contarlas, que es lo que un contador
+> de sondas no hace:
+>
+> - **M5** declaraba sus dos diagnósticos con el nombre de la clase mal
+>   escrito (`TestElModeloNoSecontradice` por `TestElModeloNoSeContradice`).
+>   El harness lo|reportaba `[CAZADA]` igual: `caidos & esperados` no está
+>   vacío mientras caiga **uno** de los dos, luego un nombre que no existe no
+>   produce un fallo sino una causa más corta.
+> - **M4** usaba `## Superficies` como ancla, y aparece **dos veces**: como
+>   encabezado y dentro de una mención en prosa. `replace(..., 1)` se comía
+>   la prosa, que no es lo que la sonda quiere deshacer.
+>
+> El harness ahora **rechaza arrancar** si un diagnóstico no existe o si un
+> ancla no es única, y se comprueba a sí mismo antes de mutar nada. Es el
+> mismo defecto que vigila, un nivel más abajo.
+>
+> **UNA CONTRADICCION MAS, ENCONTRADA AL REESCRIBIR EL ADR.** Sus
+> consecuencias decían que el documento «no introduce cambios de código»,
+> y el bloque que lo revisaba acababa de arreglar una fuga: la tercera
+> versión de la misma mentira que S1, y la más discreta, porque no se
+> contradice con otra frase suya — se contradice con lo que el repositorio
+> hizo. El guard no busca la frase literal sino la **afirmación**, y cazar
+> la redacción de su propia corrección (que citaba la frase falsa para
+> explicarla) es la razón por la que está escrito así y no con un `in`.
+>
+> **LO QUE NO SE EXPLICÓ, DICHO COMO NO SE EXPLICÓ.** Una corrida del hook
+> de pre-commit sobre este árbol dio `3 failed, 3264 passed`. Cinco corridas
+> completas posteriores sobre el **mismo árbol** dieron `3267 passed, 0
+> failed` cada una, y con el índice sucio (el estado en que estaba el hook)
+> también. No se reproduce y **no se ha identificado la causa**. Se registra
+> aquí sin maquillar: un verde posterior no borra un rojo anterior, y llamar
+> «intermitente» a algo que no se ha dejado de ver sería sustituir una
+> incógnita por una palabra.
 >
 > **LO QUE ESTE BLOQUE NO AFIRMA HABER MEDIDO.** Que la ausencia de un `OR`
 > suelto cubra el aislamiento entre tenants. El guard es una heuristica sobre

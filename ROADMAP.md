@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B13** — El modelo de amenaza que se sostiene
-> Versión activa `0.31.0.dev0` · último tag `v0.31.0` · 3270 tests · 16/16 UAT
+> Versión activa `0.31.0.dev0` · último tag `v0.31.0` · 3271 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -769,6 +769,29 @@ paths verificados»*, la declaraba **CERRADA**.
 5. **Una sección `Superficies` con una fila por cada uno de los 10 paquetes**,
    cada una nombrando el fichero de test que la sostiene.
 
+**Dónde se mira, verificado por AST:**
+
+- `tests/test_b13_threat_model.py::TestLaFugaCrossTenant` — dos tenants de verdad; la fuga se **ejecuta**, no se razona
+- `test_b13_threat_model.py:198::test_toda_superficie_con_filtro_de_kind_esta_cubierta` — contrasalto de cobertura, derivado del árbol
+- `test_b13_threat_model.py:214::test_ninguna_lectura_ejecuta_un_where_con_or_suelto` — el guard mira la consulta ensamblada
+- `test_b13_threat_model.py:290::test_todo_paquete_del_arbol_tiene_fila_en_el_adr` — un paquete nuevo rompe hasta que alguien decida
+- `test_b13_threat_model.py:386::test_cada_superficie_nombra_una_evidencia_que_existe` — cada «OK» dice de qué depende
+- `test_b13_threat_model.py:421::test_el_adapter_no_puede_estar_fuera_de_alcance_y_cerrado` — contradicción 1
+- `test_b13_threat_model.py:432::test_la_seccion_de_alcance_no_excluye_lo_que_esta_implementado` — contrasalto por su otra vía
+- `test_b13_threat_model.py:452::test_el_adr_no_puede_decir_que_no_toca_codigo_mientras_lo_toca` — contradicción 3, la que no se contradice consigo misma
+- `measure_b9_gate_1_0.py:614::_security_threat_model_actualizado` — el gate corre el guard y decide por su rc
+- `mutate_b13_threat_model.py:94::_sin_trabajo_sin_commitar` — «restaurar» y «borrar» son la misma operación sin commit debajo
+- `mutate_b13_threat_model.py:129::_colectados` — el harness rechaza arrancar si un diagnóstico no existe
+
+**Los cuatro commits de B13**, por si alguien quiere leerlos en orden:
+
+```
+da1c18f  fix(platform)      la fuga, el guard que la ejecuta y el ADR que la declaraba cerrada
+c516ecc  chore(gate)        el predicado ejecuta el guard; el harness se comprueba a sí mismo
+dcf1f58  fix(security)      la tercera contradicción, y el guard que caza su propia corrección
+<docs>    docs(state)       este bloque, con sus cifras medidas
+```
+
 **El predicado del gate, reescrito.** La vigencia del modelo se medía
 **comparando un número de tests**. Un número es una foto que caduca con cada
 commit sin que nadie toque el análisis, y un gate que se pone rojo por causas
@@ -782,8 +805,30 @@ HTTP/LLM como «E1, sin implementar, fuera de alcance» y a la vez le dedicaba
 una sección S8 entera, marcándolo CERRADO. La contradicción está resuelta y
 escrita con sus dos mitades.
 
-**Harness:** `scripts/mutate_b13_threat_model.py`, 5 sondas, cada una con su
-conjunto de tests diagnósticos.
+**Harness:** `scripts/mutate_b13_threat_model.py`, 6 sondas, cada una con su
+conjunto de tests diagnósticos. **Dos nacieron rotas** y las cazó el propio
+harness antes de contar: M5 declaraba sus dos diagnósticos con el nombre de la
+clase mal escrito, y el harness lo reportaba `[CAZADA]` igual porque
+`caidos & esperados` no está vacío mientras caiga *uno* de los dos; M4 usaba
+`## Superficies` como ancla y aparece dos veces, como encabezado y dentro de
+una mención en prosa, así que `replace(..., 1)` se comía la prosa. El harness
+rechaza arrancar si un diagnóstico no existe o si un ancla no es única.
+
+Una tercera sonda, M6, deshace una contradicción que se encontró **al releer
+el ADR con la corrección ya escrita**: sus consecuencias decían que el ADR «no
+introduce cambios de código», y el bloque que lo revisaba había arreglado una
+fuga. El guard de esa frase llegó a cazar la redacción de su propia
+corrección, que citaba la afirmación falsa para explicarla.
+
+**Resultado: 6/6 sondas cazadas, 6 causas distintas.** Suite certificada
+**3268 passed, 3 skipped, 0 failed**, `tests.total` 3271.
+
+**Un rojo que no se ha explicado, y no se maquilla.** Una corrida del hook de
+pre-commit sobre este árbol dio `3 failed, 3264 passed`. Cinco corridas
+completas posteriores sobre el **mismo árbol** —incluida una con el índice
+sucio, que es el estado en que estaba el hook— dieron `0 failed` cada una.
+No se reproduce y **la causa no está identificada**. Se deja escrito porque
+un verde posterior no borra un rojo anterior.
 
 **Resultado:** gate de 1.0 en **18 PASS / 1 OPEN / 1 NO_MEASURABLE**. Lo que
 queda `OPEN` es el runtime real certificado, que necesita
