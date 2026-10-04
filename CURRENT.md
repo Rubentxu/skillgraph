@@ -1,6 +1,6 @@
 > **Bloque 2026-10-04 (B17) — El ciclo de vida de los packs se decidía contando nombres, y el instrumento que lo ejecutaba estaba en disco sin cablear.**
-> (cerrado; publicación en curso)
-> Versión activa `0.32.1.dev0`; último tag `v0.32.1`.
+> (cerrado y publicado en `v0.32.2`)
+> Versión activa `0.32.2.dev0`; último tag `v0.32.2`.
 >
 > **ES LA TERCERA DE LAS SIETE QUE B15 NOMBRÓ**, y es la más fácil de las que
 > quedan **por una razón que no es de estilo: el instrumento que hace el trabajo
