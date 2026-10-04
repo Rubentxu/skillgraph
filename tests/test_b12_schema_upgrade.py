@@ -312,6 +312,91 @@ class TestSubirUnaBaseVieja:
 
 
 # =====================================================================
+class TestDosProcesosQueSubenLaMismaVersionNoSeMateN:
+    """La carrera entre el `SELECT` y el `INSERT`, y por que aqui solo se mira la FORMA.
+
+    **LO QUE PASÓ, MEDIDO, Y NO ES LO QUE SE ESPERABA.** Este conjunto
+    nacio con la idea de reproducir la carrera de forma determinista, y se
+    compro probarlo. No se puede, y el intento es la parte que conviene
+    dejar escrita:
+
+    1. «El hermano sube la base y luego este la sube» **pasa con el defecto
+       presente**. El `DELETE FROM schema_version` de este proceso se lleva
+       por delante la fila del hermano y los dos convergen. Un test que
+       documentara que reproduce el fallo y no lo reproduce es peor que
+       ningun test: fabrica la confianza justo donde no la hay.
+    2. Meter al hermano entre el `DELETE` y el `INSERT` con un
+       `set_trace_callback` —que SQLite invoca ANTES de cada sentencia, y
+       por tanto da control real del entrelazado— **tampoco lo
+       reproduce**: el `INSERT` del hermano se queda bloqueado por el
+       escritor que ya esta escribiendo y agota el `busy_timeout`. MEDIDO:
+       5,07 s frente a 0,15 s, y el test pasa igual con el defecto puesto.
+
+    La razon de fondo es que SQLite **serializa a los escritores**, y el
+    orden que provoca la colision —los dos `DELETE` antes que los dos
+    `INSERT`— es precisamente el que el bloqueo impide. La carrera es REAL
+    y se midio en produccion (1 hijo muerto de 30; 4 corridas rojas de 20
+    del `test_b2_real_concurrency`), pero **no es alcanzable de forma
+    determinista desde Python**, porque depende de un planificador que el motor
+    no nos deja fijar.
+
+    **LO QUE QUEDA, Y POR QUE ES SUFICIENTE.** Un comportamiento que no se
+    puede alcanzar de forma determinista solo se puede vigilar por su
+    FORMA, y eso es exactamente lo que hace el unico test de este conjunto:
+    que la escritura de la version sea una sola sentencia idempotente
+    (`INSERT OR IGNORE`) y no un `DELETE` seguido de un `INSERT`. Ese test
+    **cae con el defecto presente** —MEDIDO, reintroduciendo el codigo
+    anterior— y es la unica mitad de la garantia que se puede exigir
+    siempre. La otra mitad, la de que el proceso no muere, se mide donde si
+    es medible: en `test_b2_real_concurrency`, y con la tasa a cero
+    (`scripts/mutate_b16_migration_race.py`).
+    """
+
+    def test_la_escritura_de_la_version_es_un_insert_or_ignore(self, tmp_path: Path) -> None:
+        """CONTRA-SALTO por AST: que el arreglo no se deshaga en silencio.
+
+        Un arreglo que dependa de que nadie lo toque no es un arreglo. Y este
+        no se puede comprobar por su RESULTADO: `INSERT` e `INSERT OR IGNORE`
+        dejan la base en el mismo estado siempre que no haya carrera, y la
+        carrera es justamente lo que no se puede provocar de forma
+        determinista —esta clase lo explica con lo medido—. Lo unico que
+        queda por exigir es la FORMA de la sentencia, y es la que decide si
+        la ventana existe.
+        """
+        arbol = ast.parse(Path(migrations.__file__).read_text(encoding="utf-8"))
+        forma = None
+        for nodo in ast.walk(arbol):
+            if (
+                isinstance(nodo, ast.Constant)
+                and isinstance(nodo.value, str)
+                and "schema_version" in nodo.value
+                and nodo.value.strip().upper().startswith(("INSERT", "REPLACE", "DELETE"))
+            ):
+                forma = " ".join(nodo.value.split())
+        assert forma is not None, (
+            "no hay ninguna sentencia sobre schema_version en migrations.py: "
+            "la funcion se ha reescrito y este test hay que rehacerlo"
+        )
+        assert forma.upper().startswith("INSERT OR IGNORE"), (
+            f"la escritura de la version es {forma!r}. Sin `OR IGNORE` vuelve "
+            f"la carrera de B16: dos procesos que suben a la misma version se "
+            f"tiran el uno al otro con un IntegrityError sobre la PRIMARY KEY, y "
+            f"el que pierde el turno muere antes de escribir."
+        )
+        assert not any(
+            isinstance(nodo, ast.Constant)
+            and isinstance(nodo.value, str)
+            and nodo.value.strip().upper().startswith("DELETE FROM SCHEMA_VERSION")
+            for nodo in ast.walk(arbol)
+        ), (
+            "volvio un `DELETE FROM schema_version`. Ese DELETE es la ventana de "
+            "la carrera —abrirla y luego escribir es dar la oportunidad— y ademas "
+            "aplana la tabla, que es un REGISTRO de versiones: `version` es la "
+            "rowid y `version_de_la_base` lee MAX(version)."
+        )
+
+
+# =====================================================================
 class TestUnaBaseMasNuevaNoSeAbre:
     """Abrir en silencio un esquema que el codigo no conoce es perder datos."""
 

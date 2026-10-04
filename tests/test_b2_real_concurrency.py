@@ -269,8 +269,15 @@ class TestLosHijosSeSolapanDeVerdad:
         db = tmp_path / "p.sqlite"
         salidas = _procesos(db, PROCESOS)
         ventanas = []
-        for rc, out, _ in salidas:
-            assert rc == 0, f"un hijo fallo antes de poder medir el solape: {rc}"
+        for rc, out, err in salidas:
+            assert rc == 0, (
+                f"un hijo fallo antes de poder medir el solape: rc={rc}. "
+                f"Sin su stderr esto no dice nada: en B16 el fallo real era un "
+                f"`IntegrityError` de la migracion, y el mensaje no lo decia: se "
+                f"buscaba en el producto lo que estaba en la ultima linea del "
+                f"hijo.\n"
+                f"--- stderr del hijo ---\n{err.strip()[-2000:]}\n---------------------"
+            )
             marca = [linea for linea in out.splitlines() if linea.startswith("SG_VENTANA ")]
             assert marca, f"el hijo no declaro su ventana temporal: {out[-300:]}"
             d = json.loads(marca[0][len("SG_VENTANA ") :])

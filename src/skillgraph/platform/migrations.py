@@ -229,10 +229,52 @@ def _reescribe_version_si_cambia(cur: sqlite3.Cursor) -> None:
      respondiendo mal: la tabla ya dice la version correcta, y reescribirlo
      no responde nada. Solo se escribe cuando la respuesta cambia, que es
      exactamente cuando se sube una base.
+
+    **LO QUE FALTA AUN, Y MEDIDO EN B16: LA CARRERA ENTRE EL `SELECT` Y EL
+    `INSERT`.** Lo de arriba quita la escritura incondicional, pero deja un
+    `SELECT` seguido de un `INSERT`: leer y despues escribir. Con ocho
+    procesos abriendo la MISMA base nueva a la vez, los ocho leen
+    `MAX(version) == 0`, los ocho decide que hay que subir, y los ocho
+    insertan. `version` es la PRIMARY KEY —de hecho es la rowid—, luego el
+    segundo INSERT que llega se lleva un
+
+        sqlite3.IntegrityError: UNIQUE constraint failed: schema_version.version
+
+    y el proceso **muere antes de escribir un solo evento**. MEDIDO con el
+    interprete correcto: 1 hijo muerto de 30, y 4 corridas rojas de 20 del
+    `test_b2_real_concurrency`, que el gate de 1.0 leia como
+    «1 de 5 corridas con fallos».
+
+    El `timeout` que arreglo el `PRAGMA journal_mode` en B2 no puede
+    arreglar esto, y por eso conviene decir por que: el `timeout` hace que
+    un escritor **espere** a que el otro suelte. Aqui no hay dos escritores
+    peleandose por el mismo lock —cada uno espera su turno y entra—; lo
+    que hay es una **LECTURA seguida de una escritura** que ninguna
+    espera arregla, porque entre la una y la otra cabe otra proceso. Es
+    un *check-then-act*, y contra eso la unica respuesta es que la
+    escritura sea atomica e idempotente por si misma.
+
+    Y esa respuesta ya estaba en este mismo archivo, quince lineas mas
+    arriba: las migraciones se anotan con `INSERT OR IGNORE INTO
+    schema_migrations`, que es exactamente la forma correcta, y la version
+    no la tenia. Se le da la misma forma:
+
+    - `OR IGNORE` porque dos procesos que suben a la MISMA version estan
+      diciendo lo mismo, no el uno la verdad y el otro una mentira. La
+      fila que gana es la misma que hubiera ganado la otra.
+    - Una sola sentencia, porque el `DELETE` que precedia era justo la
+      ventana: abrir la ventana y luego escribir es dar la oportunidad.
+    - Y por lo demas la tabla deja de perder su historia. `version` es la
+      rowid y `version_de_la_base` lee `MAX(version)`, luego la tabla es
+      un REGISTRO de versiones y no una fila: el `DELETE` no la mantenia al
+      dia, la aplanaba. Con el `OR IGNORE` se conserva, que es lo que un
+      registro quiere decir.
     """
     objetivo = version_declarada()
     actual = version_de_la_base(cur)
     if actual == objetivo:
         return
-    cur.execute("DELETE FROM schema_version")
-    cur.execute("INSERT INTO schema_version(version) VALUES (?)", (objetivo,))
+    # MEDIDO: si aqui volviera un `INSERT` a secas, volveria el
+    # `IntegrityError` de arriba. `OR IGNORE` es lo que hace que dos
+    # procesos que suben a la misma version converjan en silencio.
+    cur.execute("INSERT OR IGNORE INTO schema_version(version) VALUES (?)", (objetivo,))

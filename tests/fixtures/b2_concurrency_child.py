@@ -35,12 +35,33 @@ import sys
 import time
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent.parent
+#: MEDIDO EN B16, y no es cosmetica. Este calculo era `.parent.parent`, que
+#: era correcto mientras el fichero vivia en `.pipelinek/` —ahi `.parent.parent`
+#: es la raiz del repo— y dejo de serlo cuando se movio a `tests/fixtures/`, sin
+#: que nadie lo tocara: ahi `.parent.parent` es `tests/`, luego la linea de
+#: abajo metia `tests/src` en el path, que NO EXISTE. El hijo solo podia
+#: importar `skillgraph` porque el paquete esta instalado en el interprete
+#: que lo lanza; en cuanto no lo estuviera, los cinco tests de este modulo
+#: caerian todos con `ModuleNotFoundError` —que es un fallo que dice «no se
+#: puede» y no «el nucleo no aguanta ocho escritores».
+#:
+#: Lo que no se puede es que un arnes dependa de un accidente del entorno. Si
+#: la intencion era —y la sigue siendo— probar el ARBOL DE TRABAJO y no lo
+#: que este instalado, `parents[2]` la cumple. Y hoy no cambia nada, porque el
+#: paquete se instala en modo editable y ya apunta al arbol: la diferencia se
+#: ve el dia que alguien clone en limpio y lance con un interprete sin el
+#: proyecto, y entonces el hijo debe poder importar su codigo.
+RAIZ = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(RAIZ / "src"))
 
 # Este fichero TIENE que estar versionado: `tests/test_b2_real_concurrency.py`
 # lo lanza como proceso y, si no viaja, los cinco tests de ese modulo fallan.
 # Estuvo antes en `.pipelinek/`, que esta en `.gitignore`.
+assert (RAIZ / "src" / "skillgraph").is_dir(), (
+    f"el hijo no encuentra su codigo: {RAIZ / 'src' / 'skillgraph'} no existe. "
+    f"Este fallo significa que el path de arriba no apunta a la raiz del repo, "
+    f"y no que falte el paquete: son dos cosas distintas y se arreglan distinto."
+)
 
 # Las escrituras de cada hijo se separan en el tiempo a proposito: sin esta
 # pausa, los hijos se serializan solos por el GIL del disco y el test
