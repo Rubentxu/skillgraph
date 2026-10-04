@@ -168,11 +168,11 @@ SONDAS: tuple[Sonda, ...] = (
         # harness lo clasifico como INVALIDA, que es exactamente lo que
         # distingue a una sonda que mide de una que rompe. Una sonda que rompe
         # el modulo no prueba el guard que dice vigilar — la pasaria igual
-        # cualquier reader por regex, y tambien un `import` roto —.
+        # cualquier reader por regex, y también un `import` roto —.
         #
-        # Por eso la sonda reinsta un reader FUNCIONAL: mismo dato, patron
-        # propio sobre el fichero crudo. Lo unico que cambia es que vuelve a
-        # haber dos maneras de leer el estado, que es lo que mide el guard.
+        # Por eso la sonda reinsta un reader FUNCIONAL: mismo dato, misma
+        # comprobacion de tipo sobre el texto capturado, patron propio. Lo
+        # unico que cambia es que vuelve a haber dos maneras de leer el estado.
         antes=(
             '    tests = _seccion("tests")\n'
             '    if tests is None or "total" not in tests:\n'
@@ -233,7 +233,44 @@ SONDAS: tuple[Sonda, ...] = (
 )
 
 
+def _interprete_valido() -> str | None:
+    """Por que no, si `PY` no puede importar el paquete. `None` si puede.
+
+    MEDIDO: lanzado con el Python del sistema en vez del del proyecto, este
+    harness se negaba a arrancar con «la colecta no devolvio ningun test» — un
+    sintoma de una causa que no era la que el harness mide, y sin decir donde
+    estava. Falla cerrada, que es lo importante: nunca habria dado un falso
+    verde. Pero un instrumento que se niega por una causa que no nombra obliga a
+    un viaje de ida y vuelta por el shell para descubrirla, y ese viaje es
+    exactamente donde un guard se queda sin correr y otro, sin querer, lo
+    declara verde.
+    """
+    proc = subprocess.run(
+        [PY, "-c", "import skillgraph"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    if proc.returncode == 0:
+        return None
+    return (
+        f"{PY} no puede importar `skillgraph`, y este harness corre sus sondas con el\n"
+        f"interprete con el que se lanzo. El ultimo error del interprete fue:\n"
+        f"  {proc.stderr.strip().splitlines()[-1] if proc.stderr.strip() else '(vacio)'}\n"
+        f"Lanzalo con el interprete del proyecto: `uv run python "
+        f"scripts/mutate_b14_truth_single_reader.py`."
+    )
+
+
 def main() -> int:
+    problema = _interprete_valido()
+    if problema is not None:
+        print("NO SE EJECUTA: el interprete no es el del proyecto.")
+        print(problema)
+        return 2
+
     sucio = _sin_trabajo_sin_commitar()
     if sucio:
         print("NO SE EJECUTA: hay cambios sin commitear en los mutables.")
