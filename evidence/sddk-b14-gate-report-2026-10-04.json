@@ -81,8 +81,11 @@
   "ciclo_sddk": {
     "cycle_id": "p-b7740b96d79ec013/b14",
     "path": "A-full",
-    "lease": "mavis-b14, fencing token 1",
-    "nota": "PAUSED al cerrar, igual que b4..b13: `sddk debt report` no esta implementado en esta build, luego los gates de deuda no son evaluables y el ciclo no puede pasar a CLOSED. No hay bloqueo externo."
+    "lease": "mavis-b14, fencing token 2. El token 1 caduco durante el bloque (expiraba 1791104419000) y hubo que reclamarlo pasando --cycle explicito: sin el, «sddk cycle lock acquire» responde «no active cycle found» porque un lease caducado ya no cuenta como ciclo activo, y no hay forma de recuperarlo sin indicar el ciclo. MEDIDO otra vez en este bloque, igual que en B13.",
+    "nota": "PAUSED al cerrar, igual que b4..b13: `sddk debt report` no esta implementado en esta build, luego los gates de deuda no son evaluables y el ciclo no puede pasar a CLOSED. No hay bloqueo externo.",
+    "evento_de_cierre": "evt-389e2d4e-040a-48b8-9abb-41f924690b55 (sequence 2, cycle.pause)",
+    "artefacto_registro": "81a8e47a-f63c-4f08-80ee-5ed96ec8696a",
+    "nota_sobre_el_texto": "La primera version de esta cadena se escribio con un heredoc de bash y sus acentos graves fueron interpretedos como sustitucion de comandos: tres fragmentos desaparecieron del fichero sin que ninguna comprobacion lo notara. Un texto que se pierde en silencio es un texto que nadie ha leido, y esta evidencia existe para que se pueda leer."
   },
   "publicacion": {
     "tag": "v0.31.2",
