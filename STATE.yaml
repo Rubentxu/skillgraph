@@ -608,7 +608,7 @@ tests:
   total: 3176   # BLOQUE B9: la cifra se escribe DESPUES del run, nunca antes. +11 sobre 3165, y el desglose esta MEDIDO, no estimado: con tests/test_b9_wal_lock.py APARTADO la suite colecta 3168 —los 8 suyos—, y de los 3 que faltan hasta 3176, 3 los genera el guard de wi47 al aparecer src/skillgraph/platform/journal.py (270 -> 273). QUE EL ARBOL SIN B9 COLECTE LO QUE B8 DECLARO SIGUE SIENDO LA COMPROBACION QUE LE DA SENTIDO AL NUMERO: si el +11 fuera una invencion, el 3165 de la fila anterior no saldria. ES LA CUARTA VEZ que la prediccion de B6 se cumple —«si el bloque crea modulos nuevos en src/, los guards se mueven»—, y por eso conviene no leerla al reves. CONTEXTO B8 (se conserva, ya no vivo): +77 sobre 3088 = 66 de test_b8_package_contract.py, 6 de wi47, 1 de WI-107 y 4 del guard de B0 que-viaja. CONTEXTO B7: +33 sobre 3055. CONTEXTO B6: +25 sobre 3030. CONTEXTO B5: +34 sobre 2996. CONTEXTO B4: +22 sobre 2974. OJO: el 18 que B3 declaro para test_b3_capability_seam.py ya no cuadra con el arbol, que colecta 12; se deja escrito y NO se corrige porque arreglarlo es medir B3, y un bloque que corrige la contabilidad de otro sin medirlo es el bloque que inventa cifras.
   passed: 2735
   duration_s: 241.57   # MEDIDO en la CI canonica de WI-108, run 2387c4cc-c624-4793-a8ef-1a83f3df72ea, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. El resumen es «2735 passed in 241.57s» SIN la palabra skipped, que es lo que el criterio nuevo de WI-108 exige. Bloque WI-107, run 332e09e6-ba0b-449e-908e-9686dd35a898, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. Criterio 6 (SHA-256 del .pipeline.kts) registrado en sesion: 7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42, sin drift desde 283da96 (WI-105). Bloque anterior WI-105: (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
-  package_version: "0.28.1"   # post-tag: HEAD esta EN la etiqueta v0.28.1, luego el SemVer es PURO (caso 1 del guard de release). Va a la par de __init__.py en el MISMO commit: un commit que bumpea uno y deja el otro viejo es el fallo que WI-109 sufrio.
+  package_version: "0.28.1"   # post-tag: HEAD esta EN la etiqueta v0.28.1, luego el SemVer es PURO (caso 1 del guard de release).
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1305,7 +1305,7 @@ release:
   releases:
     - tag: v0.28.1
       fecha: 2026-10-04
-      sha: "5cc5436dcea4eb9125f1b44c9c3a2429de9b27e1"
+      sha: "ec6e791109fbba30989b6d186cec61c4b85d2b4f"
       nota: >-
         B9 cerrado: el gate de 1.0 deja de ser una lista en prosa. ROADMAP.md decia, textual, que
         v1.0.0 solo existe cuando se cumplan TODAS sus propiedades, y listaba veinte: era la

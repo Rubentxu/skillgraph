@@ -127,6 +127,28 @@ con la base verde y la primera sonda cazada. «Restaurar» y «borrar» son
 la misma operación si no hay commit debajo, así que ahora se niega a
 empezar si encuentra cambios sin commitear en lo que va a restaurar.
 
+### Un incidente de release, escrito porque casi no se ve
+
+El tag `v0.28.1` se creo sobre el commit de intencion. Despues, al
+corregir el mensaje de un commit, se ejecuto `git commit --amend` **sobre
+ese commit ya etiquetado**: `--amend` reescribe el commit y crea uno
+nuevo con otro sha, y la etiqueta se queda apuntando al sha viejo, que
+ya no es alcanzable desde `HEAD`. Un `git describe` lo delata —decía
+`v0.28.0-9-...` con un `v0.28.1` a un solo commit de distancia—, pero solo
+si alguien mira; `git tag -l` seguia listando `v0.28.1` como si nada, y
+`git rev-list v0.28.1` resolvia a un commit huerfano sin decir que lo era.
+
+Se detecto porque `scripts/project_truth.py` leyo `tag_vcs: 0.28.0` con
+un `v0.28.1` recien declarado, que es exactamente la contradiccion que el
+guard existe para ver. Se corrigio reanclando la etiqueta al commit real y
+registrando su sha en `release.releases`.
+
+La leccion cabe en una linea y es la misma que la del harness que se
+destruyo a si mismo en este mismo bloque: **una etiqueta y un
+`--amend` son la misma operacion, y la segunda se lleva la primera.**
+Restaurar y borrar,enference y reescribir: el nombre cambia y el aviso es
+el mismo.
+
 ### Una paradoja que queda escrita
 
 El bloque entrega un módulo **nuevo** y un instrumento **nuevo**, y el
