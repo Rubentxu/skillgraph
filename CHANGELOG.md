@@ -14,6 +14,57 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.31.1] - 2026-10-04 — el modelo de amenaza afirmaba que no había fuga, y había una
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.31.0`:
+`b/f/x/n/d 0/0/2/0`, la regla pide **PATCH → v0.31.1**. Es la tercera y última
+`OPEN` del gate de 1.0 que no depende de credencial ni de persona.
+
+### Fixed
+
+- **Fuga cross-tenant en `platform/knowledge_repository.py::list_resources`.**
+  El filtro de `kind` se armaba como `AND api_version || '/' || kind = ? OR
+  kind = ?`, sin paréntesis. En SQL `AND` liga más fuerte que `OR`, luego la
+  segunda mitad del `OR` hacía opcional el `tenant_id` **y** el `project_id`.
+  Medido antes de corregir: un tenant que no tiene nada pide sus `DomainPack`
+  y recibe los de otro. Era alcanzable desde la CLI.
+
+  B11 encontró este defecto y no lo arregló, porque esquivarlo era lo
+  correcto para su bloque: necesitaba aislamiento fila a fila. Lo que falló es
+  que la puerta se quedó abierta y el ADR-0015 la declaraba **cerrada**.
+
+### Changed
+
+- **ADR-0015 reescrito.** Una sección `## Superficies` con una fila por cada
+  uno de los 10 paquetes de `src/skillgraph/`, cada una nombrando el fichero
+  de evidencia que la sostiene. Se añaden **S9** (packs instalables) y **S10**
+  (libro de migraciones), que son fronteras de confianza que el modelo no
+  mencionaba. Tres contradicciones resueltas, la tercera encontrada al
+  reescribirlo: el documento decía que «no introduce cambios de código», y el
+  bloque que lo revisaba acababa de corregir una fuga.
+- **La vigencia del gate deja de medirse con un número de tests** y pasa a
+  **ejecutar** `tests/test_b13_threat_model.py`, verificado en las dos
+  direcciones con causas distintas.
+
+### Added
+
+- `tests/test_b13_threat_model.py` — 17 tests en cinco conjuntos disjuntos.
+  El guard de SQL captura la consulta **ensamblada** por
+  `set_trace_callback`, no los literales: la primera versión daba verde
+  **con la fuga presente**, porque `WHERE` y `OR` están en literales distintos.
+- `scripts/mutate_b13_threat_model.py` — 6 sondas, **6/6 cazadas con 6 causas
+  distintas**. Dos nacieron rotas y las cazó el propio harness: una declaraba
+  sus diagnósticos con el nombre de la clase mal escrito (y `caidos &
+  esperados` no está vacío mientras caiga *uno* de los dos), y otra usaba un
+  ancla que aparece dos veces. El harness ahora rechaza arrancar si un
+  diagnóstico no existe o si un ancla no es única.
+
+### Certification
+
+- Gate de 1.0: **17 PASS / 2 OPEN / 1 NO_MEASURABLE → 18 / 1 / 1**.
+- `tests.total` 3254 → **3271** (+17, el fichero nuevo entero).
+- Suite: **3268 passed, 3 skipped, 0 failed**.
+
 ## [0.31.0] - 2026-10-04 — la versión del esquema era una constante, y por eso el upgrade era imposible
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.30.0`:
