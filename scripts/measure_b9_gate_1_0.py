@@ -569,18 +569,46 @@ def _backups_restore_probados() -> tuple[Veredicto, str]:
 
 
 def _upgrade_desde_releases_soportadas() -> tuple[Veredicto, str]:
-    """Se busca un punto de entrada que migre datos de una release anterior."""
-    encontrados: list[str] = []
-    for modulo in sorted((RAIZ / "src" / "skillgraph").rglob("*.py")):
-        texto = modulo.read_text(encoding="utf-8")
-        if re.search(r"def\s+(upgrade|migrate_up|actualizar_schema)\b", texto):
-            encontrados.append(str(modulo.relative_to(RAIZ)))
-    if not encontrados:
+    """Se mide EJECUTANDO la capacidad, no buscando un nombre.
+
+    **LO QUE ESTE PREDICADO ERA, Y POR QUE ERA UN DEFECTO.** Buscaba con
+    un regex `def (upgrade|migrate_up|actualizar_schema)` en todos los
+    modulos de `src/`, y contaba como PASS el primer nombre que encontrara.
+    Tres cosas van mal en eso, y las tres importan mas que el nombre:
+
+    1. Mide el NOMBRE, no la capacidad. B12 implementa el upgrade entero —
+       libro de migraciones, version derivada, base atrasada que se sube,
+       base mas nueva que falla— y se llama `sincroniza`, no `upgrade`. Con
+       el predicado viejo, B12 habria entregado la capacidad y el gate
+       habria seguido diciendo OPEN: un falso negativo, que es la misma
+       clase de fallo que el falso positivo de B9, con el signo cambiado.
+    2. Un nombre no se puede ejecutar, asi que no se puede comprobar que
+       haga lo que dice. Un `def upgrade(): pass` daba verde.
+    3. Enumera lo que hay en vez de derivarlo. Anadir una segunda via de
+       upgrade no la hacia mejor.
+
+    Es el «conectar != contener» de WI-102 y el «el touch no cierra nada»
+    de B10, aplicados a este predicado. La forma correcta es la de B10: el
+    predicador CORRE el instrumento y decide por su codigo de salida.
+
+    El medidor construye bases de verdad en un temporal y responde cinco
+    preguntas ejecutables —se sube una base vieja, la version se puede
+    PREGUNTAR y no leer del modulo, una base mas nueva falla con un error
+    del dominio, y abrir una base al dia no escribe— de modo que un PASS
+    aqui no puede venir de un nombre bien puesto.
+    """
+    proc = _corre([sys.executable, str(RAIZ / "scripts" / "measure_b12_schema_upgrade.py")])
+    salida = proc.stdout.strip()
+    resumen = salida.splitlines()[-1] if salida else "sin salida"
+    if proc.returncode != 0:
         return "OPEN", (
-            "no existe ninguna funcion de upgrade o de migracion de datos entre "
-            "releases: no hay de donde subir una base creada por una version anterior"
+            f"la capacidad de subir una base de una release anterior no esta "
+            f"completa, segun scripts/measure_b12_schema_upgrade.py: {resumen}"
         )
-    return "PASS", f"hay {len(encontrados)} puntos de entrada de upgrade: {encontrados}"
+    return "PASS", (
+        f"ejecutado scripts/measure_b12_schema_upgrade.py: {resumen}. "
+        f"El veredicto es el del instrumento, no la presencia de un nombre."
+    )
 
 
 def _security_threat_model_actualizado() -> tuple[Veredicto, str]:

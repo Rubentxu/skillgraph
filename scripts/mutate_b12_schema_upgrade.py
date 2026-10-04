@@ -183,10 +183,13 @@ SONDAS: tuple[Sonda, ...] = (
         ),
     ),
     Sonda(
-        nombre="M4_la_base_deja_de_declarar_-su_version",
+        nombre="M4_la_base_deja_de_declarar_su_version",
         fichero="src/skillgraph/platform/migrations.py",
-        antes='    cur.execute("INSERT INTO schema_version(version) VALUES (?)", (version_declarada(),))',
-        despues="    pass",
+        antes=(
+            '    cur.execute("DELETE FROM schema_version")\n'
+            '    cur.execute("INSERT INTO schema_version(version) VALUES (?)", (objetivo,))'
+        ),
+        despues="    pass  # sonda M4: la base deja de declarar su version",
         esperados=frozenset(
             {
                 "TestSubirUnaBaseVieja::test_una_base_sin_libro_se_abre_y_se_migra",

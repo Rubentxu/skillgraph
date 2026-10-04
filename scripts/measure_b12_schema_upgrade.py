@@ -52,8 +52,7 @@ class Informe:
     preguntas: list[Pregunta] = field(default_factory=list)
 
     def anota(self, nombre: str, ok: bool, evidencia: str) -> None:
-        self.veredicto = "PASS" if ok else "OPEN"
-        self.preguntas.append(Pregunta(nombre, self.veredicto, evidencia))
+        self.preguntas.append(Pregunta(nombre, "PASS" if ok else "OPEN", evidencia))
 
 
 def _base_lista(directorio: pathlib.Path, nombre: str) -> pathlib.Path:
