@@ -1,3 +1,129 @@
+> **Bloque 2026-10-04 (B9) — El gate de 1.0 deja de ser una lista en prosa.**
+> Versión activa `0.28.0.dev0`; último tag `v0.28.0`.
+>
+> **B9: `ROADMAP.md` dice, textual, que `v1.0.0` solo existe cuando se
+> cumplan TODAS sus propiedades, y a continuacion lista veinte. Era la
+> afirmacion mas fuerte del repositorio y la unica sin nada que la
+> comprobara.** Veinte afirmaciones sin predicado no son veinte riesgos: son
+> un documento. Es la misma forma que B0 senalo en un campo de estado, con
+> veinte sujetos en vez de uno.
+>
+> **MEDIDO, no supuesto.** `scripts/measure_b9_gate_1_0.py` deriva las
+> veinte del propio roadmap —la lista no esta escrita en el script, y una
+> propiedad nueva que no sepa medir sale como `NO_MEDIBLE` en vez de pasar
+> en verde— y ejecuta un predicado por cada una:
+>
+> ```
+> 13 PASS · 6 OPEN · 1 NO_MEASURABLE · 0 NO_MEDIBLE
+> listo_para_1_0: false
+> ```
+>
+> **LO QUE DESTAPO, Y NO ERA UN NUMERO.** Al medir «concurrencia real
+> certificada» salio `OPEN` con 1 de 5 corridas en rojo. MEDIDO en detalle:
+> 1 ronda de 12, con **3 de 8 hijos muertos** y 50 de 80 filas escritas.
+> El defecto de produccion era el mismo que B2 abrio y no termino de
+> cerrar: `Storage.__init__` ejecutaba `PRAGMA journal_mode = WAL` en
+> cada apertura, y el PRAGMA es idempotente pero **toma un lock de
+> escritura para averiguar que no hace nada**. Con ocho procesos abriendo
+> a la vez, uno moria con `database is locked` ANTES de escribir, y sus
+> escrituras se perdian sin excepcion en el padre y sin log.
+>
+> B2 lo arreglo con un reintento, y el reintento no bastaba. Lo que
+> faltaba era la otra mitad de lo que ya decia su propio comentario —«la
+> solucion es no preguntar»—: **preguntar** el modo con
+> `PRAGMA journal_mode` a secas, que es una LECTURA y no pide el lock
+> exclusivo. Con eso, releer entre reintentos y dormir entre ellos (que
+> `journal_mode` ignora el `busy_timeout`: devuelve `SQLITE_BUSY` de
+> inmediato). Vive en `src/skillgraph/platform/journal.py`, no en
+> `storage.py`, que esta bajo las 800 lineas por un guard de WI-65.
+> MEDIDO con el mismo escenario que antes fallaba: **40 rondas de ocho
+> procesos abriendo una base nueva a la vez, sin un solo fallo.**
+>
+> **LA SEGUNDA MITAD DEL HALLAZGO: LA PUERTA DE LOS HIJOS.** Lanzar ocho
+> procesos en un bucle no los hace competir, solo los hace empezar, y cada
+> uno tarda lo que tarde en arrancar. MEDIDO: 4 de 20 corridas del modulo
+> de concurrencia fallaban, y el que caia no era el de solape sino el de
+> autores, porque un hijo habia muerto sin que nadie se enterara —el test
+> descarta el resultado de `_procesos`—. Los hijos ahora escriben su
+> fichero de «listo» y esperan a que el padre abra la puerta, y el padre
+> no abre hasta tenerlos a todos. 0 de 20 y 0 de 25 tras el cambio.
+>
+> **LAS SEIS OPEN, Y POR QUE CADA UNA PIDE COSAS DISTINTAS.**
+> `resource/controller API estable` y `CLI estable`: no hay superficie
+> declarada contra la que comparar, asi que estan OPEN por falta de
+> certificacion, no por defecto. `runtime real certificado`: necesita
+> `SG_UAT_REAL_PROVIDER=1` y una credencial, y se ve en el `skip` del
+> propio UAT. `pack/controller lifecycle` y `upgrade desde releases
+> soportadas`: son trabajo de B8 y de B9 respectivamente, no defects.
+> `security/threat model actualizado`: el ADR-0015 se aprobo describiendo
+> un proyecto de 830 tests y 17 releases, y el arbol de hoy colecta 3176.
+> El modelo de amenaza esta bien escrito y caducado.
+>
+> **`TUI operacional` es NO_MEASURABLE, y no es un OPEN disfrazado.**
+> «Operacional» es una propiedad de una persona usando un terminal. No hay
+> forma de medirla ejecutando el repo, y declararla PASS seria la unica
+> forma de mentir. No baja el veredicto igual que un OPEN: las dos dejan
+> 1.0 lejos, y el roadmap dice TODAS.
+>
+> **EL HARNESS SE DESTRUYO A SI MISMO, Y POR QUE IMPORTA.** La primera
+> version de `scripts/mutate_b9_gate_1_0.py` restauraba con
+> `git checkout --`, que restaura **del indice**. Con el arreglo sin
+> commitear —que es como esta mientras se escribe un bloque—, el primer
+> `checkout` de la primera sonda se llevo el arreglo entero: tres ficheros
+> volvieron al estado previo y las sondas M2 a M6 se encontraron sin texto
+> que deformar. Lo malo no es que fallara: es que **parecia funcionar**,
+> porque la base se verifico verde, la primera sonda cazo y el informe
+> salio con un numero. «Restaurar» y «borrar» son la misma operacion si no
+> hay commit debajo, y por eso el harness ahora **se niega a empezar** si
+> encuentra cambios sin commitear en lo que va a restaurar.
+>
+> **CUATRO BUGS DEL PROPIO MEDIDOR, todos en la misma direccion.** (1) La
+> hoja de B5 escribe `[CERRADO ]` con un espacio y la de B6 `[CERRADO]`
+> sin el: buscando el texto exacto, el predicado de provenance leia cero
+> preguntas y devolvia **PASS**. Un predicado que pasa porque no leyo nada.
+> Ahora el marcador se reconoce por forma, y si no sale ninguna pregunta
+> el veredicto es OPEN. (2) `_migrations_probadas` buscaba la palabra
+> «deselected» para detectar que no se habia ejecutado nada, y da OPEN
+> sobre un resumen que dice `3 passed, 20 deselected`: deselected aparece
+> igual cuando los tests selectionados SI corrieron. Ahora se cuentan los
+> `passed`. (3) Las dos consultas al parser llamaban a
+> `construir_parser()`, que no existe —es `build_parser()`—, y el
+> `ImportError` se comia en un `return ()`: dos veredictos falsos, ambos
+> en la direccion de alarmar de mas. (4) B5 declara su P6 FUERA DE ALCANCE
+> y por el principio de siempre —«fuera de alcance se registra y no baja el
+> veredicto»— no cuenta como abierta; el primer medidor la contaba.
+>
+> **HARNESS: 6 de 6 sondas, 6 causas distintas.** Y tres de esas seis
+> salidas fueron fallos de los guards, no de las sondas: uno miraba que
+> el proceso siguiera vivo —un hijo sin puerta lo sigue estando 30 ms—,
+> otro hacia `join()` del hilo ANTES de comprobar, y el tercero decia
+> «ha salido un error» cuando queria decir «ha salido ESTE error»: con el
+> error tragado, la excepcion igualmente salia de `_migrate()`. Los tres
+> miden la mitad de lo que dicen medir. Un 3/6 es un numero honesto; un
+> 6/6 sobre esos tests habria sido un numero falso.
+>
+> **LO QUE NO SE ABRE.** TUI usable (no medible aqui), proveedor real
+> (credencial que este entorno no tiene), y el ciclo de vida de packs
+> (trabajo de B8, no de B9). Se registran y no bajan el veredicto.
+>
+> Instrumento: `scripts/measure_b9_gate_1_0.py`. Harness:
+> `scripts/mutate_b9_gate_1_0.py`. Guards: `tests/test_b9_wal_lock.py`.
+>
+> measure_b9_gate_1_0.py:123::propiedades_del_roadmap  las 20, DERIVADAS del roadmap
+> measure_b9_gate_1_0.py:201::_preguntas          el marcador se reconoce por forma
+> measure_b9_gate_1_0.py:319::_veredicto_de_hoja   cero preguntas leidas = OPEN
+> measure_b9_gate_1_0.py:177::_pasaron             se cuentan los `passed`, no `deselected`
+> measure_b9_gate_1_0.py:659::_comandos_de_la_cli  importa el parser, no lo adivina
+> measure_b9_gate_1_0.py:724::evaluar             una sin predicado = NO_MEDIBLE
+> measure_b9_gate_1_0.py:758::listo_para_1_0       NO_MEASURABLE tambien impide 1.0
+> platform/journal.py:75::modo_de_journal          LECTURA, y por eso no pide lock
+> platform/journal.py:85::asegura_wal             releer y dormir entre reintentos
+> platform/journal.py:62::INTENTOS_WAL             tres, y el por que esta escrito
+> test_b2_real_concurrency.py:156::_abre_la_puerta  no abre hasta tener a todos
+> mutate_b9_gate_1_0.py:84::_sin_trabajo_sin_commitar  «restaurar» y «borrar» son lo mismo
+> test_b9_wal_lock.py:113::TestLaBaseYaEstaEnWAL   una base en WAL no se repregunta
+> test_b9_wal_lock.py:267::TestLaBarreraDeLosHijos  el solape es estructural, no una carrera
+
 > **Bloque 2026-10-04 (B8) — El contrato de paquete, y lo que de él depende.**
 > Versión activa `0.28.0.dev0`; último tag `v0.28.0`.
 >
