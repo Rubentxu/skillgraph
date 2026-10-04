@@ -1,3 +1,90 @@
+> **Bloque 2026-10-04 (B14) — La autoridad de coherencia se puede engañar, y se engañó.**
+> (en curso; sin release todavía)
+> Versión activa `0.31.1.dev0`; último tag `v0.31.1`.
+>
+> **ESTE NO ES UN BLOQUE HACÍA 1.0. ES EL BLOQUE QUE HACE QUE EL VERIFICADOR
+> DEL QUE DEPENDEN TODOS LOS DEMÁS PUEDA SER CREÍDO.**
+>
+> `scripts/project_truth.py` es la respuesta a «¿dónde está el proyecto?». B0 la
+> creó, y desde entonces B0..B13 se apoyan en su veredicto de `coherente`. Un
+> verificador que dice «coherente» cuando no lo está es PEOR que no tener
+> verificador, porque las dos mitades de la propiedad se apoyan en el.
+>
+> **NO ES HIPÓTESIS: ES UN CASO QUE YA PASÓ EN B13.** Al cerrar B13 se añadió una
+> segunda clave `current_workitem` en `STATE.yaml`:
+>
+> ```
+> yaml.safe_load          -> B13_cerrado   (última clave)
+> regex de project_truth  -> B13           (primera coincidencia)
+> project_truth           -> coherente: true, sin avisar
+> ```
+>
+> Seis ficheros de test leen STATE con `yaml.safe_load`; `project_truth.py` **no
+> importaba `yaml` en absoluto** y lo leía entero con regex. Dos lectores del
+> mismo fichero discrepando en silencio.
+>
+> **MEDIDO ANTES DE ESCRIBIR NADA** (`scripts/measure_b14_truth_single_reader.py`,
+> mutaciones EN SITIO con restauracion verificada por sha256): **7 de 8**. La
+> primera version del instrumento dio 7 de 8 en una COPIA temporal, y era
+> mentira: la copia no colecta tests, `project_truth` no podía leer el recuento
+> real, y todo daba rc=2 — incluidas las siete que contaba como buenas. Un
+> instrumento que se pasa a sí mismo porque el entorno no puede correr es la
+> forma exacta del falso verde que este repo lleva catorce bloques cazando.
+>
+> **LO QUE ENTRA.** STATE se lee **una vez** con `yaml.safe_load`, en vez de con
+> tres regex que cada una puede encontrar otra cosa. Un loader que **rechaza
+> claves duplicadas en el punto de lectura**, no despues con un guard: un guard
+> que busca "¿hay dos claves iguales?" seria un segundo lector, que es el
+> problema. Y comprobacion de **tipo** en los tres campos, porque con YAML un
+> `total: 'muchos'` llegaba al verificador sin que nadie lo mirara.
+>
+> **TRES COSAS QUE EL BLOQUE ENCONTRO EN SI MISMO, Y QUE IMPORTAN MAS QUE EL
+> ARREGLO:**
+>
+> - **El mecanismo central no lanzaba nunca.** `_construye` hacia
+>   `construct_mapping(...)` y luego miraba `Mapping.items()`; y
+>   `construct_mapping` ya devuelve un dict donde la clave repetida se colapso.
+>   El bucle veia UNA clave, no dos. MEDIDO: con dos `current_workitem`,
+>   `_estado()` leía `B99_inventado` sin protestar. Para cuando existe el dict,
+>   la informacion de que había dos declaraciones ya no esta: hay que recorrer
+>   `node.value`, que son los pares en crudo.
+> - **El test de la clave duplicada daba verde aceptando el defecto.** Sin el
+>   constructor, YAML toma la ultima y el verificador dice, textual, *«workitem:
+>   STATE declara B99_inventado, CURRENT declara B13»*: **elige una de las dos y
+>   la publica como la verdad**, atribuyendo la otra a otro fichero. El
+>   veredicto SÍ cambia, luego un test de «cambia el veredicto» pasa. Ahora el
+>   contrato es «el estado es ILEGIBLE», y hay un contrasalto que comprueba que
+>   **no se publica ninguno de los dos valores**.
+> - **La medicion usaba el mismo predicado debil**, y por eso daba 8/8 con el
+>   mecanismo central roto. Endurecida a exigir `ilegible` nombrando la clave.
+>
+> > Los tres son de la misma clase que el falso verde que B13 cerro en el gate de
+> > 1.0: **un guard que pasa por una causa ajena al objeto que vigila**. Y los
+> > tres los manifesto el harness o la sonda manual, no una lectura del codigo.
+>
+> **LO QUE ESTE BLOQUE NO ABRE.** El PRE-FLIGHT anotó «los otros consumidores con
+> regex que quedan en el repo». MEDIDO: **no quedan**. `project_truth.py` era el
+> unico consumidor de produccion, y los seis de test ya usaban el parser. Era
+> deuda sin verificar, y sin verificar no era deuda.
+>
+> **CITAS VERIFICADAS** (`fichero.py:LINEA::simbolo`, comprobadas por AST):
+>
+> | cita | que sostiene |
+> |---|---|
+> | `project_truth.py:120::_SinClavesDuplicadas` | el loader que no elige en silencio |
+> | `project_truth.py:124::_construye` | recorre `node.value`, no el dict ya colapsado |
+> | `project_truth.py:150::_estado` | la lectura UNICA por la que pasa todo |
+> | `test_b14_truth_single_reader.py::TestUnaClaveDuplicadaNoPasaPorAlto` | el contrato: ilegible, no «elige una» |
+> | `test_b14_truth_single_reader.py::TestElEstadoSeLeeDeUnaSolaManera` | no queda reader por regex ni segunda lectura |
+> | `measure_b14_truth_single_reader.py::Arbol` | restaura y COMPRUEBA el sha256 |
+> | `mutate_b14_truth_single_reader.py:77::_sin_trabajo_sin_commitar` | «restaurar» y «borrar» son lo mismo |
+>
+> **GATE DE 1.0: sin cambios, 18 PASS / 1 OPEN / 1 NO_MEASURABLE**, que es lo
+> correcto: B14 endurece la autoridad de coherencia de B0, no una propiedad de
+> 1.0. `coherente: true` con `tests.total` cuadrando contra el arbol.
+>
+> ---
+>
 > **Bloque 2026-10-04 (B13) — El modelo de amenaza AFIRMABA que no habia fuga. Y habia una.**
 > (cerrado y publicado en `v0.31.1`; evidencia en
 > `evidence/sddk-b13-gate-report-2026-10-04.json`)

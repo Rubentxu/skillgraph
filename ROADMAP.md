@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B13** — El modelo de amenaza que se sostiene
-> Versión activa `0.31.1.dev0` · último tag `v0.31.1` · 3271 tests · 16/16 UAT
+> Bloque vivo: **B14** — La autoridad de coherencia se puede engañar
+> Versión activa `0.31.1.dev0` · último tag `v0.31.1` · 3284 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -63,6 +63,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B11** | Ciclo de vida de packs | `install`/`update`/`remove`/`list` sobre el contrato de B8 |
 | **B12** | Upgrade entre releases | La versión del esquema es un hecho consultable, y subir una base vieja tiene nombre |
 | **B13** | El modelo de amenaza que se sostiene | Cada «cerrado» del STRIDE nombra su prueba, y hay una fuga cross-tenant que se arregla |
+| **B14** | La autoridad de coherencia se puede engañar | El estado tiene una sola lectura, y una clave repetida ya no pasa por alto |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -834,3 +835,92 @@ un verde posterior no borra un rojo anterior.
 queda `OPEN` es el runtime real certificado, que necesita
 `SG_UAT_REAL_PROVIDER=1` y una credencial real: no se resuelve desde el
 repositorio.
+
+---
+
+## B14 — La autoridad de coherencia se puede engañar, y se engañó
+
+**No es un bloque hacia 1.0. Es el bloque que hace que el verificador del que
+dependen todos los demás pueda ser creído.**
+
+`scripts/project_truth.py` es la respuesta a *«¿dónde está el proyecto?»*. B0 la
+creó, y desde entonces B0..B13 se apoyan en su veredicto de `coherente`. Un
+verificador que dice «coherente» cuando no lo está es **peor que no tener
+verificador**, porque las dos mitades de la propiedad se apoyan en él.
+
+**No es una hipótesis: es un caso que ya pasó en B13.** Al cerrar B13 se añadió
+una segunda clave `current_workitem` en `STATE.yaml`, y el resultado medido fue:
+
+```
+yaml.safe_load          -> B13_cerrado   (última clave)
+regex de project_truth  -> B13           (primera coincidencia)
+project_truth           -> coherente: true, contradicciones: []
+```
+
+Seis ficheros de test leen `STATE.yaml` con `yaml.safe_load`;
+`project_truth.py` **no importaba `yaml` en absoluto** y lo leía entero con
+regex. Dos lectores del mismo fichero discrepando en silencio.
+
+**Medido antes de escribir nada** (`scripts/measure_b14_truth_single_reader.py`,
+mutaciones **en sitio** con restauración verificada por sha256): **7 de 8**. La
+que no era la de la clave duplicada.
+
+**La primera versión del instrumento dio 7 de 8 en una copia temporal, y era
+mentira:** la copia no colecta tests, `project_truth` no puede leer el recuento
+real, y todo devolvía `rc=2` — incluidas las siete que el script contaba como
+buenas. Un instrumento que se pasa a sí mismo porque el entorno no puede correr
+es la forma exacta del falso verde que este repositorio lleva catorce bloques
+cazando. Se rehízo sobre el árbol real, y por eso el número de partida es 7.
+
+**Cerrado:**
+
+1. `STATE.yaml` se lee **una vez** con `yaml.safe_load`, en vez de con tres
+   regex que cada una puede encontrar otra cosa. Markdown y Python siguen con
+   regex: no son YAML.
+2. Un loader que **rechaza claves duplicadas en el punto de lectura**, no
+   después con un guard: un guard que busca «¿hay dos claves iguales?» sería un
+   segundo lector, que es el problema.
+3. Comprobación de **tipo** en los tres campos. Con YAML, un `total: 'muchos'`
+   llegaba al verificador sin que nadie lo mirara.
+
+**Tres cosas que el bloque encontró en sí mismo, y que importan más que el
+arreglo:**
+
+- **El mecanismo central no lanzaba nunca.** `_construye` hacía
+  `construct_mapping(...)` y luego miraba `Mapping.items()`; y
+  `construct_mapping` ya devuelve un dict donde la clave repetida se colapsó.
+  El bucle veía **una** clave, no dos. Medido: con dos `current_workitem`,
+  `_estado()` leía `B99_inventado` sin protestar. Para cuando existe el dict, la
+  información de que había dos declaraciones ya no está.
+- **El test de la clave duplicada daba verde aceptando el defecto.** Sin el
+  constructor, YAML toma la última y el verificador dice *«STATE declara
+  B99_inventado, CURRENT declara B13»*: **elige una de las dos y la publica
+  como la verdad**. El veredicto sí cambia, luego un test de «cambia el
+  veredicto» pasa. Ahora el contrato es «el estado es ilegible», y hay un
+  contrasalto que comprueba que **no se publica ninguno de los dos valores**.
+- **La medición usaba el mismo predicado débil**, y por eso daba 8/8 con el
+  mecanismo central roto. Endurecida a exigir `ilegible` nombrando la clave.
+
+> Los tres son de la misma clase que el falso verde que B13 cerró en el gate de
+> 1.0: **un guard que pasa por una causa ajena al objeto que vigila**. Y los
+> tres los manifestó el harness o la sonda manual, no una lectura del código.
+
+**Dónde se mira, verificado por AST:**
+
+- `project_truth.py:120::_SinClavesDuplicadas` — el loader que no elige
+- `project_truth.py:124::_construye` — recorre `node.value`, no el dict
+- `test_b14_truth_single_reader.py::TestUnaClaveDuplicadaNoPasaPorAlto` — el contrato
+- `mutate_b14_truth_single_reader.py:77::_sin_trabajo_sin_commitar` — «restaurar» y «borrar» son lo mismo
+
+**Harness:** 5 sondas. M1–M5, con M1 reforzada porque la primera versión solo
+**definía** un regex del estado sin usarlo —desactivaba el módulo sin cambiar lo
+que el código hace—, y una sonda que no cambia el comportamiento no prueba el
+guard.
+
+**Lo que este bloque NO abre.** El PRE-FLIGHT anotó «los otros consumidores con
+regex que quedan en el repo». **Medido: no quedan.** `project_truth.py` era el
+único consumidor de producción, y los seis de test ya usaban el parser. Era
+deuda sin verificar, y sin verificar no era deuda.
+
+**Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
+`coherente: true` con `tests.total` cuadrando contra el árbol.
