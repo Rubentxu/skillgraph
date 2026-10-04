@@ -1,0 +1,103 @@
+{
+  "comandos": [
+    "backup",
+    "brick",
+    "expansion",
+    "init",
+    "knowledge",
+    "pack",
+    "policy",
+    "project",
+    "promotion",
+    "run",
+    "runs"
+  ],
+  "runner_all": [
+    "EXIT_BAD_NAME",
+    "EXIT_DB_MISSING",
+    "EXIT_DOMAIN",
+    "EXIT_OK",
+    "EXIT_PARSE",
+    "EXIT_PLAN_NOT_FOUND",
+    "EXIT_PROJECT_EXISTS",
+    "EXIT_PROJECT_NOT_FOUND",
+    "EXIT_RUN_FAILED",
+    "EXIT_RUN_INCOMPLETE",
+    "EXIT_USAGE",
+    "EXIT_VALIDATION",
+    "ProjectResolver",
+    "cmd_brick_register",
+    "cmd_expansion_apply",
+    "cmd_expansion_archive",
+    "cmd_expansion_list",
+    "cmd_expansion_propose",
+    "cmd_expansion_rejections",
+    "cmd_expansion_show",
+    "cmd_expansion_validate",
+    "cmd_init",
+    "cmd_knowledge_compile",
+    "cmd_knowledge_invalidate",
+    "cmd_knowledge_refresh",
+    "cmd_knowledge_stale",
+    "cmd_knowledge_trace",
+    "cmd_pack_import",
+    "cmd_project_create",
+    "cmd_project_inspect",
+    "cmd_project_list",
+    "cmd_run",
+    "main",
+    "open_catalog"
+  ],
+  "subcomandos": {
+    "backup": [
+      "create",
+      "list",
+      "restore"
+    ],
+    "brick": [],
+    "expansion": [
+      "apply",
+      "archive",
+      "list",
+      "propose",
+      "rejections",
+      "show",
+      "validate"
+    ],
+    "init": [],
+    "knowledge": [
+      "compile",
+      "invalidate",
+      "refresh",
+      "stale",
+      "trace"
+    ],
+    "pack": [
+      "import",
+      "load"
+    ],
+    "policy": [
+      "get",
+      "set"
+    ],
+    "project": [
+      "create",
+      "inspect",
+      "list"
+    ],
+    "promotion": [
+      "list",
+      "reconcile",
+      "submit"
+    ],
+    "run": [],
+    "runs": [
+      "budget",
+      "cancel",
+      "list",
+      "logs",
+      "show"
+    ]
+  },
+  "version": "sggw_superficie/v1"
+}

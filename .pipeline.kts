@@ -91,6 +91,25 @@ pipeline {
             sh("cd " + repo + " && uv run python scripts/check_package_build.py 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
         }
 
+        stage("public-surfaces") {
+            // El QUINTO contrato declarado (B10), y el que cierra dos de
+            // las seis propiedades que B9 dejo OPEN por falta de
+            // certificacion: `resource/controller API estable` y
+            // `CLI estable`.
+            //
+            // Sin el, ambas se cerraban en veinte segundos escribiendo un
+            // fichero: se declaraba un `__all__` y se hacia `touch`. Los
+            // predicados de B9 miraban la EXISTENCIA del snapshot, no su
+            // contenido, y un `touch` los ponia en verde con el gate de
+            // 1.0 exactamente igual de lejos.
+            //
+            // Este stage EJECUTA la comparacion contra el arbol. Las dos
+            // superficies se generan con `--actualizar`, y por eso el
+            // fichero nunca se escribe a mano: lo escribe el codigo que
+            // sabe lo que hay.
+            sh("cd " + repo + " && uv run python scripts/check_public_surfaces.py 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
+        }
+
         stage("ci-parity") {
             // El CUARTO contrato declarado (WI-98), y el que vigila a los
             // otros tres: comprueba que todo runner remoto invoque esta
