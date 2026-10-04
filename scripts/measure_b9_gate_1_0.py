@@ -119,7 +119,7 @@ ClaseEvidencia = Literal["ejecutada", "derivada"]
 _LANZA_PROCESO = frozenset({"run", "check_output", "check_call", "Popen", "call"})
 
 
-def _grafo_del_modulo() -> dict[str, frozenset[str]]:
+def _grafo_del_modulo(fuente: str) -> dict[str, frozenset[str]]:
     """Quien llama a quien, **dentro de este fichero**.
 
     Se construye desde el AST y no desde una lista: un predicado puede llegar a
@@ -127,8 +127,16 @@ def _grafo_del_modulo() -> dict[str, frozenset[str]]:
     el grafo se escribiera a mano, bastaria con que un helper dejara de
     nombrar al proceso para que un ``ejecutada`` se declarara ``derivada`` sin
     que nadie lo decidiera.
+
+    **Por que recibe el texto y no lee `__file__`.** MEDIDO: leer el fichero
+    desde dentro hace la funcion IMPOSIBLE de probar con codigo deformado, que
+    es la unica prueba que importa — que la clase siga a lo que el codigo hace
+    y no a una lista. Un guard que no se puede deformar es un guard que solo
+    sabe pasar. Con el texto como parametro, un test puede anadir un
+    `subprocess.run` a un predicado `derivada` y exigir que la clase gire, sin
+    tocar el fichero real.
     """
-    arbol = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    arbol = ast.parse(fuente)
     definidos = {
         nodo.name
         for nodo in ast.walk(arbol)
@@ -198,7 +206,7 @@ def _funcion_del_predicado(slug: str, grafo: dict[str, frozenset[str]]) -> str:
     )
 
 
-def clase_de_evidencia(slug: str) -> ClaseEvidencia:
+def clase_de_evidencia(slug: str, fuente: str | None = None) -> ClaseEvidencia:
     """Si el predicado de esta propiedad EJECUTA o solo DERIVA. Del arbol.
 
     **Por que esto no es una lista escrita a mano.** Dieciocho lineas de
@@ -211,7 +219,8 @@ def clase_de_evidencia(slug: str) -> ClaseEvidencia:
     asumir es exactamente el fallo medido en la primera version de esta
     funcion.
     """
-    grafo = _grafo_del_modulo()
+    texto = Path(__file__).read_text(encoding="utf-8") if fuente is None else fuente
+    grafo = _grafo_del_modulo(texto)
     funcion = _funcion_del_predicado(slug, grafo)
     return "ejecutada" if _alcanza_proceso(funcion, grafo, frozenset()) else "derivada"
 
