@@ -1,6 +1,6 @@
 > **Bloque 2026-10-04 (B11) — El ciclo de vida de los packs, que era un nombre en un gate.**
-> Versión activa `0.30.0` (versión pura, a la espera del tag `v0.30.0`);
-> último tag `v0.29.0`.
+> Versión activa `0.30.0.dev0` (ya fuera del tag `v0.30.0`); último tag
+> `v0.30.0`.
 >
 > **B11 cierra la primera de las cuatro `OPEN` que piden CODIGO, no
 > certificacion.** El predicado del gate decia, textual: `sg pack` expone
