@@ -442,35 +442,74 @@ def _resource_controller_api_estable() -> tuple[Veredicto, str]:
     que expone. Un paquete sin ``__all__`` no tiene superficie publica
     declarada, y una superficie que nadie declara no se puede certificar
     como estable aunque hoy no haya cambiado.
+
+    MEDIDO AL ESCRIBIR B10, y es la razon de que este predicado ejecuta un
+    guard en vez de seguir leyendo el fichero. La version anterior hacia
+    dos cosas: que existiera ``__all__`` y que el snapshot estuviera en su
+    sitio. Las dos se cierran escribiendo el fichero, y quien lo escribiese
+    no tendria que saber nada del arbol: veinte segundos, dos ``PASS`` y un
+    gate de 1.0 igual de lejos.
+
+    Lo que decide es que la superficie este **certificada**: declarada,
+    versionada y sin haberse movido desde el snapshot. Eso no se puede
+    leer, se ejecuta, y se delega en `scripts/check_public_surfaces.py`,
+    que es el unico que sabe derivar las tres capas de la superficie.
     """
-    modulo = RAIZ / "src" / "skillgraph" / "core" / "__init__.py"
-    if not modulo.is_file():
-        return "OPEN", "no existe src/skillgraph/core/__init__.py: no hay nucleo que auditar"
-    if "__all__" not in modulo.read_text(encoding="utf-8"):
-        return "OPEN", (
-            "core/__init__.py no declara __all__: la superficie publica no esta "
-            "declarada, luego no hay nada que pueda decir que es estable"
-        )
-    return "PASS", "core/__init__.py declara __all__"
+    problemas = _guard_de_superficies()
+    if problemas is not None:
+        return "OPEN", problemas
+    return "PASS", (
+        "la superficie del nucleo esta declarada, versionada y no se ha movido "
+        "desde su snapshot, segun scripts/check_public_surfaces.py"
+    )
+
+
+def _guard_de_superficies() -> str | None:
+    """Ejecuta el guard de superficies. Devuelve el motivo si falla, o ``None``.
+
+    Se delega y no se reimplementa: el guard es el unico que sabe derivar
+    la superficie del nucleo y la de la CLI. Dosderivaciones son dos
+    verdades, y aqui una de las dos puede quedarse vieja sin que nadie se
+    entere — que es justo lo que este bloque vino a arreglar.
+
+    Se decide por el **codigo de salida**, no por la salida: un `touch`
+    deja el snapshot en disco, y mirar el fichero era el error que se
+    estaba corrigiendo.
+    """
+    proc = _corre(
+        [sys.executable, "scripts/check_public_surfaces.py"],
+        timeout=300,
+    )
+    if proc.returncode == 0:
+        return None
+    detalle = (proc.stdout or proc.stderr).strip().splitlines()
+    return "el guard de superficies no pasa, luego la superficie no esta certificada: " + (
+        detalle[-1] if detalle else f"rc={proc.returncode}"
+    )
 
 
 def _cli_estable() -> tuple[Veredicto, str]:
-    """La CLI es estable si su superficie esta DECLARADA y vigilada.
+    """La CLI es estable si su superficie esta DECLARADA y **no se ha movido**.
 
-    Se construye la superficie de verdad —importando el parser— y se
-    comprueba que exista la declaracion contra la que compararla. Importar
-    es lo que hace que la medicion no dependa de mi memoria de la lista.
+    MEDIDO AL ESCRIBIR B10. La version anterior hacia dos cosas: importar
+    el parser —bien, eso no se puede hacer de mentira— y comprobar que
+    existiera el fichero de la declaracion. La segunda es un ``is_file()``,
+    y un ``is_file()`` se cierra con un ``touch``: veinte segundos, y el
+    veredicto pasa a ``PASS`` con una superficie que puede contener lo que
+    sea, incluido nada.
+
+    La version que hay ahora delega en el guard, que **ejecuta** la
+    comparacion contra el arbol. Y delega, no reimplementa: la superficie
+    de la CLI se deriva en un solo sitio. Dos derivaciones son dos
+    verdades, y la que no se ejecuta es la que se queda vieja.
     """
-    superficie = _superficie_de_la_cli()
-    if not superficie:
-        return "OPEN", "no se pudo construir la superficie de la CLI: el parser no importa"
-    declaracion = RAIZ / "docs" / "cli-surface.json"
-    if not declaracion.is_file():
-        return "OPEN", (
-            f"la CLI expone {len(superficie)} comandos y no existe docs/cli-surface.json "
-            "contra el que comparar: su superficie puede cambiar sin que nada lo note"
-        )
-    return "PASS", f"superficie de la CLI declarada en {len(superficie)} comandos"
+    problemas = _guard_de_superficies()
+    if problemas is not None:
+        return "OPEN", problemas
+    return "PASS", (
+        "la superficie de la CLI esta declarada, versionada y no se ha movido "
+        "desde su snapshot, segun scripts/check_public_surfaces.py"
+    )
 
 
 def _tui_operacional() -> tuple[Veredicto, str]:
@@ -700,11 +739,6 @@ def _comandos_de_la_cli() -> dict[str, list[str]]:
         return hijos
 
     return _hijos(modulo.build_parser())
-
-
-def _superficie_de_la_cli() -> tuple[str, ...]:
-    """Los comandos de primer nivel, ordenados."""
-    return tuple(sorted(_comandos_de_la_cli()))
 
 
 def _subcomandos_de(grupo: str) -> tuple[str, ...]:
