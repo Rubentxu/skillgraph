@@ -180,8 +180,8 @@ SONDAS: tuple[Sonda, ...] = (
         despues="# Sonda M2: sin este constructor, YAML se queda con la ultima clave en silencio.",
         esperados=frozenset(
             {
-                "TestUnaClaveDuplicadaNoPasaPorAlto::test_una_clave_repetida_cambia_el_veredicto",
-                "TestUnaClaveDuplicadaNoPasaPorAlto::test_el_mensaje_nombra_la_clave_y_las_versiones_en_contradicto",
+                "TestUnaClaveDuplicadaNoPasaPorAlto::test_una_clave_repetida_hace_el_estado_ilegible",
+                "TestUnaClaveDuplicadaNoPasaPorAlto::test_el_valor_que_se_lee_no_es_uno_de_los_dos_a_eleccion",
             }
         ),
     ),
