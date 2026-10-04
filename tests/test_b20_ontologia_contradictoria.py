@@ -86,6 +86,19 @@ SUPERFICIE = (
 )
 
 
+#: Las tres contradicciones que el arreglo deja, y POR QUE: el proyecto llama
+#: recurso a estos tres tipos y sus PAQUETES no lo dicen. Declarar el concepto —
+#: que es un recurso— es una decision de producto, no una tarea de guard.
+#:
+#: MEDIDO, y el motivo de que sean una constante NOMBRADA y no un `<= 3` esta en
+#: la asercion que la usa: un techo que no se nombra no se puede romper.
+PENDIENTES_POR_DECLARAR = (
+    "CompiledResource",
+    "CapabilitySpec",
+    "SkillImportReport",
+)
+
+
 def _carga() -> Any:
     spec = importlib.util.spec_from_file_location("gate_b20", GATE)
     assert spec is not None and spec.loader is not None
@@ -215,15 +228,30 @@ class TestElGateNoSeContradiceASiMismo:
                 arbol.anade_import(modulo, clase)
                 (o, _), (c, _) = arbol.predicados()
             if c == "OPEN" and o != "OPEN":
-                rotas.append(f"{clase} (ontology={o}, core_sin_dep={c})")
-        # El techo, y no se maquilla: los tres que quedan son tipos que el
-        # proyecto llama recursos en un paquete cuyo NOMBRE no lo dice. Cerrar
-        # esta lista a cero sin declarar el concepto seria tapar el hallazgo.
-        assert len(rotas) <= 3, (
-            f"{len(rotas)} contradicciones, y solo se admiten 3 Pending: "
-            f"{rotas}. Un guard que se pone rojo al GUARDAR la lista"
-            f"anade una propiedad mas que nadie ha decidido: que pasaria a ser "
-            f"la septima vez que un patron escrito a mano deja de ver la superficie."
+                rotas.append(clase)
+        # EL TECHO, NOMBRADO Y NO CONTADO, y esa es la diferencia que hace que
+        # esta asercion pueda CAER.
+        #
+        # MEDIDO: la primera version de este bloque comprobaba `len(rotas) <= 3`,
+        # y con ella la CONTRAALTO no era una contrasalto sino decorado. Invertir
+        # la implicacion —que es exactamente el defecto que este bloque cierra—
+        # deja la lista VACIA, y cero caben en tres: la sonda M3 daba «NO CAYO» y
+        # el arnes decia que el guard no se enteraba, cuando lo que pasaba es
+        # que el guard no TENIA CON QUE ENTERARSE. Un techo que no se nombra es
+        # un techo que no se puede romper.
+        #
+        # NOMBRARLAS las ata al hecho medido: si alguien invierte la comprobacion
+        # aparecen cero, y cero no son las tres que el codigo dice. Y si alguien
+        # arregla el concepto y las tres desaparecen, tambien cae, con el
+        # mensaje que dice que hay que bajar el techo a proposito.
+        assert sorted(rotas) == sorted(PENDIENTES_POR_DECLARAR), (
+            f"las contradicciones que quedan son {sorted(rotas)} y el codigo declara "
+            f"{sorted(PENDIENTES_POR_DECLARAR)}. Tres motivos, y solo tres, y todos el "
+            f"mismo: el proyecto llama recurso a un tipo cuyo PAQUETE no lo dice, y "
+            f"declarar cual es un concepto es una decision de producto. Si la lista "
+            f"cambia, o se ha arreglado el techo a proposito —y entonces hay que "
+            f"bajar PENDIENTES_POR_DECLARAR aqui, no en la asercion—, o alguien ha "
+            f"movido el criterio y hay que entender por que antes de tocarlo."
         )
 
     def test_la_evidencia_dice_sobre_que_conjunto_y_sobre_que_recorrido(self) -> None:

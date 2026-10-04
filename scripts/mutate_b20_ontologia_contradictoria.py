@@ -75,13 +75,21 @@ class Sonda:
 
 SONDAS: tuple[Sonda, ...] = (
     Sonda(
-        nombre="M1_el_conjunto_de_recursos_vuelve_a_ser_un_sufijo",
+        nombre="M1_el_conjunto_se_desincroniza_de_los_paquetes_que_lo_declaran",
         fichero=GATE,
         antes="    for paquete in PAQUETES_DE_RECURSO:",
-        # El defecto de B20 entero: un patron por forma en vez de un conjunto
-        # derivado. Con el, `PackManifest` deja de contar y el predicado vuelve
-        # a mentir sobre el tipo central del proyecto.
-        despues="    for paquete in ('inventado',):  # deformacion: conjunto vacio de proposito",
+        # MEDIDO, Y LA PRIMERA VERSION DE ESTA SONDA NO SERVIA. Vaciaba el
+        # conjunto entero, y con el caian los CUATRO tests del fichero, luego el
+        # arnes decia «cayo con otros diagnosticos» sobre una sonda que si habia
+        # funcionado. Una deformacion que tumba todo no discrimina: mide que
+        # existen tests, no que este guard mide lo que dice medir.
+        #
+        # La que si discrimina desincroniza el conjunto de la CONSTANTE que lo
+        # declara, sin vaciarlo: el conjunto cambia, el predicado sigue
+        # funcionando, y cae SOLO el test que dice que la evidencia y la base
+        # cuentan lo mismo. Esa es la propiedad de B18 aplicada aqui: la
+        # evidencia tiene que describir el recorrido REAL.
+        despues="    for paquete in (*PAQUETES_DE_RECURSO, 'knowledge'):  # deformacion: desincronizado",
         esperados=frozenset(
             {
                 "tests/test_b20_ontologia_contradictoria.py::"
@@ -114,6 +122,7 @@ SONDAS: tuple[Sonda, ...] = (
         esperados=frozenset(
             {
                 "tests/test_b20_ontologia_contradictoria.py::"
+                "TestElGateNoSeContradiceASiMismo::"
                 "test_un_tipo_de_recurso_que_las_dos_ven_no_puede_ser_un_solo_pass"
             }
         ),
