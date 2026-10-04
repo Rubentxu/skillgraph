@@ -612,40 +612,61 @@ def _upgrade_desde_releases_soportadas() -> tuple[Veredicto, str]:
 
 
 def _security_threat_model_actualizado() -> tuple[Veredicto, str]:
-    """El modelo de amenaza esta al dia si describe ESTE proyecto.
+    """El modelo de amenaza esta al dia si CUBRE lo que el producto expone.
 
-    Se mide con los numeros que el propio ADR declara: si las cifras que
-    escribio al aprobarse ya no son las del repo, el documento esta
-    historicamente bien escrito y operativamente caducado.
+    **LO QUE ESTE PREDICADO ERA, Y POR QUE ERA UN DEFECTO.** Comparaba
+    `tests declarados == tests colectados`, con la cifra que el propio ADR
+    escribio al aprobarse. Tres cosas iban mal:
+
+    1. Media una FOTO, no una propiedad. En cuanto se anadia un test, el ADR
+       quedaba «caducado» sin que nadie hubiera tocado una sola linea del
+       analisis. Un gate que se pone rojo por causas ajenas al objeto que
+       vigila ensena a ignorarlo, que es peor que no tenerlo.
+    2. Era un FALSO POSITIVO structural. Con 3254 tests contra 830
+       declarados daba OPEN, y el veredicto era «el modelo describe un
+       producto que ya no es este» —lo cual era verdad, pero por razones
+       que la cifra no distinguishia: el modelo se habia quedado sin cubrir
+       los packs, las migraciones y la carga de planes. Arreglarlo subiendo
+       el numero habria hecho PASS un modelo igual de incompleto.
+    3. Daba PASS a un documento que dijera lo que quisiera mientras los
+       numeros cuadraran. Un modelo de amenaza que llama «OK» a una fuga
+       entre tenants que existe —que es lo que ocurria— es exactamente el
+       caso que este gate pretendia vigilar.
+
+    Ahora se mide lo que el modelo tiene que cubrir: **las superficies**.
+    Se EJECUTA la comprobacion en vez de comparar dos numeros, que es la
+    forma que B10 demostro que es la unica que muerde.
     """
-    adr = RAIZ / "docs" / "architecture" / "ADR-0015-threat-model-stride.md"
-    if not adr.is_file():
-        return "OPEN", "no existe docs/architecture/ADR-0015-threat-model-stride.md"
-    texto = adr.read_text(encoding="utf-8")
-    declarados = re.findall(r"(\d+)\s+tests\s+verdes", texto)
-    releases = re.findall(r"(\d+)\s+releases", texto)
-    if not declarados or not releases:
-        return (
-            "OPEN",
-            "el ADR no declara las cifras del proyecto que describio: no se puede saber si caducó",
-        )
-    proc = _corre([sys.executable, "-m", "pytest", "--collect-only", "-q"], timeout=600)
-    reales = next(
-        (
-            int(m.group(1))
-            for linea in proc.stdout.splitlines()
-            if (m := re.search(r"(\d+) tests collected", linea))
-        ),
-        -1,
+    proc = _corre(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "--no-header",
+            "tests/test_b13_threat_model.py",
+        ],
+        timeout=900,
     )
-    declarados_n = int(declarados[0])
-    if reales != declarados_n:
+    lineas = [linea for linea in proc.stdout.splitlines() if linea.strip()]
+    resumen = lineas[-1] if lineas else f"sin salida (rc={proc.returncode})"
+    if proc.returncode != 0:
+        caidos = [
+            linea.split("::", 1)[1].split(" ")[0]
+            for linea in proc.stdout.splitlines()
+            if linea.startswith("FAILED ")
+        ]
         return "OPEN", (
-            f"el ADR se aprobo describiendo un proyecto de {declarados_n} tests y "
-            f"{releases[0]} releases; el arbol de hoy colecta {reales}. El modelo de "
-            "amenaza describe un producto que ya no es este"
+            "el modelo de amenaza no sostiene lo que afirma: "
+            f"{resumen}. Fallan {len(caidos)} comprobaciones: {sorted(caidos)[:6]}. "
+            f"Se mide ejecutando scripts/ y tests/, no comparando una cifra."
         )
-    return "PASS", f"el ADR describe el proyecto de hoy: {reales} tests, {releases[0]} releases"
+    return "PASS", (
+        f"ejecutado tests/test_b13_threat_model.py: {resumen}. El veredicto es el "
+        f"del guard: cada superficie del arbol esta enumerada y nombra la "
+        f"prueba que la sostiene, y el aislamiento entre tenants se EJECUTA "
+        f"en vez de declararse."
+    )
 
 
 def _distribution_reproducible() -> tuple[Veredicto, str]:
