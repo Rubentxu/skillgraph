@@ -64,6 +64,7 @@ decide cómo se escribe un nombre en vez de a qué conjunto pertenece.
   pytest solo sobre los `.py` staged. El gate que se estaba usando no era el que
   el repositorio declara, y ningún guard lo ve porque todos leen la copia
   versionada.
+- **El hook de pre-commit leía el código 5 de `pytest` como un fallo.** `pytest -q <fichero de producción>` no colecta nada y sale con 5, no con 0, así que un commit que stagea solo `src/` —el bump de versión, que es lo que hace toda release— decía «el smoke falló» cuando no había nada que fallar. El 5 ahora se dice con su propia línea en vez de tratarse como verde en silencio.
 - **La medición de cobertura estaba contaminada**: 282 de las 376 rutas del
   fichero de datos eran de `/tmp`, y ninguna existía ya cuando llegaba el
   informe. Eso rompía `coverage report` y `coverage json` **después** de que la
