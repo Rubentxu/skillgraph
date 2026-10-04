@@ -204,11 +204,36 @@ class SqliteKnowledgeRepository:
 
         WI-32.5: devuelve ``list[StoredResource]`` en vez de
         ``list[dict]``.
+
+        B13 — **los parentesis de la linea 211 no son cosmeticos: son el
+        aislamiento entre tenants.** Antes la consulta era
+
+            WHERE tenant_id = ? AND project_id = ?
+              AND api_version || '/' || kind = ? OR kind = ?
+
+        En SQL ``AND`` liga mas fuerte que ``OR``, luego eso se leia como
+        «(todo lo anterior Y coincide por api/kind) O (kind = ?)»: la
+        segunda mitad se comia el ``tenant_id`` **y** el ``project_id``, y
+        cualquier fila de CUALQUIER tenant con ese ``kind`` salia. MEDIDO
+        antes de arreglar: un tenant que no tiene nada pide sus
+        ``DomainPack`` y recibe los de otro.
+
+        Que B11 lo encontrara y no lo arreglara no es un fallo de B11:
+        esquivarlo era la decision correcta para el bloque que hacia, que
+        necesitaba aislamiento fila a fila y por eso lo comprobo asi. Lo
+        que fallo es que la puerta se quedo abierta y el ADR-0015, que
+        dice en S1 que «las queries filtran por tenant_id, project_id en
+        todos los paths verificados», la declaraba cerrada.
+
+        El ``OR`` legitimo es el de dentro del parentesis: un ``kind`` puede
+        venir como ``api_version/kind`` o como ``kind`` a secas, y las dos
+        formas cuentan. Lo que no es legitimo es que ese ``OR`` salga del
+        parentesis y convierta el filtro de tenant en opcional.
         """
         sql = "SELECT * FROM resources WHERE tenant_id = ? AND project_id = ?"
         params: tuple[Any, ...] = (tenant_id, project_id)
         if kind is not None:
-            sql += " AND api_version || '/' || kind = ? OR kind = ?"
+            sql += " AND (api_version || '/' || kind = ? OR kind = ?)"
             params = (tenant_id, project_id, kind, kind)
         rows = self._conn.execute(sql, params).fetchall()
         return [_row_to_resource(r) for r in rows]

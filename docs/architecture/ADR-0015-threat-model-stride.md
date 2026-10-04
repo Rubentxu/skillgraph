@@ -6,8 +6,18 @@ Estado: aceptado (sesion 2026-09-25, ciclo STEWARDSHIP-T3-001).
 
 SkillGraph es una plataforma local-first que ejecuta agentes sobre
 runs persistidos en SQLite. La iniciativa `g-skillgraph-bootstrap`
-ha cerrado 8 Etapas (0..6 + 5/8 Trabajos de Etapa 7) con 830 tests
-verdes y 17 releases. El roadmap blueprint-v1 lista entre los Trabajos
+ha cerrado las etapas 0..7 y los bloques B0..B12.
+
+> **REVISADO en B13 (2026-10-04).** La version anterior de este parrafo
+> decia una cifra de tests y de releases, y la ofrecia como la prueba de que
+> el modelo estaba al dia. No lo es, y es peor que no decirlo: una cifra se
+> pudre con cada commit sin que nadie toque el analisis, asi que un gate
+> basado en ella se pone rojo por motivos que no tienen nada que ver con la
+> seguridad. **La vigencia la decide la tabla de `## Superficies`**, que
+> esta derivada del arbol y compara lo que el producto expone. Las cifras
+> de abajo son contexto y pueden envejecer sin que el modelo caduque.
+
+El roadmap blueprint-v1 lista entre los Trabajos
 pendientes de Etapa 7:
 
 - **T3 Threat model**: "Sin threat model formal. No hay STRIDE/abuse-cases
@@ -24,6 +34,34 @@ implementados, el sistema carece de un **modelo explicito** de:
 
 Sin este modelo, una auditoria externa o un reviewer no puede
 diferenciar "lo que esta cubierto" de "lo que no se ha considerado".
+
+## Superficies
+
+Cada paquete de `src/skillgraph/` tiene fila. Una fila que diga «sin frontera
+propia» sigue siendo una **decision**, no una omision: anadir un paquete rompe
+`tests/test_b13_threat_model.py::TestElModeloEnumeraTodaSuperficieDelArbol`
+hasta que alguien decida que piensa de el.
+
+| superficie | frontera | evidencia |
+|---|---|---|
+| `cli` | Entrada del operador: argv, ficheros de receta, codigos de salida | `tests/test_cli_branches.py` |
+| `core` | Sin I/O. Aporta los errores tipados que el resto traduce a exit codes | `src/skillgraph/core/errors.py` |
+| `domain` | Sin I/O. ADTs cerradas; los valores salen de una lista, no de un literal | `src/skillgraph/domain/__init__.py` |
+| `governance` | Aprova y reexpande grafos; decide sobre evidencia | `tests/test_release_governance.py` |
+| `knowledge` | Claims, fuentes y entidades; aislamiento por tenant y proyecto | `tests/test_b6_provenance.py` |
+| `packaging` | **Contenido de fuera del proyecto**: manifiesto, requisitos, compatibilidad | `tests/test_b11_pack_lifecycle.py` |
+| `platform` | SQL, esquema y migracion. Donde se puede saltar el filtro de tenant | `tests/test_b13_threat_model.py` |
+| `presentation` | Proyeccion de estado a un operador. Sin efecto propio | `src/skillgraph/presentation/__init__.py` |
+| `resources` | Carga de planes y bricks desde disco: contenido declarativo, no codigo | `tests/test_resource_dto.py` |
+| `runtime` | Motor de runs y eventos append-only | `tests/test_runtime_events.py` |
+
+**POR QUE ESTO Y NO UN NUMERO DE TESTS.** La version anterior de este ADR
+usaba una cifra de tests y de releases como prueba de que el analisis estaba al
+dia. Eso es una **foto**: caduca con cada commit sin que nadie haya tocado una
+linea del analisis, y un gate que se pone rojo por causas ajenas al objeto que
+vigila ensena a ignorarlo. La lista de superficies describe lo que el producto
+**expone**, que es lo que un modelo de amenaza tiene que cubrir, y cambia de
+verdad cuando el producto cambia.
 
 ## Decision
 
@@ -61,9 +99,21 @@ local-first multi-tenant; queda registrado para revision del operador):
 
 - **Dentro del alcance**: Storage (SQLite queries), RunController,
   EventLog, locks, redaction, multi-tenancy, CLI runner (input
-  parsing), promotion, handoff integrity.
-- **Fuera del alcance**: Adapter real HTTP/LLM (E1, sin implementar),
-  T5 backups, T6 observabilidad.
+  parsing), promotion, handoff integrity, y — desde B8— el **ciclo de
+  vida de packs** y el **libro de migraciones**, que no existian cuando
+  se escribio este ADR y son fronteras de confianza nuevas: un pack
+  instalado es contenido de fuera del proyecto, y una migracion escribe
+  sobre el esquema al abrir. Ver S9 y S10.
+- **Fuera del alcance**: T5 backups, T6 observabilidad.
+
+> **CORRECCION de B13.** Esta linea decia que el adapter HTTP/LLM (E1)
+> no existia, mientras el gap 2 de mas abajo lo marcaba CERRADO y
+> la seccion S8 lo analizaba entera. Las dos frases no podian ser verdad.
+> El adapter HTTP existe desde WI-12 + WI-13 y esta FUERA del alcance
+> declarado para que quien lo lea sepa que **tampoco esta analizado como
+> frontera de red saliente**: S8 lo cubre desde la perspectiva de credenciales
+> y reintentos, pero el Handoff completo viaja al proveedor (ver S8,
+> Information Disclosure, gap abierto).
 
 ## Analisis STRIDE por superficie
 
@@ -71,7 +121,7 @@ local-first multi-tenant; queda registrado para revision del operador):
 
 | STRIDE | Estado | Mitigacion / Gap |
 |--------|--------|------------------|
-| **S**poofing | OK | Las queries filtran por `tenant_id, project_id` en todos los paths verificados (211 ocurrencias de `tenant_id` en `storage.py`). Tests `_test_isolation_*` (E2E-08) verifican cross-tenant rejection. |
+| **S**poofing | OK — **verificado en B13** | Las lecturas con filtro de `kind` agrupan su `OR`: `tests/test_b13_threat_model.py::TestLosSqlNoTienenUnOrSinAgrupar` captura el SQL que sale al motor y exige que ningun `WHERE` tenga un `OR` sin parentesis y que toda lectura mencione `tenant_id`. MEDIDO antes del arreglo (B13): un tenant sin datos pedia sus `DomainPack` y recibia los de otro, porque el `OR` sin agrupar convertia el filtro de tenant en opcional. **B11 encontro el defecto y no lo arreglo** —esquivarlo era correcto para su bloque— y esta fila decia «OK» mientras la puerta estaba abierta. |
 | **T**ampering | OK (parcial) | `*_atomically` APIs cierran grietas B/C/D (nodo+evento). **Gap**: grieta A (workflow_runs↔runtime_events en `create_run`, `transition_run_state`) sigue abierta. Documentado en deuda_tecnica_residual. |
 | **R**epudiation | OK | `runtime_events` append-only con `UNIQUE(event_id)`. Cada mutacion del estado emite al menos 1 evento (excepto en la grieta A). Tests T10 verifican idempotencia. |
 | **I**nformation Disclosure | OK | Redaction policy por tenant (v0.13.0). 21 tests en `test_redaction.py`. CLI `sg policy get/set`. |
@@ -145,6 +195,34 @@ cruzan la frontera del proceso via red hacia proveedores externos.
 | **D**enial of Service | Mitigado | Retry con backoff exponencial (1s base / 8s max, jitter ±25%). Failpoints `SKILLGRAPH_FAILPOINT_HTTP_TIMEOUT/_429/_500` para testing sin red. `timeout_s=30` (configurable via `--llm-timeout-s`). **Gap menor**: rate limits de Anthropic/OpenAI aplican; un burst de Runs podria agotar cuota. Recomendar budget por tenant (P3 deferred). |
 | **E**levation of Privilege | OK | Adapter solo expone `invoke(handoff: Handoff) -> AgentResult`. Sin `eval`, sin shell. Sin escritura a disco (no I/O oculto). Los env vars leídos son read-only. |
 
+### S9 — Packs instalables (B8..B11): superficie nueva, anadida en B13
+
+Un pack instalado es **contenido de fuera del proyecto**: el manifiesto
+declara requisitos, niveles de aislamiento y su propia `version`, y su `spec`
+viaja al motor. No existia cuando se escribio este ADR.
+
+| STRIDE | Estado | Mitigacion / Gap |
+|--------|--------|------------------|
+| **T**ampering | OK | `PackManifest` es un ADT cerrado validado en el constructor: un manifiesto con tipos o campos inesperados no llega a la base. `es_compatible` compara **por numero** de version y devuelve MOTIVOS, no un booleano mudo. |
+| **E**levation of Privilege | OK | `install` NO declara tipos ni capabilities: es `sg pack load` quien lo hace. La instalacion administra el hecho de que un pack este vivo; el contenido se carga y se valida aparte. Un pack no puede declarar su propio sandbox. |
+| **I**nformation Disclosure | OK | El registro de instalaciones es su propia tabla (`installed_packs`), no `resources`, y su repositorio comprueba el aislamiento **fila a fila** en las dos direcciones. `retirar` MARCA en vez de borrar, para que «¿este proyecto ha tenido alguna vez este pack?» tenga respuesta. |
+| **D**enial of Service | **Gap abierto** | `install` no comprueba tamaño del manifiesto ni numero de packs instalados. Un manifiesto enorme o un bucle de dependencias es una denial de servicio local; el operador local no es un atacante (A4), asi que se registra y no se mitiga. |
+| **Gap** | ABIERTO | **Firma del pack.** El manifiesto declara version y compatibilidad, pero nada comprueba su procedencia: un manifiesto editado a mano es indistinguible de uno firmado. Cerrarlo es una decision de producto (que firma, con que clave, y que se rompe al rotar), no un olvido. |
+
+### S10 — Libro de migraciones (B12): superficie nueva, anadida en B13
+
+Una migracion **escribe sobre el esquema al abrir una base**, sin que nadie la
+pida. Antes de B12 no habia migraciones que registrar: el esquema se
+declaraba entero y se aplicaba con `CREATE TABLE IF NOT EXISTS`.
+
+| STRIDE | Estado | Mitigacion / Gap |
+|--------|--------|------------------|
+| **T**ampering | Mitigado | Cada migracion comprueba su propia precondicion y el libro se aplica dentro de la transaccion de apertura: si una falla a mitad, el `rollback` deshace tambien el `INSERT` del libro, luego **una fila anotada significa «esta migracion se aplico entera»**. El libro REGISTRA y no gobierna, de modo que una base con drift se repara en vez de decirse que ya esta. |
+| **E**levation of Privilege | OK | Una base que declara un esquema MAS NUEVO que el codigo falla con `SchemaTooNewError` (`sg_schema_too_new`) en vez de abrirse en silencio. Abrir un esquema desconocido parece funcionar hasta que una columna que el codigo espera no esta, y para entonces la escritura ya paso. |
+| **D**enial of Service | OK (medido) | Abrir una base al dia **no escribe nada**: `total_changes == 0`. MEDIDO en B13, y no por teoria: la primera version reescribia la tabla de version en cada apertura y ocho procesos concurrentes se repartian mal el turno de escritura. Un `OR` de escritura en el camino caliente es una denegacion de servicio que el propio motor se inflinge. |
+| **R**epudiation | OK | `schema_migrations` anota identificador y fecha de cada migracion aplicada. `Storage.migraciones_aplicadas()` responde «que se le hizo a esta base», que es la pregunta que hace falta cuando algo va mal y la version sola no basta. |
+| **Gap** | ABIERTO | El libro no tiene **rollback**. Una migracion aplicada no se deshace; la unica salida es restaurar una copia. Es aceptable mientras las migraciones sean aditivas, y dejara de serlo en la primera que transforme datos. Se registra antes de necesitarlo. |
+
 ## Gaps abiertos (no cerrados por este ADR)
 
 1. **Grieta A workflow_runs↔runtime_events**: NO cerrada por H9-Plan-B.
@@ -161,8 +239,13 @@ cruzan la frontera del proceso via red hacia proveedores externos.
 3. **Certificacion stress concurrencia**: PROBADO con 2 procesos en
    `test_locks.py`, NO certificado bajo carga real. Requiere spec.
 
-4. **Audit post-schema-change**: NO formalizado. Migraciones son
-   idempotentes pero no se ejecuta un audit post-cambio.
+4. **Audit post-schema-change**: **CERRADO en B12**, que es exactamente lo
+   que este gap pedia. Existia un libro de migraciones con identificadores
+   estables, y `Storage.migraciones_aplicadas()` responde «que se le hizo a
+   esta base». Ver S10. Lo que el gap queria y B12 **no** dio, y queda
+   dicho aqui para que no se lea mas de lo que es: el libro no tiene
+   rollback, y una migracion que transforme datos dejara de ser trivial de
+   escribir.
 
 5. **STRIDE gaps menores en S8 (P3 deferred)**:
    - I/c: Redacción de Handoff antes de enviar al LLM (recomendar
