@@ -1,5 +1,5 @@
 > **Bloque 2026-10-04 (B9) — El gate de 1.0 deja de ser una lista en prosa.**
-> Versión activa `0.28.1`; último tag `v0.28.1`.
+> Versión activa `0.28.1.dev0`; último tag `v0.28.1`.
 >
 > **B9: `ROADMAP.md` dice, textual, que `v1.0.0` solo existe cuando se
 > cumplan TODAS sus propiedades, y a continuacion lista veinte. Era la
@@ -125,7 +125,7 @@
 > test_b9_wal_lock.py:267::TestLaBarreraDeLosHijos  el solape es estructural, no una carrera
 
 > **Bloque 2026-10-04 (B8) — El contrato de paquete, y lo que de él depende.**
-> Versión activa `0.28.1`; último tag `v0.28.1`.
+> Versión activa `0.28.1.dev0`; último tag `v0.28.1`.
 >
 > **B8: el enunciado enumera siete frentes, y esa es la decisión del
 > bloque.** `ROADMAP.md` §B8 lista seis tipos de paquete, aislamiento

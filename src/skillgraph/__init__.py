@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.28.1"  # SemVer PURO: valido solo mientras HEAD este EN el tag v0.28.1
+__version__ = "0.28.1.dev0"  # entre releases: HEAD ya no esta en el tag v0.28.1
 
 from skillgraph.core.errors import (
     IdentityConflictError,
