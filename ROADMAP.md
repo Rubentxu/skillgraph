@@ -30,7 +30,7 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B14** — La autoridad de coherencia se puede engañar
+> Bloque vivo: **B15** — Un predicado que se declara leyendo código no sabe cuándo deja de medir
 > Versión activa `0.31.1.dev0` · último tag `v0.31.1` · 3284 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
@@ -64,6 +64,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B12** | Upgrade entre releases | La versión del esquema es un hecho consultable, y subir una base vieja tiene nombre |
 | **B13** | El modelo de amenaza que se sostiene | Cada «cerrado» del STRIDE nombra su prueba, y hay una fuga cross-tenant que se arregla |
 | **B14** | La autoridad de coherencia se puede engañar | El estado tiene una sola lectura, y una clave repetida ya no pasa por alto |
+| **B15** | Un predicado que se declara leyendo código no sabe cuándo deja de medir | El gate dice de qué tipo es la evidencia de sus veinte propiedades, y la reproducibilidad se comprueba en vez de afirmarse |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -990,3 +991,91 @@ deuda sin verificar, y sin verificar no era deuda.
 
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
+
+
+## B15 — Un predicado que se declara leyendo código no sabe cuándo deja de medir
+
+**No es un bloque hacia 1.0 todavía: es un bloque sobre cómo el gate sabe lo que
+sabe.** Las dos propiedades que quedan abiertas siguen sin abrirse —una
+credencial y una persona—, y esto no las toca.
+
+**El hallazgo, medido.** El gate de 1.0 declara veinte propiedades. Sus veinte
+PASS salían en la misma lista y con la misma tipografía, y **no había manera de
+saber cuáles estaban respaldados por algo que se ejecuta y cuáles por una
+lectura del árbol**. La diferencia no es estética: es si el veredicto **puede
+volverse falso sin que nadie vuelva a mirarlo**.
+
+Medido, y derivado del AST del propio gate:
+
+```
+ejecutada  13      derivada  7
+```
+
+**Y una propiedad que decia PASS sin comprobar lo que dice comprobar.**
+`distribution reproducible` ejecutaba `check_package_build.py`, que construye el
+wheel y el sdist, y devolvía PASS con la evidencia entera: *«el wheel y el sdist
+se construyen y llevan lo que declaran»*. Eso prueba que **se construyen**.
+Reproducible es otra cosa: las mismas entradas, los mismos bytes. Un único build
+no puede distinguir «reproducible» de «esta vez salió bien».
+
+Medido antes de arreglar, con una prueba que tiene dientes: se construye, se
+espera a que el reloj avance, se toca el mtime de un fuente —contenido
+idéntico— y se construye otra vez. Los sha256 coinciden. **La propiedad era
+cierta; lo que no existía era nada que pudiera quitársela.**
+
+**Cerrado:**
+
+1. Cada propiedad declara su clase de evidencia, y la clase se **deriva** del
+   grafo de llamadas del propio módulo hasta un `subprocess`. No se escribe a
+   mano: veinte líneas escritas a mano serían una segunda fuente de verdad que
+   divergiría en silencio.
+2. Un guard vigila que la clase **siga al código** en las dos direcciones: un
+   predicado al que se le añade un subproceso pasa a `ejecutada` solo, y al que
+   se le quita el `subprocess` entero pasan las trece a `derivada`.
+3. `distribution reproducible` se **ejecuta**: dos construcciones, la fuente
+   tocada entre medias, los sha comparados.
+
+**Y el fallo que este bloque encontró en su propia casa, que es lo que le da
+sentido.** La primera versión de la derivación devolvió **veinte de veinte
+`derivada`**, con la autoridad de un `print` y sin una sola advertencia. Los
+predicados se registran en `PREDICADOS` como `_` + slug, la función buscaba el
+slug a secas, no lo encontraba, y **devolvía un valor por defecto** en vez de
+decir «no lo sé». Seis de esos predicados sí lanzan subproceso.
+
+> Es el mismo hallazgo que B13 cerró en el guard de SQL —que leía literales en vez
+> de la consulta ensamblada— y que B14 encontró en los guards atados a un valor
+> vivo y en las tres mutaciones no-op de su medidor. **Un guard que se declara
+> leyendo el código no sabe cuándo deja de medir.** Y la diferencia con un
+> predicar suelto: un guard que miente está instalado y paga el coste a cada
+> commit. Una sonda que miente se tira. La deuda que queda aquí es de clase
+> distinta: no es que falte un guard, es que no había forma de saber cuándo un
+> guard derivado empieza a mentir.
+
+**Y un dato de esta sesión que va en la misma línea, porque se Midió.** Al
+buscar un PASS falso —`blueprint legacy completamente probado`, que cuenta
+cobertura de UAT con un `re.findall` sobre el texto de los tests— se construyeron
+cuatro sondeos para comprobarlo. **Las cuatro fallaron, cada una en una
+dirección distinta**: buscando cadenas donde el código usa nombres; buscando el
+operador `!=` por su nombre donde el AST tiene un nodo `NotEq`; buscando
+`--collect-only` como argumento directo donde está dentro de una lista; y
+clasificando «el test razona sobre el UAT» por una aserción que lo nombre,
+cuando un test que de verdad prueba UAT-11 lo nombra en el docstring. Cuatro
+cifras distintas —0 de 12, 9 de 12, 3 de 12— y ninguna correcta. **El PASS que
+se buscaba era cierto**: `tests/uat_audit.py` tiene una función completa por UAT
+con directorios temporales, la CLI de verdad y aserciones. El predicado es
+débil; la propiedad es cierta. Queda anotado con su debilidad, que es
+información, no deuda fingida.
+
+**Dónde se mira, verificado por AST:**
+
+- `measure_b9_gate_1_0.py::_grafo_del_modulo` — la clase sale de aquí
+- `measure_b9_gate_1_0.py::_funcion_del_predicado` — una búsqueda que no
+  encuentra **levanta**
+- `measure_b9_gate_1_0.py::_construye_en` — construye para comparar, no para
+  declarar
+- `test_b15_evidence_kind.py::TestLaClaseSigueAlCodigo` — el contrasalto en las
+  dos direcciones
+
+**Resultado:** gate de 1.0 **sin cambios de veredicto**, 18 PASS / 1 OPEN / 1
+NO_MEASURABLE, ahora con la clase de cada una. Harness **6/6 con 6 causas**,
+autocomprobación del medidor **13 de 20 clases giran**.

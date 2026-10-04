@@ -1,3 +1,83 @@
+> **Bloque 2026-10-04 (B15) — Un predicado que se declara leyendo código no sabe cuándo deja de medir.**
+> (cerrado; pendiente de release)
+> Versión activa `0.31.2.dev0`; último tag `v0.31.2`.
+>
+> **ESTE NO ES UN BLOQUE HACÍA 1.0 TODAVÍA. ES UN BLOQUE SOBRE CÓMO EL GATE
+> SABE LO QUE SABE.**
+>
+> Las dos propiedades que quedan abiertas no se tocan: `runtime real
+> certificado` necesita `SG_UAT_REAL_PROVIDER=1` y una credencial real, y
+> `TUI operacional` necesita una persona usando un terminal.
+>
+> **EL HALLAZGO.** El gate de 1.0 declara veinte propiedades, y sus veinte PASS
+> salían en la misma lista y con la misma tipografía. **No había manera de saber
+> cuáles estaban respaldados por algo que se ejecuta y cuáles por una lectura
+> del árbol.** La diferencia no es estética: es si el veredicto **puede volverse
+> falso sin que nadie vuelva a mirarlo**. Medido, derivado del AST del propio
+> gate: **13 `ejecutada`, 7 `derivada`**.
+>
+> **Y UNA PROPIEDAD QUE DECÍA PASS SIN COMPROBAR LO QUE DICE COMPROBAR.**
+> `distribution reproducible` ejecutaba `check_package_build.py`, que construye
+> el paquete, y devolvía PASS con la evidencia *«el wheel y el sdist se
+> construyen y llevan lo que declaran»*. Eso prueba que SE CONSTRUYEN.
+> Reproducible es que las mismas entradas den los mismos bytes, y un único build
+> no puede distinguir «reproducible» de «esta vez salió bien».
+>
+> **MEDIDO ANTES DE ARREGLAR, con una prueba que tiene dientes:** se construye,
+> se espera a que el reloj avance, se toca el mtime de un fuente con contenido
+> IDÉNTICO, y se construye otra vez. Los sha256 coinciden —hatchling normaliza
+> las fechas—. La propiedad **era cierta**; lo que no existía era nada que
+> pudiera quitársela. Por eso el defecto no era de la distribución, era de la
+> evidencia.
+>
+> **LO QUE EL BLOQUE ENCONTRÓ EN SU PROPIA CASA, Y QUE ES LO QUE LE DA
+> SENTIDO.** La primera versión de la derivación devolvió **veinte de veinte
+> `derivada`**, con la autoridad de un `print` y sin una sola advertencia: los
+> predicados se registran en `PREDICADOS` como `_` + slug, la función buscaba el
+> slug a secas, no lo encontraba, y **devolvía un valor por defecto** en vez de
+> decir «no lo sé». Seis de esos predicados sí lanzan subproceso.
+>
+> > Un guard que se declara leyendo el código no sabe cuándo deja de medir. B13
+> > lo cerró en el guard de SQL, que leía literales en vez de la consulta
+> > ensamblada. B14 lo encontró en los guards atados a un valor vivo y en las
+> > tres mutaciones no-op de su medidor. **Aquí apareció en el código del propio
+> > bloque, y lo primero que produjo fue, en su casa, el falso que venía a
+> > cerrar.**
+>
+> **Y UN DATO DE LA MISMA LÍNEA, MEDIDO.** Al buscar un PASS falso
+> —`blueprint legacy completamente probado`, que cuenta cobertura de UAT con un
+> `re.findall` sobre el texto de los tests— se construyeron cuatro sondeos para
+> comprobarlo. **Las cuatro fallaron, cada una en una dirección distinta**, y
+> dieron `0 de 12`, `9 de 12` y `3 de 12` en tres de ellas. El PASS que se
+> buscaba era cierto: `tests/uat_audit.py` tiene una función completa por UAT con
+> directorios temporales, la CLI de verdad y aserciones. **El predicado es débil;
+> la propiedad es cierta**, y queda anotado con su debilidad, que es
+> información y no deuda fingida.
+>
+> **LO QUE ENTREGA Y LO QUE NO.** Entrega: la clase de evidencia, derivada y
+> vigilada en las dos direcciones; `distribution reproducible` ejecutada; y una
+> lista **nombrada** de las siete propiedades que no se pueden retirar solas,
+> que es lo que permite ordenar lo siguiente sin inventarlo. No sube las siete a
+> `ejecutada`: cada una necesita un instrumento, y un instrumento es un bloque.
+>
+> **DONDE SE MIRA, VERIFICADO POR AST:**
+>
+> | cita | que sostiene |
+> |---|---|
+> | `measure_b9_gate_1_0.py::_grafo_del_modulo` | la clase sale de seguir el grafo, no de una lista |
+> | `measure_b9_gate_1_0.py::_funcion_del_predicado` | una busqueda que no encuentra LEVANTA |
+> | `measure_b9_gate_1_0.py::_construye_en` | construye para comparar, no para declarar |
+> | `test_b15_evidence_kind.py::TestLaClaseSigueAlCodigo` | contrasalto en las dos direcciones |
+> | `mutate_b15_evidence_kind.py` | 6 sondas, 6/6, que el harness se autocomprueba |
+>
+> **RESULTADO:** gate de 1.0 **sin cambios de veredicto**, 18 PASS / 1 OPEN / 1
+> NO_MEASURABLE, ahora con la clase de cada una. Harness **6/6 con 6 causas**.
+> Autocomprobación del medidor **13 de 20 clases giran**. `tests.total` 3285 ->
+> 3294, +9, fichero nuevo entero, y lo fallo el propio guard de WI-115 con el
+> texto `tests: STATE declara 3285, el arbol colecta 3294`.
+>
+> ---
+
 > **Bloque 2026-10-04 (B14) — La autoridad de coherencia se puede engañar, y se engañó.**
 > (cerrado y publicado en `v0.31.2`)
 > Versión activa `0.31.2.dev0`; último tag `v0.31.2`.
