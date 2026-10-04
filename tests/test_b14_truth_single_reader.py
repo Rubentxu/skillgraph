@@ -111,6 +111,23 @@ def _con_clave_duplicada(clave: str, valor_nuevo: str) -> str:
     )
 
 
+def _valor_de(clave: str) -> str:
+    """El valor que el estado REAL declara para `clave`, leido del fichero.
+
+    Se deriva en vez de escribirse porque un contrasalto atado a un valor vivo
+    se vuelve no-op en cuanto el valor cambia, y un no-op en un contrasalto es
+    peor que no escribirlo: el guard sigue verde y ya no mide su propia via de
+    manifestacion. MEDIDO en este fichero: con `current_workitem: B13` escrito a
+    mano, el paso a B14 dejo de mutar el estado y el test seguia dando verde.
+    """
+    texto = STATE.read_text(encoding="utf-8")
+    patron = re.compile(rf"^(\s*){re.escape(clave)}:\s*(\S+)", re.MULTILINE)
+    encontrado = patron.search(texto)
+    if encontrado is None:
+        raise AssertionError(f"STATE.yaml ya no declara {clave!r} con esa forma")
+    return encontrado.group(2)
+
+
 class _inyectado:
     """Escribe `texto` en STATE.yaml y lo restaura al salir.
 
@@ -268,24 +285,30 @@ class TestUnaClaveDuplicadaNoPasaPorAlto:
         """CONTRA-SALTO del anterior por su otra via de manifestacion.
 
         Si alguien arregla la excepcion poniendo un `break` en el bucle de
-        claves —que deja la PRIMERA en vez de la ultima— el estado sigue
-        siendo ilegible y el test anterior pasa. Este comprueba que el
-        verificador no publico NINGUNO de los dos valores como si fuera el
-        declarado.
+        claves el mecanismo deja de lanzar, el estado se lee entero, y el
+        verificador publica una de las dos declaraciones como si fuera la
+        verdad. Este comprueba que no publica NINGUNA de las dos.
+
+        **El conjunto prohibido se DERIVA del estado, no se escribe.** La
+        primera version tenia `{"B13", "B99_inventado"}` a mano, y al pasar el
+        workitem vivo a B14 ese `B13` dejo de ser una de las dos declaraciones:
+        el `break` hipotetico publicaria `B14`, que el conjunto no prohibia, y
+        el contrasalto pasaria en verde midiendo exactamente el defecto que
+        describe. Un contrasalto que se desactiva al cambiar el calendario ya
+        no es un contrasalto.
         """
+        declarado = _valor_de("current_workitem")
         with (
             _EstadoRestaurado(),
             _inyectado(_con_clave_duplicada("current_workitem", "B99_inventado")),
         ):
             salida = _ejecuta()[1]
         assert salida is not None
-        if "ilegible" in salida:
-            publicado = str(salida.get("workitem_state", ""))
-        else:
-            publicado = str(salida.get("workitem_state", ""))
-        assert publicado not in {"B13", "B99_inventado"}, (
+        publicado = str(salida.get("workitem_state", ""))
+        assert publicado not in {declarado, "B99_inventado"}, (
             f"el verificador publico {publicado!r} como el workitem declarado, y hay dos "
-            f"declaraciones en el fichero. Escoger una es el defecto."
+            f"declaraciones en el fichero ({declarado!r} y 'B99_inventado'). Escoger una "
+            f"es el defecto."
         )
 
 
@@ -389,10 +412,26 @@ class TestLoQueYaFuncionabaSigueFuncionando:
         )
 
     def test_un_workitem_que_no_existe_sigue_detectandose(self) -> None:
-        texto = STATE.read_text(encoding="utf-8").replace(
-            "  current_workitem: B13", "  current_workitem: B99", 1
+        """El workitem se DERIVA del estado, no esta escrito en el test.
+
+        MEDIDO: la primera version hacia `.replace("  current_workitem: B13",
+        ...)`. Al cambiar el workitem vivo a B14 el replace se volvio un no-op,
+        el estado se quedaba coherente y el test caia sin que nadie hubiera
+        tocado el verificador. Un guard atado al valor de un campo vivo no
+        mide el verificador: mide el calendario.
+        """
+        texto, cambios = re.subn(
+            r"^(\s*current_workitem:).*$",
+            r"\g<1> B99_inventado",
+            STATE.read_text(encoding="utf-8"),
+            count=1,
+            flags=re.MULTILINE,
         )
-        with _EstadoRestaurado(), _inyectado(texto):
+        assert cambios == 1, (
+            "STATE.yaml ya no declara `current_workitem` con esa forma; este test "
+            "no sabria que mutar y pasaria por no hacer nada"
+        )
+        with _inyectado(texto):
             _, salida, _ = _ejecuta()
         assert salida is not None and salida.get("coherente") is False
         assert any("workitem" in c for c in salida.get("contradicciones") or []), (
