@@ -65,7 +65,7 @@ SONDAS: tuple[Sonda, ...] = (
         despues='    crudo = "\\0".join((proc_head.stdout, proc_estado.stdout))',
         esperados=frozenset(
             {
-                "TestLaHuellaMideLaEntradaYNoElCommit::"
+                "tests/test_b19_entrada_no_veredicto.py::"
                 "test_la_huella_cambia_si_cambia_el_contenido_de_un_fichero_ya_versionado",
             }
         ),
@@ -105,7 +105,7 @@ SONDAS: tuple[Sonda, ...] = (
         ),
         esperados=frozenset(
             {
-                "TestElVeredictoDistingueLasDosCausas::"
+                "tests/test_b19_entrada_no_veredicto.py::"
                 "test_con_la_entrada_misma_una_no_reproducibilidad_real_sigue_diciendolo"
             }
         ),
@@ -126,6 +126,22 @@ def sin_trabajo_sin_commitar() -> tuple[str, ...]:
     )
 
 
+def _colectados() -> set[str]:
+    """Los nodeids que pytest REALLY colecta, no los que este fichero dice.
+
+    Sin esto, «3 nombres existen» seria una comparacion de una lista escrita a
+    mano contra si misma.
+    """
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "--no-header", *SUITES],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {linea.strip() for linea in proc.stdout.splitlines() if "::" in linea}
+
+
 def pytest_de(una_sonda: str) -> tuple[int, set[str]]:
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "--no-header", "-p", "no:cacheprovider", *SUITES],
@@ -136,7 +152,7 @@ def pytest_de(una_sonda: str) -> tuple[int, set[str]]:
     )
     # MEDIDO, Y FALLO PROPIO DEL HARNES: la primera version hacia
     # `linea.split(" ")[0]` sobre las lineas `FAILED ...`, y por eso todo
-    #aso caia en el nombre `FAILED` y el harness decia «cayo con otros
+    # aso caia en el nombre `FAILED` y el harness decia «cayo con otros
     # diagnosticos» sobre tres sondas que SI habian caido. El separador de
     # pytest es «FAILED <fichero>::<clase>::<testo>», luego el nombre es el
     # segundo campo y no el primero. Un harness que no sabe leer su propia
@@ -219,7 +235,24 @@ def main() -> int:
         GATE.write_text(texto, encoding="utf-8")
 
     print(f"\n  arnes restaurado: {GATE.read_text(encoding='utf-8').count('if False:') == 0}")
-    print(f"  diagnosticos verificados: {sum(len(s.esperados) for s in SONDAS)} nombres existen")
+    # EL CONJUNTO SE DERIVA DEL ARBOL, Y NO DE UNA LISTA ESCRITA AQUI. La
+    # primera version de este harness comparaba los diagnosticos esperados
+    # contra una lista escrita en el propio harness y decia «3 nombres
+    # existen», sin haber comprobado nada: si el test se renombraba, el
+    # harness seguia diciendo que existian y luego contaba un 0 de 3 con la
+    # explicacion equivocada. Es el mismo error de WI-114 y el de B16: una
+    # lista de «los sitios que deben reaccionar» es la misma trampa que la
+    # lista de sitios que hay que vigilar.
+    colectados = _colectados()
+    inexistentes = sorted({d for s in SONDAS for d in s.esperados} - colectados)
+    if inexistentes:
+        print(f"  DIAGNOSTICOS QUE NO EXISTEN: {inexistentes}")
+        print("     Si un test se renombro, el harness no puede culpar a la sonda.")
+        return 1
+    print(
+        f"  diagnosticos verificados contra el arbol: "
+        f"{len({d for s in SONDAS for d in s.esperados})} de {len(colectados)} tests colectados"
+    )
     if indefinidas:
         print(f"  SIN CAZAR: {indefinidas}")
     print(f"  {len(causa_de)}/{len(SONDAS)} sondas cazadas, {len(set(causa_de.values()))} causas\n")
