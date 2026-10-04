@@ -1,0 +1,119 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B16",
+  "titulo": "Dos propiedades del gate daban PASS sin nada que comparar",
+  "release": "0.32.1",
+  "que_es_y_que_no_es": "Es la PRIMERA de las siete propiedades que B15 nombro, y no es una mejora de forma: dos de ellas daban verde sin mirar nada. No sube las otras cinco, porque cada una es un bloque, y nombrarlas es el orden. No toca las dos que quedan abiertas del gate de 1.0, porque una necesita una credencial y la otra una persona.",
+  "hallazgo_1_el_vacio_salia_verde": {
+    "que": "capabilities deterministas decia «si hay mas de uno, OPEN; si no, PASS». Con CERO declaraciones de CAPABILITY_VERSION el veredicto era PASS, y la evidencia entera era una lista vacia.",
+    "medido": {
+      "deformacion": "se renombra la constante a _CAPABILITY_VERSION en todo src/",
+      "veredicto": "PASS",
+      "evidencia": "CAPABILITY_VERSION se declara en un solo sitio: []",
+      "sobre": "copias del arbol en directorios temporales, con el repo real intacto"
+    },
+    "por_que_no_es_una_mejora_de_forma": "Un veredicto cuyo texto dice una lista vacia no es un veredicto sobre el proyecto: es sobre la capacidad de contar del propio instrumento. Y la propiedad era cierta HOY por suerte del caso —la constante existe en un sitio— y no por lo que el gate midio. Un repo donde nadie declarase la constante tendria el mismo veredicto.",
+    "segunda_mitad_que_tampoco_estaba_medida": "La propiedad decia «EL PUERTO, y solo el», y solo contaba declarantes. Bastaba con que no hubiera dos: una constante que todos importan desde un fichero que no es el puerto sigue siendo una segunda fuente de verdad, con una palabra menos.",
+    "que_entra": [
+      "cero declarantes es OPEN nombrando el hecho, no PASS con un [] en la evidencia",
+      "la deteccion pasa a AST: el re.match por linea no ve un AnnAssign, que es la forma real de hoy (CAPABILITY_VERSION: Final[str] = \"v1\")",
+      "la comprobacion exige QUE sea el puerto, no solo que no haya dos"
+    ]
+  },
+  "hallazgo_2_una_frontera_arquitectonica_que_no_vigilaba_nadie": {
+    "que": "ontology extensible buscaba el patron ^[A-Z][A-Za-z]+Pack$ dentro de CONSTANTES DE CADENA. Un `from skillgraph.resources.packs import DomainPack` es un Name del AST, no una cadena.",
+    "medido": {
+      "deformacion": "se anade a un modulo de core/ un import de verdad de DomainPack",
+      "veredicto": "PASS",
+      "evidencia": "core/ no nombra ningun tipo de recurso: se anaden sin tocarlo",
+      "sobre": "copias del arbol en directorios temporales, con el repo real intacto"
+    },
+    "por_que_es_la_fuga_de_b13_con_el_signo_cambiado": "Alli el guard leia literales en vez de la consulta ensamblada y daba verde CON LA FUGA PRESENTE. Aqui leia cadenas en vez de los imports y daba verde CON LA DEPENDENCIA PRESENTE. La propiedad declarada es una frontera arquitectonica —el nucleo no depende de los recursos, asi que anadir un recurso no obliga a tocarlo— y nada la vigilaba.",
+    "que_entra": [
+      "decide sobre ImportFrom y sobre Import",
+      "y tambien sobre Attribute —packs.DomainPack—, que es la forma mas indirecta y la que se escribe cuando ya se sabe que el nucleo no deberia saber del recurso",
+      "y sobre las cadenas, que es lo que miraba antes",
+      "el mensaje nombra el modulo y el simbolo"
+    ]
+  },
+  "hallazgo_3_un_defecto_de_produccion_que_no_era_de_este_bloque": {
+    "como_salgo": "concurrencia real certificada paso de PASS a OPEN al correr el gate, y el primer impulso era tratarlo como ruido del medidor. No lo era.",
+    "medido": {
+      "tasa_del_test_concurrente_antes": "4 corridas rojas de 20",
+      "hijos_muertos": "1 de 30, con su stderr a la vista",
+      "error": "sqlite3.IntegrityError: UNIQUE constraint failed: schema_version.version",
+      "cadena": "storage.py:490 _migrate -> migrations.py:207 sincroniza -> migrations.py:238 _reescribe_version_si_cambia -> cur.execute(\"INSERT INTO schema_version(version) VALUES (?)\", ...)"
+    },
+    "por_que_pasa": "Ocho procesos abren la misma base nueva. Cada uno lee MAX(version), ve 0, decide que hay que subir, y escribe. version es la PRIMARY KEY —de hecho es la rowid—, luego el segundo INSERT que llega revienta y el proceso MUERE antes de escribir un solo evento. La propiedad que B2 certifica es que no se pierda ninguna escritura, y aqui se perdia una sin dejar rastro.",
+    "por_que_el_timeout_de_b2_no_lo_arreglaba": "El timeout hace que un escritor ESPERE a que el otro suelte. Aqui no hay dos escritores peleandose por un lock; hay un SELECT seguido de un INSERT, y entre los dos cabe otro proceso. Contra eso, la unica respuesta es que la escritura sea atomica e idempotente por si misma.",
+    "el_arreglo_ya_esta_en_el_mismo_archivo": "Las migraciones se anotan con INSERT OR IGNORE INTO schema_migrations, quince lineas mas arriba. La version no lo tenia. Y el DELETE que precedia al INSERT era la ventana: abrirla y luego escribir es dar la oportunidad. Como version es la rowid y version_de_la_base lee MAX(version), la tabla es un REGISTRO de versiones y el DELETE no la mantenia al dia, la aplanaba.",
+    "tasa_del_test_concurrente_despues": "0 de 25",
+    "defectos_de_diagnostico_que_hacia_faltan_para_poder_verlo": [
+      "el aserto de solape real TIRABA el stderr del hijo y se quedaba en «rc=1»: un IntegrityError de la migracion se leia como un fallo de concurrencia del arnes",
+      "el hijo calculaba RAIZ con .parent.parent, correcto mientras vivia en .pipelinek/ y falso desde que se movio a tests/fixtures/ —ahi .parent.parent es tests/, luego metia tests/src en el path, que no existe— y solo podia importar skillgraph porque el paquete esta instalado en el interprete que lo lanza"
+    ]
+  },
+  "lo_que_no_se_pudo_hacer_y_por_que_esta_escrito": {
+    "que": "Se intento reproducir la carrera de forma determinista, y no se puede.",
+    "intento_1": {
+      "como": "dos conexiones: el hermano sube la base y luego este la sube",
+      "resultado": "PASA con el defecto presente",
+      "por_que": "el DELETE FROM schema_version de este proceso se lleva por delante la fila del hermano y los dos convergen"
+    },
+    "intento_2": {
+      "como": "set_trace_callback, que SQLite invoca ANTES de cada sentencia, para meter al hermano entre el DELETE y el INSERT de este proceso",
+      "resultado": "tampoco lo reproduce",
+      "medido": "5,07 s frente a 0,15 s, y pasa igual con el defecto puesto",
+      "por_que": "SQLite serializa a los escritores, y el orden que provoca la colision —los dos DELETE antes que los dos INSERT— es precisamente el que el bloqueo impide. El INSERT del hermano se queda esperando hasta agotar el busy_timeout"
+    },
+    "decision": "El test que afirmaba reproducirlo se ha RETIRADO. Un guard que solo sabe dar verde fabrica confianza justo donde no la hay. Lo que queda es un guard de FORMA, que se midio que cae con el defecto puesto, y la evidencia empirica de la tasa, que va en el harness.",
+    "por_que_la_forma_es_exigible": "INSERT e INSERT OR IGNORE dejan la base en el mismo estado siempre que no haya carrera, y la carrera no se puede provocar de forma determinista. Lo unico que queda por exigir es la forma de la sentencia, que es la que decide si la ventana existe."
+  },
+  "el_harness_ymlos_que_ya_existian": {
+    "sondas": 6,
+    "cazadas": 6,
+    "causas_distintas": 6,
+    "formas_distintas_de_caer": {
+      "por_nombre_de_test": 5,
+      "por_suite_que_no_puede_colectar": 1
+    },
+    "el_harness_cazo_dos_sondas_suyas_que_no_median": [
+      "una por leer ERROR como «no ha caido»: test_b2_real_concurrency.py IMPORTA el hijo en la linea 76 para leer sus constantes sin reescribirlas, luego el assert del hijo corre al importar y tumba la colecta entera; pytest lo reporta como ERROR, no como FAILED, y un arnes que solo mira FAILED convierte «todo ha caido» en «no ha medido nada». Es la direccion del falso verde, y es el mismo defecto que B14 cerro en tests_colectados()",
+      "otra por agrupar las suites como CADENAS en vez de como tuplas, con lo que _colectados hacia objetivos[0] sobre una cadena y no encontraba ningun test: el arnes se negaba con «la colecta no devolvio ningun test», que es el sintoma de una causa que no era la que media"
+    ],
+    "por_que_importa_que_el_harness_se_autocompruebe": "El 6/6 no habria valido sin la autocomprobacion. Un arnes que cuenta como verde una sonda que no midio es peor que no tener arnes, porque PUBLICA UN NUMERO.",
+    "sondas_que_no_son_de_este_bloque": "M5 y M6. M5 pone de vuelta el DELETE que abria la ventana de la carrera, y M6 devuelve al hijo su RAIZ roto. Van aqui y no en un arnes aparte porque si el arnes de B16 solo mirase lo que B16 toco, la proxima vez que el gate se pusiera en OPEN por un defecto de verdad habria que abrir otro bloque para mirarlo, y esa es la razon por la que este tipo de defecto se queda sin mirar."
+  },
+  "resultado": {
+    "gate_de_1_0": "18 PASS / 1 OPEN / 1 NO_MEASURABLE, sin cambios de veredicto sobre las propiedades reales",
+    "las_dos_propiedades_de_este_bloque": "PASS, con evidencia que ahora si dice lo que comprueba",
+    "concurrencia_real_certificada": "PASS, 5 de 5, donde antes fallaba 1 de cada 5",
+    "suite": "3298 passed, 3 skipped, 0 failed",
+    "tests_total": "3294 -> 3301, +7, de los que +6 son el fichero nuevo test_b16_vacuous_pass.py y +1 es el guard de forma de la migracion",
+    "harness": "6/6 con 6 causas, y 2 sondas propias cazadas por su autocomprobacion antes de contar"
+  },
+  "lo_que_queda_abierto_y_de_que_clase_es": {
+    "credencial": "runtime real certificado exige SG_UAT_REAL_PROVIDER=1 y ANTHROPIC_API_KEY u OPENAI_API_KEY. No se resuelve desde el repositorio.",
+    "persona": "TUI operacional es una propiedad de alguien usando un terminal. No se resuelve desde el repositorio.",
+    "las_cinco_derivada_que_quedan": "Cada una es un bloque, y nombrarlas ES el orden: no es una cola inventada, es la medida de donde el gate no sabe lo que dice saber.",
+    "la_clase_de_trabajo_que_si_se_puede": "Comprobar que los instrumentos que ya existen siguen midiendo lo que dicen. No necesita credenciales, y el 6/6 de este bloque es el ejemplo de por que: dos sondas suyas no median y la autocomprobacion fue lo unico que lo dijo."
+  },
+  "shas": {
+    "nota": "Tomados de git con git log, no escritos a mano. Una entrada con un sha inventado es provenance falsa.",
+    "commits_del_bloque": [
+      "75168ab fix(gate): dos propiedades del gate de 1.0 dan PASS sin nada que comparar",
+      "f85a3df fix(storage): la carrera entre el SELECT y el INSERT de la version",
+      "40d2a22 chore(gate): el harness de B16, que exige poder caerse",
+      "5cf29d6 fix(gate): el harness de B16 agrupaba las suites como cadenas",
+      "baf2d4e fix(gate): el arnes de B16 contaba solo FAILED y leia «no midio» donde habia rojo",
+      "61b0764 docs(state): B16 vivo, con lo que el bloque se encontro en si mismo",
+      "ec0f42d build(release): la version pura de v0.32.1, que existe para el tag",
+      "0a3e48c chore(release): el estado de v0.32.1, con su etiqueta ya creada",
+      "bce7076 docs(state): B16 cerrado y publicado en v0.32.1, con lo que queda nombrado",
+      "b9eb8ba docs(release): el registro de v0.32.1, con el sha de git y el bump de la herramienta"
+    ],
+    "tag": "v0.32.1",
+    "sha_del_tag": "ec0f42deb987c4dab6a917e2d6cf06df3ac5442d",
+    "semver_derivado": "b/f/x/n 0/0/4/6 -> PATCH, con la herramienta marcando la etiqueta como ok"
+  }
+}
