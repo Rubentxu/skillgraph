@@ -24,7 +24,11 @@
 > mismo fichero discrepando en silencio.
 >
 > **MEDIDO ANTES DE ESCRIBIR NADA** (`scripts/measure_b14_truth_single_reader.py`,
-> mutaciones EN SITIO con restauracion verificada por sha256): **7 de 8**. La
+> mutaciones EN SITIO con restauracion verificada por sha256): **7 de 8**.
+> **MEDIDO AL CERRAR: 8 de 8**, y el instrumento tiene su propia
+> contramutacion —`--autocomprobacion`, **3 de 3 sondas cazadas**— porque un
+> 8/8 que no puede ponerse en rojo no es un 8/8. El harness de los tests es
+> **6 de 6 sondas cazadas, 6 causas distintas**. La
 > primera version del instrumento dio 7 de 8 en una COPIA temporal, y era
 > mentira: la copia no colecta tests, `project_truth` no podía leer el recuento
 > real, y todo daba rc=2 — incluidas las siete que contaba como buenas. Un
@@ -67,6 +71,78 @@
 > unico consumidor de produccion, y los seis de test ya usaban el parser. Era
 > deuda sin verificar, y sin verificar no era deuda.
 >
+> **LO QUE EL BLOQUE ENCONTRO AL CERTIFICAR, Y QUE ES MÁS DE LO MISMO:**
+>
+> Instrumento es una palabra engañosa: un instrumento de medición que se pasa a
+> sí mismo por un entorno que no puede correr no mide nada, y es la forma exacta
+> del falso verde que este repo lleva catorce bloques cazando. Los cinco de
+> abajo son el mismo defecto con distinto disfraz —**un predicado que se puede
+> satisfacer por una causa que no es la que dice medir**— y los cinco los
+> manifesto el harness o la sonda, ninguno una lectura del codigo.
+>
+> - **Dos guards de los tests estaban atados a `current_workitem: B13` escrito a
+>   mano.** Al mover el bloque vivo a B14 los dos dejaron de mutar nada. Uno
+>   hacia un `.replace()` que se volvio no-op —el estado se quedaba coherente y
+>   el test caia sin que nadie hubiera tocado el verificador—; el otro prohibia
+>   el conjunto `{"B13", "B99_inventado"}`, y con el bloque ya en B14 un
+>   verificador roto publicaria `B14`: no prohibido, contrasalto verde midiendo
+>   el defecto que describe. Los dos derivan ahora el valor del fichero real.
+> - **La medicion tenia TRES mutaciones no-op, por el mismo motivo y en el mismo
+>   fichero.** Las preguntas 2, 4 y 8 no tocaban el estado, el verificador
+>   contestaba `coherente: true` con su respuesta NORMAL a un estado intacto, y
+>   el instrumento imprimia **5 de 8 diciendo que el arreglo recién hecho no
+>   funcionaba**. Lo que estaba roto era el instrumento. Ahora se derivan del
+>   fichero y se ABORTA si la sustitución no aplicó.
+> - **Tres de sus ocho preguntas pedían «no es coherente».** Eso lo cumple un
+>   modulo roto con la misma facilidad que un modulo que dejó de mirar, y se
+>   comprobó: con una sustitución mal escrita el estado era YAML inválido, el
+>   verificador salía con rc=2, y la pregunta contaba eso como PASS.
+> - **`RAIZ` era una ruta absoluta de esta máquina.** El instrumento mutaba
+>   ficheros de un árbol que podía no ser el suyo.
+> - **La sonda M1 del harness no media el guard que decía vigilar.** Mutaba una
+>   función a una referencia a `_TAG_STATE`, que este mismo bloque borró: el
+>   modulo reventaba con `NameError`, caían los DIEZ tests, ninguno el
+>   diagnosticado. El harness la declaró INVALIDA, que es lo que distingue a una
+>   sonda que mide de una que rompe. Ahora reinsta un reader FUNCIONAL.
+>
+> **Y UN DEFECTO DE VERDAD, NO DE INSTRUMENTO.** Al endurecer la pregunta que
+> detecta una versión incoherente apareció esto: con `__init__.py` mutilado,
+> pytest no termina la colecta, imprime «2867 tests collected, 27 errors» y sale
+> con rc=2. Ese número es real —son los tests que llegó a ver— pero no es EL
+> recuento, y `tests_colectados()` lo publicaba con su nombre:
+>
+> ```
+> tests: STATE declara 3284, el arbol colecta 2867
+> ```
+>
+> Sin 417 tests y sin decir por qué. Un número que no se pudo medir no es un
+> número: es el de otra magnitud. Ahora se niega a leerlo. El fallo va en la
+> dirección SEGURA —dice que no cuadra cuando sí cuadra—, así que no es el
+> defecto que B14 persigue; se arregla porque la autoridad de coherencia
+> hablando de un número que no contó es del mismo género que ella hablando de
+> una coherencia que no midió. M6 del harness comprueba que sin esa negativa
+> cae el test.
+>
+> **Y UNA LECCIÓN QUE CASO LA HIZO EL INSTRUMENTO CONTIGO A SÍ MISMO.** La
+> primera ejecución de `--autocomprobacion` reventó a mitad —restauraba dos
+> veces, y la segunda ya no encontraba la copia— y **dejó `project_truth.py` sin
+> el constructor de claves duplicadas**, con el repo entero en `coherente: false`
+> y sin que nadie lo dijera. La red que verifica por sha256 no cubría el
+> fichero que el instrumento más deforma. `scripts/project_truth.py` entra ahora
+> en `MUTABLES`: una red que no cubre lo que deforma no es una red.
+>
+> > **La sonda 3, con la deformación puesta, deja ver el defecto central de B14
+> > a la vista:**
+> >
+> > ```
+> > "coherente": true,  "contradicciones": [],
+> > "workitem_current": "B14",  "workitem_state": "B99"
+> > ```
+> >
+> > El verificador publicando como coherente un estado en el que STATE y CURRENT
+> > dicen cosas distintas. Eso, y no el arreglo del loader, es lo que B14
+> > existía para cerrar.
+>
 > **CITAS VERIFICADAS** (`fichero.py:LINEA::simbolo`, comprobadas por AST):
 >
 > | cita | que sostiene |
@@ -78,6 +154,8 @@
 > | `test_b14_truth_single_reader.py::TestElEstadoSeLeeDeUnaSolaManera` | no queda reader por regex ni segunda lectura |
 > | `measure_b14_truth_single_reader.py::Arbol` | restaura y COMPRUEBA el sha256 |
 > | `mutate_b14_truth_single_reader.py:77::_sin_trabajo_sin_commitar` | «restaurar» y «borrar» son lo mismo |
+> | `test_b14_truth_single_reader.py::TestUnRecuentoQueNoSeTerminoNoSePublica` | un numero de una colecta a medias no se publica |
+> | `measure_b14_truth_single_reader.py::Arbol` | restaura el VERIFICADOR tambien, y lo comprueba |
 >
 > **GATE DE 1.0: sin cambios, 18 PASS / 1 OPEN / 1 NO_MEASURABLE**, que es lo
 > correcto: B14 endurece la autoridad de coherencia de B0, no una propiedad de
