@@ -1,7 +1,23 @@
 {
   "generado": "2026-10-04",
   "bloque": "B10",
+  "release": "v0.29.0",
   "instrumento": "scripts/measure_b9_gate_1_0.py",
+  "ciclo_sddk": {
+    "cycle_id": "p-b7740b96d79ec013/b10",
+    "estado": "OPEN",
+    "fase": "explore",
+    "path": "A-full",
+    "gate_evaluado": "block-condition-met",
+    "gate_receipt": "gate-block-condition-met-d2660e908a49746c-1",
+    "gate_outcome": "failed",
+    "por_que_no_cerro": [
+      "sddk debt report no esta implementado en esta build: los gates debt-severity-assigned y debt-priority-assigned no son evaluables. El propio comando lo dice —«debt detection is not implemented in this build»— en vez de devolver un veredicto, y registra que antes escribia un informe para un ciclo fijo que no era del llamante y los gates de deuda respondian PASS sobre ese informe fabricado",
+      "la ruta A-full pide artefactos de specify/design/tasks que B10 no produjo: el bloque fue medidor primero y entrego produccion. Fabricar artefactos de fase para mover un ciclo seria el defecto que B9 cerro",
+      "la transicion cycle.block no es aplicable desde aqui: el motor responde ENGINE_GATE_FAILED_WITHOUT_TARGET porque la transicion no declara target on_failure para ese gate"
+    ],
+    "nota": "El gate se evaluo como `failed`, nunca `passed` ni `waived`. El recibo queda persistido como registro; el ciclo sigue OPEN."
+  },
   "antes": {
     "PASS": 13,
     "OPEN": 6,
