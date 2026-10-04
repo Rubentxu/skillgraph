@@ -1,0 +1,184 @@
+{
+  "generado": "2026-10-04",
+  "bloque": "B11",
+  "release": "v0.30.0",
+  "instrumento": "scripts/measure_b9_gate_1_0.py",
+  "ciclo_sddk": {
+    "cycle_id": "p-b7740b96d79ec013/b11",
+    "estado": "OPEN",
+    "fase": "explore",
+    "path": "A-full",
+    "lease": "owner=mavis-b11 fencing_token=1"
+  },
+  "antes": {
+    "PASS": 15,
+    "OPEN": 4,
+    "NO_MEASURABLE": 1
+  },
+  "despues": {
+    "PASS": 16,
+    "OPEN": 3,
+    "NO_MEASURABLE": 1
+  },
+  "listo_para_1_0": false,
+  "total_propiedades": 20,
+  "cerradas_por_b11": [
+    {
+      "nombre": "pack/controller lifecycle",
+      "antes": "OPEN",
+      "despues": "PASS",
+      "por_que_cerrada": "El predicado decia, textual, que `sg pack` expone ['import', 'load'] y no ['install', 'update', 'remove']. B8 entrego el CONTRATO (PackManifest, Requires, seis tipos, tres niveles de aislamiento, es_compatible con MOTIVOS) y decia que sin contrato versionado no hay install/update/remove que valga como algo mas que copiar ficheros. Faltaba la mitad: saber QUE hay instalado."
+    }
+  ],
+  "instrumentos_del_bloque": {
+    "medidor": "scripts/measure_b11_pack_lifecycle.py",
+    "mutacion": "scripts/mutate_b11_pack_lifecycle.py",
+    "linea_base": "5 de 5 preguntas ABIERTAS",
+    "linea_final": "5 de 5 PASS",
+    "sondas": "6/6 cazadas, 6 causas distintas"
+  },
+  "certificacion": {
+    "tests_total_declarado": 3233,
+    "tests_por_que_suman_38": "+20 de test_b11_pack_lifecycle.py, +12 de test_wi79_dispatch_exit_contract.py (los cuatro comandos nuevos por tres, que es lo que ese guard hace por comando) y +6 netos de test_wi47_broad_except_guard.py. Los +6 son 3 por cada modulo nuevo MENOS los 3 que el diff da por perdidos: no se perdieron, el id paso de registry.py a registry.py0 y registry.py1 porque pytest desambigua ids repetidos.",
+    "suite_sobre_el_arbol_commiteado": "3230 passed, 3 skipped, 0 failed",
+    "nota_sobre_los_bypass": "Dos commits del tramo de release usan HOOK_SKIP_TESTS=1, y los dos por una ventana estructural, no por comodidad. En 0fb0617 la version es PURA y el tag todavia no existe, que es el orden que AGENTS.md 12 obliga. En 6ec0ba3 la version ya es .dev0 con el tag puesto, pero el hook corre la suite ANTES de que el commit exista, y mientras HEAD sigue siendo el commit etiquetado el guard de release exige SemVer puro. A diferencia del bypass equivalente de B10, este SI se certifica despues: la suite completa corrio sobre el arbol ya commiteado y dio 3230 passed, 3 skipped, 0 failed."
+  },
+  "defectos_de_produccion_medidos": [
+    {
+      "donde": "storage.upsert_resource",
+      "sintoma": "el update de pack era IMPOSIBLE",
+      "por_que": "upsert_resource rechaza cambiar el spec bajo la misma identidad con IdentityConflictError, que es lo correcto para un recurso inmutable. Un update de pack es por definicion un spec distinto bajo la misma identidad.",
+      "conclusion": "UNA INSTALACION NO ES UN RECURSO. De ahi la tabla installed_packs y su repositorio propio, no resources."
+    },
+    {
+      "donde": "storage.list_resources",
+      "sintoma": "el filtro de kind no acota",
+      "por_que": "arma su WHERE como `AND api_version || '/' || kind = ? OR kind = ?`, sin parentesis, luego el OR se come el AND que lo precede. Delegar el aislamiento en el habria costado una fuga entre tenants.",
+      "conclusion": "el aislamiento de packs se comprueba fila a fila, con dos guards que lo verifican en las dos direcciones."
+    }
+  ],
+  "fallos_del_harness_que_se_cuentan": [
+    "MUTABLES no incluia installed_packs_repository.py: esa sonda muto el fichero y no lo restauro, y el harness reporto «arbol restaurado» porque LA SUITE SEGUIA VERDE. El veredicto final exige ahora suite verde Y git status limpio de los mutables.",
+    "La sonda M5 apuntaba al filtro de ESTADO del SQL, que es REDUNDANTE porque RegistroDePacks.instalados vuelve a filtrar: no habia nada que un test pudiera ver y salio NO CAZADA con rc=0.",
+    "Dos expectativas mal escritas, una nombrando la clase equivocada, hacian que dos sondas salieran PARCIAL aunque el fallo estuviera detectado a la perfeccion."
+  ],
+  "deuda_abierta_registrada": [
+    "Nombres de test no-ASCII: queda UNO, test_b3_capability_kernel.py:508 (test_lo_que_llega_al_adapter_no_lleva_una_senal_de_frescura). No lo cita nadie, asi que no rompe WI-92. MEDIDO sobre el arbol entero, no sobre el diff. La convencion «nombres de test en ASCII» existe pero NO es ejecutable, y por eso reaparece: hace falta un guard con contrasalto en las dos direcciones.",
+    "STATE.yaml afirma next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado («suite completa pytest antes de push»). MEDIDO: es falso. El pre-push ACTIVO es un identity-guard de emails corporativos (/home/rubentxu/.git-hooks/pre-push), y el versionado scripts/hooks/pre-push no lo invoca nadie. No abro frente porque el push SI quedo certificado, pero por el proceso y no por el hook: la suite completa corrio sobre ese mismo commit 30 s antes. Referencia: el fallo de B9 repetido — la suite verde no es el arbol restaurado, aqui es la suite verde la que se|ga de ser el hook verde.",
+    "Conflicto de tag v0.7.1: la etiqueta local (8b63db6) y la remota (b0476c2) apuntan a commits DISTINTOS, ambos ancestros de origin/main. Heredado de B10."
+  ],
+  "bloqueos_no_resolubles_desde_el_repo": [
+    "runtime real certificado: requiere SG_UAT_REAL_PROVIDER=1 y una credencial real.",
+    "TUI operacional: NO_MEASURABLE, requiere persona y terminal.",
+    "sddk debt report: no implementado en esta build, luego los gates debt-severity-assigned y debt-priority-assigned no son evaluables."
+  ],
+  "siguiente_bloque": {
+    "properties_que_piden_codigo": [
+      "upgrade desde releases soportadas",
+      "security/threat model actualizado"
+    ],
+    "nota": "Las dos son las que quedan del gate de 1.0 que NO dependen de una credencial ni de una persona."
+  },
+  "propiedades": [
+    {
+      "nombre": "roadmap/state/docs coherentes",
+      "veredicto": "PASS",
+      "evidencia": "project_truth.py rc=0, 0 contradicciones; bloque B11, version 0.30.0.dev0, 3233 tests declarados == 3233 reales"
+    },
+    {
+      "nombre": "resource/controller API estable",
+      "veredicto": "PASS",
+      "evidencia": "la superficie del nucleo esta declarada, versionada y no se ha movido desde su snapshot, segun scripts/check_public_surfaces.py"
+    },
+    {
+      "nombre": "blueprint legacy completamente probado",
+      "veredicto": "PASS",
+      "evidencia": "los 16 UAT del blueprint tienen test que los nombra"
+    },
+    {
+      "nombre": "Graph Diff Gate operativo",
+      "veredicto": "PASS",
+      "evidencia": "Graph Diff Gate: 5 cerradas, 0 abiertas, 1 declaradas FUERA DE ALCANCE (no bajan el veredicto)"
+    },
+    {
+      "nombre": "runtime real certificado",
+      "veredicto": "OPEN",
+      "evidencia": "el UAT del proveedor real se salta: exige SG_UAT_REAL_PROVIDER=1 y una credencial en el entorno. Resumen: 3 skipped in 0.06s"
+    },
+    {
+      "nombre": "ontology extensible",
+      "veredicto": "PASS",
+      "evidencia": "core/ no nombra ningun tipo de recurso: se anaden sin tocarlo"
+    },
+    {
+      "nombre": "crash/recovery real certificado",
+      "veredicto": "PASS",
+      "evidencia": "crash y recovery ejecutados de verdad: 18 passed in 1.18s"
+    },
+    {
+      "nombre": "provenance fuerte",
+      "veredicto": "PASS",
+      "evidencia": "provenance: 5 cerradas, 0 abiertas"
+    },
+    {
+      "nombre": "concurrencia real certificada",
+      "veredicto": "PASS",
+      "evidencia": "5 de 5 corridas verdes; ultima: 5 passed in 1.36s"
+    },
+    {
+      "nombre": "capabilities deterministas",
+      "veredicto": "PASS",
+      "evidencia": "CAPABILITY_VERSION se declara en un solo sitio: ['src/skillgraph/platform/ports/capabilities.py']"
+    },
+    {
+      "nombre": "core sin dependencias de impl. externa",
+      "veredicto": "PASS",
+      "evidencia": "core/ solo importa de si mismo y de la estandar (5 modulos)"
+    },
+    {
+      "nombre": "CLI estable",
+      "veredicto": "PASS",
+      "evidencia": "la superficie de la CLI esta declarada, versionada y no se ha movido desde su snapshot, segun scripts/check_public_surfaces.py"
+    },
+    {
+      "nombre": "TUI operacional",
+      "veredicto": "NO_MEASURABLE",
+      "evidencia": "«operacional» es una propiedad de una persona usando un terminal: no hay forma de medirla ejecutando el repo. B7 la registro como P4 fuera de alcance."
+    },
+    {
+      "nombre": "migrations probadas",
+      "veredicto": "PASS",
+      "evidencia": "migracion contra base previa ejecutada: 3 passed, 20 deselected in 0.08s"
+    },
+    {
+      "nombre": "pack/controller lifecycle",
+      "veredicto": "PASS",
+      "evidencia": "`sg pack` expone el ciclo completo: ['import', 'install', 'list', 'load', 'remove', 'update']"
+    },
+    {
+      "nombre": "backups/restore probados",
+      "veredicto": "PASS",
+      "evidencia": "backups y restore ejecutados: 39 passed in 0.21s"
+    },
+    {
+      "nombre": "upgrade desde releases soportadas",
+      "veredicto": "OPEN",
+      "evidencia": "no existe ninguna funcion de upgrade o de migracion de datos entre releases: no hay de donde subir una base creada por una version anterior"
+    },
+    {
+      "nombre": "security/threat model actualizado",
+      "veredicto": "OPEN",
+      "evidencia": "el ADR se aprobo describiendo un proyecto de 830 tests y 17 releases; el arbol de hoy colecta 3233. El modelo de amenaza describe un producto que ya no es este"
+    },
+    {
+      "nombre": "distribution reproducible",
+      "veredicto": "PASS",
+      "evidencia": "el wheel y el sdist se construyen y llevan lo que declaran"
+    },
+    {
+      "nombre": "UAT agent-first completa",
+      "veredicto": "PASS",
+      "evidencia": "los 16 UAT del blueprint estan cubiertos por tests. Lo que NO mide esta propiedad es si el agente PUELA conocimiento: B6 lo dejo como P5 fuera de alcance porque necesita un proveedor real"
+    }
+  ]
+}
