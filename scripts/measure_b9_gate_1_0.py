@@ -793,16 +793,127 @@ def _migrations_probadas() -> tuple[Veredicto, str]:
 
 
 def _pack_controller_lifecycle() -> tuple[Veredicto, str]:
-    """El ciclo de vida que B8 nombro es install/update/remove. Se mira si existen."""
-    declarados = ("install", "update", "remove")
-    existentes = _subcomandos_de("pack")
-    faltan = [v for v in declarados if v not in existentes]
-    if faltan:
-        return "OPEN", (
-            f"`sg pack` expone {sorted(existentes)} y no {list(faltan)}: el ciclo de "
-            "vida que B8 declaro como requisito no existe todavia como comando"
+    """Se mide EJECUTANDO el ciclo, no contando nombres de subcomandos.
+
+    **LO QUE ESTE PREDICADO ERA, MEDIDO, Y NO ES UNA HIPOTESIS.** Decia
+    «`sg pack` expone el ciclo completo: ['import', 'install', 'list',
+    'load', 'remove', 'update']», y su unico trabajo era mirar si tres
+    CADENAS estaban en un `dict` que salen del parser. La propiedad que
+    declara es «el ciclo de vida que B8 nombro es install/update/remove»,
+    y eso no es un nombre: es que `install` RECHACE lo que no encaja, que
+    `update` exige que la version SUBA, y que `remove` de algo que no esta
+    lo diga en vez de reventar.
+
+    MEDIDO, con la decision de `install` rota en una COPIA del arbol —el
+    `if` que levanta `ValidationError` cuando `motivos_de_incompatibilidad`
+    devuelve motivos, y no `es_compatible`, que es la verdad del dominio y
+    que no se toca porque romper las dos no mediria una—:
+
+        gate   : PASS    <- leia NOMBRES
+        B11 Q1 : PASS    <- leia NOMBRES, y es LITERALMENTE este predicado
+        B11 Q2 : OPEN    <- EJECUTO install con un pack incompatible
+        resumen: OPEN: 1 · PASS: 4
+
+    **El ciclo estaba roto y la propiedad que lo declara estaba en verde.**
+
+    Y el hallazgo mas uncomfortable no es del gate: es que **este
+    predicado era Q1 del instrumento de B11**, y Q1 es la mas debil de las
+    cinco —las otras cuatro ejecutan la CLI de verdad—. O sea que el gate
+    llevaba tiempo decidiendo «el ciclo de vida existe» con la unica de las
+    cinco preguntas que no lo prueba. Q1 lo sabe y lo dice en su docstring;
+    no es que estea equivocado, es que estaba solo.
+
+    Por eso aqui no se reimplementa el instrumento: se CORRE, que es la
+    forma de B12 para `upgrade desde releases soportadas` y la de B10 para
+    las superficies. Delegar y no reimplementar, porque dosDerivaciones son
+    dos verdades y la que no se ejecuta es la que se queda vieja.
+
+    **Y POR QUE NO SE TOCA Q1.** La pregunta «¿existen los comandos?» es una
+    condicion necesaria y es barata; lo que no puede hacer es BASTAR, y con
+    las cinco en AND deja de bastar. Cambiarla sin un instrumento que la
+    reemplace seria perder cobertura, y este bloque no esta para eso.
+    """
+    proc = _corre([sys.executable, str(RAIZ / "scripts" / "measure_b11_pack_lifecycle.py")])
+    salida = (proc.stdout + proc.stderr).strip()
+    if not salida:
+        return "NO_MEASURABLE", (
+            f"scripts/measure_b11_pack_lifecycle.py no devolvio nada (rc={proc.returncode}). "
+            "Un instrumento que no dice nada no es un instrumento que diga que no: "
+            "este veredicto NO es «el ciclo esta roto» ni «el ciclo esta bien»"
         )
-    return "PASS", f"`sg pack` expone el ciclo completo: {sorted(existentes)}"
+    preguntas = _preguntas_del_instrumento(salida)
+    if proc.returncode != 0 and not preguntas:
+        # MEDIDO: la primera version de este predicado caia aqui con el texto
+        # «se ha EJECUTADO para saberlo» y «Caen 0 de 0 preguntas». Y no se
+        # habia ejecutado NADA: el instrumento no arranco —rc=2, «can't open
+        # file»—, y el predicado afirmaba una ejecucion que no habia ocurrido,
+        # con un recuento de preguntas que era cero sobre cero. Lo cazo el
+        # guard de este mismo bloque.
+        #
+        # Son dos preguntas distintas y no se pueden sumar: «¿el ciclo de vida
+        # se sostiene?» y «¿puedo medir si se sostiene?». Un subproceso puede
+        # no correr —sin `scripts/` en la copia, sin permiso, sin el
+        # interprete— y su fallo no es un fallo del ciclo. Es el mismo defecto
+        # que B14 cerro en `tests_colectados()`: publicar un dato de una
+        # medicion que no se hizo, con la autoridad de quien si la hizo.
+        return "NO_MEASURABLE", (
+            f"NO SE HA PODIDO MEDIR: scripts/measure_b11_pack_lifecycle.py no ha "
+            f"contestado (rc={proc.returncode}) y su salida no contiene ni una "
+            f"pregunta con veredicto. Esto NO es «el ciclo de vida este roto»: es "
+            f"«no se ha podido mirar», y son dos cosas con dos arreglos distintos —"
+            f"uno en el entorno y otro en el ciclo—. Salida: {salida[-400:]}"
+        )
+    if proc.returncode != 0:
+        caidas = [nombre for nombre, veredicto in preguntas if veredicto != "PASS"]
+        detalle = (
+            "; ".join(
+                f"{nombre}: {veredicto}" for nombre, veredicto in preguntas if veredicto != "PASS"
+            )
+            or "sin detalle por pregunta"
+        )
+        return "OPEN", (
+            f"el ciclo de vida de los packs NO se sostiene, y se ha EJECUTADO para "
+            f"saberlo: scripts/measure_b11_pack_lifecycle.py rc={proc.returncode}. "
+            f"Caen {len(caidas)} de {len(preguntas)} preguntas — {detalle}. "
+            f"Que el ciclo exista como comando no lo prueba: lo prueba que instale, "
+            f"rechace lo que no encaja y se pueda quitar. Salida: {salida[-400:]}"
+        )
+    return "PASS", (
+        f"el ciclo de vida de los packs se ha EJECUTADO, no contado: "
+        f"scripts/measure_b11_pack_lifecycle.py rc=0, "
+        f"{len(preguntas)} de {len(preguntas)} preguntas en PASS — "
+        + "; ".join(f"{nombre}: {veredicto}" for nombre, veredicto in preguntas)
+        + ". Una de ellas EJECUCIA `install` con un pack incompatible y exigia que "
+        "lo rechazara diciendo por que, que es lo que un nombre de subcomando no "
+        "puede distinguir de un `def install(): pass`"
+    )
+
+
+def _preguntas_del_instrumento(salida: str) -> tuple[tuple[str, str], ...]:
+    """Los veredictos por pregunta del instrumento, DERIVADOS de su salida.
+
+    MEDIDO, y es la razon de que esto sea una funcion y no un `split` en el
+    predicado: la instrumentacion tiene que venir de lo que el instrumento
+    DICE, no de lo que este gate recuerda que dice. Si el formato cambia, lo
+    que tiene que ponerse en rojo es la instrumentacion —que es lo que
+    emitio el dato—, y no el consumidor.
+
+    El formato es `[VEREDICTO] pregunta`, con el veredicto entre corchetes
+    para que la alineacion de la tabla no lo parta.
+    """
+    preguntas: list[tuple[str, str]] = []
+    for linea in salida.splitlines():
+        limpia = linea.strip()
+        if not limpia.startswith("["):
+            continue
+        cierre = limpia.find("]")
+        if cierre < 0:
+            continue
+        veredicto = limpia[1:cierre].strip()
+        nombre = limpia[cierre + 1 :].strip()
+        if veredicto and nombre:
+            preguntas.append((nombre, veredicto))
+    return tuple(preguntas)
 
 
 def _backups_restore_probados() -> tuple[Veredicto, str]:
