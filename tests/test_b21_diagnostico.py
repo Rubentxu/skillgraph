@@ -95,6 +95,7 @@ class Corrida:
     estado_antes: tuple[tuple[str, float | None], ...]
     estado_despues: tuple[tuple[str, float | None], ...]
     sin_diagnostico: str
+    aislado: Path
 
 
 def test_la_corrida_del_guard_reproduce_el_defecto(corrida: Corrida) -> None:
@@ -155,6 +156,31 @@ def _subconjunto_del_roadmap() -> list[Path]:
     return encontrados
 
 
+def _data_file_de_la_config(rc: Path) -> str:
+    """El `data_file` que la config escrita por la corrida declara.
+
+    Se lee el ARTEFACTO que la corrida produjo, no el fuente del script: lo
+    que decide donde escribe coverage es lo que hay en el rc, y eso es lo que
+    esta corrida en concreto dejo escrito.
+    """
+    lineas = [
+        linea.split("=", 1)[1].strip()
+        for linea in rc.read_text(encoding="utf-8").splitlines()
+        if linea.strip().startswith("data_file")
+    ]
+    assert len(lineas) == 1, f"la config aislada declara {len(lineas)} data_file: {lineas}"
+    return lineas[0]
+
+
+#: El reloj que este guard usa. Vive en `.pipelinek/` porque ahi es donde
+#: AGENTS.md permite que las etapas produzcan efectos secundarios, y lo
+#: escribe una sola cosa en el mundo: la corrida de `coverage.sh`. Los
+#: ficheros de datos de cobertura NO sirven de reloj —los mueve el proceso que
+#: contiene al guard— y el nombre se declara UNA vez para que el reloj y su
+#: contrasalto no puedan dejar de hablar del mismo fichero.
+LOG_DEL_REPO = ".pipelinek/unit-tests.log"
+
+
 def _estado_del_repo() -> tuple[tuple[str, float | None], ...]:
     """Los ficheros de cobertura del repo, con su mtime.
 
@@ -167,6 +193,15 @@ def _estado_del_repo() -> tuple[tuple[str, float | None], ...]:
     que no contiene lo que dice medir no mide; compara contra una lista
     vacia que nunca puede cambiar.
 
+    Y despues, al corregir eso, aparecio el problema de al reves: este estado
+    lo cambia el PROCESO QUE CONTIENE AL GUARD, no la corrida aislada. MEDIDO
+    en la certificacion: la suite completa lanza cientos de subprocesos de la
+    CLI, cada uno deja su `.coverage.parallel.<host>.<pid>.<rand>` en la raiz
+    al terminar, y uno de ellos cae entre las dos medidas. El guard fallaba
+    senalando un fichero que la corrida aislada no habia tocado, y en verde
+    cuando la tocaba. El estado global no sirve como reloj de este guard; por
+    eso la propiedad se mide sobre el artefacto de la corrida.
+
     No se compara por hash: coverage escribe un formato binario con version,
     y un guard que lo leyera estaria probando el lector de coverage en vez de
     la propiedad. Lo que importa es que los ficheros SEGUAN AHORA y que el log
@@ -175,8 +210,8 @@ def _estado_del_repo() -> tuple[tuple[str, float | None], ...]:
     estado: list[tuple[str, float | None]] = []
     for ruta in sorted(RAIZ.glob(".coverage*")):
         estado.append((ruta.name, ruta.stat().st_mtime))
-    log = RAIZ / ".pipelinek" / "unit-tests.log"
-    estado.append((str(log.relative_to(RAIZ)), log.stat().st_mtime if log.is_file() else None))
+    log = RAIZ / LOG_DEL_REPO
+    estado.append((LOG_DEL_REPO, log.stat().st_mtime if log.is_file() else None))
     return tuple(estado)
 
 
@@ -265,6 +300,7 @@ def corrida(tmp_path_factory: pytest.TempPathFactory) -> Corrida:
         estado_antes=antes,
         estado_despues=_estado_del_repo(),
         sin_diagnostico=_sin_diagnostico(proc.stdout + proc.stderr),
+        aislado=aislado,
     )
 
 
@@ -456,67 +492,82 @@ class TestElInstrumentoNoRompeLaCorridaQueLoCertifica:
                 "ejecutar sin pisar el estado de cobertura de la corrida"
             )
 
-    def test_una_corrida_aislada_no_toca_el_estado_del_repo(self, corrida: Corrida) -> None:
-        """La propiedad, ejecutada: el dato del repo sigue siendo el de antes.
+    def test_una_corrida_aislada_escribe_donde_no_manda(self, corrida: Corrida) -> None:
+        """La propiedad, sobre el artefacto que la corrida dejo escrito.
 
-         No se compara porhash —que exijiria saber leer el formato binario de
-         coverage—, sino por la propiedad que importa: los ficheros siguen
-        AHORA y el log del repo no se ha reescrito con una corrida de un solo
-         test.
+        MEDIDO POR QUE NO SE MIDE EL ESTADO DEL REPO, que es lo que hacia la
+        version anterior. Ese estado lo cambia el PROCESO QUE CONTIENE AL
+        GUARD: la suite completa lanza cientos de subprocesos de la CLI y
+        cada uno deja su `.coverage.parallel.<host>.<pid>.<rand>` en la raiz al
+        terminar. En la certificacion, uno cayo entre las dos medidas y el
+        guard fallo senalando un fichero que la corrida aislada no habia
+        tocado —con el aislamiento INTACTO—. Un guard que se pone rojo por el
+        ruido de su propio contenedor no puede usarse para distinguir el ruido
+        de un defecto: en el otro sentido tampoco, porque el ruido puede tapar
+        justo el defecto que sí ocurria.
+
+        Lo que se mide aqui es la CAUSA y no el sintoma: si el `data_file` de
+        la config que esta corrida escribio apunta a su sandbox, coverage no
+        tiene a donde ir en la raiz. Es un silogismo, no una correlacion, y por
+        eso no lo puede contaminar nadie que este fuera.
         """
-        nombres_antes = {nombre for nombre, _ in corrida.estado_antes}
-        nombres_despues = {nombre for nombre, _ in corrida.estado_despues}
-        assert nombres_antes == nombres_despues, (
-            "correr el instrumento aislado creo o borro ficheros de cobertura "
-            f"del repo: antes {sorted(nombres_antes)}, despues {sorted(nombres_despues)}"
+        config = corrida.aislado / "rc"
+        assert config.is_file(), (
+            f"la corrida aislada no dejo su config en {config}: si no hay "
+            "config, no hay dato de cobertura que pueda estar donde no debe"
         )
-        # El mtime, no solo el nombre. MEDIDO: la asercion de arriba compara
-        # NOMBRES, y pisar un dato de cobertura no cambia el nombre del
-        # fichero, lo reescribe. La sonda M4 (quitar el aislamiento del
-        # data_file) reescribia $REPO_ROOT/.coverage.parallel con una corrida
-        # de UN test y este test daba verde: la propiedad del docstring —los
-        # ficheros siguen AHORA— no era la que se comprobaba.
-        #
-        # El mtime es la unica señal de "siguen iguales" que no exige saber
-        # leer el formato binario de coverage, que es justo lo que este
-        # guard evita hacer.
-        cambiados = {
-            nombre
-            for nombre, antes in corrida.estado_antes
-            if dict(corrida.estado_despues).get(nombre) != antes
-        }
-        assert not cambiados, (
-            f"la corrida aislada reescribio {sorted(cambiados)}: la etapa "
-            "SIGUIENTE (coverage-floors) leeria una corrida de un solo test. "
-            "El aislamiento de COVERAGE_DATA_FILE no se esta aplicando"
+        data_file = Path(_data_file_de_la_config(config)).resolve()
+        assert data_file.is_relative_to(corrida.aislado.resolve()), (
+            f"la config aislada declara data_file={data_file}, que esta FUERA "
+            f"de {corrida.aislado}. La corrida escribio su dato en el estado "
+            "compartido, y la etapa siguiente (coverage-floors) leeria una "
+            "corrida de un solo test. El aislamiento de COVERAGE_DATA_FILE no "
+            "se esta aplicando"
         )
-        antes_log = dict(corrida.estado_antes).get("unit-tests.log")
-        ahora_log = dict(corrida.estado_despues).get("unit-tests.log")
+
+    def test_la_corrida_aislada_dejo_dato_en_su_sitio(self, corrida: Corrida) -> None:
+        """La otra mitad: apuntaba a su sitio Y hay algo ahi.
+
+        Sin esto, un `data_file` apuntando al sandbox que no se llegara a
+        escribir cumpliria la propiedad anterior y no medirian nada: la
+        corrida no habria dejado ni un byte. Es el contrasalto de que el
+        instrumento se mida a si mismo —el fallo de WI-110 por el otro lado.
+        """
+        assert (corrida.aislado / "data").is_file(), (
+            f"la corrida aislada no dejo datos en {corrida.aislado / 'data'}: "
+            "la config apunta ahi pero nadie escribio, asi que el guard de "
+            "arriba pasaria sin que la receta llegara a medir nada"
+        )
+
+    def test_el_log_del_repo_no_se_reescribio(self, corrida: Corrida) -> None:
+        """El log SI es un reloj utilizable: solo lo escribe coverage.sh.
+
+        Los ficheros de datos no sirven —los mueve el proceso que contiene al
+        guard—, pero este lo escribe una sola cosa en el mundo, que es la
+        corrida aislada. Por eso la medicion del log se conserva y la de los
+        datos no.
+        """
+        antes_log = dict(corrida.estado_antes).get(LOG_DEL_REPO)
+        ahora_log = dict(corrida.estado_despues).get(LOG_DEL_REPO)
         assert ahora_log == antes_log, (
             "el log del repo se reescribio: la corrida aislada escribio donde "
             "no debia, y la etapa que lo lee mediria una corrida de un test"
         )
 
-    def test_el_estado_medido_no_esta_vacio(self, corrida: Corrida) -> None:
-        """El contrasalto del contrasalto: la lista tiene algo que mirar.
+    def test_el_log_medido_existe(self, corrida: Corrida) -> None:
+        """El contrasalto del reloj: tiene que haber un reloj.
 
-        MEDIDO, y es el fallo de WI-110 otra vez. Este guard comparaba
-        `RAIZ/.pipelinek/.coverage*`, donde NO hay ningun fichero de
-        cobertura —`RC` y `DATA_FILE` caen en la RAIZ—. La lista comparada
-        contenia siempre un elemento (el log), asi que la comparacion era
-        mitad decoracion: la sonda M4, que quita el aislamiento del
-        data_file, daba 9 passed con el aislamiento roto.
-
-        Si el directorio que se mide llega vacio, el guard no tiene nada que
-        comparar y sale verde por falta de materia, no porque la propiedad se
-        cumpla. Un fallo de verdad ahi se veria como "antes y despues
-        vacios", que es indistinguible de "nada cambio".
+         La medicion del log compara `antes` con `despues`, y si ese log no
+         existiera en ninguno de los dos momentos ambos valores serian `None` y
+         la comparacion daria verde. MEDIDO AL ESCRIBIR ESTE CONTRASALTO: la
+        medicion pedia `"unit-tests.log"` y el estado la declara como
+        `".pipelinek/unit-tests.log"`. La clave no existia en ninguno de los
+        dos momentos, los dos `.get()` devolvian `None`, y `None == None` es
+        verde: el test que se suponia que vigilaba el log no miraba el log.
+        Una vez mas, comparar dos ausencias.
         """
-        nombres = {nombre for nombre, _ in corrida.estado_antes}
-        assert ".coverage" in nombres or ".coverage.parallel" in nombres, (
-            "el estado medido no contiene ningun fichero de cobertura: el "
-            f"guard esta mirando donde no se escribe (midio {sorted(nombres)}). "
-            "Sin esto el test anterior compara dos listas sin datos de "
-            "cobertura y sale verde aunque la corrida aislada haya pisado el "
-            "dato del repo"
+        assert LOG_DEL_REPO in {nombre for nombre, _ in corrida.estado_antes}, (
+            f"el log del repo ({LOG_DEL_REPO}) no estaba antes de la corrida: "
+            "el reloj que usa este guard no existia, y comparar dos ausencias "
+            "sale verde sin decir nada sobre la propiedad"
         )
