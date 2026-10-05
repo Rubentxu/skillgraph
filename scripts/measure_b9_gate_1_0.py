@@ -508,6 +508,26 @@ def _roadmap_state_docs_coherentes() -> tuple[Veredicto, str]:
         carga = json.loads(proc.stdout)
     except json.JSONDecodeError:
         return "OPEN", f"project_truth.py no emitio JSON legible (rc={proc.returncode})"
+    # MEDIDO en B20-2: `project_truth.py` tiene DOS salidas y las dos son JSON
+    # valido. La segunda es la de `VerdadNoLegible` —trae `coherente: false` e
+    # `ilegible`, y ninguna de las cinco verdades—, y salia por aqui como
+    # `OPEN` con la lista de contradicciones VACIA: un veredicto que afirma
+    # que la propiedad no se cumple cuando lo que pasa es que el
+    # instrumento no pudo leer. Peor que no decir nada, porque ademas
+    # orienta mal: `OPEN` pide arreglar el proyecto, y aqui lo que hay que
+    # arreglar es una verdad rota.
+    #
+    # El veredicto es `NO_MEASURABLE` y no `OPEN` por el vocabulario de la
+    # cabecera: «no hay forma de decidirla con este entorno, y se dice por
+    # que». Las dos dejan 1.0 lejos —declarar PASS seria la unica forma de
+    # mentir— y aqui lo que se declara es que el fallo es del instrumento.
+    ilegible = carga.get("ilegible")
+    if ilegible:
+        return "NO_MEASURABLE", (
+            f"project_truth.py rc={proc.returncode} NO PUDO LEER una de las cinco "
+            "verdades, asi que esta propiedad no se ha podido decidir. No es lo "
+            f"mismo que este en contradiccion. Causa: {ilegible}"
+        )
     if carga.get("coherente") is True:
         return "PASS", (
             f"project_truth.py rc={proc.returncode}, 0 contradicciones; "
