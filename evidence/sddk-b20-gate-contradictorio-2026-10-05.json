@@ -1,0 +1,111 @@
+{
+  "generado": "2026-10-05",
+  "bloque": "B20",
+  "subbloque": "B20-2, que es lo que salio al publicar",
+  "titulo": "El gate se contradecía a sí mismo, y la razón era un sufijo",
+  "release": "0.32.5",
+  "que_es_y_que_no_es": "No es un PASS falso ni un OPEN falso, que es lo que abriron B16 y B17: es que el gate se CONTRADECE A SÍ MISMO. `ontology extensible` y `core sin dependencias de impl. externa` son dos propiedades del mismo gate sobre la MISMA frontera, y con un solo import en core/ la primera daba PASS y la segunda OPEN. MEDIDO sobre la superficie real del proyecto, no sobre casos inventados: 7 CONTRADICCIONES de 9.",
+  "la_causa_y_tiene_las_dos_caras": {
+    "el_patron": "_TIPO_DE_RECURSO = ^[A-Z][A-Za-z]*Pack$",
+    "por_que_es_la_causa": "Un patrón por FORMA. No veía ninguno de los ocho tipos que el proyecto DECLARA de verdad —PackManifest, CompiledResource, CapabilitySpec, BrickType, Catalog, Brick— y veía FilaDePack, que es una FILA de la tabla de packs y no un tipo de recurso. PackManifest es el manifiesto de un pack, el tipo central del proyecto, y no acaba en Pack.",
+    "el_principio": "UN PATRÓN POR FORMA ES UNA LISTA, más corta y peor: decide CÓMO SE ESCRIBE un nombre en vez de A QUÉ CONJUNTO PERTENECE.",
+    "el_comentario_del_al_lado_razonaba_bien": "Decia que no escribir una lista de tipos evita una segunda fuente de verdad. Lo que no ve es que el patrón ES la lista."
+  },
+  "que_entrega": {
+    "el_conjunto_se_deriva_del_arbol": "PAQUETES_DE_RECURSO = (resources, packaging) y _tipos_de_recurso() por AST. La evidencia publica cuantos son, de donde salen y cuantos ficheros se recorrieron.",
+    "los_docstrings_se_dicen_sin_abrir_veredicto": "Documentar la frontera es lo contrario de depender de ella. MEDIDO: core/ menciona WorkflowPlan en tres sitios y los tres son documentacion de NewType.",
+    "el_techo_se_nombra_no_se_cuenta": "Tres contradicciones quedan en PENDIENTES_POR_DECLARAR —CompiledResource en knowledge/, CapabilitySpec en platform/ports/, SkillImportReport en domain/— porque el proyecto llama recurso a tres tipos cuyos PAQUETES no lo dicen. Declararlo es una decision de producto, no una tarea de guard. `len(rotas) <= 3` NO ERA ROMPIBLE: con la implicacion invertida la lista queda vacia y cero caben en tres."
+  },
+  "los_siete_defectos_que_salieron_al_certificar": {
+    "por_que_importan": "Son mas informativos que el arreglo del bloque.",
+    "1_el_guard_de_b16_deformaba_con_codigo_inexistente": "from skillgraph.resources.packs import DomainPack. MEDIDO por AST: `packs` NO es un modulo y `DomainPack` NO es un simbolo sino el `kind` de un recurso escrito como cadena —un dato de disco tratado como tipo de Python—. Endurecer el predicado no rompio el guard: lo DESTAPO.",
+    "2_state_declaraba_b19_mientras_current_declaraba_b20": "Roto el par que hace la autoridad de coherencia. Rotado a current_workitem B20 / previous_workitem B19.",
+    "3_el_hook_instalado_diverge_del_declarado": ".git/hooks/pre-commit corria la suite entera; el declarado corre pytest SOLO sobre los .py staged, el filtro de WI-100, un cambio de 12x. MEDIDO: el hook que anunciaba «smoke, N files staged» lanzaba los 3321 tests. La AUSENCIA de pre-push ya la tenia medida y escrita el propio hook, y no se reclama como hallazgo de B20. Un hook instalado y desfasado es peor que uno ausente. No puede ser un test: .git/hooks no se versiona, luego un test afirmaria sobre el arbol de trabajo. Queda como deuda registrada.",
+    "4_la_cobertura_venia_contaminada": "282 de 376 rutas del dato eran de /tmp, de copias de un temporal que el propio test ya habia borrado. Eso rompia `coverage report` y `coverage json` DESPUES de que la suite pasara. Arreglado con omit = /tmp/* en [run], y MEDIDO que no relaja el suelo: 95 y 99 dan rc=2 sobre un 94 % real.",
+    "5_un_acento_grave_dentro_de_un_heredoc_sin_comillas": "El heredoc de coverage.sh va SIN comillas porque tiene que expandir $REPO_ROOT, y bash ejecuto el acento grave como sustitucion de comando. MEDIDO por que no lo cazaron los tests: LEIAN EL TEXTO del heredoc, que estaba bien, cuando lo que estaba mal era lo que el shell PRODUCE de el. El guard ahora GENERA la config ejecutando el heredoc y exige que coverage la lea, vía COVERAGE_RCFILE porque `coverage debug config` no acepta --rcfile.",
+    "6_seis_modulos_incumplian_el_suelo_que_declaran": "pack.py 46,43 -> 91,07 % (suelo 70), installed_packs_repository 78,57 -> 100 %, registry 77,86 -> 98,47 %, views 79,26 -> 98,52 %, graph_diff 80,00 -> 99,13 %, status 75,31 -> 92,59 %. Cobertura global 93,68 -> 95,87 %. NO SE BAJA NINGUN SUELO: se cubre el codigo que lo incumple. Y no es deuda que crease el arreglo 4: las rutas de /tmp eran COPIAS, luego contarlas no podia sumar una linea a src/.",
+    "7_pytest_sale_con_5_y_el_hook_lo_Leia_como_fallo": "`pytest -q <fichero sin tests>` sale con 5, y el hook lo leia como fallo, lo que BLOQUEA el commit de release: un bump de version stagea SOLO src/ y ahi no hay ningun test. Arreglado diciendo el motivo en vez de callar. Y UN FALLO PROPIO: la primera version del arreglo usaba un comando suelto y `set -e` abortaba antes del `if`."
+  },
+  "un_hallazgo_que_se_desmentio_y_se_revirtio": "Se penso que `tail -40` del hook truncaba la lista de FAILED. MEDIDO: la enseña COMPLETA incluso con 14 fallos. Lo que la recorto fue la captura de salida de la herramienta. El cambio se revirtio en vez de sostenerlo con una medicion desmentida.",
+  "b20_2_la_misma_forma_mas_abajo": {
+    "que_lo_abrio": "Publicar es certificar. El pre-push corre la receta y su unit-tests dio 2 failed: el par de version de WI-109, y otro que se atribuyo a un «fallo dependiente del orden» que NO se reproduce —el par pasa, y tampoco pasa en la suite entera—. La causa no establecida se nombra como no establecida.",
+    "lo_que_si_es_cierto_y_medido": "project_truth.py tiene DOS salidas y solo una se miraba. main() responde Estado —las cinco verdades, rc 0/1— o VerdadNoLegible —coherente false e ilegible, y NINGUNA de las cinco, rc 2—. Las dos son JSON valido, luego son dos contratos y no uno con un campo a veces ausente. MEDIDO con el script real sobre un arbol real roto: rc=0 con `bloque` contra rc=2 con `ilegible` y sin `bloque`.",
+    "las_dos_victimas": {
+      "test_b0_truth_convergence": "hacia carga['bloque'] sobre las dos formas y sobre la segunda reventaba con KeyError: 'bloque'. El guard que existe para explicar por que el proyecto no esta bien era el que no lo explicaba, y la causa estaba a mano en la misma carga.",
+      "measure_b9_gate_1_0": "cadia en la rama de contradicciones y salia OPEN con la lista VACIA. No es que no dijera nada: orienta mal, porque OPEN dice «arregla el proyecto» y aqui lo que hay que arreglar es una verdad rota. Es el error de B19 por otra puerta.",
+      "el_que_si_lo_conocia": "measure_b14_truth_single_reader.py lee `ilegible`. Uno de tres consumidores conocia la segunda forma."
+    },
+    "por_que_no_measurable_y_no_open": "Es el vocabulario que la cabecera del gate ya definiaba para esto: «no hay forma de decidirla con este entorno, y se dice por que». Las dos dejan 1.0 lejos —declarar PASS seria la unica forma de mentir—, luego no baja el veredicto: baja la AFIRMACION de que el proyecto tiene un defecto que no se ha comprobado que tenga.",
+    "los_tres_casos_son_disjuntos": "una verdad rota -> NO_MEASURABLE con la causa; una contradiccion -> OPEN con las DOS caras; una respuesta sana -> PASS sin perder el bloque. El primero exige ademas que la forma ilegible NO traiga contradicciones, que es lo que hace las dos distinguibles.",
+    "el_arreglo_esta_en_el_helper": "_ejecuta() es por donde pasan los seis asserts del fichero de B0, y distinguir las dos formas ahi los tapa a todos. Es la leccion de WI-114 —la traduccion vive en el helper—: puesta en cada assert serian seis sitios que se pueden divergir en cuanto uno se toque."
+  },
+  "b20_2_la_release_que_este_bloque_hacia_no_se_contaba_a_si_misma": {
+    "que_paso": "La etiqueta v0.32.5 existia en git y no estaba en release.releases, y test_state_release_integrity puso la suite en rojo.",
+    "por_que_no_es_un_forgot_en_una_tabla": "El inventario es lo que DECIDE que releases se contrastan: test_every_listed_sha_matches_its_tag recorre las entradas LISTADAS. Una release que no esta en la lista se escapa de ese contraste, luego el defecto real era que la provenance de esa release no miraba nadie. El guard de exhaustividad lo delata; el del sha, no.",
+    "medido": "Con la entrada anadida y el sha que estaba escrito a mano en la prosa: FAILED v0.32.5: dice a8c1ffaab559, git dice f3948feda480. El guard estaba bien; lo que faltaba era la entrada.",
+    "las_tres_afirmaciones_caducadas_del_mismo_registro": {
+      "la_fila_de_semver": "semver_bump citaba la fila de v0.32.4 (0/0/3/7 PATCH v0.32.4 ok) como si fuera la de esta etiqueta. La de v0.32.5 es 0/0/5/12 PATCH v0.32.5 ok, segun scripts/derive_semver.py.",
+      "la_afirmacion_falsa_sobre_el_guard": "Decia que «una entrada con un sha escrito a mano es provenance falsa, y el guard que la lista no puede mirarlo». Falso por lo de arriba, y una afirmacion falsa en un comentario de provenance es justo lo que hace que nadie lo compruebe.",
+      "el_tests_total_y_el_sha": "rationale_b20 declaraba 3318 -> 3410 con el campo en 3412, y daba como «SHA de esta release» a8c1ffa, que no es el commit de la etiqueta sino uno de en medio del bloque."
+    }
+  },
+  "el_harness_al_final": {
+    "sondas": 4,
+    "cazadas": 4,
+    "causas_distintas": 4,
+    "cada_una_cae_solo_su_diagnostico": "M1 quita la distincion de la rama en el guard de B0; M2 le quita la causa al mensaje; M3 apaga la rama del gate; M4 la ensancha para que se coma tambien la respuesta CONTRADICTORIA, y cae el contrasalto de conjuntos disjuntos.",
+    "un_fallo_propio_del_arnes": "La primera version contaba como CAZADA cualquier rc != 0, y los selectores de las dos sondas del gate estaban mal —les faltaba el tests/—, luego pytest salia con 4, que es ERROR DE USO, y el arnes lo leia como «la sonda cayo». Un arnes que cuenta su propio error como acierto es peor que no tener arnes: da el numero que el bloque quiere mostrar y no midio nada. Ahora exige rc == 1 Y el nombre del test en la salida, y valida cada selector ANTES de deformar. Es el segundo fallo propio de arnes en dos bloques.",
+    "lo_que_no_se_mide": "Que _ejecuta deje de mirar la rama: eso se midio de otra manera, con el script real sobre un arbol real roto. Deformar el helper para verlo reventar seria una sonda circular."
+  },
+  "un_defecto_del_certificado_que_no_es_del_bloque": "Anadir la rama al gate desloco 20 lineas y las cuatro citas de CURRENT.md quedaron viejas. Lo cazo test_wi92_measured_claims en la certificacion, que es el contrato que se acepto al adoptar las citas por linea. Citas actualizadas al valor real, verificado por el guard.",
+  "lo_que_queda_abierto_y_de_que_clase_es": {
+    "credencial": "runtime real certificado exige SG_UAT_REAL_PROVIDER=1 y ANTHROPIC_API_KEY u OPENAI_API_KEY. Es lo unico OPEN que queda.",
+    "persona": "TUI operacional es una propiedad de alguien usando un terminal.",
+    "estado_por_clon": "La divergencia de .git/hooks no puede ser un test, porque no se versiona. Se restaura con `bash scripts/install-hooks.sh` y queda como deuda registrada, no como guard.",
+    "instrumento": "El console.log de una etapa que falla se queda en 13 lineas y pierde el detalle del FAILED; el nombre del test hubo que recuperarlo corriendo la suite a mano. Deuda tangencial: se registra y no se abre otro frente en este bloque.",
+    "producto": "S9 y S10 del ADR-0015 siguen siendo decisiones de producto."
+  },
+  "shas": {
+    "nota": "Tomados de git con git log y git rev-list. Una entrada con un sha inventado es provenance falsa, y este bloque existe porque un patron por forma decidia como se escribe un nombre en vez de a que conjunto pertenece.",
+    "tag": "v0.32.5",
+    "sha_del_tag": "f3948feda4802fd88d049b50f0758a41d9c20622",
+    "commits_del_bloque": [
+      "777b53a docs(state): el bloque vivo, con B20-2 dentro y las citas otra vez al dia",
+      "ea4fe1d fix(b0): el guard de la verdad decia QUE fallaba y no POR QUE",
+      "477c552 fix(gate): la respuesta ilegible de project_truth se perdia, y decia OPEN",
+      "3360883 fix(state): v0.32.5 no estaba en el inventario, y sin estarlo nadie contrastaba su sha",
+      "0c714a1 fix(release): la version activa y la del estado, en 0.32.5.dev0",
+      "3acae31 docs(state): el recuento de B20, con los dos guards del hook dentro",
+      "a9c5b31 chore(release): el estado de v0.32.5, con su etiqueta ya creada",
+      "4f849d9 fix(hooks): pytest sale con 5 cuando no colecta tests, y el hook lo leia como fallo",
+      "f3948fe build(release): bump 0.32.4.dev0 -> 0.32.5, con el SemVer derivado",
+      "a8c1ffa test(coverage): seis modulos incumplian el suelo que su propia ubicacion declara",
+      "8caf242 fix(ci): un acento grave en el heredoc rompia la configuracion, y el guard no lo vio",
+      "1f05fe7 fix(ci): la cobertura se rompia con un temporal que el propio test ya habia borrado",
+      "c4aae7a docs(state): al certificar, el gate que corria no era el declarado",
+      "3a01f77 fix(gate): el guard de B16 deformaba la frontera con codigo que no existe",
+      "c09d540 fix(state): STATE.yaml seguia declarando B19 mientras CURRENT declara B20",
+      "9d2f6f2 docs(state): B20 vivo en CURRENT y ROADMAP, con las citas verificadas",
+      "7f65223 docs(state): B20 vivo, con el techo que tiene y el motivo",
+      "608d711 chore(gate): M2 declara tambien el diagnostico de la contradiccion, que construye",
+      "411e157 chore(gate): el arnes de B20 declara dos diagnosticos por sonda, y por que",
+      "351edef test(b20): el techo del guard no se podia romper, y por eso el arnes decia otra cosa",
+      "2d3dc37 fix(gate): el gate se contradecia a si mismo, y la razon era un sufijo",
+      "00a847f docs(state): B19 cerrado y publicado en v0.32.4, con lo que queda nombrado",
+      "c54da67 docs(evidence): el informe de B19, con los shas tomados de git y no escritos a mano",
+      "8970e65 docs(release): el registro de v0.32.4, con el sha de git y el bump de la herramienta",
+      "62cbe51 chore(release): el estado de v0.32.4, con su etiqueta ya creada"
+    ],
+    "head": "777b53a07af6cfe9c33889610c2a667a6541a620",
+    "arbol_limpio": true
+  },
+  "certificacion": {
+    "receta": "bash scripts/ci.sh, la canonica de .pipeline.kts",
+    "run_id": "52b22437-d2ba-4654-9a16-f02ef745e9b8",
+    "head_certificado": "docs(state): el bloque vivo, con B20-2 dentro y las citas otra vez al dia",
+    "la_etapa_evidence_verifica_el_run_anterior": "MEDIDO y no es un defecto: la receta no puede verificar su propio run porque cuando se ejecuta todavia no tiene RunFinished, y la resolucion sale del motor —`RunFinished` mas reciente es, durante un run, el run ANTERIOR—. Asi que la etapa `evidence` de un run N juzga al run N-1.",
+    "la_cadena_se_auto_sana_una_corrida_despues": "`solo_autoevaluada` en check_pipeline_receipt.py exculpa un run anterior con EXACTAMENTE un StepFailed y que sea el de la etapa `evidence`. MEDIDO en esta certificacion: el run c0a564e1 dejo las ocho etapas reales en SUCCESS —unit-tests con 3416 passed + 3 skipped y cero fallos, coverage-floors con «todo modulo gobernado por 6.3 cumple su suelo» y 95,87 % global, package-build, public-surfaces, ci-parity y lint— y fallo solo en `evidence`, que verificaba el run anterior, que si habia fallado de verdad. Ese run es el unico caso que la excepcion cubre, y por eso la corrida siguiente si da 9/9. La excepcion es estrecha a proposito: un run abortado sin un solo StepFailed se rechaza igual, y lo fija `test_un_run_abortado_sigue_sin_pasar`.",
+    "suite": "3416 passed + 3 skipped = 3419, que es tests.total",
+    "cobertura_global": "95,87 %, y el suelo de pyproject es 80 %"
+  }
+}

@@ -14,10 +14,75 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.32.6] - 2026-10-05 — Lo que salió al publicar: la verdad ilegible, y la release que no se contaba a sí misma
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.5`:
+`b/f/x/n 0/0/5/2`, la regla pide **PATCH -> v0.32.6**.
+
+Publicar es certificar. El `pre-push` corre la receta, y su `unit-tests` dio
+`2 failed` sobre un árbol que la suite entera daba verde. Uno era el par de
+versión de WI-109. El otro se atribuyó a un «fallo dependiente del orden» que
+**no se reproduce**, y eso se nombra como no establecido, no como causa.
+
+**LO QUE SÍ ES CIERTO, Y MEDIDO, ES ESTE.** `project_truth.py` tiene **dos**
+salidas, no una, y las dos son JSON válido. La de `Estado` trae las cinco
+verdades y sale con `rc` 0/1; la de `VerdadNoLegible` trae `coherente: false` e
+`ilegible`, y **ninguna** de las cinco, y sale con `rc` 2. Son dos contratos, no
+uno con un campo a veces ausente.
+
+De sus consumidores, **uno** conocía la segunda forma
+(`measure_b14_truth_single_reader.py`, que lee `ilegible`) y los otros dos no:
+
+- `tests/test_b0_truth_convergence.py` hacía `carga["bloque"]` sobre las dos, y
+  sobre la segunda reventaba con `KeyError: 'bloque'`. El guard que existe para
+  explicar por qué el proyecto no está bien **era el que no lo explicaba**, y la
+  causa estaba a mano en la misma carga.
+- `measure_b9_gate_1_0.py` caía en la rama de contradicciones y devolvía
+  `OPEN` con la lista **vacía**. No es que no dijera nada: **orienta mal**,
+  porque `OPEN` dice «arregla el proyecto» y aquí lo que hay que arreglar es una
+  verdad rota. Es el defecto de B19 entrando por otra puerta.
+
+El veredicto nuevo es `NO_MEASURABLE`, que el vocabulario de la cabecera del
+gate ya definía para esto: «no hay forma de decidirla con este entorno, y se
+dice por qué». Las dos dejan 1.0 lejos —declarar `PASS` sería la única forma de
+mentir—, así que no baja el veredicto: baja la **afirmación** de que el
+proyecto tiene un defecto que no se ha comprobado que tenga.
+
+**Y LA RELEASE QUE ESTE BLOQUE ACABABA DE HACER NO SE CONTABA A SÍ MISMA.**
+`v0.32.5` estaba en git y fuera de `release.releases`. No era un *forgot* en una
+tabla: el inventario es lo que **decide qué releases se contrastan**, y una que
+no está en la lista se escapa de `test_every_listed_sha_matches_its_tag`. Una
+release no listada es una release cuya provenance no mira nadie. MEDIDO, con el
+sha que estaba escrito a mano en la prosa:
+
+```
+FAILED v0.32.5: dice a8c1ffaab559, git dice f3948feda480
+```
+
+El guard estaba bien; lo que faltaba era la entrada. Y con ella caían tres
+afirmaciones caducadas en el mismo registro: la fila de SemVer de `v0.32.4`
+citada como si fuera la de `v0.32.5`, un `tests.total` que no cuadraba con su
+campo, y un comentario que afirmaba que «el guard que la lista no puede mirarlo»
+—falso, y una afirmación falsa en un comentario de provenance es justo lo que
+hace que nadie lo compruebe.
+
+**Certificado** con la receta canónica, 9/9 etapas, run
+`52b22437-d2ba-4654-9a16-f02ef745e9b8` verificado por su receipt:
+`3416 passed + 3 skipped = 3419`. Cobertura global 95,87 % y todo módulo
+gobernado por §6.3 sobre su suelo. `tests.total` 3412 -> 3419, +7.
+
+**Harness 4/4 con 4 causas**, dos sondas sobre el guard de B0 y dos sobre el del
+gate. Y con un **fallo propio del arnés**, el segundo en dos bloques: la
+primera versión contaba como CAZADA cualquier `rc != 0`, y los selectores de las
+dos sondas del gate estaban mal —les faltaba el `tests/`—, luego pytest salía
+con 4, que es **error de uso**, y el arnés lo leía como «la sonda cayó». Un
+arnés que cuenta su propio error como acierto es peor que no tener arnés: da el
+número que el bloque quiere mostrar y no midió nada.
+
 ## [0.32.5] - 2026-10-05 — El gate se contradecía a sí mismo, y la razón era un sufijo
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.4`:
-`b/f/x/n/d 0/0/5/11/0`, la regla pide **PATCH -> v0.32.5**.
+`b/f/x/n 0/0/5/12`, la regla pide **PATCH -> v0.32.5**.
 
 **Es el hallazgo más incómodo de la serie, y no es un `PASS` falso ni un
 `OPEN` falso.** B16 abrió propiedades que daban verde con el defecto presente.
