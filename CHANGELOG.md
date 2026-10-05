@@ -14,6 +14,91 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.32.7] - 2026-10-05 — Una certificación en rojo no puede decir QUÉ falló
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.6`:
+`b/f/x/n 0/0/2/6`, la regla pide **PATCH -> v0.32.7**.
+
+No es que la CI no mostrara el fallo. Es que el motor se queda con la **cola**
+de la salida de cada step y la recorta a media línea, y `coverage.sh` imprime
+~100 líneas de tabla de cobertura **después** de pytest. Los `FAILED`
+existían en el log entero de la misma corrida; lo que no existía era que nadie
+los dijera al final. **MEDIDO**: de 12 consolas de `unit-tests` en
+`.pipelinek/control/`, las 12 terminan sin `FAILED`, y la única que sí lo hace
+es `3bb3a3b8`, un run que de verdad falló.
+
+La propiedad es **«lo que pytest dice de sus fallos tiene que aparecer DESPUÉS
+de la última tabla de cobertura»**, y no «que se impriman las FAILED». La
+segunda se cumple hoy sin el arreglo —el log tiene la lista entera— y la
+primera no. La primera aguanta además que la tabla crezca.
+
+`scripts/diagnose_pytest_run.sh` reimprime el resumen y los `FAILED` al final.
+Vive **aparte** y no dentro de `coverage.sh`, por un motivo concreto: para que
+un guard pueda **ejecutarlo** contra un log real sin arrancar la receta entera.
+Un guard que lee el fuente de un bloque de shell mide el texto del bloque, que
+es exactamente el fallo de B20 con el heredoc de la configuración.
+
+**Se cumplió en producción.** La primera certificación de B21 terminó en rojo y
+su journal **nombró** los cinco fallos. Era justo lo que se venía a arreglar, y
+lo demostró el propio run que lo sufre.
+
+### Los siete defectos que salieron al certificar
+
+Cinco eran regresiones **propias** de este bloque. Ninguno fallaba por mirar
+mal: **fallaban por no mirar**.
+
+- **El predicado de paridad miraba la palabra.** Declaraba
+  `diagnose_pytest_run.sh` como script que «ejecuta pytest» por un `echo` que
+  nombra pytest. Ahora mira la orden **sin sus cadenas**, y no filtra las
+  líneas que empiezan por `echo`: `echo a && pytest` **sí** invoca pytest, y un
+  filtro por primer token dejaría pasar justo el caso que el invariante existe
+  para cazar.
+- **WI-75 fijaba un literal y la propiedad estaba intacta.** Se puso rojo al
+  parametrizar la expresión con `COVERAGE_DATA_FILE`, y el heredoc va sin
+  comillas a propósito, así que la ruta seguía saliendo absoluta. Es el error
+  de WI-106 y el de B20 con otra forma: decidir **cómo se escribe** la ruta en
+  vez de **a qué conjunto pertenece**. Ahora resuelve la expresión con el
+  shell y compara el **valor**, dos veces y desde dos `cwd` distintos.
+- **El guard de aislamiento miraba un directorio vacío.** Buscaba
+  `.pipelinek/.coverage*`, y ahí no hay ningún fichero de cobertura: `RC` y
+  `DATA_FILE` caen en la raíz. La lista comparada contenía siempre un
+  elemento —el log— y la mitad de la propiedad no se miraba.
+- **Y luego comparaba nombres, no hechos.** Pisar un dato de cobertura no
+  renombra el fichero: lo reescribe. El docstring prometía «los ficheros siguen
+  AHORA» y lo que se comprobaba era que no hubiera nombres nuevos.
+- **Y eso lo hacía verde en local y rojo en la suite.** El fallo más caro, y no
+  se vio hasta la certificación. El estado que el guard medía lo cambia **el
+  proceso que lo contiene**: la suite lanza cientos de subprocesos de la CLI y
+  cada uno deja su `.coverage.parallel.<host>.<pid>.<rand>` en la raíz. La
+  misma corrida lo dice: el estado «antes» ya traía `pid1223081` de otro
+  proceso y el «después» traía `pid1286996` de otro. **Un reloj que se mueve
+  solo no puede medir**, ni para pasar ni para fallar. La medición pasó al
+  artefacto que la corrida escribe: si el `data_file` de la config aislada
+  apunta a su sandbox, coverage no tiene a dónde ir en la raíz. Es un
+  silogismo, y nadie de fuera lo puede contaminar.
+- **El reloj del log no existía.** La medición del log —el único reloj
+  utilizable, porque solo lo escribe `coverage.sh`— comparaba la clave
+  `unit-tests.log` cuando el estado la declara como `.pipelinek/unit-tests.log`.
+  Dos `.get()` a `None`, `None == None`, verde: el test que se suponía que
+  vigilaba el log no miraba el log. Encontrado por su propio contrasalto, que
+  es exactamente para lo que existe.
+- **`tests.total` se escribió antes de que existieran los guards.** La regla es
+  que la cifra se escribe **después** del run, y el run es lo que la mide. Los
+  dos únicos fallos de la recertificación eran la misma causa, y los dos guards
+  que los nombraban decían cuál era el número bueno.
+
+### El reparto entre los dos guards
+
+WI-75 mide que la ruta por defecto **no dependa del `cwd`**, y acepta en verde
+la forma fija. B21 mide que `COVERAGE_DATA_FILE` **se respete**, y esa misma
+forma la rompe. Ninguno de los dos puede suplantar al otro: uno mira la
+resolución y el otro el aislamiento. Un solo guard para las dos habría tenido
+que elegir, y el que hubiera elegido midiendo la mitad de la propiedad.
+
+**Certificado** con la receta canónica: 9/9 etapas, run
+`ba25dc8b-5d1d-4eb8-973d-1752aa3f5848` verificado por su receipt,
+**3428 passed + 3 skipped = 3431**.
+
 ## [0.32.6] - 2026-10-05 — Lo que salió al publicar: la verdad ilegible, y la release que no se contaba a sí misma
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.5`:

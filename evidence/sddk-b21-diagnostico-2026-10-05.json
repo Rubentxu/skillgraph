@@ -1,0 +1,41 @@
+{
+  "generado": "2026-10-05",
+  "bloque": "B21",
+  "titulo": "Una certificación en rojo no puede decir QUÉ falló",
+  "que_es": "No es que la CI no mostrara el fallo: es que el motor se queda con la COLA de la salida de cada step y la recorta a media línea, y `coverage.sh` imprime ~100 líneas de tabla de cobertura DESPUÉS de pytest. Los `FAILED` existían en el log entero de la misma corrida; lo que no existía era que nadie los dijera al final. MEDIDO: de 12 consolas de `unit-tests` en `.pipelinek/control/`, las 12 terminan sin `FAILED`, y la única que sí terminó con la línea es `3bb3a3b8`, un run que de verdad falló.",
+  "la_propiedad_y_no_otra": "«Lo que pytest dice de sus fallos tiene que aparecer DESPUÉS de la última tabla de cobertura», y no «que se impriman las FAILED». La segunda se cumple hoy sin el arreglo —el log tiene la lista entera—, y la primera no. La primera aguanta además que la tabla crezca.",
+  "que_entrega": {
+    "el_instrumento": "scripts/diagnose_pytest_run.sh reimprime el resumen y las líneas FAILED al final, con MAX_FALLIDOS=20 declarado. Vive APARTE y no dentro de coverage.sh, por un motivo concreto: para que un guard pueda EJECUTARLO contra un log real sin arrancar la receta entera. Un guard que lee el fuente de un bloque de shell mide el texto del bloque, que es exactamente el fallo de B20 con el heredoc de la configuración.",
+    "el_aislamiento": "coverage.sh gana tres rutas parametrizables —COVERAGE_RC, COVERAGE_DATA_FILE, COVERAGE_LOG— porque su estado de cobertura es GLOBAL y COMPARTIDO: `coverage erase` borra el dato que lee la etapa SIGUIENTE, `coverage-floors`, y un guard que ejecutara la receta durante la suite dejaría a esa etapa midiendo un solo fichero de test. Un guard que rompe la corrida que lo certifica es peor que no tener guard."
+  },
+  "se_cumplio_en_produccion": "La primera certificación de B21, run e166b0a5, terminó en rojo y su journal NOMBRÓ los cinco fallos. Era justo lo que se venía a arreglar, y lo demostró el propio run que lo suffering. En la recertificación, run b4271500, la cola de la etapa termina en `=== coverage: tests que fallaron ===` seguido del FAILED, DESPUÉS de la tabla de 100 líneas.",
+  "los_defectos_que_salieron_al_certificar": {
+    "por_que_importan": "Siete, y cinco de ellos eran regresiones PROPIAS de este bloque. Un bloque que se encuentra a si mismo es el unico que se puede encontrar.",
+    "1_el_predicado_de_paridad_miraba_la_palabra": "check_ci_recipe_parity declaraba scripts/diagnose_pytest_run.sh como script que «ejecuta pytest» por una linea `echo` que nombra pytest. El predicado miraba la ORDEN sin quitarle las CADENAS. Se quitan las cadenas y no las lineas que empiezan por `echo`, porque `echo a && pytest` SI invoca pytest y un filtro por primer token dejaria pasar justo el caso que el invariante existe para cazar.",
+    "2_wi75_fijaba_un_literal_y_la_propiedad_estaba_intacta": "El guard fijaba `data_file = $REPO_ROOT/.coverage.parallel` y se puso rojo cuando la expresion se parametro con COVERAGE_DATA_FILE. El heredoc va SIN comillas a proposito, asi que la ruta sigue saliendo absoluta. Es el error de WI-106 —un guard que compara contra su propia copia— y el de B20 con otra forma: decidir COMO SE ESCRIBE la ruta en vez de A QUE CONJUNTO PERTENECE. Ahora resuelve la expresion con el shell y compara el VALOR, dos veces y desde dos cwd distintos: si fuese relativa, cada cwd daria un valor distinto.",
+    "3_el_guard_de_aislamiento_miraba_un_directorio_vacio": "`_estado_del_repo()` miraba `RAIZ/.pipelinek/.coverage*`, donde NO hay ningun fichero de cobertura: RC y DATA_FILE caen en la RAIZ y solo el LOG va a `.pipelinek/`. La lista comparada contenia siempre un elemento, el log, y la mitad de la propiedad no se miraba. La sonda M4 —quitar el aislamiento del data_file— daba 9 passed con el aislamiento roto.",
+    "4_y_luego_comparaba_nombres_y_no_hechos": "Pisar un dato de cobertura no renombra el fichero: lo reescribe. MEDIDO sobre el dato real, con M4 una corrida de un solo test deja `.coverage.parallel` con mtime 04:44:57 y el nombre es el de antes. El docstring prometia «los ficheros siguen AHORA» y lo que se comprobaba era que no hubiera nombres nuevos.",
+    "5_y_eso_lo_hacia_verde_en_local_y_rojo_en_la_suite": "El fallo mas caro de los siete, y no se vio hasta la certificacion. El estado que el guard media lo cambia el PROCESO QUE CONTIENE AL GUARD: la suite completa lanza cientos de subprocesos de la CLI y cada uno deja su `.coverage.parallel.<host>.<pid>.<rand>` en la raiz al terminar. La MISMA corrida lo dice: el estado «antes» ya traia `pid1223081.XLRP4gNx` de otro proceso, y el «despues» traia `pid1286996.Xd9njrXx` de otro. Un reloj que se mueve solo no puede medir, ni para pasar ni para fallar. La medicion paso a hacerse sobre el ARTEFACTO que la corrida escribe: si el `data_file` de la config aislada apunta a su sandbox, coverage no tiene a donde ir en la raiz. Es un silogismo, y nadie de fuera lo puede contaminar.",
+    "6_el_reloj_del_log_no_existia": "La medicion del log —el unico reloj utilizable, porque solo lo escribe coverage.sh— comparaba la clave `unit-tests.log` cuando el estado la declara como `.pipelinek/unit-tests.log`. Dos `.get()` a None, `None == None`, verde: el test que se suponia que vigilaba el log no miraba el log. MEDIDO AL ESCRIBIR SU CONTRASALTO, que es exactamente para lo que existe. El nombre vive ahora en LOG_DEL_REPO y lo usan el reloj y su contrasalto.",
+    "7_tests_total_se_escribio_antes_de_que_existieran_los_guards": "La regla es que la cifra se escribe DESPUES del run, y el run es lo que la mide. Los dos unicos fallos de la recertificacion eran la misma causa, y los dos guards que los nombraban decian cual era el numero bueno."
+  },
+  "el_patron_de_los_siete": "NINGUNO fallaba por mirar mal: fallaban por NO MIRAR. Un guard que compara contra un directorio sin ficheros, o contra una clave que no esta, o contra un reloj que su contenedor mueve, sale verde sin tener nada que mirar. Y por eso el contrasalto no es decoracion: es lo que distingue «mide y sale verde» de «no tiene nada que medir y sale verde». El sexto se encontro gracias al sexto.",
+  "reparto_de_responsabilidades_entre_los_dos_guards": {
+    "wi75_mide": "que la ruta por defecto NO dependa del cwd. La forma fija `data_file = $REPO_ROOT/...` cumple esa propiedad y WI-75 la acepta en verde.",
+    "b21_mide": "que COVERAGE_DATA_FILE se respete. La misma forma la rompe, y B21 la caza.",
+    "por_que_no_es_redundancia": "Ninguno de los dos podria suplantar al otro: uno mira la resolucion, el otro el aislamiento. Un solo guard para las dos habria tenido que elegir, y el que hubiera elegido midiendo la mitad de la propiedad."
+  },
+  "el_arnes": {
+    "versionado": false,
+    "nota": "vive en .pipelinek/, que es de un solo uso y no se commitea",
+    "sondas": "5, con el reparto de responsabilidades explicitado: M1 relativo, M2 borrada y M3 $PWD las caza WI-75; M4 sale LIMPIA en WI-75 y la caza B21.",
+    "por_que_la_cuarta_dice_limpia_y_no_verde": "Una sonda que espera verde no se «caza»: lo que se mide es que el guard no se ponga rojo de mas. Nombrarla igual haria que el recuento de 5/5 dijera mas de lo que dice."
+  },
+  "deuda_registrada_y_no_abierta": {
+    "el_test_de_b14_muta_el_state_real": "La clase `_inyectado` de test_b14_truth_single_reader.py escribe en el STATE.yaml de verdad y lo restaura con comprobacion por sha256. MEDIDO: leer STATE.yaml mientras la suite corre devuelve un estado INVENTADO —«workitem: STATE declara B99_inventado»—, y fue lo primero que parecio una contradiccion nueva del instrumento. No lo es: la restauracion funciona y el fichero queda intacto. El riesgo real es un lector EXTERNO durante la corrida, y un crash que deje el estado sucio. No se abre aqui porque no invalida ninguna propiedad de B21 y abrirlo seria otro frente."
+  },
+  "criterios_de_salida": {
+    "tests_total": 3431,
+    "nota": "3428 passed + 3 skipped. La cifra se escribe DESPUES del run."
+  }
+}
