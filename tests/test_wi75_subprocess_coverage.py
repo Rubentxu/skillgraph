@@ -128,7 +128,55 @@ def test_subprocess_cli_coverage_is_recorded(tmp_path: Path) -> None:
     )
 
 
-def test_coverage_script_pins_the_three_ingredients() -> None:
+def _expresion_del_data_file() -> str:
+    """Saca del script la expresión que se escribe en `data_file`.
+
+    Se queda con la de CODIGO: la cabecera comentada del script nombra el
+    ingrediente (linea 36) y una busqueda sobre el fichero entero contaria
+    esa prosa como si fuera la configuracion.
+    """
+    body = COVERAGE_SCRIPT.read_text(encoding="utf-8")
+    code = "\n".join(line for line in body.splitlines() if not line.lstrip().startswith("#"))
+    lineas = [line for line in code.splitlines() if line.strip().startswith("data_file")]
+    assert len(lineas) == 1, (
+        f"se esperaba exactamente una linea de codigo que fije data_file, "
+        f"hay {len(lineas)}: {lineas}"
+    )
+    return lineas[0].split("=", 1)[1].strip()
+
+
+def _resuelve_data_file(expresion: str, cwd: Path, data_file: str = "") -> str:
+    """Deja que el shell resuelva la expresion, desde el cwd que se le pase.
+
+    El heredoc de `coverage.sh` va SIN comillas a proposito, para que el
+    shell expanda `$REPO_ROOT` al escribir. Evaluar aqui con el shell de
+    verdad es lo que hace fiel la medida: si la expresion dejara de
+    expandirse, este helper devolveria el texto crudo y el guard lo veria.
+
+    `eval` con comillas DOBLES es lo que reproduce el heredoc, que tambien
+    las lleva. Con comillas simples no habria expansion, y el guard pasaria
+    sobre un `data_file` que en el script real no se expande.
+    """
+    proc = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'REPO_ROOT="$1"; DATA_FILE="$2"; eval "printf %s \\"$3\\""',
+            "_",
+            str(REPO_ROOT),
+            data_file,
+            expresion,
+        ],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        check=False,
+    )
+    assert proc.returncode == 0, f"el shell no resolvio la expresion: {proc.stderr}"
+    return proc.stdout
+
+
+def test_coverage_script_pins_the_three_ingredients(tmp_path: Path) -> None:
     """El script debe seguir fijando los tres ingredientes de la receta.
 
     Fijarlos aqui evita el modo de fallo mas caro: una receta que "funciona"
@@ -158,10 +206,38 @@ def test_coverage_script_pins_the_three_ingredients() -> None:
     )
     # (2) parallel: sin el, last-writer-wins entre procesos.
     assert "parallel = true" in code, "falta parallel = true en la config"
-    # (3) data_file absoluto: con cwd=tmp_path uno relativo se pierde.
-    assert "data_file = $REPO_ROOT/.coverage.parallel" in code, (
-        "el data_file debe ser absoluto; con uno relativo los datos de los "
+    # (3) data_file que NO depende del cwd: es la propiedad, y se mide
+    #     EJECUTANDO la expresion, no comparando su texto.
+    #
+    #     Por que no un pin del literal. La forma era
+    #     `data_file = $REPO_ROOT/.coverage.parallel` y B21 la parametro con
+    #     COVERAGE_DATA_FILE para poder aislar la corrida; el pin dio rojo
+    #     con la propiedad INTACTA. Es el error de WI-106 otra vez —un guard
+    #     que compara contra su propia copia—, y el de B20 con otra forma:
+    #     decidir COMO SE ESCRIBE la ruta en vez de A QUE CONJUNTO PERTENECE.
+    #
+    #     Lo que hay que medir es el valor que acaba leyendo coverage, y ese
+    #     lo decide el shell. Se resuelve DOS veces, desde dos cwd distintos:
+    #     si la ruta fuese relativa, cada cwd daria un valor distinto y los
+    #     datos de los subprocesos caerian en el tmp de pytest, que los borra.
+    #
+    #     Asi el guard sobrevive a la parametrizacion (que es lo que enables)
+    #     y sigue cazando la clase entera de defectos: borrar la linea,
+    #     ponerla relativa, o ponerla con $PWD.
+    expresion = _expresion_del_data_file()
+    desde_repo = _resuelve_data_file(expresion, cwd=REPO_ROOT)
+    desde_tmp = _resuelve_data_file(expresion, cwd=tmp_path)
+
+    assert Path(desde_repo).is_absolute(), (
+        f"el data_file debe ser absoluto; el valor resuelto es {desde_repo!r} "
+        f"(expresion: {expresion!r}). Con uno relativo los datos de los "
         "subprocesos caen en el tmp de pytest y se borran"
+    )
+    assert desde_repo == desde_tmp, (
+        "el data_file no puede depender del cwd: se resolvio a "
+        f"{desde_repo!r} desde el repo y a {desde_tmp!r} desde {tmp_path}. "
+        "Relativo significa que los datos de los subprocesos caen en el tmp "
+        "de pytest y se borran al terminar"
     )
     assert "COVERAGE_PROCESS_START" in code, "falta exportar COVERAGE_PROCESS_START"
 
