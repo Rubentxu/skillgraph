@@ -3,7 +3,7 @@
   "bloque": "B20",
   "subbloque": "B20-2, que es lo que salio al publicar",
   "titulo": "El gate se contradecía a sí mismo, y la razón era un sufijo",
-  "release": "0.32.5",
+  "release": "0.32.5 (B20) y 0.32.6 (B20-2)",
   "que_es_y_que_no_es": "No es un PASS falso ni un OPEN falso, que es lo que abriron B16 y B17: es que el gate se CONTRADECE A SÍ MISMO. `ontology extensible` y `core sin dependencias de impl. externa` son dos propiedades del mismo gate sobre la MISMA frontera, y con un solo import en core/ la primera daba PASS y la segunda OPEN. MEDIDO sobre la superficie real del proyecto, no sobre casos inventados: 7 CONTRADICCIONES de 9.",
   "la_causa_y_tiene_las_dos_caras": {
     "el_patron": "_TIPO_DE_RECURSO = ^[A-Z][A-Za-z]*Pack$",
@@ -66,10 +66,23 @@
     "producto": "S9 y S10 del ADR-0015 siguen siendo decisiones de producto."
   },
   "shas": {
-    "nota": "Tomados de git con git log y git rev-list. Una entrada con un sha inventado es provenance falsa, y este bloque existe porque un patron por forma decidia como se escribe un nombre en vez de a que conjunto pertenece.",
-    "tag": "v0.32.5",
-    "sha_del_tag": "f3948feda4802fd88d049b50f0758a41d9c20622",
+    "nota": "Tomados de git con git log y git rev-list. Una entrada con un sha inventado es provenance falsa, y este bloque existe porque un patron por forma decidia como se escribe un nombre en vez de a que conjunto pertenece. Y en v0.32.5 ese sha estaba escrito a mano y era el de un commit de en medio del bloque, sin que nada lo notara porque la entrada del inventario que lo contrasta no existia.",
+    "release_del_bloque": {
+      "B20": {
+        "tag": "v0.32.5",
+        "sha_del_tag": "f3948feda4802fd88d049b50f0758a41d9c20622"
+      },
+      "B20-2": {
+        "tag": "v0.32.6",
+        "sha_del_tag": "4d37e2e87abc676e70a767492c04ce0c66d7582b",
+        "por_que_dos": "B20-2 es lo que salio al publicar B20, y queda DETRAS de la etiqueta v0.32.5, asi que sin una release propia el bloque tendria trabajo verificado y sin emitir. El SemVer lo pide la herramienta, no la mano: 0/0/5/2 -> PATCH."
+      }
+    },
+    "tag": "v0.32.6",
+    "sha_del_tag": "4d37e2e87abc676e70a767492c04ce0c66d7582b",
     "commits_del_bloque": [
+      "0ff7467 chore(release): el estado de v0.32.6, con el sha tomado de git",
+      "4d37e2e build(release): bump 0.32.5.dev0 -> 0.32.6, con el SemVer derivado",
       "777b53a docs(state): el bloque vivo, con B20-2 dentro y las citas otra vez al dia",
       "ea4fe1d fix(b0): el guard de la verdad decia QUE fallaba y no POR QUE",
       "477c552 fix(gate): la respuesta ilegible de project_truth se perdia, y decia OPEN",
@@ -96,13 +109,13 @@
       "8970e65 docs(release): el registro de v0.32.4, con el sha de git y el bump de la herramienta",
       "62cbe51 chore(release): el estado de v0.32.4, con su etiqueta ya creada"
     ],
-    "head": "777b53a07af6cfe9c33889610c2a667a6541a620",
+    "head": "0ff746761989b9a0cdb56ca7e2f2dc2a34fb32ff",
     "arbol_limpio": true
   },
   "certificacion": {
     "receta": "bash scripts/ci.sh, la canonica de .pipeline.kts",
     "run_id": "52b22437-d2ba-4654-9a16-f02ef745e9b8",
-    "head_certificado": "docs(state): el bloque vivo, con B20-2 dentro y las citas otra vez al dia",
+    "head_certificado": "chore(release): el estado de v0.32.6, con el sha tomado de git",
     "la_etapa_evidence_verifica_el_run_anterior": "MEDIDO y no es un defecto: la receta no puede verificar su propio run porque cuando se ejecuta todavia no tiene RunFinished, y la resolucion sale del motor —`RunFinished` mas reciente es, durante un run, el run ANTERIOR—. Asi que la etapa `evidence` de un run N juzga al run N-1.",
     "la_cadena_se_auto_sana_una_corrida_despues": "`solo_autoevaluada` en check_pipeline_receipt.py exculpa un run anterior con EXACTAMENTE un StepFailed y que sea el de la etapa `evidence`. MEDIDO en esta certificacion: el run c0a564e1 dejo las ocho etapas reales en SUCCESS —unit-tests con 3416 passed + 3 skipped y cero fallos, coverage-floors con «todo modulo gobernado por 6.3 cumple su suelo» y 95,87 % global, package-build, public-surfaces, ci-parity y lint— y fallo solo en `evidence`, que verificaba el run anterior, que si habia fallado de verdad. Ese run es el unico caso que la excepcion cubre, y por eso la corrida siguiente si da 9/9. La excepcion es estrecha a proposito: un run abortado sin un solo StepFailed se rechaza igual, y lo fija `test_un_run_abortado_sigue_sin_pasar`.",
     "suite": "3416 passed + 3 skipped = 3419, que es tests.total",
