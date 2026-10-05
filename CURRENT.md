@@ -1,6 +1,66 @@
+> **Bloque 2026-10-05 (B21) — Una certificación en rojo no puede decir QUÉ falló.**
+> (cerrado y publicado en `v0.32.7`)
+> Versión activa `0.32.7.dev0`; último tag `v0.32.7`.
+>
+> **NO ES QUE LA CI NO MOSTRARA EL FALLO.** Es que el motor se queda con la
+> **cola** de la salida de cada step y la recorta a media línea, y
+> `coverage.sh` imprime ~100 líneas de tabla de cobertura **después** de
+> pytest. Los `FAILED` existían en el log entero de esa misma corrida; lo que
+> no existía era que nadie los dijera al final.
+>
+> **MEDIDO, sobre las consolas reales:** de 12 consolas de `unit-tests` en
+> `.pipelinek/control/`, **las 12 terminan sin `FAILED`**, y la única que sí lo
+> hace es `3bb3a3b8` — un run que de verdad falló.
+>
+> **LA PROPIEDAD Y NO OTRA.** «Lo que pytest dice de sus fallos tiene que
+> aparecer **DESPUÉS** de la última tabla de cobertura», y no «que se impriman
+> las FAILED»: la segunda ya se cumple sin el arreglo —el log tiene la lista
+> entera— y por eso no distinguiría nada. La primera aguanta además que la
+> tabla crezca.
+>
+> **SE CUMPLIÓ EN PRODUCCIÓN.** La primera certificación de B21 terminó en rojo
+> y su journal **nombró** los cinco fallos. Era justo lo que se venía a
+> arreglar, y lo demostró el propio run que lo sufre.
+>
+> **Y SIETE DEFECTOS AL CERTIFICAR, CINCO DE ELLOS REGRESIONES PROPIAS.** Y
+> ninguno fallaba por mirar mal: **fallaban por no mirar**. El que mejor
+> resume el patrón es el que llegó más tarde. El guard compara el estado del
+> repo antes y después
+> (`tests/test_b21_diagnostico.py:184::_estado_del_repo`), y ese estado lo
+> mueve el proceso que lo contiene:
+>
+> ```
+> guard de aislamiento: mide que la corrida aislada no toca el estado del repo
+>   en LOCAL            -> 10 passed
+>   en la SUITE COMPLETA -> 1 failed, con el aislamiento INTACTO
+> ```
+>
+> La suite lanza cientos de subprocesos de la CLI y cada uno deja su
+> `.coverage.parallel.<host>.<pid>.<rand>` en la raíz al terminar. La misma
+> corrida lo dice — el estado «antes» ya traía `pid1223081` de otro proceso y
+> el «después» traía `pid1286996` de otro. **Un reloj que se mueve solo no
+> puede medir**, ni para pasar ni para fallar. La medición pasó al artefacto
+> que la corrida escribe: si el `data_file` de la config aislada apunta a su
+> sandbox, coverage no tiene a dónde ir en la raíz. Es un silogismo, y nadie
+> de fuera lo puede contaminar. El recorte del diagnóstico, que es lo que
+> este bloque arregla, se declara en
+> `scripts/diagnose_pytest_run.sh:51::MAX_FALLIDOS` y se imprime al final
+> desde ahí.
+>
+> **Y EL SEXTO LO ENCONTRÓ SU PROPIO CONTRASALTO**, que es para lo que existe:
+> el reloj del log —el único utilizable, porque solo lo escribe `coverage.sh`—
+> comparaba la clave `unit-tests.log` cuando el estado la declara como
+> `.pipelinek/unit-tests.log`. Dos `.get()` a `None` y `None == None`: verde.
+> El test que se suponía que vigilaba el log no miraba el log.
+>
+> **Certificado** con la receta canónica: 9/9 etapas, run
+> `ba25dc8b-5d1d-4eb8-973d-1752aa3f5848` verificado por su receipt,
+> **3428 passed + 3 skipped = 3431**.
+
+---
+
 > **Bloque 2026-10-04 (B20) — El gate se contradecía a sí mismo, y la razón era un sufijo.**
 > (cerrado y publicado en `v0.32.5`, con B20-2 en `v0.32.6`)
-> Versión activa `0.32.6.dev0`; último tag `v0.32.6`.
 >
 > **ES EL HALLAZGO MÁS INCÓMODO DE LA SERIE, Y NO ES UN `PASS` FALSO NI UN
 > `OPEN` FALSO.** B16 abrió propiedades que daban verde con el defecto

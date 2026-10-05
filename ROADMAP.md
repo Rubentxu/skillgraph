@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B20** — El gate se contradecía a sí mismo, y la razón era un sufijo
-> Versión activa `0.32.4.dev0` · último tag `v0.32.4` · 3324 tests · 16/16 UAT
+> Bloque vivo: **B21** — Una certificación en rojo no puede decir QUÉ falló
+> Versión activa `0.32.7.dev0` · último tag `v0.32.7` · 3431 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
 y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
@@ -70,6 +70,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B18** | La frontera del núcleo no miraba la mitad de la superficie | Los relativos se resuelven, la estándar se deriva del intérprete, y la evidencia describe el recorrido |
 | **B19** | «NO es reproducible» y «no he podido medirlo» son la misma frase | La entrada del paquete se mide antes de acusar, y el veredicto no culpa al proyecto de haber medido dos entradas distintas |
 | **B20** | El gate se contradecía a sí mismo | El conjunto de recursos se deriva del árbol, y un docstring que documenta la frontera no es una dependencia |
+| **B21** | Una certificación en rojo no puede decir QUÉ falló | Lo que pytest dice de sus fallos aparece después de la última tabla, y un guard no usa como reloj un estado que mueve su propio contenedor |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
