@@ -196,10 +196,10 @@
 >
 > | cita | que sostiene |
 > |---|---|
-> | `measure_b9_gate_1_0.py:602::_ontology_extensible` | los tres defectos, escritos en su docstring |
-> | `measure_b9_gate_1_0.py:799::PAQUETES_DE_RECURSO` | el conjunto se declara por **paquete**, no por clase |
-> | `measure_b9_gate_1_0.py:802::_tipos_de_recurso` | el conjunto se **deriva** del árbol, y la cifra se publica |
-> | `measure_b9_gate_1_0.py:823::_docstrings_de` | documentación y código, separados —y sus dos defectos |
+> | `measure_b9_gate_1_0.py:622::_ontology_extensible` | los tres defectos, escritos en su docstring |
+> | `measure_b9_gate_1_0.py:819::PAQUETES_DE_RECURSO` | el conjunto se declara por **paquete**, no por clase |
+> | `measure_b9_gate_1_0.py:822::_tipos_de_recurso` | el conjunto se **deriva** del árbol, y la cifra se publica |
+> | `measure_b9_gate_1_0.py:843::_docstrings_de` | documentación y código, separados —y sus dos defectos |
 > | `test_b20_ontologia_contradictoria.py:95::PENDIENTES_POR_DECLARAR` | el techo **nombrado**, que es lo que lo hace rompible |
 > | `test_b20_ontologia_contradictoria.py:216::TestElGateNoSeContradiceASiMismo` | el invariante que cierra la contradicción |
 > | `mutate_b20_ontologia_contradictoria.py` | 3 sondas, 3/3, y **M1 y M2 declaran dos diagnósticos cada una** |
@@ -208,6 +208,67 @@
 > | `test_b20_coverage_omit.py:230::TestElArregloNoRelajaElSuelo` | un arreglo que apaga el umbral no es un arreglo |
 > | `test_b20_coverage_omit.py:250::TestLaConfiguracionEsLegible` | lo que el shell **produce** tiene que ser una configuración |
 > | `check_coverage_floors.py:159::informe` | la **segunda** consumer, que también se rompía |
+>
+> ---
+>
+> **Y AL PUBLICAR, B20-2: LA MISMA FORMA DEL DEFECTO, OTRA VEZ Y MÁS ABAJO.**
+> Publicar es certificar. El `pre-push` corre la receta, y su `unit-tests` dio
+> `2 failed`. Uno era el par de versión de WI-109. El otro se atribuyó a un
+> «fallo dependiente del orden» que **no se reproduce**: el par pasa, y
+> tampoco pasa en la suite entera. Lo que sí es cierto, y medido, es esto:
+>
+> **`project_truth.py` tiene DOS salidas, y solo una se miraba.** `main()`
+> responde `Estado` —las cinco verdades, `rc` 0/1— o `VerdadNoLegible` —
+> `coherente: false` e `ilegible`, y **ninguna** de las cinco, `rc` 2—. Las
+> dos son JSON válido, y por eso son dos contratos y no uno con un campo a
+> veces ausente. De sus consumidores, **uno** conocía la segunda forma
+> (`measure_b14_truth_single_reader.py`, que lee `ilegible`) y los otros dos
+> no:
+>
+> | consumidor | qué salía | qué dice el guard sobre no mirar la causa |
+> |---|---|---|
+> | `test_b0_truth_convergence.py` | `KeyError: 'bloque'` | el guard que existe para explicar el problema era el que no lo explicaba |
+> | `measure_b9_gate_1_0.py` | `OPEN` con la lista **vacía** | afirma que la propiedad no se cumple cuando lo que pasa es que no se pudo leer |
+>
+> Y el segundo no es que no diga nada: **orienta mal**. `OPEN` dice «arregla el
+> proyecto»; aquí lo que hay que arreglar es una verdad rota. Es el error de
+> B19 entrando por otra puerta, y por eso el veredicto nuevo es
+> `NO_MEASURABLE`, que el vocabulario de la cabecera del gate ya definía para
+> exactamente esto: «no hay forma de decidirla con este entorno, y se dice por
+> qué». **Las dos dejan 1.0 lejos**, luego aquí no baja el veredicto: baja la
+> **afirmación** de que el proyecto tiene un defecto que no se ha comprobado
+> que tenga.
+>
+> **LA MEDICIÓN, con el script real sobre un árbol real:**
+>
+> ```
+> respuesta sana      rc=0  bloque, coherente, contradicciones, objetivo, …
+> respuesta ilegible  rc=2  coherente, ilegible      ← sin `bloque`, con la causa
+> ```
+>
+> **Y, AL PUBLICAR, LA RELEASE QUE ESTE BLOQUE ACABABA DE HACER NO SE
+> CONTABA A SÍ MISMA.** `v0.32.5` estaba en git y fuera de
+> `release.releases`. No era un *forgot* en una tabla: el inventario es lo que
+> decide qué releases se contrastan, y una que no está en la lista **se escapa
+> de `test_every_listed_sha_matches_its_tag`**. Una release no listada es una
+> release cuya provenance no mira nadie. MEDIDO, poniendo el sha que estaba
+> escrito a mano en la prosa: `FAILED v0.32.5: dice a8c1ffaab559, git dice
+> f3948feda480`. El guard estaba bien; lo que faltaba era la entrada. Y con
+> ella caían tres afirmaciones caducadas en el mismo registro: la fila de
+> SemVer de `v0.32.4` citada como si fuera la de `v0.32.5`, un `tests.total`
+> que no cuadraba con el campo, y un comentario que afirmaba que «el guard que
+> la lista no puede mirarlo» —falso, y una afirmación falsa en un comentario de
+> provenance es justo lo que hace que nadie lo compruebe.
+>
+> **CERRADO CON HARNESS 4/4 CON 4 CAUSAS**, dos sondas sobre el guard de B0 y
+> dos sobre el del gate. Y con un **fallo propio del arnés** que es el segundo
+> en dos bloques: la primera versión contaba como CAZADA cualquier `rc != 0`, y
+> los selectores de las dos sondas del gate estaban mal —les faltaba el
+> `tests/`—, luego pytest salía con 4, que es **error de uso**, y el arnés lo
+> leía como «la sonda cayó». Un arnés que cuenta su propio error como acierto es
+> peor que no tener arnés: da el número que el bloque quiere mostrar y no midió
+> nada. Ahora exige `rc == 1` **y** el nombre del test en la salida, y valida
+> cada selector **antes** de deformar.
 >
 > ---
 >
