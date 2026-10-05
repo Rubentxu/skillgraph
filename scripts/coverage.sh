@@ -107,7 +107,18 @@ fi
 # patron `.coverage.*` del .gitignore, igual que los ficheros de datos
 # paralelos. Un nombre con guion lo dejaba sin ignorar y ensuciaba el
 # arbol, que es requisito del checklist de release.
-RC="$REPO_ROOT/.coverage.rc"
+#
+# LAS TRES RUTAS SE PUEDEN APUNTAR A OTRO SITIO, y no es para tests: es que el
+# estado de cobertura de este script es GLOBAL y COMPARTIDO. MEDIDO en B21:
+# `coverage erase` de mas abajo borra el fichero de datos, asi que un guard
+# que ejecutara este script DURANTE la suite dejaria a `coverage-floors` —la
+# etapa SIGUIENTE, que lee ese mismo dato— midiendo un solo fichero de test y
+# poniendola en rojo. Un guard que rompe la corrida que lo certify es peor que
+# no tener guard. Con estas tres variables el guard ejecuta el instrumento DE
+# VERDAD sin tocar el estado del que dependen los demas.
+RC="${COVERAGE_RC:-$REPO_ROOT/.coverage.rc}"
+DATA_FILE="${COVERAGE_DATA_FILE:-$REPO_ROOT/.coverage.parallel}"
+LOG="${COVERAGE_LOG:-$REPO_ROOT/.pipelinek/unit-tests.log}"
 
 # --- por que la configuracion omite /tmp (MEDIDO en B20, al certificar) -----
 #
@@ -153,7 +164,7 @@ branch = true
 source = skillgraph
 parallel = true
 sigterm = true
-data_file = $REPO_ROOT/.coverage.parallel
+data_file = $DATA_FILE
 # Lo que vive fuera del arbol del repo no es codigo de este repo, y no se
 # mide. El motivo, medido, esta en el comentario de este script, encima.
 omit =
@@ -182,7 +193,6 @@ uv run coverage erase --rcfile="$RC"
 
 # El log va a `.pipelinek/` porque AGENTS.md exige que los stages solo
 # produzcan efectos secundarios en `.pipelinek/` y `evidence/`.
-LOG="$REPO_ROOT/.pipelinek/unit-tests.log"
 mkdir -p "$(dirname "$LOG")"
 
 echo "=== coverage: pytest (principal via pytest-cov, subprocesos via hook) ==="
@@ -200,16 +210,19 @@ echo "=== coverage: report ==="
 uv run coverage report --rcfile="$RC"
 REPORT_RC=$?
 
-# La linea de resumen se imprime AL FINAL, y no por decoracion. Medido: el
-# `EchoOutputCaptured` de pipelinek conserva solo los ultimos ~1,2 KB de la
-# salida de cada step, y con `pytest -q` la linea de resumen cae en el medio
-# y se truncaba. AGENTS.md exige que el journal contenga `N passed in Xs`
-# porque es lo que separa una ejecucion real de un veredicto cacheado; sin
-# esto el criterio no se puede cumplir, no porque la run fuera falsa, sino
-# porque su prueba habia quedado fuera del recorte.
-echo "=== coverage: resumen de pytest ==="
-RESUMEN="$(grep -Eo '[0-9]+ (passed|failed|error)[^=]*' "$LOG" | tail -1)"
-echo "pytest: ${RESUMEN:-SIN RESUMEN}"
+# El diagnostico se imprime AL FINAL, y no por decoracion: es la ULTIMA cosa
+# que este script escribe. MEDIDO en B21: el motor se queda con la cola de la
+# salida de cada step y recorta a media linea, y este script imprime ~100
+# lineas de tabla de cobertura DESPUES de pytest, luego las lineas FAILED
+# quedaban fuera de la cola. El dato existia —el log de esta misma corrida lo
+# tiene entero—; lo que no existia era que nadie lo dijera al final.
+#
+# El script que reimprime vive aparte, `scripts/diagnose_pytest_run.sh`, y no
+# aqui dentro, por un motivo concreto: para que un guard pueda EJECUTARLO
+# contra un log real sin tener que arrancar este script entero. Un guard que
+# lee el fuente de un bloque de shell mide el texto del bloque, que es
+# exactamente el fallo de B20 con el heredoc de la configuracion.
+bash scripts/diagnose_pytest_run.sh "$LOG"
 
 # El exit code es el de pytest: un fallo de tests no debe quedar tapado
 # por un informe que se imprimiria igual.
