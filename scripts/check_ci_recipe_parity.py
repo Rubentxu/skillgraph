@@ -334,9 +334,30 @@ def rutas_de_script(contenido: str, marca: str) -> frozenset[str]:
     )
 
 
+#: Las CADENAS de una orden, y solo ellas. Se quitan antes de buscar
+#: invocaciones, y el motivo esta medido en B21: `scripts/diagnose_pytest_run.sh`
+#: —un script que IMPRIME el diagnostico de una corrida y no lanza pytest en
+#: ningun momento— daba `sg_ci_receta_suya` con la linea
+#: `echo "=== coverage: resumen de pytest ==="`. El predicado decia «este
+#: script ejecuta pytest» mirando la palabra, no la orden, que es justo lo que
+#: el docstring de `filtra_por_ficheros` dice que no hace.
+#:
+#: Se quitan las cadenas y no las lineas que empiezan por `echo`, porque
+#: `echo a && pytest` SI invoca pytest y un filtro por primer token dejaria
+#: pasar justo el caso que este invariante existe para cazar.
+_CADENA: Final = re.compile(r'"[^"]*"|\'[^\']*\'')
+
+
 def ejecuta_pytest(contenido: str) -> bool:
-    """¿El script lanza pytest en algún momento?"""
-    return any(_INVOCA_PYTEST.search(orden) for orden in logicas_de(contenido, "#"))
+    """¿El script lanza pytest en algún momento?
+
+    Se mira la orden SIN sus cadenas, no el texto entero: un `echo` que
+    menciona pytest no lo ejecuta, y un guard que lo creyera acabaria
+    marcando scripts que solo imprimen —MEDIDO, ver `_CADENA`—.
+    """
+    return any(
+        _INVOCA_PYTEST.search(_CADENA.sub("", orden)) for orden in logicas_de(contenido, "#")
+    )
 
 
 def filtra_por_ficheros(contenido: str) -> bool:

@@ -164,7 +164,7 @@ branch = true
 source = skillgraph
 parallel = true
 sigterm = true
-data_file = $DATA_FILE
+data_file = ${DATA_FILE:-$REPO_ROOT/.coverage.parallel}
 # Lo que vive fuera del arbol del repo no es codigo de este repo, y no se
 # mide. El motivo, medido, esta en el comentario de este script, encima.
 omit =
