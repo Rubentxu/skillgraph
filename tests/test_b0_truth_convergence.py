@@ -29,8 +29,10 @@ from __future__ import annotations
 
 import ast
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -41,6 +43,88 @@ SCRIPT = RAIZ / "scripts" / "project_truth.py"
 sys.path.insert(0, str(RAIZ / "scripts"))
 
 import project_truth  # noqa: E402
+
+#: Las cinco verdades y el fichero del que sale cada una. Se copian tal cual
+#: al sandbox del contraargumento: el JSON de la rama ilegible tiene que salir
+#: de verdad, no de una carga escrita aqui, porque un guard que compara contra
+#: su propia copia es el error de WI-106 aplicado a un test.
+LOS_FICHEROS_DE_LA_VERDAD = (
+    "STATE.yaml",
+    "ROADMAP.md",
+    "CURRENT.md",
+    "src/skillgraph/__init__.py",
+)
+
+
+def _ilegible(carga: dict) -> str | None:
+    """La causa de la respuesta ilegible, o `None` si la respuesta es normal.
+
+    `main()` tiene DOS salidas y las dos son JSON valido. La de `Estado` trae
+    `bloque`; la de `VerdadNoLegible` trae `coherente: false` e `ilegible`, y
+    ninguna de las cinco verdades. Son dos contratos, no uno con un campo a
+    veces ausente: por eso se distinguen por la clave que las separa y no por
+    un `if not carga.get(...)` que las trataria igual.
+    """
+    if "ilegible" not in carga:
+        return None
+    return str(carga["ilegible"])
+
+
+def _mensaje_de_instrumento(causa: str) -> str:
+    """El fallo de un guard de este fichero cuando el instrumento no pudo leer.
+
+    MEDIDO en B20-2: la respuesta ilegible es un JSON valido SIN `bloque`, y
+    este fichero hacia `carga["bloque"]` directamente. Resultado: un
+    `KeyError: 'bloque'` —que dice QUE fallo y no POR QUE— en el test que
+    precisamente existe para explicar por que el proyecto no esta bien. La
+    causa estaba a mano, en la misma carga, en la clave `ilegible`.
+
+    Y el peor sitio para perderla es este: la rama ilegible sale cuando una
+    de las cinco verdades esta rota, y entonces el guard se ejecuta precisamente
+    cuando su explicacion es lo unico que hay.
+    """
+    return (
+        "project_truth.py NO PUDO LEER una de las cinco verdades, asi que no "
+        "emitio respuesta. Esto no es «el proyecto se contradice» —eso sale "
+        "con `coherente: false` y la lista de contradicciones—: es el "
+        "instrumento el que fallo, y la causa dice cual de las cinco:\n"
+        f"  {causa}\n\n"
+        "Se arregla en el fichero que nombra arriba, no aqui. Si sale "
+        "`no se pudo leer <fichero>`, ese fichero no existe o no se puede "
+        "abrir; si sale sobre el recuento, pytest no pudo colectar."
+    )
+
+
+def _sandbox_roto(destino: Path) -> Path:
+    """Un arbol donde `__init__.py` existe pero ya no declara `__version__`.
+
+    Se copia el arbol MINIMO que el script lee, con el propio script dentro,
+    para que su `RAIZ` —que se deriva de `__file__`— sea el sandbox y no el
+    repositorio. Un clon entero haria la prueba lenta y, sobre todo, haria que
+    un fallo de la prueba se confunda con un fallo del repo.
+    """
+    for relativo in LOS_FICHEROS_DE_LA_VERDAD:
+        destino_fichero = destino / relativo
+        destino_fichero.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(RAIZ / relativo, destino_fichero)
+    (destino / "scripts").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(SCRIPT, destino / "scripts" / SCRIPT.name)
+    (destino / "src" / "skillgraph" / "__init__.py").write_text(
+        "# el fichero existe pero ya no declara la version\n", encoding="utf-8"
+    )
+    return destino
+
+
+def _respuesta_de(sandbox: Path) -> tuple[int, dict]:
+    """La respuesta REAL del script, ejecutada en el sandbox."""
+    proc = subprocess.run(
+        [sys.executable, str(sandbox / "scripts" / SCRIPT.name)],
+        cwd=sandbox,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return proc.returncode, json.loads(proc.stdout)
 
 
 def _ejecuta() -> tuple[int, dict]:
@@ -60,7 +144,7 @@ def _ejecuta() -> tuple[int, dict]:
         check=False,
     )
     try:
-        return proc.returncode, json.loads(proc.stdout)
+        carga = json.loads(proc.stdout)
     except json.JSONDecodeError as exc:  # pragma: no cover - ver abajo
         pytest.fail(
             "project_truth.py no emitio JSON legible. La respuesta unica a "
@@ -69,6 +153,10 @@ def _ejecuta() -> tuple[int, dict]:
             f"stderr:\n{proc.stderr[-300:]}\n"
             f"JSONDecodeError: {exc}"
         )
+    ilegi = _ilegible(carga)
+    if ilegi is not None:
+        pytest.fail(_mensaje_de_instrumento(ilegi))
+    return proc.returncode, carga
 
 
 class TestLaVerdadEsUnica:
@@ -176,6 +264,80 @@ class TestLaVerdadEsUnica:
         assert "ROADMAP.md" in cabecera, (
             "el roadmap historico tiene que senalar cual es el vivo, o el "
             "lector se queda con dos y sin saber cual"
+        )
+
+
+class TestLaVerdadIlegibleSeDice:
+    """La segunda forma de la respuesta, que hasta B20-2 nadie miraba.
+
+    `main()` no tiene una salida, tiene DOS, y las dos salen como JSON
+    valido. La segunda —`ilegible`— es la que aparece cuando una verdad esta
+    rota, o sea justo cuando el guard tiene algo que decir.
+
+    Estos tests no reimplementan la rama: **ejecutan el script de verdad** en
+    un arbol donde una verdad esta rota, y comprueban que la respuesta llega
+    con la causa puesta y que el guard la nombra en vez de reventar.
+    """
+
+    def test_la_rama_ilegible_sale_de_verdad_y_trae_la_causa(self) -> None:
+        """Que exista la rama, con su forma propia y su causa dentro.
+
+        Sin esto, un `project_truth.py` que dejara de tener segunda salida
+        pasaria todos los tests de este fichero: la respuesta normal trae
+        `bloque` y no menciona `ilegible` nunca.
+        """
+        with tempfile.TemporaryDirectory(prefix="b0_ilegible_") as tmp:
+            rc, carga = _respuesta_de(_sandbox_roto(Path(tmp)))
+
+        assert rc == 2, f"una verdad ilegible tiene que salir con 2, dio {rc}"
+        assert carga.get("coherente") is False, (
+            "una verdad ilegible NO es una verdad sana con un campo a menos: "
+            f"la respuesta fue {carga}"
+        )
+        assert "bloque" not in carga, (
+            "la rama ilegible no puede fingir tener las cinco verdades: si "
+            f"trajera `bloque`, seria indistinguible de la sana. Trae: {carga}"
+        )
+
+    def test_el_guard_nombra_la_causa_y_no_revienta(self) -> None:
+        """La propiedad, tal cual: el fallo dice POR QUE, no solo QUE.
+
+        Este es el test que faltaba. Antes de B20-2 el guard hacia
+        `carga["bloque"]` sobre esta respuesta y salia un `KeyError: 'bloque'`:
+        el test que existe para explicar el problema era el que no lo
+        explicaba.
+        """
+        with tempfile.TemporaryDirectory(prefix="b0_ilegible_") as tmp:
+            _, carga = _respuesta_de(_sandbox_roto(Path(tmp)))
+
+        # Se pasa por la MISMA politica que usa `_ejecuta`, no por una copia:
+        # si la politica dejara de mirar `ilegible`, esto pasaria en verde.
+        causa = _ilegible(carga)
+        assert causa is not None, f"la respuesta ilegible no trae la causa: {carga}"
+        assert "__version__" in causa, (
+            "la causa no dice QUE verdad se rompio, y sin eso quien corrige "
+            f"tiene que abrir el script a adivinar. Decia: {causa!r}"
+        )
+
+    def test_el_mensaje_distingue_instrumento_de_proyecto(self) -> None:
+        """Que se separen las DOS formas de estar mal, en el mensaje.
+
+        Un unico mensaje para las dos convertiria «tu repositorio esta mal» y
+        «mi instrumento no pudo leer tu repositorio» en la misma frase, que es
+        el error de B19 con otro envoltorio: una accion que se deduce de un
+        veredicto que no distingue de quien es el problema.
+        """
+        ilegi = "src/skillgraph/__init__.py no declara __version__"
+        mensaje = _mensaje_de_instrumento(ilegi)
+
+        assert ilegi in mensaje, "el mensaje no repite la causa que le pasan"
+        assert "NO PUDO LEER" in mensaje, (
+            "el mensaje no dice que es un fallo del instrumento, luego el "
+            "lector lo toma como un fallo del proyecto"
+        )
+        assert "contradiccion" in mensaje.lower(), (
+            "el mensaje tiene que decir por que NO es lo otro: sin eso, quien "
+            "lea tiene que adivinar si hay que arreglar el repo o el guard"
         )
 
 
