@@ -14,6 +14,74 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.37.0] - 2026-10-06 — Los conflictos avisan y son consultables
+
+SemVer **derivado** desde `v0.36.0`: `0 breaking · 1 feat · 2 fix · 3 otros`
+(`git log v0.36.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.37.0**.
+
+## El enunciado de esta fila exagera, y medirlo cambió el bloque
+
+La fila decía *«Dos claims incompatibles se pisan y no hay forma de saberlo»*.
+Medido antes de escribir nada, con `scripts/measure_b27_conflictos.py`:
+
+    P1  CERRADA  dos fuentes, hechos opuestos  -> 2 filas, COEXISTEN
+    P2  CERRADA  misma fuente, hechos opuestos -> 1 fila, SE PISA
+
+El overwrite **no** depende de que dos herramientas discrepen: depende de la
+**misma** fuente con la **misma** revisión, porque el `UNIQUE` de `claims` es
+`(subject_entity_id, predicate, source_id, checked_at_revision)` y lleva
+`source_id` dentro. Dos herramientas distintas ya coexistían de sobra.
+
+Lo que sí era cierto era la otra mitad, y es la que se arregla.
+
+## El overwrite deja de ser silencioso
+
+`record_claim` usaba `INSERT OR IGNORE` y devolvía el `claim_id` que se le
+había dado. Eso miente: el `UNIQUE` puede rechazar la fila y el método devuelve
+igual, como si hubiera escrito. Medido: dos afirmaciones opuestas con la misma
+fuente y la misma revisión dejan **una** fila —la primera—, y quien escribe
+creía haber registrado la suya.
+
+Ahora devuelve `ClaimRecorded`, que dice si hubo conflicto y **qué se solapa**.
+
+## Los conflictos son consultables y estables
+
+`conflicts_for(subject_entity_id)` por la fachada de `Storage` devuelve los
+conflictos **agrupados por predicado** y en **orden estable**. Tres
+afirmaciones que se contradicen son un conflicto con tres afirmaciones, no tres
+conflictos: sin agrupar, «cuántas contradicciones hay» sería el número de claims
+y no el de contradicciones.
+
+Un conflicto requiere **dos valores distintos**, no varias filas: tres fuentes
+que dicen todas `true` no se contradicen, y llamarlas conflicto haría que
+`conflicts_for` devolviera casi todo.
+
+## Corregido: un aviso que no se imprime es un aviso que no existió
+
+El conflicto del destino se imprimía en ningún sitio. Ahora el reconcile
+anexa una línea:
+
+```
+p1  PUBLISHED
+CONFLICTOS  1 claim(s) ya afirmaban otra cosa en destino: c-nuevo
+```
+
+No se convierte en `FAILED`: el apply se completó y el destino tiene su propia
+versión. Decir «fallido» sería mentir sobre el estado del proyecto.
+
+## Lo que este bloque NO hace
+
+- **No resuelve.** Decidir cuál de las dos afirmaciones vale es B28, y es por
+  intención de consulta.
+- **No borra.** Un conflicto no es un error a limpiar: son dos afirmaciones que
+  ambas tienen fuente. Lo que las resolverá son las ventanas de vigencia.
+
+Verificación: `scripts/measure_b27_conflictos.py` **3/5 → 0/5**,
+`scripts/mutate_b27_conflictos.py` **5/5 sondas cazadas** con
+`tras restaurar: rc=0 VERDE`, y `knowledge_conflicts.py` al **100 %** de
+cobertura.
+
 ## [0.36.0] - 2026-10-06 — Una herramienta externa aporta conocimiento sin escribir en el store
 
 SemVer **derivado** desde `v0.35.0`: `0 breaking · 2 feat · 2 fix · 3 otros`

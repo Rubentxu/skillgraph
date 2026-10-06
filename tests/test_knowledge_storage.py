@@ -230,7 +230,16 @@ def test_upsert_entity_different_kind_same_key(tmp_path: Path) -> None:
 
 
 def test_record_claim_returns_claim_id(tmp_path: Path) -> None:
-    """record_claim devuelve el claim_id del ADT."""
+    """record_claim devuelve el claim_id del ADT.
+
+    **B27: EL RETORNO DEJO DE SER UN `str`.** Antes devolvia el `claim_id` a
+    secas, y con `INSERT OR IGNORE` eso miente: el `UNIQUE` de la tupla natural
+    puede rechazar la fila y el metodo devolvia igual, como si hubiera escrito.
+
+    El `claim_id` sigue siendo el primero de los dos: lo que se anade es el
+    aviso. Y se comprueba con `== "clm-1"` y no con `== out.claim_id`, porque un
+    test que compara el campo contra si mismo no verifica nada.
+    """
     s = _make_storage(tmp_path)
     s.register_source(tenant_id="t", project_id="p", source=_src())
     s.upsert_entity(tenant_id="t", project_id="p", entity=_ent())
@@ -243,7 +252,8 @@ def test_record_claim_returns_claim_id(tmp_path: Path) -> None:
         checked_at_revision="rev1",
     )
     out = s.record_claim(tenant_id="t", project_id="p", claim=claim)
-    assert out == "clm-1"
+    assert out.claim_id == "clm-1"
+    assert out.conflicto is False, "una escritura limpia no es un conflicto"
 
 
 def test_record_claim_idempotent_on_revision(tmp_path: Path) -> None:

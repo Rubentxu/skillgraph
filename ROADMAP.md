@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B26** — Una herramienta externa no tiene forma de aportar conocimiento sin escribir en el store · `Observation Envelope` versionado, normalizers puros e ingesta idempotente
-> Versión activa `0.36.0.dev0` · último tag `v0.36.0` · 3537 tests · 16/16 UAT
+> Bloque vivo: **B27** — Dos claims incompatibles se pisan y no hay forma de saberlo · conflict sets consultables y estables, sin overwrite
+> Versión activa `0.36.0.dev0` · último tag `v0.36.0` · 3560 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
@@ -1072,9 +1072,27 @@ como imports. La frontera de diseño que esta serie atraviesa ya tiene dueño.
 
 ### Estado
 
-**B25 y B26 cerrados y publicados** (`v0.35.0` y `v0.36.0`). Los otros ocho
+**B25, B26 y B27 cerrados** (`v0.35.0`, `v0.36.0` y `v0.36.1`). Los otros siete
 siguen en el mapa como fila, sin sección, guard, harness ni criterio de
 aceptación escrito.
+
+**Y LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTO SER FALSA**, lo cual importa
+mas que el resultado. Decía: *«Dos claims incompatibles se pisan y no hay forma
+de saberlo»*. MEDIDO antes de escribir nada, con
+`scripts/measure_b27_conflictos.py`:
+
+    P1  dos fuentes, hechos opuestos  -> 2 filas, COEXISTEN
+    P2  misma fuente, hechos opuestos -> 1 fila, SE PISA
+
+El overwrite **no** depende de que dos herramientas discrepen: depende de la
+MISMA fuente con la MISMA revisión, porque el `UNIQUE` de `claims` es
+`(subject_entity_id, predicate, source_id, checked_at_revision)` y lleva
+`source_id` dentro. Dos herramientas distintas ya coexistían de sobra.
+
+Lo que sí era cierto era la otra mitad —«y no hay forma de saberlo»— y esa mitad
+es la que B27 arregla: `conflicts_for` por la fachada, y `record_claim` que
+devuelve si hubo conflicto y **qué se solapa** en vez de devolver siempre el
+`claim_id` como si hubiera escrito.
 
 **LO QUE B26 DEJO ABIERTO PARA B27, DICHO EN SU PROPIO RECIBO.** La ingesta de
 un envelope **no borra historia**: si una herramienta cambia lo que dice sin

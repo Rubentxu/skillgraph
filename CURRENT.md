@@ -2,26 +2,30 @@
 
 >
 
-> **Bloque 2026-10-06 (B26) — Una herramienta externa aporta conocimiento sin
-> escribir en el store.**
+> **Bloque 2026-10-06 (B27) — Los conflictos avisan y son consultables.**
 >
-> Versión activa `0.36.0.dev0`; último tag `v0.36.0`; **3537 tests**.
+> Versión activa `0.36.0.dev0`; último tag `v0.36.0`; **3560 tests**.
 >
-> `ObservationEnvelope` versionado, `normalizar` **puro** e `ingerir` idempotente
-> por contenido. `observed_at` **entra** en el envelope, y eso es lo que hace
-> posible la pureza: si el normalizador leyera el reloj, dos normalizaciones darían
-> `checked_at_revision` distintas, el `claim_id` saldría distinto —porque
-> `make_claim_id` lo incluye en la semilla— y la idempotencia **se rompería sola**,
-> sin que nada lo indicara.
+> **LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTÓ SER FALSA**, y eso importa
+> más que el resultado. Decía «dos claims incompatibles se pisan»; medido sobre
+> una base real, eso solo pasa con la **misma** fuente y la **misma** revisión,
+> porque el `UNIQUE` de `claims` lleva `source_id` dentro. Dos herramientas que
+> discrepan ya coexistían de sobra.
 >
-> **El bloque no empezó por una idea: empezó por un bug.** B25 metió una segunda
-> forma de objeto en `Claim`, y la promoción —que serializa y deserializa **a
-> mano**— se quedó con la de antes. Medido sobre una base real: un claim cuyo
-> objeto es una entidad **no se podía promover**, y el fallo salía en el proyecto
-> **destino**, que es el que nadie mira. El arreglo no fue «añadir el campo al
-> dict»: `_claim_to_payload` deriva ahora el payload de `dataclasses.asdict`, de
-> modo que un campo nuevo viaja solo. Medido con `scripts/measure_b26_ingesta.py`:
-> 5/5 → **0/5**. Contrasalto **5/5**.
+> Lo que sí era cierto es la otra mitad —«y no hay forma de saberlo»—, y esa
+> mitad es la que se arregla: `conflicts_for` por la fachada de `Storage`, y
+> `record_claim` que devuelve si hubo conflicto y **qué se solapa** en lugar de
+> devolver siempre el `claim_id` como si hubiera escrito. El aviso llega hasta
+> la salida del reconcile, porque un aviso que se recoge y no se imprime es un
+> aviso que no existió.
+>
+> **B27 avisa, no resuelve.** Decidir cuál de las dos afirmaciones vale es B28,
+> y es por intención de consulta; borrar es B29. Contrasalto **5/5**.
+>
+> **B26 cerrado en `v0.36.0`**: `ObservationEnvelope` versionado, `normalizar`
+> puro e `ingerir` idempotente. `observed_at` **entra** en el envelope, y eso es
+> lo que hace posible la pureza. Arrancó por un bug: la promoción serializaba a
+> mano y se quedó con la forma de anterior de `Claim`. Medido 5/5 → **0/5**.
 >
 > **B25 cerrado en `v0.35.0`** (SemVer derivado: `0 breaking, 1 feat, 1 fix, 3 otros`
 > → MINOR, `scripts/derive_semver.py`). **B24 cerrado en `v0.34.1`**. La ruta de certificación se ejecuta
