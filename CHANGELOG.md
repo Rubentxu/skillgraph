@@ -14,6 +14,92 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.34.1] - 2026-10-06 — La ruta de certificación nunca se ejecutaba, y la que la verificaba era un trinquete
+
+SemVer **derivado** desde `v0.34.0`: `0 feat · 0 breaking · 3 fix · 2 test ·
+2 chore`, la regla pide **PATCH -> v0.34.1**.
+
+## Una UAT que declaraba ocho fronteras y ejecutaba tres
+
+`tests/test_uat_real_provider.py` promete `workflow → ContextRecipe → handoff →
+adapter real → AgentResult → transicion → persistencia → recuperacion`, y sus
+tres tests tocaban `handoff`, `adapter` y `AgentResult`. **Las otras cinco no se
+ejecutaban nunca.**
+
+Y las instrucciones de ejecución decían `pytest tests/uat_real_provider.py`,
+sin el prefijo `test_`: quien las siguiera ejecutaba nada y recibía **rc=4**,
+un error de uso de pytest que no dice nada sobre la UAT. Una instrucción que
+apunta a un path inexistente no es una instrucción.
+
+Lo que entra es el recorrido entero, ejecutable **sin credencial y sin dinero**,
+contra el `HttpAgentAdapter` **de verdad** —su `httpx.Client`, su retry y su
+parseo— contra un servidor local que habla la *forma* de la respuesta del
+proveedor. Lo único sustituido es el otro extremo del cable: con un doble del
+adapter se certificaría que el doble funciona, que es lo que B2 vino a cerrar.
+
+**Un servidor local no es un proveedor.** Certifica que las ocho fronteras
+funcionan; que el proveedor real conteste lo sigue midiendo el camino opt-in con
+credencial, intacto.
+
+## El hallazgo que nadie buscaba: la idempotencia tiene CINCO capas
+
+Medido, quitando una a una, con el test de reconciliación como único criterio:
+
+```
+guarda de terminal (runcontroller)              rc=0
+guarda de frontier (run_observability)          rc=0
+las dos anteriores                              rc=0
++ el run no se cierra + frontier no filtra       rc=0
+estado real tras una pasada: state='COMPLETED'  current_node=None
+```
+
+La quinta no es una guarda de reconciliar: es el **guard de nodo**, que devuelve
+veredicto si ya hay `SUCCEEDED` y el plan no declara self-loop. Las cuatro
+anteriores son cortocircuitos que evitan llegar hasta ahí. La propiedad que mide
+el test es el efecto conjunto de las cinco, y no nombra ninguna.
+
+## Y el `pre-push` era un trinquete que no se podía deshacer
+
+MEDIDO, con la suite en verde y las ocho etapas de código en `success`:
+
+```
+5229e03b  unit-tests  3473 passed, 3 skipped, 96 % de cobertura
+5229e03b  RunFinished/failure  — y lo único que falló fue la etapa
+           `evidence`, mirando el run ANTERIOR, que había fallado de verdad
+```
+
+La etapa verificaba el último run **terminado**, y como corre *dentro* del run,
+ese es el **anterior**. Suena sensato y es un trinquete: si el anterior falló,
+este se juzga con ese fallo; y el siguiente se juzga con este, que terminó en
+`failure`. **Cuatro runs seguidos** con la suite en verde y todos en `failure`.
+La exculpación mínima de WI-110 no lo arregla: perdona el `StepFailed` de
+`evidence/sh-0`, nunca el veredicto.
+
+La única salida que ofrecía el hook era `--no-verify`, que es justo lo que no se
+usa. Ahora la etapa verifica el run **en curso** y mide lo que ya existe.
+
+## Tres reds de estado que solo aparecieron al intentar publicar
+
+1. **`v0.34.0` duplicado** en `STATE.yaml release.releases`: 88 entradas, dos
+   veces, y **idénticas** incluido el `rationale`.
+2. **`0.34.0` sin sección** en el changelog: el release se etiquetó sin contar.
+3. **El total se quedó atrás** varias veces: `3465 → 3475 → 3489`.
+
+Y uno que no era de estado sino de medición:
+`test_wi97::test_construir_no_escribe_dentro_del_repositorio` comparaba
+`{p.name for p in ROOT.iterdir()}`, así que medía *la raíz entera*. Con
+`coverage.sh` en modo `parallel`, en una corrida real había **698** ficheros
+`.coverage.parallel.<host>.<pid>.<rand>` en la raíz. En CI no es una carrera: es
+cada pasada.
+
+## Verificación
+
+Suite completa con la receta de cobertura —la misma que corre el `pre-push`—:
+**3473 passed, 3 skipped, 0 failed**, 96 % de cobertura. Harness de B24 **5/5**
+y el contrasalto del trinquete **4/4**, ambos con el árbol byte a byte como
+estaba. `project_truth.py` rc=0, `coherente: true`,
+`bloque = workitem_state = workitem_current`, `3489 == 3489`.
+
 ## [0.34.0] - 2026-10-06 — El instrumento que responde «¿dónde está el proyecto?» no lo decía
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.33.0`:

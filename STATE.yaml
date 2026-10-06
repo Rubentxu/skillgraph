@@ -610,7 +610,7 @@ tests:
   total: 3489  # BLOQUE B24: 3465 -> 3489, +10 del recorrido de la UAT real, +1 del contrasalto del filtro de transitorios que pidio el `pre-push`, y +13 del arreglo del trinquete de la etapa `evidence`. ESE ULTIMO ES EL QUE IMPORTA: la etapa verificaba el ultimo run TERMINADO, y como corre DENTRO del run, ese es el ANTERIOR —de modo que un rojo real de codigo condenaba a todos los runs siguientes, y el siguiente se juzgaba con un veredicto `failure` que la exculpacion minima de WI-110 nunca toca. MEDIDO en este repo: tras los tres reds de `v0.34.0`, cuatro runs seguidos con la suite en verde y las ocho etapas de codigo en `success` terminaron en `failure`, todos en la etapa `evidence`, con `3473 passed` y 96 % de cobertura. Es un trinquete: la unica salida que ofrecia el hook era `--no-verify`, que es justo lo que no se usa. Ahora verifica el run EN CURSO y mide lo que ya existe —StepStarted, EchoOutputCaptured y StepFailed—; el veredicto final no se verifica porque todavia no se ha emitido, y no se finge que si: esa certificacion puntual es el mismo script con `--run-id`. Contasalto de 4 sondas, 4/4 cazadas (`.pipelinek/b24_trinquete_mutate.py`), script byte a byte identico. De paso se arranco el codigo muerto que el contrasalto encontro: un `not en_curso` dentro de `solo_autoevaluada` que no podia cambiar ningun resultado. MEDIDO AL ESCRIBIRLO, Y NO EN EL TEST: `informes()` devolvia 5 informes para 2 runs, porque un `defaultdict` usado como conjunto no crea la clave con `in` y el `continue` por payload vacio pasaba antes de registrarla —un run cuyo primer evento va vacio se anadia una vez POR CADA evento suyo, y la eleccion entre runs se hace sobre esa lista—. # BLOQUE B24: 3465 -> 3476, +10 del recorrido y +1 del contrasalto que el pre-push pidio. Ese +1 es `test_wi97::test_el_filtro_no_se_traga_lo_que_si_es_una_escritura`, que exige que el filtro de transitorios siga viendo un directorio real: un guard al que se le quitan los falsos positivos puede quedarse sin ningun positivo. MEDIDO AL PUBLICAR: el `pre-push` corre la verificacion canonica y con la suite en rojo no sube; encontro v0.34.0 DUPLICADO en release.releases, 0.34.0 SIN SECCION en el CHANGELOG y este total atraso. Uno de ellos, `test_wi97::test_construir_no_escribe_dentro_del_repositorio`, no era de estado sino de medicion: comparaba `{p.name for p in ROOT.iterdir()}` y `coverage.sh` corre pytest con `parallel = true`, que deja ~698 ficheros `.coverage.parallel.<host>.<pid>.<rand>` en la raiz durante la corrida. MEDIDO con ruido en vivo: 1 failed antes, 6 passed despues. # BLOQUE B24: 3465 -> 3475, +10 de tests/test_b24_recorrido_certificacion.py: las ocho fronteras del recorrido de la UAT real, ejecutadas contra el HttpAgentAdapter DE VERDAD (httpx, retry y parseo) contra un servidor local que habla la FORMA de la respuesta del proveedor. Un servidor local NO es una certificacion del proveedor: certifica que las ocho fronteras del camino funcionan, y lo unico que queda fuera es que el proveedor real conteste, que lo mide el camino opt-in con credencial, intacto. MEDIDO AL ABRIR: el modulo de la UAT real declaraba ocho fronteras y sus tres tests solo tocaban tres, y sus instrucciones de ejecucion decian `pytest tests/uat_real_provider.py`, que no existe —rc=4, un error de uso de pytest que no dice nada sobre la UAT—. # BLOQUE B23: 3444 -> 3465, +21 de tests/test_b23_instrumento_verdad.py entero: 16 de R1 (raiz por parametro, con los tres contrasaltos), 8 de R2/R3 (ventana y bloque cruzados), 5 de R4 (el roadmap no se contradice a si mismo), y 6 de R6 (la derivacion que lee ventanas tiene que encontrar ventanas, o el guard pasa sin medir). LA CIFRA SE ESCRIBE DESPUES DE LA CORRIDA, NUNCA ANTES: sale de `pytest --collect-only` sobre el arbol real, que es la unica magnitud comparable. LO QUE ESTA CIFRA PAGANDO, MEDIDO: antes de este bloque, `project_truth.py --raiz /tmp` salia rc=0 con la verdad del REPO REAL, y el ROADMAP publicaba `0.32.7` dos releases despues —con el instrumento diciendo `coherente: true` y seis contradicciones a la vista—. El release 9961843 no toco ROADMAP.md, y eso no lo noto nadie porque el instrumento no cruzaba la ventana que el propio ROADMAP declara ser la respuesta.
   passed: 2735
   duration_s: 241.57   # MEDIDO en la CI canonica de WI-108, run 2387c4cc-c624-4793-a8ef-1a83f3df72ea, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. El resumen es «2735 passed in 241.57s» SIN la palabra skipped, que es lo que el criterio nuevo de WI-108 exige. Bloque WI-107, run 332e09e6-ba0b-449e-908e-9686dd35a898, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. Criterio 6 (SHA-256 del .pipeline.kts) registrado en sesion: 7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42, sin drift desde 283da96 (WI-105). Bloque anterior WI-105: (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
-  package_version: "0.34.0.dev0"   # La version activa del paquete. La lee test_version_matches_git_tag y la compara con `__init__.py`: los dos campos son la MISMA verdad declarada dos veces, y por eso la segunda declaracion tiene que moverse con la primera. MEDIDO en WI-109: la primera certificacion de B23 dio este test en ROJO porque el post-release bumpeaba `__init__.py` y dejo este campo viejo —el hermano pequeno de la cifra que WI-115 vigilaba, y el motivo de que este guard exista.
+  package_version: "0.34.1.dev0"   # La version activa del paquete. La lee test_version_matches_git_tag y la compara con `__init__.py`: los dos campos son la MISMA verdad declarada dos veces, y por eso la segunda declaracion tiene que moverse con la primera. MEDIDO en WI-109: la primera certificacion de B23 dio este test en ROJO porque el post-release bumpeaba `__init__.py` y dejo este campo viejo —el hermano pequeno de la cifra que WI-115 vigilaba, y el motivo de que este guard exista.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1181,7 +1181,7 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.34.0
+  tag: v0.34.1
   fecha: 2026-10-06
   # `semver_bump` NO se repite aqui: vive en la entrada de `release.releases`, y
   # declararlo dos veces es justo lo que el verificador rechaza —`STATE.yaml declara
@@ -1524,6 +1524,41 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.34.1
+      fecha: 2026-10-06
+      semver_bump: PATCH
+      package_version: 0.34.1.dev0
+      rationale_b24: >-
+        BLOQUE B24 — LA RUTA DE CERTIFICACION NUNCA SE EJECUTABA, Y LA QUE LA
+        VERIFICABA ERA UN TRINQUETE. MEDIDO AL ABRIR: el modulo de la UAT real
+        declara ocho fronteras y sus TRES tests solo tocaban tres —handoff,
+        adapter y AgentResult—. Las otras cinco no se ejecutaban nunca. Y sus
+        instrucciones de ejecucion decian `pytest tests/uat_real_provider.py`,
+        que no existe: rc=4, un error de uso de pytest que no dice nada sobre la
+        UAT. LO QUE ENTRA: el recorrido entero, ejecutable sin credencial y sin
+        dinero, contra el HttpAgentAdapter DE VERDAD —httpx, retry y parseo— y
+        contra un servidor local que habla la FORMA de la respuesta del
+        proveedor. Un servidor local NO es el proveedor: certifica que las ocho
+        fronteras funcionan, y lo unico que queda fuera es que el proveedor real
+        conteste, que lo mide el camino opt-in con credencial, intacto.
+        HALLAZGO DE PRODUCTO, MEDIDO: la idempotencia de reconciliar un run
+        resuelto tiene CINCO capas, y ninguna sola la rompe. Quitar la guarda de
+        terminal rc=0; la de frontier rc=0; las dos rc=0; mas que el run no se
+        cierre rc=0. La quinta es el GUARD DE NODO, que devuelve veredicto si ya
+        hay SUCCEEDED y el plan no declara self-loop; las cuatro anteriores son
+        cortocircuitos que evitan llegar hasta ahi.
+        Y LO QUE ENCONTRO EL PRE-PUSH: la etapa `evidence` verificaba el ultimo
+        run TERMINADO, y como corre dentro del run ese es el ANTERIOR — de modo
+        que un rojo real de codigo condenaba a todos los runs siguientes, y el
+        siguiente se juzgaba con un veredicto `failure` que la exculpacion minima
+        de WI-110 nunca toca. MEDIDO: cuatro runs seguidos con 3473 tests
+        verdes y las ocho etapas de codigo en `success`, todos en `failure`. Un
+        rojo de verdad dejaba el proyecto sin poder publicar, y la unica salida
+        era `--no-verify`. Ademas: `v0.34.0` DUPLICADO en esta lista,
+        `0.34.0` sin seccion en el CHANGELOG, el total 3465 -> 3489, y
+        `test_wi97` midiendo la raiz entera mientras la cobertura parallel deja
+        ~698 ficheros temporales en ella. SemVer derivado: 0 feat, 0 breaking,
+        3 fix, 2 test, 2 chore => PATCH. 3473 passed, 3 skipped, 0 failed, 96 %.
     - tag: v0.34.0
       sha: 1a8815913f2e6110365df27fadfa62cdac214a20
       fecha: 2026-10-06
