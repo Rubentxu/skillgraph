@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B23** — El instrumento de la verdad puede equivocarse, y se le ve
-> Versión activa `0.34.0.dev0` · último tag `v0.34.0` · 3465 tests · 16/16 UAT
+> Bloque vivo: **B24** — La ruta de certificación nunca se ejecutaba, y sus instrucciones apuntaban a un fichero que no existe
+> Versión activa `0.34.0.dev0` · último tag `v0.34.0` · 3476 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
@@ -88,6 +88,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B21** | Una certificación en rojo no puede decir QUÉ falló | Lo que pytest dice de sus fallos aparece después de la última tabla, y un guard no usa como reloj un estado que mueve su propio contenedor |
 | **B22** | La suite no puede cambiar el árbol por debajo de un instrumento, y un predicado reventado no borra el informe | Escribir y cambiar se separan, toda excepción va declarada, y cada predicado da su veredicto aunque lance |
 | **B23** | El instrumento que responde «¿dónde está el proyecto?» no lo decía | La raíz es un parámetro, la ventana del ROADMAP se contrasta, y el bloque se cruza con STATE y CURRENT |
+| **B24** | La ruta de certificación nunca se ejecutaba, y sus instrucciones apuntaban a un fichero que no existe | Las ocho fronteras se ejecutan contra el adapter de verdad, sin credencial ni dinero, y una instrucción que aponta a un path inexistente se mide como lo que es |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se

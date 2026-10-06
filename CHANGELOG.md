@@ -14,6 +14,58 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.34.0] - 2026-10-06 — El instrumento que responde «¿dónde está el proyecto?» no lo decía
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.33.0`:
+`b/f/x/n/d 0/2/0/5/0`, la regla pide **MINOR -> v0.34.0**. Segundo `feat`
+seguido: el instrumento de la verdad deja de poder mentir.
+
+**MEDIDO ANTES DE ESCRIBIR NADA**, con `project_truth.py --raiz <distinto>`:
+el script no leía `sys.argv` en ninguna parte y su raíz venía de
+`Path(__file__)`. Consecuencias, una por una: `--raiz /tmp` devolvía **rc=0**
+con la verdad del **repo real**; `--raiz /no/existe` devolvía **rc=0** con
+`"coherente": true`; y ejecutado desde otro directorio devolvía también la del
+repo. Ignorar el flag no era una ergonomía que faltara: era un instrumento que
+**afirmaba haber medido lo que no media**.
+
+**La ventana del ROADMAP mentía sobre quién la escribía.** Decía que su sección
+«Dónde está el proyecto» la producía ese script. No la producía nadie: se
+escribía a mano y nadie la leía. El release anterior (`9961843`) no tocó
+`ROADMAP.md`, la ventana se quedó en `v0.32.7` dos versiones atrás, y mientras
+tanto el instrumento publicaba `coherente: true` con **seis contradicciones a la
+vista** — dos de ellas porque el fichero se contradecía **consigo mismo**
+(`3444 tests` en una línea, `3431` en la siguiente).
+
+**Lo que entra.** La raíz pasa a ser **parámetro** en los doce lectores y las
+constantes de módulo desaparecen: su sola presencia era la invitación a leer de
+la raíz equivocada. La ventana se **contrasta** y no se regenera —el instrumento
+conserva sus cero escrituras, y uno que escribe el fichero de autoridad sería un
+problema nuevo y peor que el que arregla—. Y `bloque`, que se leía y se publicaba
+sin cruzarse con nadie, ahora se cruza con `STATE.yaml` y `CURRENT.md`: era el
+tercer hueco de la familia B20-2.
+
+**Y el guard que sabe dar rojo.** `ROADMAP.md` se deja **en rojo a propósito**
+hasta que las seis contradicciones están corregidas, con un contrasalto que
+comprueba que el guard las detecta: un guard que no puede dar rojo no es un
+guard. 3444 -> 3465 tests, +21 de `test_b23_instrumento_verdad.py` entero.
+Harness de 6 sondas: **6/6 cazadas**.
+
+**LO QUE EL HARNESS CAZÓ Y ERA UN HUECO REAL, no una sonda.** Con la
+comprobación del código de salida de pytest desactivada, el verificador leía el
+número **parcial** de una colecta rota y publicaba `coherente: true` con
+`tests_reales: 2`; como el parcial coincidía con el declarado, no había
+contradicción que emitir. Una aserción que mira la **contradicción** no ve la
+**publicación** — y ese hueco venía de B14.
+
+Cierra además la deuda `bl-bl-01M48JHGJJ000388H523GPE6G0`: `test_b14` deformaba
+el árbol real, y ahora deforma un árbol de verdad. Su comprobación no es una
+declaración sino el sha256 de `__init__.py`, `STATE.yaml`, `CURRENT.md` y
+`ROADMAP.md` antes y después de su corrida: **idéntico**.
+
+Verificación: **3462 passed, 3 skipped, 0 failed**, 96 % de cobertura, árbol
+limpio tras la suite completa. Contratos `check_public_surfaces`,
+`check_ci_recipe_parity` y `check_package_build` en verde.
+
 ## [0.33.0] - 2026-10-06 — El árbol no puede cambiar bajo los pies de un instrumento
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.7`:

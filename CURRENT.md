@@ -2,73 +2,73 @@
 
 >
 
-> **Bloque 2026-10-06 (B23) — El instrumento de la verdad puede equivocarse, y se le ve.**
+> **Bloque 2026-10-06 (B24) — La ruta de certificación nunca se ejecutaba.**
 >
-> Versión activa `0.34.0.dev0`; último tag `v0.34.0` (MINOR derivado: la regla pide
-> MINOR desde `v0.33.0`, con 0 breaking y feats y fixes por debajo).
+> Versión activa `0.34.0.dev0`; último tag `v0.34.0`.
 >
-> **EL INSTRUMENTO QUE RESPONDE «¿DÓNDE ESTÁ EL PROYECTO?» NO TENÍA LÍNEA DE
-> ÓRDENES.** `sys.argv` no se leía en ninguna parte de
-> `scripts/project_truth.py:48`, y su raíz venía de `Path(__file__)`. MEDIDO:
+> **MEDIDO AL ABRIR: EL MÓDULO DECLARABA OCHO FRONTERAS Y SUS TRES TESTS
+> TOCABAN TRES.** `tests/test_uat_real_provider.py` promete
+> `workflow → ContextRecipe → handoff → adapter real → AgentResult → transicion
+> → persistencia → recuperacion`, y ejecutaba `handoff`, `adapter` y
+> `AgentResult`. Las otras cinco —`workflow`, `ContextRecipe`, `transicion`,
+> `persistencia` y `recuperacion`— no se ejecutaban nunca.
 >
-> ```
-> $ project_truth.py --raiz /tmp          rc=0, imprime la verdad del REPO REAL
-> $ project_truth.py --raiz /no/existe    rc=0, imprime la verdad del REPO REAL
-> $ cd /otro/arbol && project_truth.py    rc=0, imprime la verdad del REPO REAL
-> ```
+> **Y SUS INSTRUCCIONES DE EJECUCIÓN APUNTABAN A UN FICHERO QUE NO EXISTE.**
+> Decían `pytest tests/uat_real_provider.py`, sin el prefijo `test_`. Quien las
+> siguiera ejecutaba nada y recibía `rc=4`: un error de uso de pytest, no un
+> fallo de la UAT. Una instrucción que apunta a un path inexistente no es una
+> instrucción, es una trampa con la forma de una instrucción.
 >
-> El tercero es el peor de los tres, y no lo había medido nadie: ignorando
-> `--raiz` **no se puede apuntar a ningún otro sitio**. No era una ergonomía
-> que faltara; era un instrumento que afirmaba haber medido lo que no medía.
+> **LO QUE ENTRA: EL RECORRIDO, EJECUTABLE SIN DINERO Y SIN CREDENCIAL.**
+> `tests/test_b24_recorrido_certificacion.py:94::TestElRecorridoCompletoSinDinero`
+> cubre las ocho fronteras contra el `HttpAgentAdapter` **de verdad** —su
+> `httpx.Client`, su retry y su parseo— contra el servidor local de
+> `tests/_proveedor_local.py:87::proveedor_local`, que habla la FORMA de la
+> respuesta del proveedor. Lo único que se sustituye es el otro extremo del
+> cable: si el adapter fuera un doble, estaríamos certificando que el doble
+> funciona, que es justo lo que B2 vino a cerrar.
 >
-> **LA VENTANA DEL ROADMAP DECÍA QUIÉN LA ESCRIBÍA, Y MENTÍA.** `ROADMAP.md:37-39`
-> afirmaba que su sección «Dónde está el proyecto» «la produce
-> `scripts/project_truth.py`». No la producía nadie: se escribía a mano y nadie
-> la leía. MEDIDO: el release `9961843` no tocó el fichero
-> (`git show --stat 9961843 -- ROADMAP.md` vacío) y la ventana se quedó en
-> `v0.32.7` dos versiones atrás, con el instrumento publicando
-> `coherente: true` y **seis contradicciones a la vista**. Dos de ellas eran que
-> el fichero se contradecía **consigo mismo**: `3444 tests` en una línea y
-> `3431 tests` en la siguiente.
+> **UN SERVIDOR LOCAL NO ES UN PROVEEDOR.** Esto no certifica que Anthropic
+> conteste: certifica que las ocho fronteras del camino funcionan. Lo único que
+> queda fuera es «que el proveedor real conteste», y lo mide
+> `tests/test_uat_real_provider.py` con `SG_UAT_REAL_PROVIDER=1` y credencial,
+> camino que este bloque no toca. Un camino, dos endpoints: si el opt-in está
+> puesto, el servidor local ni se levanta.
 >
-> **EL TERCER HUECO DE LA FAMILIA B20-2.** `bloque` se leía del ROADMAP y se
-> publicaba, y no se cruzaba con nadie. STATE y CURRENT se cruzaban **entre
-> sí**, luego los tres podían estar mal y dar `coherente: true`: el ROADMAP
-> diciendo `B99` mientras los otros dos decían `B22`, y nada que lo notara.
-> El cruce vive en `scripts/project_truth.py:697`, y usa una clave que ya
-> existía.
+> **LA EVIDENCIA ES QUE HUBO UNA LLAMADA REAL, NO QUE ACABARA BIEN.** La
+> propiedad no es «el nodo acabó SUCCEEDED» sino «el servidor RECIBIÓ una
+> petición construida por el adapter». Eso lo mide
+> `tests/_proveedor_local.py:107::peticiones`; sin ella, un adapter que no se
+> invoca y otro que se invoca con la basura darían el mismo veredicto al resto
+> del recorrido.
 >
-> **LO QUE SE CORRIGIÓ, Y CÓMO.** La raíz pasa a ser **parámetro** en los doce
-> lectores y las constantes de módulo **desaparecen** —su sola presencia es la
-> invitación a leer de la raíz equivocada—. La ventana se **contrasta**, no se
-> regenera: el instrumento conserva sus cero escrituras, porque uno que escribe
-> el fichero de autoridad sería un problema nuevo y peor que el que arregla.
+> **LO QUE EL HARNESS HIZO, Y FUE LO MÁS CARO DEL BLOQUE.**
+> `scripts/mutate_b24_ruta_certificacion.py:123::SONDAS` declara cinco sondas, una
+> propiedad por sonda. Dos de ellas, tal como estaban escritas, **no podían
+> caer**: mutar `estado` es un no-op porque el setup de `proveedor_local()` lo
+> repone, y `segunda = primera` deja el assert tautológico. Medidas, no supuestas:
+> rehechas y **5/5 cazadas**.
 >
-> **Y `test_b14` DEJO DE DEFORMAR EL ÁRBOL REAL**, que era la deuda
-> `bl-bl-01M48JHGJJ000388H523GPE6G0` que B22 dejó con nombre y motivo. Estaba
-> bloqueada por el instrumento, no por el test: sin raíz por parámetro, todo
-> sandbox daba `ilegible` por el motivo equivocado. MEDIDO con sha256 de los
-> cuatro ficheros del árbol real antes y después de su corrida: **idénticos**.
+> **Y DE AHÍ SALIÓ UN HALLAZGO DE PRODUCTO, NO DEL HARNESS: LA IDEMPOTENCIA DE
+> RECONCILIAR UN RUN RESUELTO TIENE CINCO CAPAS.** Quitarle una —la guarda de
+> `src/skillgraph/runtime/runcontroller.py:315::_reconcile_run_locked`, la de
+> `src/skillgraph/runtime/run_observability_delegations.py:202::_calculate_frontier`,
+> o que el run no se cierre— da `rc=0`. Ni dos juntas. La quinta no es una guarda
+> de reconciliar: es el guard de nodo,
+> `src/skillgraph/runtime/node_execution_delegations.py:182::_node_guard`, que
+> devuelve veredicto si ya hay SUCCEEDED y el plan no declara self-loop. Las
+> cuatro anteriores son cortocircuitos que evitan llegar hasta ahí. La propiedad
+> que mide
+> `tests/test_b24_recorrido_certificacion.py:212::test_6_reconciliar_de_nuevo_no_reejecuta_el_nodo`
+> es el efecto conjunto de las cinco, y no nombra ninguna.
 >
-> **LO QUE EL HARNESS CAZÓ, Y ERA UN HUECO DE VERDAD.** Seis sondas, seis
-> propiedades. La primera corrida dio 5/6, y la sexta no cayó por una razón que
-> no era del harness: desactivada la comprobación del código de salida de
-> pytest, el verificador leía el **número parcial** de una colecta rota y
-> publicaba `coherente: true` con `tests_reales: 2`. Como el parcial coincidía
-> con el declarado, no había contradicción que emitir, y el guard miraba
-> precisamente eso. **Una aserción que mira la contradicción no ve la
-> publicación** — hueco que venía de B14. Ahora exige que el verificador se
-> niegue a publicar el recuento y lo diga con `ilegible`.
->
-> **LO QUE NO SE CIERRA, CON MOTIVO MEDIDO.** (1) `pipelinek` 0.39.0 no arranca
-> en este entorno (`INFRASTRUCTURE`, nunca escribe `wrapper.sh`); es el
-> binario, no el repo, y los contratos de la receta se ejecutaron directo.
-> (2) El instrumento no lo pide ninguna etapa de la receta; la red en CI es
-> `test_b0_truth_convergence.py`, que con B23 pasa de estar verde por la razón
-> equivocada a estar verde por la correcta. No se añade etapa porque el
-> SHA-256 de `.pipeline.kts` es un invariante desde WI-110. (3) La credencial
-> de runtime real y la persona para el TUI operacional siguen siendo
-> imposibles desde el repositorio.
+> **Y TRES DEFECTOS DE ESTADO DE B23 QUE ENCONTRÓ LA RED AL PUBLICAR.** El
+> `pre-push` corre la verificación canónica, y con la suite en rojo no sube.
+> `v0.34.0` estaba **duplicado** en `STATE.yaml release.releases`, la entrada de
+> 0.34.0 **no estaba** en el CHANGELOG, y el total declarado se quedaba en 3465
+> con 3475 en el árbol. Ninguno lo señalaba ningún test hasta que el push los
+> pidió.
+
 
 > **Bloque 2026-10-06 (B22) — La suite no puede cambiar el árbol por debajo de un instrumento.**
 >
