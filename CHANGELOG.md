@@ -14,6 +14,85 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.36.0] - 2026-10-06 — Una herramienta externa aporta conocimiento sin escribir en el store
+
+SemVer **derivado** desde `v0.35.0`: `0 breaking · 2 feat · 2 fix · 3 otros`
+(`git log v0.35.0..HEAD`, contado con las mismas reglas que
+`scripts/derive_semver.py`), la regla pide **MINOR -> v0.36.0**.
+
+## Una forma declarada para lo que observa una herramienta
+
+`CapabilityResult.payload` es `dict[str, Any]`: cualquier cosa cabe y nada
+comprueba que sea la forma correcta. Ahora existe `ObservationEnvelope`, una
+forma **nominal y versionada** (`sg.observation/1`) que una capability puede
+devolver y que el sistema puede distinguir de un dict.
+
+Un envelope se compone de un `producer` (`CapabilitySpec`, que ya llevaba
+versión), un `adapter`, la `source` de la que sale el dato, el sujeto sobre el
+que se observa, y las observaciones. El objeto de una observación admite **las
+dos formas de B25**: literal o `EntityRef`. No es una unión de dos tipos: es la
+misma pregunta que hace `Claim` y que sostiene el CHECK de la tabla, y se
+valida en el mismo sitio.
+
+## El normalizador es puro, y por eso `observed_at` entra en el envelope
+
+`normalizar` no toca disco, ni reloj, ni la entrada. Eso solo es posible
+porque **el reloj entra en el envelope**: si el normalizador llamara a
+`now_iso()`, dos normalizaciones del mismo envelope darían
+`checked_at_revision` distintas, el `claim_id` saldría distinto —porque
+`make_claim_id` lo incluye en la semilla— y la idempotencia **se rompería sola,
+sin que nada lo indicara**.
+
+El `claim_id` sale de `make_claim_id`, que ya era UUIDv5 sobre
+`(subject, predicate, source, revision)`. Por eso la ingesta es idempotente
+**por contenido**, y no por un contador: `ingerir` dos veces el mismo envelope
+reconstruye los mismos ids y las filas caen con `INSERT OR IGNORE`.
+
+## Un envelope con versión desconocida falla en la frontera
+
+Sin versión no se puede rechazar lo viejo: una herramienta que cambia su forma
+de hablar sigue intentando escribir con el contrato anterior, y el fallo
+aparece en el dato, en vez de en la frontera. `UnknownEnvelopeVersionError`
+sale con su `code` (`sg_unknown_envelope_version`) y el mensaje dice **qué
+versión se esperaba**, porque «versión no soportada» sin la versión buena
+obliga a buscar el número en el código.
+
+## Corregido: un claim cuyo objeto es una entidad no se podía promover
+
+Este bloque empezó por un bug, no por una idea. B25 añadió una segunda forma de
+objeto a `Claim`, y la promoción —que serializa y deserializa **a mano**— se
+quedó con la de antes. MEDIDO sobre una base real:
+
+    payload del claim: {... 'object_literal': None ...}
+    ¿arrastra object_entity? False
+    reconstruido: InvalidClaimObjectError
+
+Un claim cuyo objeto es una entidad **no se podía promover**, y el fallo salía
+en el proyecto **destino**, que es el que nadie mira: en el origen todo estaba
+perfecto.
+
+**El arreglo no fue «añadir el campo al dict».** Eso habría arreglado este caso
+y dejado el defecto intacto: `_claim_to_payload` enumeraba nueve claves a mano,
+luego *cada* campo nuevo se rompe a mano, y se rompe en un sitio distinto del
+que se escribió. Ahora el payload se deriva de `dataclasses.asdict(claim)`, y
+un campo nuevo viaja **solo**. El dividendo real de este bloque no es arreglar
+el bug de hoy: es hacer que esa clase de bug no tenga dónde aparecer.
+
+## Lo que este bloque NO hace
+
+- **No serializa envelopes a disco.** Es una frontera en memoria. Persistir
+  envelopes crudos necesita versión **y** política de reingesta, y eso es otro
+  bloque.
+- **La idempotencia no borra historia.** Una herramienta que cambia lo que dice
+  sin cambiar de versión deja **dos** afirmaciones, y las dos son válidas: lo
+  que las resolverá son las ventanas de vigencia. Borrar la anterior sería
+  destruir historia para parecer consistente.
+
+Verificación: `scripts/measure_b26_ingesta.py` **5/5 → 0/5**,
+`scripts/mutate_b26_ingesta.py` **5/5 sondas cazadas**,
+cobertura de `knowledge/observation.py` **100 %**, y
+`3534 passed, 3 skipped, 0 failed`.
+
 ## [0.35.0] - 2026-10-06 — Un hecho entre dos entidades se puede expresar
 
 SemVer **derivado** desde `v0.34.1`: `0 breaking · 1 feat · 1 fix · 3 otros`

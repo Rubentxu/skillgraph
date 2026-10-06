@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.35.0.dev0"  # B25: 0 breaking, 1 feat, 1 fix, 3 otros => MINOR. La referencia al tag anterior se conserva en el comentario largo de mas abajo.
+__version__ = "0.36.0.dev0"  # B26: 0 breaking, 2 feat, 2 fix, 3 otros => MINOR, derivado con scripts/derive_semver.py sobre el tramo v0.35.0..HEAD. La referencia al tag anterior se conserva en el comentario largo de mas abajo.
 
 from skillgraph.core.errors import (
     IdentityConflictError,
