@@ -1768,6 +1768,44 @@ def _subcomandos_de(grupo: str) -> tuple[str, ...]:
 # --------------------------------------------------------------------------
 
 
+def _aisla(nombre: str, predicado: Predicado) -> tuple[str, str]:
+    """Ejecuta UN predicado y convierte su excepcion en un veredicto.
+
+    **Por que esto existe, MEDIDO.** La version anterior llamaba al
+    predicado sin mas, y `main()` envolvia el bucle entero en un
+    `except Exception` que imprimia «Un predicado revanto y el informe NO
+    esta completo» y salia con 2. Una sola excepcion —la de
+    `_distribution_reproducible`— borro los veredictos de las otras
+    diecinueve propiedades, y `listo_para_1_0` dejo de calcularse: cero
+    informacion sobre el gate de 1.0, no un OPEN. Y no fue hipotetico: la
+    perdida se produjo en produccion, con la suite corriendo en paralelo y
+    `src/skillgraph/__init__.py` deformado por un test.
+
+    **Y por que `NO_MEASURABLE` y no `OPEN`.** `OPEN` es una afirmacion
+    sobre el PROYECTO —«esta propiedad no se cumple»— y un predicado que
+    revienta no ha medido nada, luego no puede afirmar eso del proyecto.
+    `NO_MEASURABLE` dice exactamente lo que se: no se pudo medir, y aqui
+    esta por que. Y `listo_para_1_0` exige las veinte en `PASS`, asi que el
+    1.0 sigue sin poder declararse — que es lo correcto.
+
+    **La excepcion NO se traga en silencio.** El mensaje dice clase y texto,
+    porque un verificador que dice «fallo» sin decir cual deja a quien
+    corrige haciendo la cuenta a mano, que es el trabajo que el guard
+    existe para evitar.
+    """
+    try:
+        return predicado()
+    except Exception as exc:
+        return (
+            "NO_MEASURABLE",
+            f"el predicado de «{nombre}» no se pudo ejecutar: "
+            f"{type(exc).__name__}: {exc}. Esta propiedad NO ha sido medida; "
+            "no es un OPEN sobre el proyecto, es un hueco en lo que este "
+            "instrumento pudo mirar. Los otros predicados siguen dando su "
+            "veredicto.",
+        )
+
+
 def evaluar(nombres: tuple[str, ...], predicados: dict[str, Predicado]) -> tuple[Propiedad, ...]:
     """Empareja cada propiedad con su predicado y ejecuta el que hay.
 
@@ -1789,7 +1827,7 @@ def evaluar(nombres: tuple[str, ...], predicados: dict[str, Predicado]) -> tuple
                 )
             )
             continue
-        veredicto, evidencia = predicado()
+        veredicto, evidencia = _aisla(nombre, predicado)
         medidas.append(Propiedad(nombre, veredicto, evidencia))
     return tuple(medidas)
 
@@ -1823,16 +1861,15 @@ def main() -> int:
     try:
         medidas = evaluar(nombres, PREDICADOS)
     except Exception as exc:
-        # Un predicado que revienta NO es un veredicto de OPEN: es que el
-        # informe estaria incompleto, y un informe incompleto con
-        # `listo_para_1_0` calculado seria un 1.0 decidido sobre propiedades
-        # que nadie midio. MEDIDO: la primera vez que se ejecuto, el
-        # predicado de la CLI revento con AttributeError y el proceso salio
-        # con 1 —el codigo de «contradiction» de project_truth.py—, que aqui
-        # significa exactamente lo contrario. Se distingue: 1 es «medido y
-        # no se cumple», 2 es «no se pudo medir».
+        # Aqui ya NO cae el fallo de un predicado: `_aisla` lo convierte en
+        # veredicto. Lo que llega es que el instrumento no puede ni enumerar
+        # las propiedades —el roadmap ilegible, un dict de predicados roto— y
+        # eso si es un fallo del instrumento, no una propiedad sin medir.
+        # MEDIDO, por que la distincion importa: en la version anterior los
+        # dos casos salian por la misma puerta, y el que se produjo en
+        # produccion —un predicado reventado— se confundia con este.
         print(
-            f"Un predicado revanto y el informe NO esta completo: {type(exc).__name__}: {exc}",
+            f"El instrumento no pudo construir el informe: {type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
         return 2
