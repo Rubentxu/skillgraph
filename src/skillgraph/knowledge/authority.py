@@ -336,7 +336,6 @@ PERFILES_POR_DEFECTO: Final[Mapping[QueryIntent, AuthorityProfile]] = MappingPro
 MotivoDescarte = Literal[
     "origen_no_preferido",
     "cerrado_por_agente_no_permitido",
-    "empate_en_la_jerarquia",
 ]
 """**POR QUE UNA AFIRMACION NO GANO.**
 
@@ -344,6 +343,24 @@ Es un `Literal` cerrado por la misma razon que `QueryIntent`: un motivo que sea
 un string libre obliga a quien lo lee a interpretarlo, y una explicacion que hay
 que interpretar no es una explicacion. La spec §8 pide poder contestar «por
 que», y «por que» tiene que ser una palabra de un vocabulario cerrado.
+
+**Y TIENE DOS VALORES, NO TRES. UN TERCERO ESTABA DECLARADO Y ERA INALCANZABLE,
+MEDIDO POR LA COBERTURA.** Declaraba `empate_en_la_jerarquia`, con su rama en
+`_motivo_de`. La cobertura del bloque la marco como linea no cubierta, y no era
+un test que faltara: la rama **no se puede alcanzar**.
+
+El razonamiento es corto y no admite excepciones. `_motivo_de` solo se llama
+para afirmaciones que NO estan en `elegidas`. Y una afirmacion admisible que no
+esta en `elegidas` solo puede estarlo porque su rango es **peor** que
+`mejor_rango` — si fuera igual, estaria en `elegidas` por construccion. Luego
+`rango > mejor_rango` siempre, y la rama del empate nunca corre.
+
+Un empate NO produce un descarte: produce dos `elegidas` y
+`sin_resolver=True`, que es la respuesta honesta — «estas dos son igual de
+autoritativas y se contradicen». Declarar un motivo para eso habria producido
+un valor que **nadie puede observar**, y un vocabulario cerrado con un valor
+imposible es una promesa que el codigo no cumple: quien escriba
+`if motivo == "empate_en_la_jerarquia"` tendria una rama muerta y no lo sabria.
 """
 
 MOTIVOS_DESCARTE: Final[frozenset[str]] = frozenset(typing.get_args(MotivoDescarte))
@@ -441,25 +458,38 @@ class Resolution:
 # ---------------------------------------------------------------------------
 
 
-def _motivo_de(
-    afirmacion: Claim,
-    perfil: AuthorityProfile,
-    mejor_rango: int,
-) -> MotivoDescarte:
-    """Por que esta afirmacion no gana. Tres motivos, y solo tres.
+def _motivo_de(afirmacion: Claim, perfil: AuthorityProfile) -> MotivoDescarte:
+    """Por que esta afirmacion no gano. Dos motivos, y la funcion es TOTAL.
 
-    **EL ORDEN DE ESTA FUNCION ES EL ORDEN DE IMPORTANCIA DEL MOTIVO**, y no es
-    arbitrario: el guard del agente va primero porque es una **prohibicion**,
-    no una preferencia. Si el perfil puso al agente el primero y aun asi no
-    gana, el motivo que se explica es el del guard —no «perdi por rango»—, y
-    esa distincion es la unica que permite entender por que perdio.
+    **POR QUE NO HAY UNA TERCERA RAMA, Y POR QUE ESO ES UNA DECISION DE DISENO.**
+    Una afirmacion llega aqui solo si NO esta en `elegidas`, y `elegidas` es
+    exactamente «lo admisible en el mejor rango». Luego:
+
+    - si **no** es admisible, el motivo es el guard —que es una prohibicion,
+      y va primero porque explica mas que una preferencia;
+    - si **si** lo es, su rango es peor por construccion, y el motivo es el
+      rango.
+
+    Los dos casos cubren todo el dominio, luego no hay rama de empate, no hay
+    `else`, y no hay invariante que comprobar. Una version anterior de esta
+    funcion comparaba contra `mejor_rango` y **dejaba un `raise` para un caso
+    que la cobertura demostro inalcanzable**; dos razones para no volver a
+    ella. La primera es que un `raise AssertionError` en un fichero que el
+    propio harness somete a mutacion es una forma de pedir que la sonda M5
+    reviente el modulo —y una sonda que revienta el modulo no mide la
+    propiedad, mide el fallo de la sonda—. La segunda es que el repositorio no
+    tira `AssertionError` en ningun sitio, y `AGENTS.md` 1.2 manda errores
+    tipados: un camino que no se puede recorrer no es un error de dominio,
+    es codigo que no deberia existir.
+
+    Que el motivo del guard vaya primero NO es cosmetico: si el perfil puso al
+    agente el primero y aun asi no gana, decir «perdi por rango» seria falso, y
+    «no gano por rango» sobre una prohibicion hide la unica razon por la que
+    perdio.
     """
-    if afirmacion.assertion_origin == "agent-inferred" and not perfil.permitir_inferencia_de_agente:
+    if not _es_admisible(afirmacion, perfil):
         return "cerrado_por_agente_no_permitido"
-    rango = perfil.rango_de(afirmacion.assertion_origin)
-    if rango is None or rango > mejor_rango:
-        return "origen_no_preferido"
-    return "empate_en_la_jerarquia"
+    return "origen_no_preferido"
 
 
 def resolver(
@@ -544,7 +574,7 @@ def resolver(
     )
     ids_elegidas = {c.claim_id for c in elegidas}
     descartadas = tuple(
-        Descartada(afirmacion=c, motivo=_motivo_de(c, politica, mejor_rango))
+        Descartada(afirmacion=c, motivo=_motivo_de(c, politica))
         for c in sorted(candidatas, key=lambda c: c.claim_id)
         if c.claim_id not in ids_elegidas
     )

@@ -63,6 +63,9 @@ PY = RAIZ / ".venv" / "bin" / "python"
 CAZADA = "CAZADA"
 INOCUA = "INOCUA"
 ROTA = "ROTA"
+#: El instrumento no pudo terminar: el arbol esta roto, y eso ES un fallo de
+#: las propiedades, no una sonda que no mordio. Ver `preguntas_abiertas`.
+CAIDA = -1
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,7 +151,23 @@ def compila_el_arbol() -> tuple[bool, str]:
 
 
 def preguntas_abiertas() -> tuple[int, str]:
-    """Corre el instrumento y cuenta las preguntas ABIERTAS."""
+    """Corre el instrumento y cuenta las preguntas ABIERTAS.
+
+    **Y DEVUELVE VEREDICTO AUNQUE EL INSTRUMENTO REVENTE.** La primera version
+    devolvia `-1` si no encontraba la linea `RESULTADO:`, y el harness lo
+    contaba como sonda NO cazada. MEDIDO: la sonda M5 rompia el resolver, el
+    instrumento reventaba con traceback, y el harness decia «la propiedad
+    aguanto» — cuando lo que habia pasado es que el arbol entero estaba roto.
+
+    Invertirlo importa por una razon que no es de este bloque: **un arbol que
+    ni siquiera puede ejecutar el instrumento NO satisface las propiedades**, y
+    una sonda cuyo efecto es romper el arbol lo ha detectado, no fallado. Por
+    eso una caida se cuenta como `CAZADA`, con la razon nombrada —y no como
+    «inocua», que es la lectura que miente en verde.
+
+    Es la misma leccion de B22 —«cada predicado da su veredicto aunque lance»—
+    y aqui el predicado que carecia de veredicto era el proprio instrumento.
+    """
     proc = subprocess.run(
         [str(PY), str(INSTRUMENTO)],
         capture_output=True,
@@ -160,7 +179,7 @@ def preguntas_abiertas() -> tuple[int, str]:
     for ln in salida.splitlines():
         if ln.startswith("RESULTADO:"):
             return int(ln.split(":")[1].strip().split("/")[0]), salida
-    return -1, salida
+    return CAIDA, salida
 
 
 @dataclass
@@ -194,6 +213,10 @@ def main() -> int:
 
     base_abiertas, salida_base = preguntas_abiertas()
     print(f"  sin sondas: {base_abiertas} preguntas abiertas")
+    if base_abiertas == CAIDA:
+        print("  el instrumento NO TERMINA sobre el arbol sin sondas")
+        print(salida_base[-600:])
+        return 2
     if base_abiertas != 0:
         print("  el bloque NO esta cerrado: se mide sobre un arbol que ya falla")
         print(salida_base[-600:])
@@ -227,9 +250,16 @@ def main() -> int:
                 continue
 
             abiertas, salida = preguntas_abiertas()
-            cazada = abiertas >= sonda.p_abiertas_minimo
-            veredicto = CAZADA if cazada else INOCUA
-            detalle = f"abre {abiertas} pregunta(s); {sonda.que_rompe}"
+            if abiertas == CAIDA:
+                veredicto = CAZADA
+                detalle = (
+                    "el instrumento no pudo terminar: el arbol quedo roto, "
+                    f"y eso no satisface las propiedades. {sonda.que_rompe}"
+                )
+            else:
+                cazada = abiertas >= sonda.p_abiertas_minimo
+                veredicto = CAZADA if cazada else INOCUA
+                detalle = f"abre {abiertas} pregunta(s); {sonda.que_rompe}"
             informe.resultados.append((sonda.nombre, veredicto, detalle))
             print(f"  {sonda.nombre}  {veredicto:<7} {sonda.que_rompe}")
             print(f"      {detalle}")

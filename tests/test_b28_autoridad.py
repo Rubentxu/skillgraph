@@ -330,6 +330,25 @@ class TestLaResolucionSeExplica:
         assert motivos == ["origen_no_preferido"]
         assert set(motivos) <= MOTIVOS_DESCARTE
 
+    def test_un_conflicto_vacio_no_inventa_una_respuesta(self) -> None:
+        """Un `Conflicto` sin afirmaciones es degenerado, pero es construible.
+
+        `conflicts_for` nunca devuelve uno —una sola afirmacion no es conflicto,
+        y sin filas devuelve la tupla vacia—, pero `resolver` es una funcion
+        PURA que acepta cualquier `Conflicto` que le den. Y lo acepta porque es
+        PESO, no por descuido: reventar ahi significaria que alguien Tendria que
+        distinguir el caso antes de llamar, y ese `if` estaria en el sitio
+        equivocado.
+
+        Y la respuesta correcta es «nadie gana», no un ganador inventado.
+        """
+        vacio = Conflicto(subject_entity_id=SUJETO, predicate="imports_module", afirmaciones=())
+        r = resolver(vacio, intencion="actual_behavior")
+        assert r.elegidas == ()
+        assert r.descartadas == ()
+        assert r.ganadora is None
+        assert r.sin_resolver is True
+
     def test_ganadora_devuelve_la_unica_o_none(self) -> None:
         r = resolver(_el_conflicto_del_bloque(), intencion="actual_behavior")
         assert r.ganadora is not None
