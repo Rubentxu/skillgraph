@@ -88,7 +88,17 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B21** | Una certificación en rojo no puede decir QUÉ falló | Lo que pytest dice de sus fallos aparece después de la última tabla, y un guard no usa como reloj un estado que mueve su propio contenedor |
 | **B22** | La suite no puede cambiar el árbol por debajo de un instrumento, y un predicado reventado no borra el informe | Escribir y cambiar se separan, toda excepción va declarada, y cada predicado da su veredicto aunque lance |
 | **B23** | El instrumento que responde «¿dónde está el proyecto?» no lo decía | La raíz es un parámetro, la ventana del ROADMAP se contrasta, y el bloque se cruza con STATE y CURRENT |
-| **B24** | La ruta de certificación nunca se ejecutaba, y sus instrucciones apuntaban a un fichero que no existe | Las ocho fronteras se ejecutan contra el adapter de verdad, sin credencial ni dinero, y una instrucción que aponta a un path inexistente se mide como lo que es |
+| **B24** | La ruta de certificación nunca se ejecutaba, y sus instrucciones apuntaban a un fichero que no existe | Las ocho fronteras se ejecutan contra el adapter de verdad, sin credencial ni dinero, y una instrucción que apunta a un path inexistente se mide como lo que es |
+| **B25** | Un hecho entre dos entidades no se puede expresar: `Claim.object_literal` solo admite literales, y los predicados son un conjunto cerrado | `object` pasa a ser literal **o** `EntityRef`, y un pack añade un predicado sin tocar el núcleo |
+| **B26** | Una herramienta externa no tiene forma de aportar conocimiento sin escribir en el store | `Observation Envelope` versionado, normalizers puros e ingesta idempotente |
+| **B27** | Dos claims incompatibles se pisan y no hay forma de saberlo | conflict sets consultables y estables, sin overwrite |
+| **B28** | Resolver un conflicto es un ranking global, y la respuesta correcta depende de para qué se pregunta | `AuthorityProfile` por `QueryIntent`, no un ranking único |
+| **B29** | No se puede preguntar qué se sabía en una revisión, ni cómo fue reemplazado | ventanas de vigencia, supersession y query por revisión |
+| **B30** | Traer el contexto es traerlo todo, o traerlo truncado sin decir qué se cayó | `ContextSlice` mínimo dentro de presupuesto, con `why`/`impact` deterministic-first |
+| **B31** | No hay análisis estructural real: `line_count = 137` es todo lo que se sabe del código | CogniCode → CodeAnalysis → Knowledge, **sin imports en el núcleo** |
+| **B32** | No se puede responder cuándo cambió una relación ni por qué | cadena de commits trazable por entidad, con el SHA como identidad |
+| **B33** | La telemetría y la intención/documentación se contradicen y una pisa a la otra | ambos se preservan, y la autoridad decide según el intent |
+| **B34** | No hay forma de preguntar al sistema por lo que sabe | `what`/`why`/`impact`/`changed`/`conflicts`/`evidence`, con CLI y transporte agent sobre el mismo modelo de query |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -1015,6 +1025,102 @@ deuda sin verificar, y sin verificar no era deuda.
 
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
+
+
+## B25..B34 — La serie epistemológica
+
+**Objetivo cerrado.** Diez bloques que convierten el grafo de conocimiento de
+«un almacen de claims» en «algo que se puede preguntar». B0..B24 construyeron
+un motor que sabe **ejecutar** un workflow y **certificar** que lo ejecuta; esta
+serie le da un tercer eje: **qué se sabe**, **quién lo afirma** y **cuándo dejó
+de ser cierto**.
+
+No es una ampliación de B24 ni continúa su serie: es una línea distinta, con su
+propio vocabulario, y arranca con **ningún bloque empezado**.
+
+### Lo que hay hoy, medido
+
+**B25 parte de un defecto real y presente en el código.** `Claim` declara
+
+    object_literal: Any  # int | str | bool; depende del predicate
+
+(`src/skillgraph/knowledge/graph.py:189`). El `object` de un claim es
+**siempre un literal**: no hay forma de decir «A usa B» sin escribir el nombre
+de B dentro de un string. Y los predicados son un `Final[frozenset[str]]` de
+**siete** literales escrito en el núcleo
+(`src/skillgraph/core/runtime_types.py:241`), validado en `__post_init__`: un
+pack no puede añadir ni el objeto ni el predicado sin tocar el core. Las dos
+mitades de la fila de B25 en el mapa están medidas, no temidas.
+
+**Y el primer predicado de esa lista es `line_count`**, que es la prueba de que
+la fila de B31 no es una hipótesis: B31 dice «no hay análisis estructural real:
+`line_count = 137` es todo lo que se sabe del código», y ese `line_count` es el
+primer elemento de un conjunto de siete valores que alguien decidió de
+antemano. Un conjunto de siete no crece solo.
+
+**B31 no tiene que inventar su frontera: ya está instrumentada.**
+`TestElNucleoNoImportaAdapters` (`tests/test_b3_capability_kernel.py:539`) rastrea
+los paquetes `("runtime", "core", "resources")` y falla si alguno conoce un
+producto externo, con un contrasalto declarado aparte (`NUCLEO_MINIMO`) para que
+reducir el rastreo no lo vacíe en verde. `knowledge/knowledge_query.py:17` ya
+nombra `CodeAnalysis`, `TelemetryQuery` y `SecretAccess` como capabilities y no
+como imports. La frontera de diseño que esta serie atraviesa ya tiene dueño.
+
+**Lo que NO existe todavía, medido:** `EntityRef`, `Observation Envelope`,
+`AuthorityProfile`, `ContextSlice`, supersession y conflict sets **no aparecen en
+`src/`**. Cero de los diez bloques tiene código.
+
+### Estado
+
+**Ninguno empezado.** Los diez están en el mapa como fila; ninguno tiene sección,
+guard, harness ni criterio de aceptación escrito. El orden es el del bundle, con
+una dependencia que sí es dura y que el propio orden respeta: **B28 no es
+ejecutable sin B27**, porque no se puede resolver un conflicto por intención de
+consulta si antes no hay conflicto que consultar. El resto del orden es el que
+propone el bundle, y los gates pueden reordenarlo.
+
+### Lo que esta línea NO sustituye
+
+**El gate de 1.0 sigue vivo y sigue siendo B9**, con sus dos propiedades que no
+se abren desde el código: runtime real certificado (`OPEN` — una credencial) y
+TUI operacional (`NO_MEASURABLE` — una persona). B25..B34 son ortogonales a las
+dos y pueden avanzar sin tocarlas; lo que no pueden es declararlas resueltas, y
+esta sección no lo hace.
+
+### Procedencia, y lo que de ella llega a todo el mundo
+
+`docs/skillgraph-epistemic-evolution-2026-10-06/` — 18 documentos: baseline,
+visión, arquitectura objetivo, siete specs, roadmap, hitos, UAT/AAT, migración,
+playbook, riesgos y nueve ADR (`ADR-0025`..`ADR-0033`).
+
+**Esa carpeta no está versionada.** `.gitignore` deja `docs/*` fuera salvo
+`docs/blueprint/` y `docs/architecture/`, por la política de WI-99 que separa la
+evidencia que los UAT leen del material de trabajo. Consecuencia concreta: **la
+tabla del mapa es la copia que llega a todo el mundo**, y quien solo tenga git
+tiene el orden y los objetivos, pero no las specs ni los ADR. Es una deuda
+conocida y asumida, no un olvido.
+
+**Numeración: dos rebaseos, y el primero estaba mal.** La serie venía como
+B22..B31 sobre un árbol donde B21 era el último cerrado. El primer rebaseo la
+llevó a **B32..B41** y fue un error: si B22, B23 y B24 están ocupados, el
+siguiente libre es **B25**, y B32..B41 dejaba B25..B31 —siete bloques— sin usar
+en la autoridad. Segundo rebaseo a **B25..B34**, que es lo que está aquí.
+
+### La frontera que los atraviesa
+
+**El contrato va de SkillGraph a la herramienta, nunca al revés.**
+
+```
+              contrato de SkillGraph
+                       ▲
+                       │
+   Adaptador CogniCode ┘
+```
+
+B31 es donde se paga caro si se invierte: si el modelo epistemológico se
+diseñara alrededor de la forma de salida de un analizador concreto, cada
+analizador nuevo obligaría a cambiar el núcleo, que es lo que `AGENTS.md` §4.3
+prohíbe con `Protocol` y lo que el guard citado arriba ya mide.
 
 
 ## B23 — El instrumento de la verdad puede equivocarse, y se le ve
