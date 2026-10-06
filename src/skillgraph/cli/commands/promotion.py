@@ -9,6 +9,7 @@ claims, failpoints, payload de entidad) viven en `cli.support`.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import os
 import sys
 from pathlib import Path
@@ -118,7 +119,7 @@ def _default_claim_importer(storage: Storage, *, tenant_id: str, target_project:
     Devuelve True si el claim quedó registrado en destino (o ya estaba).
     """
 
-    from skillgraph.knowledge.graph import Claim, Entity
+    from skillgraph.knowledge.graph import Claim, Entity, entity_ref
 
     def _apply(payload: dict) -> bool:
         c = payload.get("claim")
@@ -167,6 +168,20 @@ def _default_claim_importer(storage: Storage, *, tenant_id: str, target_project:
             extraction_method=c.get("extraction_method", "static_analysis"),
             extractor_version=c.get("extractor_version", "unknown"),
             checked_at_revision=c.get("checked_at_revision", "unknown"),
+            # B26: la referencia a entidad se reconstruye AQUI, con el smart
+            # constructor, en vez de asumir que no la hay. Antes se leia
+            # `c["object_literal"]` y nada mas, y un claim promovido con objeto-
+            # entidad llegaba sin el: el `Claim` se construia sin objeto, la
+            # invariante de B25 lo rechazaba, y el fallo salia EN EL PROYECTO
+            # DESTINO, que es el que nadie mira.
+            #
+            # Se conserva la lectura por clave, y no un `ObservationEnvelope`,
+            # porque el payload de promocion tiene su propio contrato —lo
+            # escribe `cmd_promotion_submit` y puede venir de un outbox de otra
+            # epoca—. Lo que B26 cambia no es el contrato del payload: es que
+            # la conversion pasa por los constructores que validan, y no por
+            # asumir que un campo no existe.
+            object_entity=entity_ref(c["object_entity_id"]) if c.get("object_entity_id") else None,
         )
         storage.record_claim(tenant_id=tenant_id, project_id=target_project, claim=claim)
         return True
@@ -246,19 +261,28 @@ def _claim_to_payload(claim: Claim) -> dict:
     `observed` —una afirmacion de una persona reinterpretada como
     observacion— sin que nada fallara en el proyecto origen, que es
     donde se mira.
+
+    **B26: ESTE DICT SE DERIVA DE LA FORMA, YA NO SE ESCRIBE A MANO.** Se
+    construye con `dataclasses.asdict`, y lo unico que se ajusta a mano es
+    `object_entity`, porque es el unico campo que no es un valor plano: es un
+    `EntityRef`, y al otro lado del payload tiene que haber un `entity_id`.
+
+    Antes se escribian nueve claves literalmente, y B25 anadio una décima
+    (`object_entity`) que nadie Recordo. MEDIDO: la promocion de un claim con
+    objeto-entidad reventaba con `InvalidClaimObjectError` **en el proyecto
+    destino**, porque el payload llevaba `object_literal=None` y nada mas. El
+    fallo aparecia donde nadie mira y ningun test lo decia.
+
+    Con `asdict`, un campo nuevo en `Claim` viaja solo. No porque alguien lo
+    anada dos veces: porque la enumeracion manual era el defecto, y era un
+    defecto que solo se manifiesta en el camino de serializacion, que es
+    justamente el que no tiene cobertura de campos.
     """
-    return {
-        "claim_id": claim.claim_id,
-        "subject_entity_id": claim.subject_entity_id,
-        "predicate": claim.predicate,
-        "object_literal": claim.object_literal,
-        "source_id": claim.source_id,
-        "evidence_ids": list(claim.evidence_ids),
-        "assertion_origin": claim.assertion_origin,
-        "extraction_method": claim.extraction_method,
-        "extractor_version": claim.extractor_version,
-        "checked_at_revision": claim.checked_at_revision,
-    }
+    payload = dataclasses.asdict(claim)
+    ref = payload.pop("object_entity", None)
+    payload["object_entity_id"] = ref["entity_id"] if isinstance(ref, dict) else None
+    payload["evidence_ids"] = list(claim.evidence_ids)
+    return payload
 
 
 PROMOTION_FAILPOINTS: Final[frozenset[str]] = frozenset(
