@@ -4,7 +4,7 @@
 
 > **Bloque 2026-10-06 (B25) — Un hecho entre dos entidades no se puede expresar.**
 >
-> Versión activa `0.35.0.dev0`; último tag `v0.35.0`; **3509 tests**.
+> Versión activa `0.35.0.dev0`; último tag `v0.35.0`; **3514 tests**.
 >
 > `EntityRef` es un TIPO, no una etiqueta: con `object_literal` anotado `Any`, una
 > etiqueta dentro del JSON colisionaría con un literal legítimo. La invariante
