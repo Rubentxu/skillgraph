@@ -31,12 +31,26 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B22** — La suite no puede cambiar el árbol por debajo de un instrumento
-> `0.32.7.dev0` · tag `v0.32.7` · 3444 tests · 16/16 UAT
-> Versión activa `0.32.7.dev0` · último tag `v0.32.7` · 3431 tests · 16/16 UAT
+> Versión activa `0.33.0.dev0` · último tag `v0.33.0` · 3465 tests · 16/16 UAT
 
-Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
-y la produce `scripts/project_truth.py`, que la imprime en JSON. Ningún otro
-script la reconstruye.
+Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
+
+**CORRECCIÓN DE B23, Y LO QUE AFIRMABA ESTA PÁGINA ERA FALSO.** Decía que
+«la produce `scripts/project_truth.py`». No la producía nadie: la escribía a
+mano, nadie la leía, y por eso se quedó dos releases atrás (`v0.32.7`) con el
+instrumento diciendo `coherente: true`. MEDIDO: el release `9961843` no tocó
+este fichero.
+
+Ahora la relación es al revés: `scripts/project_truth.py` **contrasta** esta
+ventana contra la verdad —versión, tag y cifra— y sale con `rc=1` si no
+cuadra. No la regenera, y es deliberado: el instrumento tiene cero escrituras,
+y un instrumento que escribe el fichero de autoridad sería un problema nuevo y
+peor que el que arregla. Mantenerla sigue siendo de quien la escribe; lo que
+cambia es que **el desfase ya no puede pasar inadvertido**.
+
+Había además **dos** ventanas contradictorias —`3444 tests` y `3431 tests`— y
+el instrumenta no cruzaba ninguna. Ahora tampoco se permite que el fichero se
+contradiga a sí mismo.
 
 ## Baseline
 
