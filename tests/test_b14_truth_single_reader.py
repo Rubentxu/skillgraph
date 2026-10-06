@@ -538,16 +538,41 @@ class TestUnRecuentoQueNoSeTerminoNoSePublica:
         que es EXACTAMENTE la linea parcial que B14 cerro. Lo que el guard
         vigila —que un recuento de una colecta que no termino no se
         publique— se reproduce igual.
+
+        **Y LA AFIRMACION SE ENDURECIO EN B23, PORQUE MEDIDA ERA INSUFICIENTE.**
+        La version anterior comprobaba `not any(c.startswith("tests:") ...)`.
+        MEDIDO con la sonda M5 del harness de B23: desactivando la
+        comprobacion del codigo de salida, el verificador lee el numero
+        PARCIAL y publica `coherente: true` con `tests_reales: 2` — el
+        parcial coincide con el declarado, luego no hay contradiccion `tests:`
+        que emitir, y el test pasaba en verde con un numero que no se conto.
+        Una asercion que mira la CONTRADICCION no ve la PUBLICACION. La de
+        ahora exige lo que la propiedad dice: que el verificador se NIEGUE a
+        publicar el recuento y lo diga con `ilegible`, que es la lectura
+        honesta de una colecta que no termino.
         """
         (arbol / "tests" / "test_roto.py").write_text("def roto(:\n    pass\n", encoding="utf-8")
-        _, salida, crudo = _ejecuta(arbol)
+        rc, salida, crudo = _ejecuta(arbol)
         assert salida is not None, crudo[:250]
-        contras = salida.get("contradicciones") or []
-        assert not any(c.startswith("tests:") for c in contras), (
-            f"el verificador publico un recuento de una colecta que no termino: {contras}. "
-            f"El numero de una colecta interrumpida es el numero de otra magnitud, y "
-            f"compararlo con el que declara el estado es comparar dos cosas distintas."
+
+        # (1) No se publica un recuento de una colecta que no termino. Esta es
+        # la asercion que M5 caza: sin ella el guard pasa con un numero falso.
+        assert "ilegible" in salida, (
+            f"una colecta interrumpida dio un veredicto en vez de una negativa: {salida}. "
+            f"El numero de una colecta que no termino es el numero de otra magnitud, y "
+            f"publicarlo con nombre propio es afirmar que se conto lo que no se conto."
         )
+        assert "tests_reales" not in salida, (
+            f"el verificador publico un recuento de una colecta que no termino: {salida}. "
+            f"El numero parcial es real —son los tests que llego a ver— pero no es EL "
+            f"recuento, y sin una contradiccion `tests:` que lo delate pasaria en verde."
+        )
+
+        # (2) El motivo dice que la colecta no termino, no solo que algo fallo.
+        assert "no terminó" in salida["ilegible"] or "no termino" in salida["ilegible"], (
+            f"el motivo no dice que la colecta no termino: {salida['ilegible']!r}"
+        )
+        assert rc == 2, f"una colecta que no se pudo medir tiene que salir con 2, dio {rc}"
 
 
 # =====================================================================
