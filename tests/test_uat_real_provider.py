@@ -31,10 +31,33 @@ verdad, no un test verde porque no miró.
     # (o OPENAI_API_KEY=sk-...; el proveedor se elige con SG_UAT_PROVIDER)
 
     # 2. Opt-in explicito.
-    SG_UAT_REAL_PROVIDER=1 uv run pytest tests/uat_real_provider.py -v
+    SG_UAT_REAL_PROVIDER=1 uv run pytest tests/test_uat_real_provider.py -v
 
 Sin `SG_UAT_REAL_PROVIDER=1`, el fichero se **omite entero** y su razon se
 imprime en el resumen. Con el, corre el ciclo completo.
+
+**CORRECCION DE B24, Y NO ES COSMETICA.** Este docstring decia el nombre del
+modulo SIN el prefijo `test_` de pytest, y ese fichero no existia. MEDIDO: quien
+siguiera las instrucciones recibiria `rc=4`, un error de USO de pytest que no
+dice nada sobre la UAT, y no tendria forma de saber que no ejecuto nada. Es el
+error 32 de WI-113 —una sonda que apunta a un texto inexistente y se cuenta como
+si hubiera midido— en un sitio donde la consecuencia es que la certificacion no
+llega a empezar.
+
+Y el guard que lo vigila **cazo la correccion misma**: el texto que lo explica
+citaba el nombre roto, asi que `test_el_path_del_docstring_existe` se puso en
+ROJO contra la correccion. Un guard que solo mira el fichero de destino no
+mide la instruccion; hay que mirar lo que el modulo DICE de si mismo. Vigila
+`tests/test_b24_recorrido_certificacion.py::TestLasInstruccionesDeEjecucionApuntanAUnFicheroQueExiste`.
+
+**LO QUE ESTE RECORRIDO NO HACE, Y LO DICE EL NOMBRE.** Cubre el
+`Handoff`, el adapter y el `AgentResult`. Las otras cinco fronteras que el
+modulo declaraba —workflow, `ContextRecipe`, transicion, persistencia y
+recuperacion— no se ejecutaban aqui, y B24 las cubre en
+`tests/test_b24_recorrido_certificacion.py` contra un proveedor local, sin
+dinero y sin credencial. Un servidor local NO es un proveedor: lo que se
+mide ahi es que las fronteras funcionan, no que el proveedor conteste. Lo
+unico que queda por certificar fuera es lo de aqui.
 
 **QUE RECORRE, Y POR QUE EL CICLO COMPLETO.** B2 no pide «comprobar que la
 API responde». Pide el recorrido entero, porque cada salto es una frontera
