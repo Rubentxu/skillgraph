@@ -515,18 +515,25 @@ class TestLaRespuestaNoSeFabrica:
         que la funcion de lectura devuelve exactamente lo que hay en el
         fichero. Si alguien cambiara la verdad sin cambiar el lector, este
         test lo veria.
+
+        MEDIDO en B23, y por eso la raiz es un argumento y no una
+        constante: con la raiz escribiendose en el codigo, estos lectores no
+        se podrian lanzar contra NINGUN otro arbol, y un lector que solo
+        sabe leer de un sitio no se puede probar. La raiz de aqui es la del
+        repositorio, explicita.
         """
+        raiz = RAIZ
         assert (
-            project_truth.version_activa()
-            == project_truth._lee("src/skillgraph/__init__.py")
+            project_truth.version_activa(raiz)
+            == project_truth._lee(raiz, "src/skillgraph/__init__.py")
             .split('__version__ = "')[1]
             .split('"')[0]
         )
         assert (
-            project_truth.bloque_del_roadmap()
-            == project_truth._lee("ROADMAP.md").split("Bloque vivo: **")[1].split("**")[0]
+            project_truth.bloque_del_roadmap(raiz)
+            == project_truth._lee(raiz, "ROADMAP.md").split("Bloque vivo: **")[1].split("**")[0]
         )
-        assert project_truth.workitem_de_state() in project_truth._lee("STATE.yaml")
+        assert project_truth.workitem_de_state(raiz) in project_truth._lee(raiz, "STATE.yaml")
 
     def test_una_verdad_ilegible_es_un_fallo_y_no_un_verde(self) -> None:
         """El modo de fallo que WI-115 dio un contrasalto y aqui se cierra.
@@ -538,7 +545,7 @@ class TestLaRespuestaNoSeFabrica:
         """
         assert issubclass(project_truth.VerdadNoLegible, RuntimeError)
         with pytest.raises(project_truth.VerdadNoLegible):
-            project_truth._lee("no/existe/este/fichero.md")
+            project_truth._lee(RAIZ, "no/existe/este/fichero.md")
 
     def test_el_codigo_de_salida_distingue_medir_de_contradecirse(self) -> None:
         """Tres veredictos, no dos.
