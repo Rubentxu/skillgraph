@@ -4,7 +4,7 @@
 
 > **Bloque 2026-10-06 (B25) — Un hecho entre dos entidades no se puede expresar.**
 >
-> Versión activa `0.34.1.dev0`; último tag `v0.34.1`; **3509 tests**.
+> Versión activa `0.35.0.dev0`; último tag `v0.35.0`; **3509 tests**.
 >
 > `EntityRef` es un TIPO, no una etiqueta: con `object_literal` anotado `Any`, una
 > etiqueta dentro del JSON colisionaría con un literal legítimo. La invariante
@@ -15,8 +15,8 @@
 > quedan abiertas son a propósito (el CHECK del `predicate` exigiría reconstruir la
 > tabla; la superficie de aportación del pack es B26).
 >
-> **B24 cerrado en `v0.34.1`** (SemVer derivado: `0 feat, 0 breaking, 3 fix, 2 test,
-> 2 chore` → PATCH, `scripts/derive_semver.py`). La ruta de certificación se ejecuta
+> **B25 cerrado en `v0.35.0`** (SemVer derivado: `0 breaking, 1 feat, 1 fix, 3 otros`
+> → MINOR, `scripts/derive_semver.py`). **B24 cerrado en `v0.34.1`**. La ruta de certificación se ejecuta
 > entera sin credencial y sin dinero, y la etapa `evidence` ya no es un trinquete.
 >
 > **MEDIDO AL ABRIR: EL MÓDULO DECLARABA OCHO FRONTERAS Y SUS TRES TESTS

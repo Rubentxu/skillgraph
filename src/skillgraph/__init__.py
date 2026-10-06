@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.34.1.dev0"  # cuarto eslabon de la cadena de v0.32.7: HEAD ya NO esta en la etiqueta, luego el SemVer vuelve a ser <tag>.dev0 (caso 2 del guard de release). B24: 0 feat, 0 breaking, 3 fix, 2 test, 2 chore => PATCH. HEAD tiene que estar MAS ALLA del tag para que este commit exista, y ese es el motivo de que este commit se haga con la suite saltada y se compruebe DESPUES a mano: no hay orden en el que el hook vea un HEAD que todavia no existe. La ventana es la misma que en v0.32.6, v0.32.5, v0.32.4, v0.32.3, v0.32.2, v0.32.1, v0.32.0, v0.31.2, v0.31.1 y v0.31.0, y el motivo esta medido en B12, no supuesto.
+__version__ = "0.35.0.dev0"  # B25: 0 breaking, 1 feat, 1 fix, 3 otros => MINOR. La referencia al tag anterior se conserva en el comentario largo de mas abajo.
 
 from skillgraph.core.errors import (
     IdentityConflictError,

@@ -14,6 +14,60 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.35.0] - 2026-10-06 — Un hecho entre dos entidades se puede expresar
+
+SemVer **derivado** desde `v0.34.1`: `0 breaking · 1 feat · 1 fix · 3 otros`
+(`git log v0.34.1..HEAD`, contado con las mismas reglas que
+`scripts/derive_semver.py`), la regla pide **MINOR -> v0.35.0**.
+
+## El objeto de un claim puede ser otra entidad
+
+`Claim.object_literal` estaba anotado `Any` y `EntityID` es un `NewType` sobre
+`str`, así que el constructor **aceptaba** cualquier cadena. El defecto nunca
+fue que se negara: era que el sistema guardaba dos cadenas y no sabía cuál
+apuntaba a algo. MEDIDO antes de escribir nada, con
+`scripts/measure_b25_relaciones.py`:
+
+    ambos objetos son str ('str' frente a 'el fichero que todavia no he
+    creado'): el sistema NO puede decir cual de los dos es una entidad
+
+La pregunta de B25 no es «¿lo acepta?» sino **«¿lo diferencia?»**, y por eso
+`EntityRef` es un **tipo**, no una etiqueta dentro del JSON: una etiqueta
+colisionaría con un literal legítimo, porque el campo es `Any`.
+
+## Un literal y una referencia no se pueden confundir
+
+La invariante «exactamente uno» la sostienen **Python y el CHECK de la tabla**,
+con el **mismo XOR**. Si se apartaran, la base rechazaría filas que Python
+acepta y el fallo aparecería en el sitio más caro.
+
+## Un pack añade un predicado sin tocar el núcleo
+
+`PredicadoDePack` es un `NewType` con su smart constructor, y
+**`CLAIM_PREDICATES` sigue teniendo siete valores**. La promesa era «sin tocar
+el núcleo», y ampliar ese fichero habría sido tocarlo. El criterio es un
+**namespace**, no un registro: un registro sería estado global mutable
+(`AGENTS.md` §1.4).
+
+## Dos decisiones que salen de medir
+
+**La columna nueva NO lleva clave foránea.** Con `PRAGMA foreign_keys = ON`,
+declarar `REFERENCES entities(entity_id)` rechaza **todos los claims
+literales**, porque el marcador `''` no es una entidad. La garantía se
+recupera en Python, en `record_claim`.
+
+**El índice NO está en el DDL, está en la migración.** El DDL corre con
+`CREATE TABLE IF NOT EXISTS`, luego no reconstruye una tabla vieja, y un
+`CREATE INDEX` sobre una columna ausente revienta `executescript` entero — con
+lo cual **abrir la base falla**, que es lo que la migración viene a arreglar.
+
+## Lo que NO cambia
+
+El gate de 1.0 sigue en 18 PASS / 1 OPEN / 1 NO_MEASURABLE. Un pack puede
+**usar** un predicado con namespace pero todavía no puede **instalarse**: eso
+es B26. El límite queda dicho en `scripts/measure_b25_relaciones.py`, que
+termina en **2/4** preguntas abiertas y explica por qué cada una lo está.
+
 ## [0.34.1] - 2026-10-06 — La ruta de certificación nunca se ejecutaba, y la que la verificaba era un trinquete
 
 SemVer **derivado** desde `v0.34.0`: `0 feat · 0 breaking · 3 fix · 2 test ·
