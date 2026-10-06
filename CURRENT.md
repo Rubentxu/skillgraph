@@ -4,7 +4,7 @@
 
 > **Bloque 2026-10-06 (B27) — Los conflictos avisan y son consultables.**
 >
-> Versión activa `0.36.0.dev0`; último tag `v0.36.0`; **3560 tests**.
+> Versión activa `0.37.0.dev0`; último tag `v0.37.0`; **3560 tests**.
 >
 > **LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTÓ SER FALSA**, y eso importa
 > más que el resultado. Decía «dos claims incompatibles se pisan»; medido sobre

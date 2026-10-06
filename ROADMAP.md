@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B27** — Dos claims incompatibles se pisan y no hay forma de saberlo · conflict sets consultables y estables, sin overwrite
-> Versión activa `0.36.0.dev0` · último tag `v0.36.0` · 3560 tests · 16/16 UAT
+> Versión activa `0.37.0.dev0` · último tag `v0.37.0` · 3560 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
