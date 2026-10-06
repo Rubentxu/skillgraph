@@ -145,10 +145,10 @@ class TestMixinsAreDisjoint:
         # desde `KnowledgeDelegations` como cualquier otro. La
         # disyuncion es la propiedad; la cifra es la consequence, y sube
         # solo cuando un nombre nuevo entra en la red.
-        # B25 lo subio a 68 con `list_claims_by_object_entity`, el unico
-        # delegate que hace PREGUNTABLE una referencia a entidad: sin el,
-        # `record_claim` podria escribirla y ninguna puerta podria leerla.
-        assert len(seen) == 68, f"esperados 68 metodos, hay {len(seen)}"
+        # B27 lo subio a 69 con `conflicts_for`, el delegate que hace
+        # PREGUNTABLE una contradiccion: sin el, el sistema sabia que dos
+        # afirmaciones se oponen y no habia por donde enterarse.
+        assert len(seen) == 69, f"esperados 69 metodos, hay {len(seen)}"
 
     def test_each_mixin_delegates_to_exactly_one_accessor(self) -> None:
         """AST, no grep: los `return self.x(...)` multilinea no se leen
@@ -221,7 +221,10 @@ class TestPublicSurfacePreserved:
     #: escribió cree que sí. Lo que la superficie pública vigila es que se note
     #: cuando eso pasa, y por eso el número se mueve con el motivo al lado y no
     #: a dedo.
-    EXPECTED_PUBLIC = 78
+    # B27 lo subio a 79 con `conflicts_for`: un conflicto que se guarda y
+    # no se puede preguntar es peor que no tenerlo, porque quien lo
+    # escribio creeria que si.
+    EXPECTED_PUBLIC = 79
     # Solo los privados no-dunder: `__init__`/`__enter__`/`__exit__`
     # estan cubiertos por LIVE_SQL_METHODS y por `close`/`uow`.
     EXPECTED_PRIVATE = 5

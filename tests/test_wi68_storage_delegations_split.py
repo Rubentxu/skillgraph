@@ -142,8 +142,8 @@ class TestStorageStillInherits:
         # `Storage`: por eso el bucle de alcanzabilidad va DESPUES de la
         # cifra y no dentro de ella. Los dos nombres nuevos son
         # `get_resource_status` y `update_resource_status`.
-        # B25 lo subio a 68 con `list_claims_by_object_entity`, el delegate
-        # que hace preguntable una referencia a entidad.
-        assert len(moved) == 68, f"esperados 68 metodos de delegacion, hay {len(moved)}"
+        # B27 lo subio a 69 con `conflicts_for`, el delegate que hace
+        # preguntable una contradiccion entre afirmaciones.
+        assert len(moved) == 69, f"esperados 69 metodos de delegacion, hay {len(moved)}"
         for name in moved:
             assert callable(getattr(Storage, name, None)), f"{name} ya no es alcanzable"
