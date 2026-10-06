@@ -57,6 +57,29 @@ CREATE TABLE IF NOT EXISTS schema_version (
 -- identificable estable. `schema_version` responde «que version tiene este
 -- proyecto»; esta tabla responde «que se le hizo a esta base», que es la
 -- pregunta que hace falta cuando algo va mal y la version sola no basta.
+-- B29: EL ORDEN DE LAS REVISIONES.
+--
+-- Una ventana de vigencia es un intervalo, y un intervalo necesita un orden.
+-- Las revisiones de verdad son SHAs de commit, y comparar dos SHAs es
+-- LEXICOGRAFICO: un orden total y ARBITRARIO. Una ventana sobre un orden
+-- inventado no es una ventana.
+--
+-- `seq` es EL ORDEN EN QUE ESTE STORE APRENDIO DE ESAS REVISIONES. No es
+-- ascendencia de git —eso es la capability `GitHistory`, que es B32—, ni es
+-- orden lexicografico, y no pretende serlo. Es el unico orden que este store
+-- puede defender sin conocer la topologia del repositorio.
+--
+-- Y esto es lo que separa los DOS EJES de 06-SPEC §1 de forma real:
+-- `checked_at_revision` es knowledge time, y `seq` es valid time. Confundirlos
+-- no era una falta de estilo: era no tener un eje con el que comparar.
+--
+-- `revision` es UNIQUE porque dos filas con la misma revision y distinto
+-- `seq` harian la ventana arbitraria, y la consulta por revisionaria.
+CREATE TABLE IF NOT EXISTS revision_registro (
+    seq      INTEGER PRIMARY KEY AUTOINCREMENT,
+    revision TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     migration_id TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL
@@ -288,6 +311,27 @@ CREATE TABLE IF NOT EXISTS claims (
     -- rechazaria TODOS los claims literales, porque `''` no es una entidad.
     object_entity_id      TEXT NOT NULL DEFAULT ''
         CHECK ((object_literal_json = '') <> (object_entity_id = '')),
+    -- B29: VENTANA DE VIGENCIA. `checked_at_revision` de arriba es
+    -- KNOWLEDGE time (cuando lo vimos); estas dos son VALID time (cuando era
+    -- cierto el hecho), y no son lo mismo. Sin ellas, un hecho que CAMBIO se
+    -- lee igual que un hecho que se CONTRADICE. MEDIDO: con dos filas de la
+    -- MISMA fuente en revisiones consecutivas, `conflicts_for` devolvia un
+    -- conflicto y `resolver` contestaba «gana NADIE» a algo que si tiene
+    -- respuesta en cada instante.
+    --
+    -- Las dos son ANULABLES y sin default a proposito: `NULL` significa
+    -- «esta afirmacion no caduca» —que es lo cierto de todo el grafo que ya
+    -- existia—, y un default inventado fecharia en el pasado lo que se acaba
+    -- de escribir. Un `CHECK` de coherencia vive en `Claim.__post_init__`, no
+    -- aqui: SQLite no revalida CHECK sobre filas ya escritas, y una restriccion
+    -- blanda hacia atras es exactamente lo que B25 eligio y dijo.
+    valid_from_revision  TEXT,
+    valid_until_revision TEXT,
+    -- B29: la cadena de supersesion. NO es un `REFERENCES`: dos claims que se
+    -- superseden pueden provenir de bases migradas antes de que existiera la
+    -- columna, y una FK ahi haria fallar escrituras que antes funcionaban.
+    -- La integridad la sostiene `record_claim`, que es quien la escribe.
+    supersedes_claim_id TEXT,
     UNIQUE (subject_entity_id, predicate, source_id, checked_at_revision)
 );
 CREATE INDEX IF NOT EXISTS idx_claims_subject

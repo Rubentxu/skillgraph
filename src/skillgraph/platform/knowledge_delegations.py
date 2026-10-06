@@ -271,6 +271,7 @@ class KnowledgeDelegations:
         tenant_id: str,
         project_id: str,
         subject_entity_id: str,
+        revision: str | None = None,
     ) -> tuple[Conflicto, ...]:
         """B27: los conflictos de un sujeto, consultables y ESTABLES.
 
@@ -282,6 +283,26 @@ class KnowledgeDelegations:
             tenant_id=tenant_id,
             project_id=project_id,
             subject_entity_id=subject_entity_id,
+            revision=revision,
+        )
+
+    def claims_at_revision(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None,
+    ) -> tuple[Claim, ...]:
+        """B29: ¿qué afirmaciones eran ciertas en `revision`? `None` = HEAD.
+
+        Va en la fachada por el mismo motivo que en B25 y B27.
+        """
+        return self.knowledge_repository().claims_at_revision(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=subject_entity_id,
+            revision=revision,
         )
 
     def list_claims_by_object_entity(

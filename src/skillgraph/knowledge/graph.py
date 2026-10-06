@@ -254,6 +254,26 @@ class Claim:
     #: `Claim("id", "sujeto", "line_count", 42, "src")` —posicional, como
     #: aparece en codigo existente— empezara a meter `source_id` en este.
     object_entity: EntityRef | None = None
+    # --- B29: VENTANA DE VIGENCIA. Los tres AL FINAL, por el mismo motivo. ---
+    #: **VALID time**, y NO es `checked_at_revision`. Aquel dice cuando lo
+    #: VIMOS; este dice cuando el hecho ERA CIERTO. Son los dos ejes de
+    #: `06-SPEC` §1, y confundirlos no era una falta de estilo: era no tener
+    #: un eje con el que comparar, luego no poder distinguir «cambio» de
+    #: «contradiccion». MEDIDO: sin esto, dos filas de la MISMA fuente en
+    #: revisiones consecutivas daban un conflicto, y `resolver` contestaba
+    #: «gana NADIE» a algo que si tiene respuesta en cada instante.
+    #:
+    #: `None` = «no caduca». Es el valor del grafo que ya existia y es el
+    #: correcto por defecto: una afirmacion no caduca por no saber cuando.
+    valid_from_revision: str | None = None
+    valid_until_revision: str | None = None
+    #: La cadena de supersesion: que afirmacion **reemplazo** a cual.
+    #:
+    #: MEDIDO antes del bloque: NO existia ninguna columna ni funcion que
+    #: dijera que `c-B` sustituyo a `c-A`. Habia dos filas con dos revisiones,
+    #: y nada mas; podrian ser un cambio o dos herramientas discrepantes, y no
+    #: habia forma de saberlo.
+    supersedes_claim_id: ClaimID | None = None
 
     def __post_init__(self) -> None:
         # B25: un predicado del nucleo o un predicado de pack. El conjunto de
@@ -278,6 +298,16 @@ class Claim:
                     if es_literal
                     else "no llevo ninguno; un claim tiene que afirmar algo"
                 )
+            )
+
+        # B29: un claim no puede supersederse a si mismo. Es la unica
+        # invariante de la supersesion que se puede comprobar aqui, y se
+        # comprueba porque el bucle que la recorre en `claims_at_revision` no
+        # tiene por donde defenderse: entraria en un ciclo infinito.
+        if self.supersedes_claim_id == self.claim_id:
+            raise InvalidClaimObjectError(
+                f"Claim {self.claim_id!r} se supersede a si mismo: una cadena de "
+                "supersesion con un ciclo no se puede recorrer"
             )
 
         if self.assertion_origin not in ASSERTION_ORIGINS:
@@ -377,6 +407,102 @@ class Conflicto:
         return tuple(c.claim_id for c in self.afirmaciones)
 
 
+def vigente_en(
+    desde: int | None,
+    hasta: int | None,
+    seq: int,
+) -> bool:
+    """¿El hecho era cierto en la posicion `seq` de la historia?
+
+    **ES PURA A PROPOSITO, Y POR ESO VIVE AQUI Y NO EN EL REPOSITORIO.** La
+    ventana es un intervalo, y un intervalo necesita un orden; el orden vive en
+    `revision_registro`, que es una tabla. Si la comparacion viviera alli, no se
+    podria probar sin abrir un SQLite, y una regla de intervalo sin tests
+    unitarios es una regla que se rompe en silencio.
+
+    Args:
+        desde: `seq` de `valid_from_revision`, o `None` si no caduca por abajo.
+        hasta: `seq` de `valid_until_revision`, o `None` si sigue vigente.
+        seq: la posicion que se pregunta.
+
+    Returns:
+        `True` si el hecho era cierto en `seq`. **Cerrada por abajo, ABIERTA
+        por arriba**: una ventana es `[desde, hasta)`.
+
+        **Y LA SEMANTICA DEL EXTREMO SUPERIOR ESTA MEDIDA, NO ADOPTADA.** La
+        primera version de este bloque hizo la ventana **cerrada por los dos
+        lados**, y entonces en `revB` el claim viejo seguia vigente y la
+        consulta por revision devolvia `['c-A', 'c-B']` — las dos
+        afirmaciones, que es justo la respuesta que B29 viene a eliminar.
+
+        Lo que lo decide es el gate de `06-SPEC` §9, escrito por el bloque:
+
+            commit A: A -> calls B        commit B: A -> calls C
+            at(A) -> calls B             at(B)  -> calls C
+
+        En `revB` la respuesta es `calls C`, y **no** las dos. Si el extremo
+        superior fuera inclusivo, `at(B)` tendria que devolver las dos, que es
+        la mitad de un conflicto. Luego `hasta` es la PRIMERA revision en la
+        que el hecho ya no es cierto, y la ventana es `[desde, hasta)`.
+
+        Esa forma ademas hace que las ventanas sean **contiguas sin huecos**:
+        `[revA, revB)` y `[revB, ...)` no dejan instante sin respuesta, que es
+        lo que un intervalo semiabierto garantiza y lo que un intervalo cerrado
+        por los dos lados NO hacia —en el frontier se solaparian—.
+
+    **UNA VENTANA AL REVES DEVUELVE `False` EN TODAS PARTES.** Con `desde=5,
+    hasta=2` no hay ningun `seq` que la satisfaga, y eso es lo que hace que
+    `vigente_en` sea **total**: quien la llama nunca tiene que mirar
+    `desde <= hasta` antes de preguntar.
+    """
+    if desde is not None and seq < desde:
+        return False
+    return not (hasta is not None and seq >= hasta)
+
+
+def _sigiente_revision(cur: Any, revision: str) -> int:
+    """El `seq` de `revision`, registrandola la PRIMERA vez que se ve.
+
+    **POR QUE UN `AUTOINCREMENT` Y NO UN MAX+1.** Con `MAX(seq)+1`, dos
+    conexiones que registraran revisiones a la vez podrian leer el mismo
+    maximo y escribir el mismo `seq` — y entonces dos ventanas distintas
+    dirian lo mismo sobre el mismo instante, que es peor que no tener orden.
+    El `UNIQUE` sobre `revision` evita el otro extremo, que es dos filas con la
+    misma revision y distinto `seq`.
+
+    **Y DEVUELVE UN `int`, NO UN `str`.** El `seq` es lo que se compara; la
+    revision es lo que se guarda. Ver la nota de `revision_registro` en
+    `platform/schema.py`: comparar SHAs seria un orden lexicografico y
+    arbitrario.
+    """
+    fila = cur.execute(
+        "SELECT seq FROM revision_registro WHERE revision = ?", (revision,)
+    ).fetchone()
+    if fila is not None:
+        return int(fila[0])
+    cur.execute("INSERT INTO revision_registro (revision) VALUES (?)", (revision,))
+    fila = cur.execute(
+        "SELECT seq FROM revision_registro WHERE revision = ?", (revision,)
+    ).fetchone()
+    return int(fila[0])
+
+
+def seq_de(cur: Any, revision: str | None) -> int | None:
+    """El `seq` de una revision, o `None` si este store no la ha visto.
+
+    **UNA REVISION DESCONOCIDA NO ES UN ERROR: ES QUE NO HAY NADA QUE DIJERA
+    DE ELLA.** Y se distingue de «hay claims pero ninguno en esa revision»
+    precisamente porque una revision desconocida **no aparece** en
+    `revision_registro` y por tanto no tiene `seq` con el que comparar.
+    """
+    if revision is None:
+        return None
+    fila = cur.execute(
+        "SELECT seq FROM revision_registro WHERE revision = ?", (revision,)
+    ).fetchone()
+    return None if fila is None else int(fila[0])
+
+
 __all__ = [
     "Claim",
     "ClaimID",
@@ -396,5 +522,7 @@ __all__ = [
     "entity_id",
     "entity_ref",
     "predicado_de_pack",
+    "seq_de",
     "source_id",
+    "vigente_en",
 ]

@@ -405,6 +405,17 @@ class Resolution:
     intencion: QueryIntent
     elegidas: tuple[Claim, ...]
     descartadas: tuple[Descartada, ...]
+    #: **DE QUE REVISION RESPONDIO ESTA RESOLUCION.** B29.
+    #:
+    #: **POR QUE NO ES OPCIONAL.** Sin este campo, `sg knowledge resolve`
+    #: contestaba «gana NADIE» a una pregunta que si tiene respuesta, y el
+    #: operador no tenia forma de saber si era porque no lo sabia el sistema o
+    #: porque estaba preguntando en el instante equivocado. MEDIDO antes del
+    #: bloque: exactamente eso.
+    #:
+    #: `None` significa **HEAD**: se respondio con lo que no ha caducado. Y no
+    #: es lo mismo que «sin revision»: es la respuesta a una pregunta distinta.
+    revision: str | None = None
 
     @property
     def ganadora(self) -> Claim | None:
@@ -429,7 +440,7 @@ class Resolution:
         return len(self.elegidas) != 1
 
     @property
-    def firma(self) -> tuple[str, str, tuple[str, ...], tuple[tuple[str, str], ...]]:
+    def firma(self) -> tuple[str, str, str | None, tuple[str, ...], tuple[tuple[str, str], ...]]:
         """**La decision, comparable entre resoluciones.**
 
         **POR QUE NO COMPARAR LA `Resolution` ENTERA.** La `Resolution` lleva
@@ -448,6 +459,7 @@ class Resolution:
         return (
             self.perfil,
             self.intencion,
+            self.revision,
             tuple(c.claim_id for c in self.elegidas),
             tuple((d.afirmacion.claim_id, d.motivo) for d in self.descartadas),
         )
@@ -497,6 +509,7 @@ def resolver(
     *,
     intencion: QueryIntent,
     perfil: AuthorityProfile | None = None,
+    revision: str | None = None,
 ) -> Resolution:
     """Resuelve `conflicto` **para `intencion`**, y dice como.
 
@@ -517,6 +530,11 @@ def resolver(
         perfil: la politica. Si se omite, la de `PERFILES_POR_DEFECTO` para
             esta intencion. Es el punto de extension del bloque: quien tiene
             una politica propia la trae.
+        revision: **de que revision se responde** (B29). `None` es HEAD. Se
+            propaga a la `Resolution` sin mas: el resolver no la usa para
+            decidir —decidir lo hace la ventana, que se aplico ANTES, en
+            `conflicts_for`—, sino para poder CONTESTAR que instante se
+            respondio.
 
     Returns:
         Una `Resolution` explicable. Sin ganador si la politica no puede
@@ -543,6 +561,7 @@ def resolver(
             intencion=pregunta,
             elegidas=(),
             descartadas=(),
+            revision=revision,
         )
 
     mejor_rango = _mejor_rango(candidatas, politica)
@@ -559,6 +578,7 @@ def resolver(
                 Descartada(afirmacion=c, motivo="cerrado_por_agente_no_permitido")
                 for c in sorted(candidatas, key=lambda c: c.claim_id)
             ),
+            revision=revision,
         )
 
     elegidas = tuple(
@@ -584,6 +604,7 @@ def resolver(
         intencion=pregunta,
         elegidas=elegidas,
         descartadas=descartadas,
+        revision=revision,
     )
 
 

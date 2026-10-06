@@ -41,7 +41,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from skillgraph.knowledge.graph import Conflicto
+from skillgraph.knowledge.graph import Conflicto, seq_de, vigente_en
 from skillgraph.platform.knowledge_mappers import row_to_claim as _row_to_claim
 from skillgraph.platform.storage import Storage
 
@@ -83,6 +83,7 @@ class SqliteConflictRepository:
         tenant_id: str,
         project_id: str,
         subject_entity_id: str,
+        revision: str | None = None,
     ) -> tuple[Conflicto, ...]:
         """Los conflictos de un sujeto, **ordenados de forma estable**.
 
@@ -92,11 +93,38 @@ class SqliteConflictRepository:
                 entre si, y meterlos seria ruido con apariencia de señal.
             subject_entity_id: el sujeto cuyas afirmaciones se comparan.
 
+            revision: **la pregunta cambia con el tiempo**. `None` es HEAD: solo
+                compiten las afirmaciones que NO han caducado. Una revision
+                concreta hace competir solo las que eran ciertas en ella.
+
         Returns:
             Una tupla de `Conflicto`, **vacia si no hay ninguno**. Una sola
             afirmacion NO es conflicto: no se contradice nadie, y llamarle
             conflicto seria el equivalente de B25 — un sistema que confunde
             «coexisten» con «se oponen».
+
+        **B29: POR QUE EL FILTRO ES UNA PREGUNTA Y NO UN BORRADO.** MEDIDO
+        antes del bloque, con dos filas de la MISMA fuente en revisiones
+        consecutivas:
+
+            conflicts_for  ->  1 conflicto: [c-A, c-B]
+            resolver       ->  gana NADIE
+
+        El sistema contestaba «nadie gana» a algo que tiene respuesta definitiva
+        en cada instante. La causa era que se comparaban valores **sin mirar el
+        tiempo**, luego un hecho que CAMBIO se leia igual que un hecho que se
+        CONTRADICE — que es la consecuencia que ADR-0030 nombra como *«menos
+        falsos conflictos»*.
+
+        El arreglo NO es borrar el conflicto ni hacerlo mas raro: es que el
+        hecho viejo **caduca**, y lo caducado no compite. Las dos afirmaciones
+        siguen ahi y se siguen pudiendo consultar por su revision; lo que deja
+        de ser verdad es que se opongan **a la vez**.
+
+        Y una revision que este store **nunca ha visto** da tupla vacia, que no
+        es un error: es que no hay nada que dijera de ella. Se distingue de
+        «hay claims pero ninguno en esa revision» porque una revision
+        desconocida no llega a tener `seq`.
         """
         rows = self._conn.execute(
             """
@@ -109,8 +137,16 @@ class SqliteConflictRepository:
         if not rows:
             return ()
 
+        # B29: el filtro de ventana va DESPUES de leer, no en el `WHERE`.
+        # Podria ir antes —la base lo hace mas rapido— pero el `WHERE` es
+        # donde se decidio el alcance por tenant y proyecto, y mezclar ahi la
+        # pregunta con el ambito haria que cambiar uno cambiara el otro sin que
+        # nada lo dijera. Ademas asi la ventana se aplica con `vigente_en`, que
+        # es la MISMA funcion pura que los tests exercise sin base.
+        vigentes = [r for r in rows if _vigente_en_revision(self._conn, r, revision)]
+
         por_predicado: dict[str, list[sqlite3.Row]] = {}
-        for row in rows:
+        for row in vigentes:
             por_predicado.setdefault(row["predicate"], []).append(row)
 
         conflictos: list[Conflicto] = []
@@ -128,6 +164,55 @@ class SqliteConflictRepository:
                     )
                 )
         return tuple(conflictos)
+
+
+def _vigente_en_revision(conn: sqlite3.Connection, row: sqlite3.Row, revision: str | None) -> bool:
+    """¿Era este claim cierto en `revision`? `None` = HEAD.
+
+    **LOS DOS `NULL` NO SIGNIFICAN LO MISMO, Y ESA ASIMETRIA ES EL NUCLE DEL
+    BLOQUE.** Es lo unico que hay que recordar de esta funcion:
+
+    | columna              | `NULL` significa                    |
+    |----------------------|-------------------------------------|
+    | `valid_from_revision` | «desde `checked_at_revision`»        |
+    | `valid_until_revision`| «todavia vigente»                   |
+
+    Asimetro y no simetria, y hay una razon para cada lado:
+
+    - **`valid_from = NULL` es «desde que lo vimos».** Una afirmacion
+      observada en la revision R es, hasta donde este store sabe, cierta desde
+      R. Lo que delante significa «desde el principio de todo», que solo es
+      cierto para el primer hecho de una cadena.
+    - **`valid_until = NULL` es «todavia vigente»**, y no «hasta siempre»: es
+      lo que hace que un hecho sin reemplazo siga compitiendo en HEAD.
+
+    **MEDIDO: rellenar la columna al insertar rompia la ida y vuelta.** La
+    primera version escribia `valid_from = checked_at_revision` en cada
+    INSERT, y `get_claim(...) == Claim(...)` —un contrato de B25— dejo de
+    cumplirse: el store estaba Guardando un campo que el llamante no declaro.
+    Resolverlo en lectura deja la columna como el llamante la dejo, y pone la
+    interpretacion en un solo sitio.
+
+    **Y UNA REVISION QUE ESTE STORE NUNCA HA VISTO NO ES UN ERROR: ES QUE NO
+    HAY NADA QUE DIJERA DE ELLA.** Se distingue de «hay claims pero ninguno en
+    esa revision» precisamente porque una revision desconocida no llega a
+    tener `seq`.
+    """
+    if revision is None:
+        return row["valid_until_revision"] is None
+    seq = seq_de(conn, revision)
+    if seq is None:
+        return False
+    # `valid_from_revision` en NULL cae en `checked_at_revision`. Es el unico
+    # sitio donde se interpreta esa asimetria, y por eso es un `if` y no una
+    # expresion suelta en tres consultas: si tres sitios lo interpretan, tres
+    # sitios pueden interpretarlo distinto.
+    desde_row = row["valid_from_revision"] or row["checked_at_revision"]
+    return vigente_en(
+        seq_de(conn, desde_row),
+        seq_de(conn, row["valid_until_revision"]),
+        seq,
+    )
 
 
 def _tiene_valores_distintos(grupo: list[sqlite3.Row]) -> bool:

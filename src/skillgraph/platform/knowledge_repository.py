@@ -557,6 +557,7 @@ class SqliteKnowledgeRepository:
         tenant_id: str,
         project_id: str,
         subject_entity_id: str,
+        revision: str | None = None,
     ) -> tuple[Conflicto, ...]:
         """B27: los conflictos de un sujeto, consultables y ESTABLES.
 
@@ -570,6 +571,31 @@ class SqliteKnowledgeRepository:
             tenant_id=tenant_id,
             project_id=project_id,
             subject_entity_id=subject_entity_id,
+            revision=revision,
+        )
+
+    def claims_at_revision(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None,
+    ) -> tuple[Claim, ...]:
+        """B29: ¿qué afirmaciones de este sujeto eran ciertas en `revision`?
+
+        `revision=None` es HEAD. Una revision que este store nunca ha visto
+        devuelve vacio, que no es un error: es que no hay nada que dijera de
+        ella.
+
+        Va en la fachada por el mismo motivo que en B25 y B27: la consulta que
+        se guarda tiene que poder PREGUNTARSE por la API publica.
+        """
+        return self._claims.claims_at_revision(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=subject_entity_id,
+            revision=revision,
         )
 
     def get_claim(

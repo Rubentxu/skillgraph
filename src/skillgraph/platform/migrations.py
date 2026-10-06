@@ -158,10 +158,54 @@ def _anade_object_entity_id(cur: sqlite3.Cursor) -> None:
     )
 
 
+def _anade_ventanas_de_vigencia(cur: sqlite3.Cursor) -> None:
+    """`0004` — B29: ventana de vigencia, supersesion y orden de revisiones.
+
+    Misma forma que `0003`, y por las mismas dos razones: `PRAGMA table_info`
+    primero, y tragarse el error de la carrera **solo** si es el de columna
+    duplicada —capturar `sqlite3.OperationalError` entero se tragaria tambien
+    un disco lleno.
+
+    **LAS COLUMNAS VAN SIN DEFAULT, Y PORQUE.** Anadir una columna `NOT NULL` a
+    una tabla con filas obliga a un default, y el default de
+    `valid_from_revision` fecharia en el pasado toda afirmacion que existia
+    antes de B29. Anulables y sin default: `NULL` es «no caduca», que es lo
+    cierto de todo el grafo preexistente.
+
+    **EL INDICE SE ASEGURA SIEMPRE, FUERA DEL `if`.** Hay dos caminos que lo
+    necesitan y solo uno pasa por el `ALTER`: una base nueva tiene las columnas
+    desde el `CREATE TABLE` y se saltaria el `ALTER` entero, y si el indice
+    estuviera dentro se quedaria sin indice para siempre sin que nada fallara.
+
+    Y no esta en `schema.py` porque ese DDL corre con `CREATE TABLE IF NOT
+    EXISTS`: sobre una base con la tabla vieja no reconstruye nada, y un indice
+    sobre una columna que no existe revienta `executescript` entero — con lo
+    cual ABRIR la base falla, que es justo lo que la migracion viene a
+    arreglar. MEDIDO en B25.
+    """
+    columnas = {fila[1] for fila in cur.execute("PRAGMA table_info(claims)")}
+    for nombre in ("valid_from_revision", "valid_until_revision", "supersedes_claim_id"):
+        if nombre not in columnas:
+            try:
+                cur.execute(f"ALTER TABLE claims ADD COLUMN {nombre} TEXT")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+
+    # La ventana se consulta por `(sujeto, revision)`, y el filtro es un
+    # rango sobre dos columnas: sin indice, `claims_at_revision` es un escaneo
+    # por sujeto en cada llamada, y B34 la va a llamar por cada verbo.
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_claims_ventana "
+        "ON claims(subject_entity_id, valid_from_revision, valid_until_revision)"
+    )
+
+
 MIGRACIONES: Final[tuple[Migracion, ...]] = (
     Migracion("0001_claims_assertion_origin", _anade_assertion_origin),
     Migracion("0002_installed_packs", _anota_installed_packs),
     Migracion("0003_claims_object_entity_id", _anade_object_entity_id),
+    Migracion("0004_claims_ventanas_de_vigencia", _anade_ventanas_de_vigencia),
 )
 
 

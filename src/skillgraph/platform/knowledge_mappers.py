@@ -114,6 +114,13 @@ def row_to_claim(row: sqlite3.Row, evidence_ids: list[str], json: Any) -> Claim:
         checked_at_revision=row["checked_at_revision"],
         stale=bool(row["stale"]),
         object_entity=object_entity,
+        # B29: la ventana viaja con el claim. MEDIDO antes del bloque: el
+        # mapper los dejaba fuera, luego un claim leido de la base volvia sin
+        # ventana aunque la fila la tuviera — y eso no es un detalle de
+        # transporte, es que la BASE no era la que contestaba.
+        valid_from_revision=row["valid_from_revision"],
+        valid_until_revision=row["valid_until_revision"],
+        supersedes_claim_id=row["supersedes_claim_id"],
     )
 
 

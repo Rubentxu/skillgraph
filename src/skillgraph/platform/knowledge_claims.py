@@ -13,7 +13,8 @@ import sqlite3
 from typing import Any
 
 from skillgraph.core.errors import InvalidEntityIDError
-from skillgraph.knowledge.graph import Claim, ClaimRecorded
+from skillgraph.knowledge.graph import Claim, ClaimRecorded, _sigiente_revision
+from skillgraph.platform.knowledge_conflicts import _vigente_en_revision
 from skillgraph.platform.knowledge_mappers import (
     objeto_del_claim,
     row_to_claim as _row_to_claim,
@@ -147,6 +148,113 @@ class SqliteClaimRepository:
                 ),
             ).fetchone()
 
+            # B29: la revision entra en `revision_registro` ANTES de decidir la
+            # ventana, porque la ventana se compara por `seq` y el `seq` se
+            # asigna al primer contacto con la revision. Sin este paso, dos
+            # claims de la MISMA revision recibirian `seq` distintos y su
+            # ventana seria arbitraria.
+            _sigiente_revision(cur, claim.checked_at_revision)
+
+            # B29: la SUPERSESION. Si la MISMA fuente vuelve a afirmar este
+            # sujeto y este predicado en una revision POSTERIOR, y el valor
+            # es otro, eso no es una contradiccion: es que el hecho CAMBIO.
+            #
+            # MEDIDO antes del bloque: `conflicts_for` comparaba valores sin
+            # mirar el tiempo, luego un cambio se leia como una contradiccion y
+            # `resolver` contestaba «gana NADIE» a algo que si tiene respuesta
+            # en cada instante. Aqui lo viejo CADUCA en la revision en la que
+            # aparece el nuevo, y el nuevo dice a quien reemplaza.
+            #
+            # **SOLO DE LA MISMA FUENTE.** Dos fuentes son dos familias: si
+            # `local:a.py` y `local:b.py` dicen cosas distintas en la misma
+            # revision, nadie sabe cual cambio de opinion, y enlazarlos seria
+            # inventar una secuencia que nadie observo. 06-SPEC §2 habla de
+            # *source family*, y eso es exactamente lo que dice este filtro.
+            #
+            # **Y SOLO DE UNA REVISION ESTRICTAMENTE POSTERIOR — MEDIDO QUE SIN
+            # ESTO FALLABAN DOS TESTS DE B26 Y B27, Y LOS DOS CONTRA ALGO QUE
+            # ESTE MISMO BLOQUE DICE.** La primera version elegía «la vigente mas
+            # reciente de la misma fuente» sin mirar el ORDEN:
+            #
+            # - **B26 (idempotencia)**: reingerir el mismo envelope dos veces
+            #   cerraba la ventana del propio claim (`valid_until_revision`
+            #   `None` -> `'rev-1'`), luego la relectura devolvia un claim
+            #   distinto del primero. Ingerir dos veces es idempotente por
+            #   definicion, y una afirmacion no puede caducar por reingerirse.
+            # - **B27 (orden estable)**: registrando `r3` antes que `r2`, `r2`
+            #   supersedia a `r3` —una revision ANTERIOR cerrando a una
+            #   POSTERIOR— y el conflict set dependia del orden de insercion,
+            #   que es justo lo que aquel test prohibia.
+            #
+            # El filtro es `seq(candidata) < seq(nueva)`, y `claim_id <> ?`
+            # quita el otro caso degenerado: el propio claim. MEDIDO con la
+            # correccion: el test de idempotencia de B26 vuelve a verde.
+            #
+            # **Y EL VALOR TIENE QUE SER OTRO — MEDIDO QUE SIN ESTO FALLABA UN
+            # TEST DE B27 QUE ESTE MISMO BLOQUE ROMPIO.** Un filtro por
+            # «misma fuente, mismo sujeto, mismo predicado, revision
+            # posterior» supersedia tambien a las **re-observaciones del mismo
+            # valor**, que no son un cambio: son la misma afirmacion vista dos
+            # veces. Y entonces la ventana dependia del ORDEN DE INGESTA:
+            # registrando `c3(rc3)=False` antes que `c2(rc2)=False`, cada una
+            # cerraba a la otra segun cual se guardara primero, y el conflict
+            # set —que B27 declara estable— dependia de eso.
+            #
+            # Es la condicion que el propio enunciado de arriba ya decia («y el
+            # valor es otro») y que el SQL no miraba: una supersesion cuenta
+            # un CAMBIO, y si el valor es el mismo no hubo cambio que contar.
+            # La comparacion es sobre las DOS columnas del XOR de B25, que es
+            # la misma pregunta que hace `_valor_de` al detectar conflictos.
+            #
+            # **Y SE CIERRAN TODOS, NO SOLO EL MAS RECIENTE — MEDIDO QUE SIN
+            # ESTO EL RESULTADO SEGUIA DEPENDIENDO DEL ORDEN DE INGESTA.** Una
+            # fuente no sostiene dos valores a la vez: cuando afirma un valor
+            # nuevo, TODAS sus afirmaciones anteriores que siguieran abiertas
+            # y dijeran otra cosa pasan a historicas. Cerrar solo la mas
+            # reciente dejaba abiertas las anteriores, y entonces dependia de
+            # cual se hubiera guardado primero cual era «la mas reciente».
+            #
+            # MEDIDO con `false@rc2, false@rc3, true@rc1` de la MISMA fuente:
+            # registrando en orden, `true` cerraba a `rc3`; al reves, cerraba a
+            # `rc2`. Distintos conflict sets para el mismo conjunto de
+            # afirmaciones.
+            #
+            # El enlace `supersedes_claim_id` **si** es singular y apunta al
+            # mas reciente: la cadena que 06-SPEC §2 describe es una linea, y
+            # recorrerla hacia atras tiene que tener un unico predecesor. Lo
+            # que se cierra es una ventana; lo que se encadena es una
+            # secuencia.
+            supersedidos = cur.execute(
+                """
+                SELECT claim_id FROM claims
+                WHERE subject_entity_id = ? AND predicate = ?
+                  AND source_id = ? AND tenant_id = ? AND project_id = ?
+                  AND valid_until_revision IS NULL
+                  AND claim_id <> ?
+                  AND (COALESCE(object_literal_json, '') <> COALESCE(?, '')
+                       OR COALESCE(object_entity_id, '') <> COALESCE(?, ''))
+                  AND (SELECT seq FROM revision_registro r
+                        WHERE r.revision = claims.checked_at_revision)
+                    < (SELECT seq FROM revision_registro r WHERE r.revision = ?)
+                ORDER BY (SELECT seq FROM revision_registro r
+                           WHERE r.revision = claims.checked_at_revision) DESC
+                """,
+                (
+                    claim.subject_entity_id,
+                    claim.predicate,
+                    claim.source_id,
+                    tenant_id,
+                    project_id,
+                    claim.claim_id,
+                    obj_json,
+                    ref,
+                    claim.checked_at_revision,
+                ),
+            ).fetchall()
+            # El `ORDER BY ... DESC` deja el mas reciente el primero, y ese es
+            # el unico que la cadena nombra como predecesor.
+            encadenado = supersedidos[0]["claim_id"] if supersedidos else None
+
             cur.execute(
                 """
                 INSERT OR IGNORE INTO claims
@@ -154,8 +262,9 @@ class SqliteClaimRepository:
                      predicate, object_literal_json, source_id,
                      assertion_origin,
                      extraction_method, extractor_version,
-                     checked_at_revision, stale, object_entity_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     checked_at_revision, stale, object_entity_id,
+                     valid_from_revision, valid_until_revision, supersedes_claim_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     claim.claim_id,
@@ -171,7 +280,35 @@ class SqliteClaimRepository:
                     claim.checked_at_revision,
                     int(claim.stale),
                     ref,
+                    # B29: `valid_from_revision` se ESCRIBE tal cual lo declaro
+                    # el llamante. Completarlo con `checked_at_revision`
+                    # rompia la ida y vuelta del ADT —`get_claim(...) ==
+                    # Claim(...)` es un contrato de B25—: el store estaba
+                    # Guardando un campo que nadie habia declarado.
+                    #
+                    # `NULL` no es «desde siempre»: significa «desde la
+                    # revision en que lo vimos», y eso lo interpreta
+                    # `_vigente_en_revision`, en UN solo sitio.
+                    claim.valid_from_revision,
+                    claim.valid_until_revision,
+                    claim.supersedes_claim_id or encadenado,
                 ),
+            )
+
+            # B29: cerrar la ventana de TODO lo que este reemplaza. Va DENTRO
+            # de la misma transaccion que el INSERT, porque si cerrara fuera
+            # podria quedar un instante en el que los dos estan abiertos — que
+            # es justo la contradiccion que este bloque existe para evitar.
+            cur.executemany(
+                """
+                UPDATE claims
+                SET valid_until_revision = ?
+                WHERE claim_id = ? AND tenant_id = ? AND project_id = ?
+                """,
+                [
+                    (claim.checked_at_revision, f["claim_id"], tenant_id, project_id)
+                    for f in supersedidos
+                ],
             )
             # Attach evidence links (idempotente).
             for evidence_id in claim.evidence_ids:
@@ -428,6 +565,47 @@ class SqliteClaimRepository:
             (tenant_id, project_id, predicate),
         ).fetchall()
         return tuple(_row_to_stored_claim(row, json) for row in rows)
+
+    def claims_at_revision(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None,
+    ) -> tuple[Claim, ...]:
+        """B29: ¿qué afirmaciones de este sujeto eran CIERTAS en `revision`?
+
+        **LA MITAD DE LA FILA QUE SI ERA CIERTA, CONVERTIDA EN CONSULTA.** La
+        fila decia «no se puede preguntar qué se sabia en una revision». El
+        dato existia —`checked_at_revision` en cada fila—; lo que no existia
+        era la pregunta. Y la pregunta es un filtro de ventana, no un barrido:
+        lo que se asks es qué afirmaciones **abrian** su ventana en ese punto.
+
+        `revision=None` es HEAD: solo las afirmaciones que no han caducado.
+
+        **UNA REVISION QUE ESTE STORE NUNCA HA VISTO DEVUELVE VACIO, Y NO ES
+        UN ERROR.** Es la respuesta honesta: una afirmacion es algo que ESTE
+        store afirmo, y de una revision que no ha visto no tiene nada que
+        decir. Lo que NO se hace es devolver todas las afirmaciones «porque
+        si», que es lo que haria un filtro ausente.
+
+        Returns:
+            Los claims vigentes, **ordenados de forma estable** por `claim_id`.
+            B27 fijo esa propiedad para los conflict sets y aqui se sostiene
+            igual: una consulta de historico cuya lista depende del plan de
+            ejecucion no es una consulta de historico.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT * FROM claims
+            WHERE subject_entity_id = ? AND tenant_id = ? AND project_id = ?
+            ORDER BY claim_id ASC
+            """,
+            (subject_entity_id, tenant_id, project_id),
+        ).fetchall()
+        vigentes = [r for r in rows if _vigente_en_revision(self._conn, r, revision)]
+        return tuple(_row_to_claim(r, [], json) for r in vigentes)
 
     def list_claims_by_object_entity(
         self,

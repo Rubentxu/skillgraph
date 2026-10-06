@@ -295,13 +295,43 @@ class KnowledgeRepository(Protocol):
         ...
 
     def conflicts_for(
-        self, *, tenant_id: str, project_id: str, subject_entity_id: str
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None = None,
     ) -> tuple[Any, ...]:
         """B27: los conflictos de un sujeto, consultables y ESTABLES.
+
+        **B29: `revision` es parte del contrato, y no un extra.** Sin el, el
+        unico conflicto que se puede ver es el de HEAD, y el de HEAD no es el
+        unico que hay: MEDIDO, dos afirmaciones de la MISMA fuente en revisiones
+        consecutivas daban un conflicto, y el sistema contestaba «gana NADIE» a
+        algo que si tiene respuesta en cada instante. La ventana es lo que
+        separa «cambio» de «contradiccion», y la ventana se pregunta por
+        revision.
 
         En el puerto, para que un consumidor pueda preguntar por los conflictos
         sin abrir el componente de SQLite. Un dato que se guarda y no se puede
         preguntar es peor que no tenerlo.
+        """
+        ...
+
+    def claims_at_revision(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None,
+    ) -> tuple[Any, ...]:
+        """B29: ¿qué afirmaciones eran CIERTAS en `revision`? `None` = HEAD.
+
+        En el puerto por el mismo motivo que `conflicts_for`: es la mitad
+        «consultable» de una fila de roadmap que decia que no se podia
+        preguntar. Una revision que el store nunca ha visto devuelve vacio, y
+        vacio no es error: es que no hay nada que dijera de ella.
         """
         ...
 
