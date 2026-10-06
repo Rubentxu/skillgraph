@@ -174,6 +174,45 @@ class InvalidAssertionOriginError(ValidationError):
     code = "sg_invalid_assertion_origin"
 
 
+class EnvelopeInvalido(ValidationError):
+    """Una `Observation` del envelope no afirma nada, o afirma las dos cosas.
+
+    **NO es `InvalidClaimObjectError` aunque la pregunta parezca la misma.** La
+    de B25 responde de un `Claim` ya construido, y la garantia la sostienen tres
+    capas (este error, `Claim.__post_init__` y el CHECK de SQL). Esta responde de
+    un `Observation`, que es todavia un **dato de entrada de una herramienta
+    externa**: lo que falla ahi es la frontera, y la frontera no es la misma
+    capa. Si las dos compartieran clase, unaWould colapsar a la otra y el
+    `code` —que es la clave con la que la CLI traduce a exit code— dejaria de
+    distinguir «el Claim esta mal» de «lo que llego de fuera esta mal».
+
+    Se declara en `core/errors.py` y no en `knowledge/observation.py` porque el
+    guard de WI-109 deriva el conjunto de clases **recorriendo el paquete
+    entero**: un error definido en el modulo que lo usa solo se contaria cuando
+    ese modulo se importara, y un guard que depende del orden de importacion no
+    mide.
+    """
+
+    code = "sg_envelope_invalido"
+
+
+class UnknownEnvelopeVersionError(ValidationError):
+    """El envelope declara una version que este sistema no entiende.
+
+     **POR QUE ESTO ES UN ERROR Y NO UN DEFAULT.** Un envelope con version
+     desconocida es una herramienta hablando un contrato que este core no
+    implementa. Aceptarla «con lo que haya» seria perder el dato en silencio y
+     descubrirlo mucho despues, en el dato; rechazarla aqui deja el fallo donde
+     es: en la frontera, con el mensaje diciendo que version se esperaba.
+
+     El mensaje lleva SIEMPRE la version que se espera, para que quien lo recibe
+     sepa que actualizar. Un «version no soportada» sin la version buena obliga a
+     buscar el numero en el codigo.
+    """
+
+    code = "sg_unknown_envelope_version"
+
+
 class SkillGraphWarning(UserWarning):
     """Raíz de los warnings no fatales de SkillGraph.
 
@@ -305,6 +344,7 @@ __all__ = [
     "CyclicDependencyError",
     "CyclicDependencyWarning",
     "DulwichNotAvailableError",
+    "EnvelopeInvalido",
     "HopLimitExceededWarning",
     "IdempotencyError",
     "IdentityConflictError",
@@ -329,6 +369,7 @@ __all__ = [
     "UnknownClaimError",
     "UnknownClaimPredicateError",
     "UnknownEntityError",
+    "UnknownEnvelopeVersionError",
     "UnknownKindError",
     "UnknownSourceError",
     "ValidationError",
