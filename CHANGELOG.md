@@ -14,6 +14,158 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.38.0] - 2026-10-06 — La autoridad se decide por intención, no hay un ranking global
+
+SemVer **derivado** desde `v0.37.0`: `0 breaking · 2 feat · 2 fix · 3 otros`
+(`git log v0.37.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.38.0**.
+
+## La fila acusa a un ranking global, y medido no hay ranking: no hay nada
+
+La fila decía *«Resolver un conflicto es un ranking global, y la respuesta
+correcta depende de para qué se pregunta»*. Medido antes de escribir nada, con
+`scripts/measure_b28_autoridad.py` → **5/5 ABIERTAS**, y la primera sorpresa
+está en el propio enunciado:
+
+**No existe ningún ranking.** B27 dejó los conflictos consultables y ordenados;
+lo único que faltaba era decidir, y decidir no existía.
+
+Lo que sí estaba **armado** es la tentación, y por eso el bloque existe:
+
+    AssertionOrigin = observed | derived-deterministically
+                    | agent-inferred | human-asserted
+
+Cuatro valores que ya estaban en `core/runtime_types.py`, y cuyo docstring dice
+en sus propias palabras que **no son un ranking** —son «quién afirma». Los
+datos para ordenar están a mano, y el orden depende de la pregunta:
+
+    ¿qué devolvió producción?        observed > derived-deterministically
+    ¿qué dependencia está permitida?  human-asserted > derived-deterministically
+
+Por eso la propiedad medida **no es «se elige alguien»** sino **«el mismo
+conflicto, con dos intenciones, elige afirmaciones DISTINTAS»**. Un resolver con
+ranking fijo pasaría cualquier prueba que comprobara que hay ganador.
+
+## `AuthorityProfile` por `QueryIntent`
+
+- **`QueryIntent`**: los siete valores del «ADT inicial» de `05-SPEC` §3, con
+  smart constructor. Una intención inventada sale como
+  `UnknownQueryIntentError` (`sg_unknown_query_intent`), no como un string libre
+  que nadie lee.
+- **`AuthorityProfile`**: el ranking vive en la **política**, con nombre, y
+  quien pregunta puede traer el suyo. Siete perfiles por defecto, y **no son el
+  mismo** — que es lo que convierte «depende de para qué se pregunta» en una
+  propiedad del sistema y no una costumbre.
+- **`resolver()`**: **puro**, sin disco, sin reloj y sin `Storage`. El store
+  entra ya resuelto, en un `Conflicto`.
+- **`Resolution`**: policy usada, intención, elegidos, descartados **con
+  motivo**, y `firma` — la decisión como tupla comparable.
+- **`sg knowledge resolve <proyecto> <sujeto> --intent <intención> [--json]`**:
+  sin esto la capacidad no se puede preguntar, y una capacidad que no se
+  pregunta es el mismo defecto que B6 midió en `extraction_method`.
+
+## El guard del agente es un campo, no una posición en la lista
+
+La spec (§7) prohíbe que `agent-inferred` cierre un conflicto *por defecto*. La
+lectura tentadora — ponerlo el último de la preferencia — **es un guard roto**:
+se rompe **reordenando una lista**, que es el cambio más barato de quien no
+sabe lo que hace, y solo en el perfil equivocado.
+
+Es `permitir_inferencia_de_agente: bool = False`, y está medido por qué: un
+perfil que pone al agente **el primero** lo sigue dejando perder.
+
+`Resolution.elegidas` **puede estar vacía**, y es la respuesta honesta: si lo
+único que hay son afirmaciones de agente, no hay ganador, y cada descarte
+dice `cerrado_por_agente_no_permitido`. Un resolver que devuelve algo siempre
+está inventando autoridad donde no la hay.
+
+## La contrasalto encontró un fallo del INSTRUMENTO, y por eso cambió el código
+
+La sonda M2 —«el flag del agente puesto a `True`» — salió **INOCUA**. La causa:
+P4 usaba el perfil por defecto de `actual_behavior`, donde `human-asserted`
+está por encima de `agent-inferred`. Ahí el agente perdía **por rango** aunque
+el guard estuviera borrado, y el motivo impreso era `origen_no_preferido`, no
+el del guard.
+
+Es decir: **P4 —el guard del bloque— habría pasado aunque el guard se borrara.**
+Un guard medido en un escenario donde no puede cambiar el resultado no es un
+guard, es una aserción con código de seguridad.
+
+Un origen **no listado** valía por una prohibición silenciosa, porque `rango_de`
+devuelve `None` para él. Los siete perfiles por defecto **nombran ahora los
+cuatro orígenes**, y P4 usa un perfil con el agente el primero, de modo que la
+única razón posible para que no gane sea el flag.
+
+**Instrumento:** 5/5 → **0/5**. **Contrasalto:** **5/5 sondas cazadas**, `rc=0`
+al restaurar, con las anclas en **regex** porque `ruff format` desancló las cinco
+de una pasada y el guard de sintaxis las clasificó `ROTA` en vez de fingir que
+las cazaba.
+
+## Una discrepancia de la spec, resuelta y dicha
+
+`05-SPEC` no es coherente consigo misma: **§3** lista `intended_behavior` y el
+**ejemplo B de §2** usa `queryIntent: intended_architecture`. Se sigue §3 porque
+es normativa y explícitamente cerrada, y porque `AGENTS.md` §2.1 exige ADR para
+crecer un `Literal` y ADR-0028 no lo pide. Queda anotado en el módulo, en el
+PRE-FLIGHT y en el ROADMAP, porque resolverla en silencio sería perderla.
+
+## Lo que este bloque NO hace
+
+1. **No borra.** Resolver para una intención no elimina afirmaciones: las dos
+   siguen consultables. Lo que las borra es **B29**, con ventanas de vigencia.
+2. **No persiste** la resolución, y **no carga perfiles de YAML**. Que quien
+   llama traiga el suyo es el punto de extensión; la carga declarativa es
+   trabajo futuro, y declararla como hecho sería documentar un hueco.
+3. **No elige entre perfiles.** `resolver` recibe una intención; qué política se
+   usa es de quien pregunta.
+
+## Superficie
+
+`core-surface.json` 64 → 67 (los tres errores) y `cli-surface.json`:
+`subcomandos.knowledge` 5 → 6, `runner.__all__` 38 → 39. Los ADTs de B28 **no**
+entran en la superficie del núcleo, y no por olvido: viven en `knowledge/`, y
+declararlos en `skillgraph.core` invertiría la dependencia.
+
+## La certificación encontró un valor del vocabulario que nadie podía observar
+
+`knowledge/authority.py` cerró la certificación al **97 %**, con **dos** líneas
+sin cubrir. Ninguna era un test que faltara: eran **código inalcanzable**.
+
+`MotivoDescarte` declaraba `empate_en_la_jerarquia`, con su rama en
+`_motivo_de`. La rama **no se puede alcanzar**:
+
+- `_motivo_de` solo se llama para afirmaciones que **no** están en `elegidas`.
+- `elegidas` es exactamente «lo admisible en el mejor rango».
+- Una afirmación admisible que no está en `elegidas` solo puede estarlo porque
+  su rango es **peor**. Luego `rango > mejor_rango` siempre.
+
+Un empate no produce un descarte: produce **dos** `elegidas` y
+`sin_resolver=True` — «estas dos son igual de autoritativas y se contradicen»,
+que es la respuesta honesta. Declarar un motivo para eso creaba un valor que
+**nadie puede observar**, y un vocabulario cerrado con un valor imposible es una
+promesa que el código no cumple: quien escriba
+`if motivo == "empate_en_la_jerarquia"` tendrá una rama muerta y no lo sabrá.
+
+El arreglo no fue borrarlo: `_motivo_de` pasa a ser **total**. O no es admisible
+—y el motivo es el guard— o lo es, y el motivo es el rango. Dos casos cubren
+todo el dominio: sin rama de empate, sin `else`, sin invariante.
+
+**Y el instrumento de medición no daba veredicto cuando reventaba**, lo cual es
+un hueco del harness y no del bloque: `preguntas_abiertas()` devolvía `-1` si
+no encontraba su línea `RESULTADO:`, y el harness lo contaba como sonda **no
+cazada**. Es decir: si una sonda rompía el árbol entero, informaba de que «la
+propiedad aguantaba». Un árbol que ni siquiera puede ejecutar el instrumento
+**no satisface las propiedades**, así que ahora una caída cuenta como
+`CAZADA`, con la razón nombrada — la misma lección de B22, aplicada al propio
+instrumento.
+
+## Medición
+
+    scripts/measure_b28_autoridad.py    5/5 ABIERTAS  ->  0/5 ABIERTAS
+    scripts/mutate_b28_autoridad.py     5 sondas       ->  5/5 CAZADAS, rc=0
+    tests/test_b28_autoridad.py          42 passed
+    knowledge/authority.py               100 % (90 stmts, 20 branches, 0 missing)
+
 ## [0.37.0] - 2026-10-06 — Los conflictos avisan y son consultables
 
 SemVer **derivado** desde `v0.36.0`: `0 breaking · 1 feat · 2 fix · 3 otros`
