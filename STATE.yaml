@@ -610,7 +610,7 @@ tests:
   total: 3465  # BLOQUE B23: 3444 -> 3465, +21 de tests/test_b23_instrumento_verdad.py entero: 16 de R1 (raiz por parametro, con los tres contrasaltos), 8 de R2/R3 (ventana y bloque cruzados), 5 de R4 (el roadmap no se contradice a si mismo), y 6 de R6 (la derivacion que lee ventanas tiene que encontrar ventanas, o el guard pasa sin medir). LA CIFRA SE ESCRIBE DESPUES DE LA CORRIDA, NUNCA ANTES: sale de `pytest --collect-only` sobre el arbol real, que es la unica magnitud comparable. LO QUE ESTA CIFRA PAGANDO, MEDIDO: antes de este bloque, `project_truth.py --raiz /tmp` salia rc=0 con la verdad del REPO REAL, y el ROADMAP publicaba `0.32.7` dos releases despues —con el instrumento diciendo `coherente: true` y seis contradicciones a la vista—. El release 9961843 no toco ROADMAP.md, y eso no lo noto nadie porque el instrumento no cruzaba la ventana que el propio ROADMAP declara ser la respuesta.
   passed: 2735
   duration_s: 241.57   # MEDIDO en la CI canonica de WI-108, run 2387c4cc-c624-4793-a8ef-1a83f3df72ea, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. El resumen es «2735 passed in 241.57s» SIN la palabra skipped, que es lo que el criterio nuevo de WI-108 exige. Bloque WI-107, run 332e09e6-ba0b-449e-908e-9686dd35a898, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. Criterio 6 (SHA-256 del .pipeline.kts) registrado en sesion: 7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42, sin drift desde 283da96 (WI-105). Bloque anterior WI-105: (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
-  package_version: "0.33.0.dev0"   # cuarto eslabon de la cadena de v0.32.6: HEAD ya NO esta en la etiqueta, luego el SemVer vuelve a ser <tag>.dev0 (caso 2 del guard de release). HEAD tiene que estar MAS ALLA del tag para que este commit exista, y ese es el motivo de que este commit se haga con la suite saltada y se compruebe DESPUES a mano: no hay orden en el que el hook vea un HEAD que todavia no existe. La ventana es la misma que en v0.32.4, v0.32.3, v0.32.2, v0.32.1, v0.32.0, v0.31.2, v0.31.1 y v0.31.0, y el motivo esta medido en B12, no supuesto.
+  package_version: "0.34.0.dev0"   # La version activa del paquete. La lee test_version_matches_git_tag y la compara con `__init__.py`: los dos campos son la MISMA verdad declarada dos veces, y por eso la segunda declaracion tiene que moverse con la primera. MEDIDO en WI-109: la primera certificacion de B23 dio este test en ROJO porque el post-release bumpeaba `__init__.py` y dejo este campo viejo —el hermano pequeno de la cifra que WI-115 vigilaba, y el motivo de que este guard exista.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1181,9 +1181,18 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.33.0
+  tag: v0.34.0
   fecha: 2026-10-06
-  semver_bump: MINOR   # DERIVADO con scripts/derive_semver.py desde v0.32.7: «b/f/x/n/d 0/1/0/4/0  la regla pide MINOR  v0.33.0  ok». El campo `sha` de la entrada de `release.releases` lo contrasta test_every_listed_sha_matches_its_tag, que compara con `git rev-list -n1 <tag>`: un sha escrito a mano que no coincide con git pone la suite en rojo. Esta entrada se anade DESPUES de crear la etiqueta, que es el unico momento en que `git rev-list -n1 v0.33.0` responde.
+  # `semver_bump` NO se repite aqui: vive en la entrada de `release.releases`, y
+  # declararlo dos veces es justo lo que el verificador rechaza —`STATE.yaml declara
+  # la clave 'semver_bump' DOS VECES`—, que es la propiedad de B14 funcionando sobre
+  # el fichero que se estaba editando. El campo `sha` de esa entrada lo contrasta
+  # test_every_listed_sha_matches_its_tag contra `git rev-list -n1 <tag>`: un sha
+  # escrito a mano que no coincide con git pone la suite en rojo. Este sha se TOMO de
+  # git: 1a8815913f2e6110365df27fadfa62cdac214a20. La entrada se anade DESPUES de crear la etiqueta, que es el unico
+  # momento en que `git rev-list -n1 v0.34.0` responde.
+  semver_bump: MINOR   # DERIVADO con scripts/derive_semver.py desde v0.32.7: «la regla pide MINOR -> v0.34.0». 0 breaking. El bloque cambia el COMPORTAMIENTO de un instrumento en vez de anadirle otro, que es la misma razon por la que v0.33.0 fue MINOR y no PATCH. El campo `sha` de la entrada de `release.releases` lo contrasta test_every_listed_sha_matches_its_tag contra `git rev-list -n1 <tag>`: un sha escrito a mano que no coincide con git pone la suite en rojo. Este sha se TOMO de git: 1a8815913f2e6110365df27fadfa62cdac214a20. La entrada se anade DESPUES de crear la etiqueta, que es el unico momento en que `git rev-list -n1 v0.34.0` responde.
+  # semver-bump revertido: «b/f/x/n/d 0/1/0/4/0  la regla pide MINOR  v0.33.0  ok». El campo `sha` de la entrada de `release.releases` lo contrasta test_every_listed_sha_matches_its_tag, que compara con `git rev-list -n1 <tag>`: un sha escrito a mano que no coincide con git pone la suite en rojo. Esta entrada se anade DESPUES de crear la etiqueta, que es el unico momento en que `git rev-list -n1 v0.33.0` responde.
   rationale_b22: >-
     BLOQUE B22 — EL ARBOL DE TRABAJO NO PUEDE CAMBIAR BAJO LOS PIES DE UN INSTRUMENTO,
     cerrado y publicado en v0.33.0. NO ES UN OPEN NUEVO: es cero informacion. El gate de
@@ -1515,6 +1524,60 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.34.0
+      sha: 1a8815913f2e6110365df27fadfa62cdac214a20
+      fecha: 2026-10-06
+      semver_bump: MINOR
+      package_version: 0.34.0.dev0
+      rationale_b23: >-
+        BLOQUE B23 — EL INSTRUMENTO DE LA VERDAD PODIA EQUIVOCARSE, Y SE LE VE,
+        cerrado y publicado en v0.34.0. El instrumento que responde «¿donde esta el
+        proyecto?» no tenia linea de ordenes: no leia `sys.argv` en ninguna parte y su
+        raiz venia de `Path(__file__)`, luego `--raiz /tmp` salia rc=0 con la verdad
+        del REPO REAL, una raiz inexistente salia rc=0 con `coherente: true`, y
+        ejecutar el script desde otro directorio devolvia tambien la del repo. La
+        ventana del ROADMAP DECIA QUIEN LA ESCRIBIA Y MENTIA: el fichero afirmaba que
+        este script la producia, y no la producia nadie. El release 9961843 no toco
+        ROADMAP.md y la ventana se quedo en v0.32.7 dos versiones atras, con el
+        instrumento publicando `coherente: true` y SEIS CONTRADICCIONES A LA VISTA —
+        dos de ellas porque el fichero se contradecia CONSIGO MISMO—. Y el tercer
+        hueco de la familia B20-2: `bloque` se leia y se publicaba sin cruzarse con
+        nadie. QUE ENTRA: la raiz como parametro en los doce lectores, con las
+        constantes de modulo eliminadas; la ventana contrastada —no regenerada, porque
+        el instrumento conserva sus cero escrituras—; `bloque` cruzado con STATE y
+        CURRENT. R5 CERRADO: `test_b14` deja de deformar el arbol real, MEDIDO con
+        sha256 antes y despues de la corrida: identicos. Y EL HARNESS CAZO UN HUECO
+        REAL: una asercion que miraba la CONTRADICCION y no la PUBLICACION dejaba
+        pasar un recuento parcial que coincidia con el declarado. 3444 -> 3465 tests,
+        +21 de test_b23_instrumento_verdad.py entero. 3462 passed, 0 failed, 96 % de
+        cobertura, arbol limpio tras la suite completa.
+    - tag: v0.34.0
+      sha: 1a8815913f2e6110365df27fadfa62cdac214a20
+      fecha: 2026-10-06
+      semver_bump: MINOR
+      package_version: 0.34.0.dev0
+      rationale_b23: >-
+        BLOQUE B23 — EL INSTRUMENTO DE LA VERDAD PODIA EQUIVOCARSE, Y SE LE VE,
+        cerrado y publicado en v0.34.0. El instrumento que responde «¿donde esta el
+        proyecto?» no tenia linea de ordenes: no leia `sys.argv` en ninguna parte y su
+        raiz venia de `Path(__file__)`, luego `--raiz /tmp` salia rc=0 con la verdad
+        del REPO REAL, una raiz inexistente salia rc=0 con `coherente: true`, y
+        ejecutar el script desde otro directorio devolvia tambien la del repo. La
+        ventana del ROADMAP DECIA QUIEN LA ESCRIBIA Y MENTIA: el fichero afirmaba que
+        este script la producia, y no la producia nadie. El release 9961843 no toco
+        ROADMAP.md y la ventana se quedo en v0.32.7 dos versiones atras, con el
+        instrumento publicando `coherente: true` y SEIS CONTRADICCIONES A LA VISTA —
+        dos de ellas porque el fichero se contradecia CONSIGO MISMO—. Y el tercer
+        hueco de la familia B20-2: `bloque` se leia y se publicaba sin cruzarse con
+        nadie. QUE ENTRA: la raiz como parametro en los doce lectores, con las
+        constantes de modulo eliminadas; la ventana contrastada —no regenerada, porque
+        el instrumento conserva sus cero escrituras—; `bloque` cruzado con STATE y
+        CURRENT. R5 CERRADO: `test_b14` deja de deformar el arbol real, MEDIDO con
+        sha256 antes y despues de la corrida: identicos. Y EL HARNESS CAZO UN HUECO
+        REAL: una asercion que miraba la CONTRADICCION y no la PUBLICACION dejaba
+        pasar un recuento parcial que coincidia con el declarado. 3444 -> 3465 tests,
+        +21 de test_b23_instrumento_verdad.py entero. 3462 passed, 0 failed, 96 % de
+        cobertura, arbol limpio tras la suite completa.
     - tag: v0.29.0
       fecha: 2026-10-04
       sha: "5ace1e2554beee06440f3eeacc85adacccab61f3"
