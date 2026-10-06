@@ -619,6 +619,24 @@ class SqliteKnowledgeRepository:
             tenant_id=tenant_id, project_id=project_id, predicate=predicate
         )
 
+    def list_claims_by_object_entity(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        object_entity_id: str,
+    ) -> tuple[StoredClaim, ...]:
+        """B25: los claims cuyo objeto es esa entidad. Delega en
+        `SqliteClaimRepository` (WI-61).
+
+        Sin este metodo, una referencia a entidad se podria escribir pero no
+        preguntar: seria un dato que se guarda y no se lee, que es peor que no
+        tenerlo porque el que lo escribio creeria que si.
+        """
+        return self._claims.list_claims_by_object_entity(
+            tenant_id=tenant_id, project_id=project_id, object_entity_id=object_entity_id
+        )
+
     def list_evidences_for_source(
         self,
         *,

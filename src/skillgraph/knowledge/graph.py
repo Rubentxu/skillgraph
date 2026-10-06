@@ -34,10 +34,10 @@ from typing import Any, NewType
 
 from skillgraph.core.errors import (
     InvalidAssertionOriginError,
+    InvalidClaimObjectError,
     InvalidEntityIDError,
     InvalidSourceError,
     InvalidSourceIDError,
-    UnknownClaimPredicateError,
 )
 from skillgraph.core.runtime_types import (
     ASSERTION_ORIGINS,
@@ -46,9 +46,11 @@ from skillgraph.core.runtime_types import (
     ClaimPredicate,
     FindingResult,
     FreshnessState,
+    PredicadoDePack,
     RuleRef,
     SourceKind,
     TraceKind,
+    predicado_de_pack,
 )
 
 # --- Identificadores nominales (NewType sobre str) -----------------------
@@ -96,6 +98,20 @@ def entity_id(raw: str) -> EntityID:
     if not raw or ":" not in raw:
         raise InvalidEntityIDError(f"entity_id debe tener formato 'kind:key' (recibido {raw!r})")
     return EntityID(raw)
+
+
+def entity_ref(raw: str) -> EntityRef:
+    """Smart constructor para EntityRef: delega en `entity_id`.
+
+    **POR QUE NO DUPLICA EL FORMATO.** Un `EntityRef` **es** una `EntityID`,
+    asi que la validacion del `kind:key` ya existe y ya tiene su error. Copiarla
+    aqui seria una segunda version de la misma regla, que divergiria el dia que
+    cambie la de `entity_id` — y divergiria en silencio, porque las dos seguirian
+    dando verde por separado.
+
+    Un constructor por `NewType`, que es lo que pide `AGENTS.md` §2.3.
+    """
+    return EntityRef(entity_id(raw))
 
 
 # --- ADT inmutables -------------------------------------------------------
@@ -174,6 +190,24 @@ class Evidence:
 
 
 @dataclass(frozen=True, slots=True)
+class EntityRef:
+    """Una referencia a otra Entity, usada como OBJETO de un Claim.
+
+    **POR QUE UN TIPO Y NO UNA CADENA.** Antes de B25, `Claim.object_literal`
+    era `Any`, luego cualquier cadena era un literal legitimo y el sistema no
+    tenia forma de decir si una de ellas apuntaba a algo. Eso se midio: dos
+    claims cuyo objeto era `str` en los dos casos, y el sistema incapaz de
+    distinguirlos.
+
+    Escalar a tipo es lo que hace que la pregunta del bloque —«¿lo diferencia?»—
+    tenga respuesta. `EntityRef` NO es igual a la cadena que lleva dentro, que
+    es justo por lo que un round-trip que degrade a `str` se nota.
+    """
+
+    entity_id: EntityID
+
+
+@dataclass(frozen=True, slots=True)
 class Claim:
     """Afirmacion verificable sobre una Entity, sostenida por Evidences.
 
@@ -181,12 +215,28 @@ class Claim:
     `(subject_entity_id, predicate, source_id, checked_at_revision)`,
     asi que el mismo Claim se puede re-registrar bajo una nueva
     `checked_at_revision` para representar la evolucion historica.
+
+    **EL OBJETO ES EXACTAMENTE UNO: LITERAL O ENTIDAD (B25).** Antes era solo
+    literal, y por eso no se podia expresar «A usa B». Ahora el campo nuevo
+    `object_entity` es la puerta, y la invariante es que las dos no se puedan
+    usar a la vez ni dejar las dos fuera.
+
+    `object_literal` pasa a `Any = None`, y `None` deja de ser un literal
+    valido: es lo que significa «el objeto no es un literal, mira
+    `object_entity`». Se estrecha el dominio legal, y se puede: MEDIDO, nadie
+    usaba `object_literal=None` antes de este cambio.
     """
 
     claim_id: ClaimID
     subject_entity_id: EntityID
-    predicate: ClaimPredicate
-    object_literal: Any  # int | str | bool; depende del predicate
+    predicate: ClaimPredicate | PredicadoDePack
+    #: Sin default **a proposito**. En cuanto `object_literal` deja de ser
+    #: obligatorio —porque `None` pasa a significar «el objeto es la entidad»—
+    #: todos los campos de despues tendrian que llevar default, y `source_id`
+    #: acabaria siendo opcional. Prefiero que quien afirma sin fuente lo pase
+    #: explicito: un claim sin fuente es un claim sin respaldo, y que el
+    #: constructor lo admita es una forma de no notarlo.
+    object_literal: Any
     source_id: SourceID
     evidence_ids: tuple[EvidenceID, ...] = field(default_factory=tuple)
     extraction_method: str = "static_analysis"
@@ -198,12 +248,38 @@ class Claim:
     assertion_origin: AssertionOrigin = "observed"
     checked_at_revision: str = ""
     stale: bool = False
+    #: B25. Va **al final** a proposito: los campos siguientes ya tienen
+    #: default, y anadirlo aqui mantiene intacta la compatibilidad posicional
+    #: de los cinco anteriores. Un campo nuevo en medio habria hecho que
+    #: `Claim("id", "sujeto", "line_count", 42, "src")` —posicional, como
+    #: aparece en codigo existente— empezara a meter `source_id` en este.
+    object_entity: EntityRef | None = None
 
     def __post_init__(self) -> None:
+        # B25: un predicado del nucleo o un predicado de pack. El conjunto de
+        # siete NO crece; lo que se abre es la forma. Un string sin punto no
+        # es de ninguno de los dos y se sigue rechazando, que es lo que hace
+        # que `test_claim_unknown_predicate_raises` siga verde.
         if self.predicate not in CLAIM_PREDICATES:
-            raise UnknownClaimPredicateError(
-                f"predicate {self.predicate!r} no registrado en CLAIM_PREDICATES"
+            predicado_de_pack(self.predicate)
+
+        # B25: exactamente uno de los dos objetos. Se comprueba con la MISMA
+        # pregunta que la base (un XOR), para que las dos capas no puedan
+        # discrepar: si aqui se invirtiera el criterio, la base rechazaria
+        # filas que Python acepta y el fallo apareceria en el sitio mas caro.
+        es_literal = self.object_literal is not None
+        es_entidad = self.object_entity is not None
+        if es_literal == es_entidad:
+            raise InvalidClaimObjectError(
+                f"Claim {self.claim_id!r} necesita exactamente un objeto: "
+                + (
+                    "llevo los dos (un literal y una entidad), y entonces no se sabe "
+                    "cual de los dos es la verdad"
+                    if es_literal
+                    else "no llevo ninguno; un claim tiene que afirmar algo"
+                )
             )
+
         if self.assertion_origin not in ASSERTION_ORIGINS:
             raise InvalidAssertionOriginError(
                 f"assertion_origin {self.assertion_origin!r} fuera de {sorted(ASSERTION_ORIGINS)}"
@@ -252,6 +328,7 @@ __all__ = [
     "ClaimID",
     "Entity",
     "EntityID",
+    "EntityRef",
     "Evidence",
     "EvidenceID",
     "Finding",
@@ -261,5 +338,7 @@ __all__ = [
     "SourceID",
     "TraceID",
     "entity_id",
+    "entity_ref",
+    "predicado_de_pack",
     "source_id",
 ]

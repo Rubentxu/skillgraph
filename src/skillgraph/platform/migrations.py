@@ -108,9 +108,60 @@ def _anota_installed_packs(cur: sqlite3.Cursor) -> None:
     cur.execute("SELECT 1 FROM installed_packs LIMIT 1")
 
 
+def _anade_object_entity_id(cur: sqlite3.Cursor) -> None:
+    """`claims.object_entity_id`: el objeto pasa a poder ser una entidad (B25).
+
+    Misma forma que `0001`, y por las mismas razones: `PRAGMA table_info`
+    primero, y tragarse el error de la carrera SOLO si el error es el de columna
+    duplicada —capturar `sqlite3.OperationalError` entero se tragaria tambien un
+    disco lleno.
+
+    **LO QUE ESTA MIGRACION NO HACE, Y ES LO IMPORTANTE.** SQLite **no
+    revalida los CHECK sobre filas que ya estan**. El CHECK de «exactamente
+    uno» protege las escrituras que vengan despues, y deja intactas las de
+    antes: una base con datos previos tiene una restriccion parcial, fuerte
+    hacia delante y blanda hacia atras. Reconstruir la tabla para cerrar el
+    hueco era la alternativa, y es la operacion mas arriesgada que existe
+    sobre una base con datos. Se elige la restriccion parcial y se dice, en vez
+    de elegir la arriesgada y no decirlo.
+
+    **EL `DEFAULT ''` NO ES COSMETICO.** Una columna `NOT NULL` anadida a una
+    tabla con filas necesita un default, y el marcador tiene que ser un valor
+    que `json.dumps` no produzca nunca: `''` cumple eso porque `json.dumps("")`
+    es `'""'`.
+    """
+    columnas = {fila[1] for fila in cur.execute("PRAGMA table_info(claims)")}
+    if "object_entity_id" not in columnas:
+        try:
+            cur.execute(
+                "ALTER TABLE claims ADD COLUMN object_entity_id TEXT NOT NULL DEFAULT '' "
+                "CHECK ((object_literal_json = '') <> (object_entity_id = ''))"
+            )
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
+
+    # El indice se asegura SIEMPRE, y fuera del `if`, a proposito: hay dos
+    # caminos que lo necesitan y solo uno pasa por el `ALTER`. Una base nueva
+    # tiene la columna desde el `CREATE TABLE` y se saltaria el `ALTER` entero;
+    # si el `CREATE INDEX` estuviera dentro, esa base se quedaria sin indice
+    # para siempre, sin que nada fallara.
+    #
+    # Y no esta en `schema.py` porque ese DDL corre con `CREATE TABLE IF NOT
+    # EXISTS`: sobre una base con la tabla vieja no la reconstruye, y un indice
+    # sobre una columna que no existe revienta `executescript` entero — con lo
+    # cual ABRIR la base falla, que es justo lo que la migracion viene a
+    # arreglar. MEDIDO antes de decidirlo asi.
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_claims_object_entity "
+        "ON claims(object_entity_id) WHERE object_entity_id <> ''"
+    )
+
+
 MIGRACIONES: Final[tuple[Migracion, ...]] = (
     Migracion("0001_claims_assertion_origin", _anade_assertion_origin),
     Migracion("0002_installed_packs", _anota_installed_packs),
+    Migracion("0003_claims_object_entity_id", _anade_object_entity_id),
 )
 
 

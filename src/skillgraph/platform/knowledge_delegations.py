@@ -256,6 +256,23 @@ class KnowledgeDelegations:
             tenant_id=tenant_id, project_id=project_id, claim=claim
         )
 
+    def list_claims_by_object_entity(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        object_entity_id: str,
+    ) -> tuple[StoredClaim, ...]:
+        """B25: los claims cuyo objeto es esa entidad.
+
+        Delegado WI-56 igual que sus hermanos. Sin este metodo sobre `Storage`,
+        la referencia a entidad se podria escribir por una puerta y no se podria
+        preguntar por ninguna: se guardaria y no se leeria nunca.
+        """
+        return self.knowledge_repository().list_claims_by_object_entity(
+            tenant_id=tenant_id, project_id=project_id, object_entity_id=object_entity_id
+        )
+
     def get_claim(
         self,
         *,

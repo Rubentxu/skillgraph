@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from skillgraph.knowledge.graph import Claim, Evidence, Source
+from skillgraph.knowledge.graph import Claim, EntityID, EntityRef, Evidence, Source
 from skillgraph.platform.storage import StoredClaim, StoredEvidence, StoredRelation, StoredResource
 
 
@@ -59,12 +59,53 @@ def row_to_stored_evidence(row: sqlite3.Row, json: Any) -> StoredEvidence:
     )
 
 
+def objeto_del_claim(row: sqlite3.Row, json: Any) -> tuple[object, EntityRef | None]:
+    """B25: el objeto de un claim, en sus dos formas y sin adivinar.
+
+    **POR QUE NO SE ADIVINA MIRANDO EL JSON.** Una implementacion que metiera la
+    referencia dentro de `object_literal_json` con una etiqueta tendria que
+    distinguir al leer entre «un dict que es una referencia» y «un dict que un
+    usuario escribió y se parece a una referencia» — y no hay forma de
+    distinguirlos. Por eso la referencia tiene columna propia, y por eso aquí la
+    pregunta es «¿qué dice la columna?», no «¿qué forma tiene esto?».
+
+    La columna `object_entity_id` es `NOT NULL`, luego llega SIEMPRE: `''` es el
+    marcador de ausencia y no lo produce nunca `json.dumps`. Se mira el
+    conjunto de columnas porque una consulta que no la selecciona —`SELECT *` de
+    una base pre-B25, o una consulta explicita de las anteriores a este
+    bloque— no es una fila sin referencia: es una fila de un esquema anterior.
+
+    **`# noqa: SIM118` NO ES COSMETICO, ES LO CONTRARIO DE LO QUE PARECE.**
+    ruff pide cambiar `x in row.keys()` por `x in row`. MEDIDO en SQLite:
+
+        'a' in r        -> False      # con la columna 'a' presente y valiendo 1
+        'a' in r.keys() -> True
+
+    `sqlite3.Row` **no implementa `__contains__`**, luego `in` cae al iterable
+    de la fila y compara contra los VALORES. Aplicar el autofix de ruff habria
+    hecho que toda fila con referencia se leyera como si no tuviera columna, y
+    el round-trip devolveria `None` sin que ningun test lo notara: se busco un
+    predicado que no existe, nunca se comparo un valor con un nombre.
+    """
+    # ruff no puede saber que `row` es un sqlite3.Row y no un dict.
+    if "object_entity_id" not in row.keys():  # noqa: SIM118
+        # Esquema anterior a B25: toda fila es literal. No es un caso teorico;
+        # lo produce abrir una base con una version vieja que no ha migrado.
+        return (json.loads(row["object_literal_json"]), None)
+
+    ref = row["object_entity_id"]
+    if ref:
+        return (None, EntityRef(EntityID(ref)))
+    return (json.loads(row["object_literal_json"]), None)
+
+
 def row_to_claim(row: sqlite3.Row, evidence_ids: list[str], json: Any) -> Claim:
+    object_literal, object_entity = objeto_del_claim(row, json)
     return Claim(
         claim_id=row["claim_id"],
         subject_entity_id=row["subject_entity_id"],
         predicate=row["predicate"],
-        object_literal=json.loads(row["object_literal_json"]),
+        object_literal=object_literal,
         source_id=row["source_id"],
         evidence_ids=tuple(evidence_ids),
         assertion_origin=row["assertion_origin"],
@@ -72,6 +113,7 @@ def row_to_claim(row: sqlite3.Row, evidence_ids: list[str], json: Any) -> Claim:
         extractor_version=row["extractor_version"],
         checked_at_revision=row["checked_at_revision"],
         stale=bool(row["stale"]),
+        object_entity=object_entity,
     )
 
 
@@ -97,6 +139,7 @@ def row_to_stored_claim(row: sqlite3.Row, json: Any) -> StoredClaim:
         extractor_version=row["extractor_version"],
         checked_at_revision=row["checked_at_revision"],
         stale=bool(row["stale"]),
+        object_entity_id=(row["object_entity_id"] if "object_entity_id" in row.keys() else ""),  # noqa: SIM118
     )
 
 

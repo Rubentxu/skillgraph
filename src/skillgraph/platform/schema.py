@@ -274,12 +274,39 @@ CREATE TABLE IF NOT EXISTS claims (
     extractor_version     TEXT NOT NULL,
     checked_at_revision   TEXT NOT NULL,
     stale                 INTEGER NOT NULL DEFAULT 0,
+    -- B25: el objeto de un claim es UN literal o UNA entidad, nunca los dos y
+    -- nunca ninguno. El XOR de abajo es la MISMA pregunta que la de
+    -- `Claim.__post_init__`, a proposito: si las dos capas no dijeran lo
+    -- mismo, la base rechazaria filas que Python acepta.
+    --
+    -- `''` es el marcador de ausencia y no colisiona con nada, porque
+    -- `json.dumps` NUNCA produce `''`: `json.dumps("")` es `'""'` y
+    -- `json.dumps(None)` es `'null'`.
+    --
+    -- SIN clave foránea a proposito, y medido: con `foreign_keys = ON` (como
+    -- abre `storage.py`) declarar `REFERENCES entities(entity_id)` aqui
+    -- rechazaria TODOS los claims literales, porque `''` no es una entidad.
+    object_entity_id      TEXT NOT NULL DEFAULT ''
+        CHECK ((object_literal_json = '') <> (object_entity_id = '')),
     UNIQUE (subject_entity_id, predicate, source_id, checked_at_revision)
 );
 CREATE INDEX IF NOT EXISTS idx_claims_subject
     ON claims(subject_entity_id, predicate);
 CREATE INDEX IF NOT EXISTS idx_claims_stale
     ON claims(stale) WHERE stale = 1;
+-- B25: `idx_claims_object_entity` NO se crea aqui, y el motivo es concreto.
+--
+-- Este DDL se ejecuta con `CREATE TABLE IF NOT EXISTS`, luego sobre una base
+-- cuya tabla `claims` ya existia **no la reconstruye**: la deja como estaba.
+-- Un `CREATE INDEX` sobre una columna que esa tabla vieja no tiene revienta
+-- `executescript` entero, y con el revienta el ABRIR la base — que es
+-- precisamente lo que deberia arreglar una migracion. MEDIDO: una base con la
+-- tabla al esquema anterior no abria, con `no such column: object_entity_id`.
+--
+-- El indice lo crea la migracion `0003`, que si sabe distinguir «la columna no
+-- esta» de «la columna esta y el indice no». Una base nueva lo tiene tambien:
+-- `sincroniza` corre TODAS las migraciones en cada apertura, no solo las que
+-- faltan.
 
 CREATE TABLE IF NOT EXISTS claim_evidence (
     claim_id      TEXT NOT NULL REFERENCES claims(claim_id),

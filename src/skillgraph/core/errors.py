@@ -149,6 +149,19 @@ class UnknownClaimPredicateError(ValidationError):
     code = "sg_unknown_predicate"
 
 
+class InvalidClaimObjectError(ValidationError):
+    """El objeto de un Claim no es exactamente UNO de: literal o entidad.
+
+    **EXISTE Y NO REUTILIZA `UnknownClaimPredicateError` A PROPÓSITO.** Son dos
+    ejes distintos —el predicado y el objeto— y `AGENTS.md` §1.2 exige que cada
+    clase declare su `code`: dos errores que comparten `code` no pueden salir
+    con exit codes distintos, y entonces el `code` deja de ser clave. Es
+    exactamente lo que WI-109 cerró.
+    """
+
+    code = "sg_invalid_claim_object"
+
+
 class InvalidAssertionOriginError(ValidationError):
     """El origen epistemico de un Claim no esta en el vocabulario B6.
 
