@@ -1072,9 +1072,9 @@ como imports. La frontera de diseño que esta serie atraviesa ya tiene dueño.
 
 ### Estado
 
-**B25, B26, B27 y B28 cerrados** (`v0.35.0`, `v0.36.0`, `v0.37.0` y pendiente de
-release). Los otros seis siguen en el mapa como fila, sin sección, guard,
-harness ni criterio de aceptación escrito.
+**B25, B26, B27, B28 y B29 cerrados** (`v0.35.0`, `v0.36.0`, `v0.37.0`, `v0.38.0`
+y pendiente de release). Los otros cinco siguen en el mapa como fila, sin sección,
+guard, harness ni criterio de aceptación escrito.
 
 **Y LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTO SER FALSA**, lo cual importa
 mas que el resultado. Decía: *«Dos claims incompatibles se pisan y no hay forma
@@ -1203,6 +1203,147 @@ clasificó `ROTA` en vez de fingir que las cazó, que es lo que tiene que hacer.
 razones: es la lista normativa y explícitamente cerrada, y `AGENTS.md` §2.1
 exige ADR para crecer un `Literal` — y el ADR que cubre esto (ADR-0028) no lo
 pide. Crecerlo sería inventar un valor donde más se lee como verdad.
+
+---
+
+## B29 — Un cambio en el tiempo deja de leerse como una contradicción
+
+**Objetivo cerrado.** Dos afirmaciones de la misma fuente que fueron ciertas en
+instantes distintos dejan de contradecirse, y se puede preguntar qué se sabía
+en una revisión dada.
+
+### Lo que se midió antes de escribir nada
+
+`scripts/measure_b29_vigencia.py` → **5/5 ABIERTAS**. Y la fila exagera en su
+primera mitad: **decía que no se puede preguntar qué se sabía en una revisión, y
+eso es falso** — `checked_at_revision` está en cada claim desde antes de esta
+serie. Lo que no había era la **consulta**.
+
+La mitad grave es otra, y es la que duele:
+
+```
+filas en claims:   c-A "psycopg" @revA    c-B "sqlite3" @revB
+conflicts_for  ->  1 conflicto: [c-A, c-B]
+resolver       ->  gana NADIE
+```
+
+**El sistema responde «nadie gana» a algo que tiene respuesta definitiva en cada
+instante.** En `revA` era `psycopg`; en `revB` es `sqlite3`. Las dos
+afirmaciones están, con su revisión, y no sabe. La causa es precisa:
+`conflicts_for` compara valores **sin mirar el tiempo**, luego un hecho que
+**cambió** se lee igual que uno que se **contradice**.
+
+### El orden: por qué nace `revision_registro`
+
+Las revisiones reales son SHAs, y compararlos **es lexicográfico y arbitrario**
+(`rev10 < rev9`). Se introduce `revision_registro(seq, revision)`, donde `seq`
+es **el orden en que ESTE store aprendió de esas revisiones**. No es ascendencia
+de git — eso es `GitHistory`, que es B32 — y el nombre lo declara para que nadie
+lo lea como más de lo que es.
+
+### La ventana es `[desde, hasta)`, y el gate lo dice
+
+No es una elección de gusto. El gate de `06-SPEC` §9, escrito por el bloque:
+
+```
+commit A: A -> calls B        commit B: A -> calls C
+at(A) -> calls B             at(B)  -> calls C
+```
+
+En `revB` la respuesta es `calls C`, y **no las dos**. Con el extremo superior
+inclusivo, `at(B)` devolvería las dos — media mitad de un conflicto. La primera
+versión del bloque hizo la ventana cerrada por los dos lados, y por eso
+`claims_at_revision(revB)` daba `['c-A', 'c-B']`.
+
+### La asimetría de los `NULL`, interpretada en un solo sitio
+
+| columna | `NULL` significa |
+|---|---|
+| `valid_from_revision` | «desde `checked_at_revision`» |
+| `valid_until_revision` | «todavía vigente» |
+
+`valid_from` en `NULL` es «desde que lo vimos», no «desde el principio de todo»,
+que solo es cierto para el primer hecho de una cadena. Y `valid_until` en
+`NULL` es «todavía vigente», que es lo que hace que un hecho sin reemplazo siga
+compitiendo en HEAD.
+
+`valid_from_revision` se escribe **tal cual lo declara el llamante**. Rellenarlo
+con `checked_at_revision` rompía la ida y vuelta `get_claim(...) == Claim(...)`,
+que es un contrato de B25: el store estaba guardando un campo que nadie había
+declarado.
+
+### La supersesión cierra ventanas; la cadena encadena una secuencia
+
+Son dos cosas distintas y el bloque las separa. **Se cierran TODAS** las
+afirmaciones abiertas de esa fuente que dijeran otro valor — una fuente no
+sostiene dos cosas a la vez —, mientras que `supersedes_claim_id` es **singular**
+y apunta a la más reciente, porque la cadena de `06-SPEC` §2 es una línea y
+recorrerla hacia atrás tiene que tener un único predecesor.
+
+Las tres condiciones que la supersesión **no** puede tocar, y que no estaban
+escritas en ninguna parte, salieron de ejecutar la suite de B25–B28 sobre el
+bloque ya implementado:
+
+1. **Orden.** La consulta elegía «la vigente más reciente» sin mirar el orden:
+   reingerir el mismo envelope cerraba la ventana del propio claim (rompía la
+   idempotencia de B26).
+2. **Valor.** Tampoco miraba el valor, pese a que el propio comentario del bloque
+   decía «y el valor es otro». Reingerir la misma afirmación no es un cambio, y
+   sin ese filtro la ventana dependía del orden de ingesta (rompía la propiedad
+   de B27 de que el conflict set no dependa del orden).
+3. **Alcance.** Cerraba solo la más reciente y dejaba abiertas las anteriores de
+   esa fuente: entonces «cuál era la más reciente» dependía de cuál se guardara
+   primero.
+
+### Lo que este bloque NO hace
+
+1. **No borra.** El claim viejo se queda, con su ventana cerrada. B27 no borra y
+   B29 tampoco: lo que deja de competir no es lo que se elimina.
+2. **No añade `GitHistory`** ni inventa el orden entre revisiones de dos
+   almacenes distintos. B32 es quien trae la ascendencia real de commits.
+3. **No reabre B27.** Misma fuente, misma revisión y otro valor **siguen
+   avisando**: eso es una discrepancia de verdad, no un cambio en el tiempo.
+4. **No supersede entre fuentes.** `06-SPEC` §2 habla de *source family*, y dos
+   fuentes son dos familias: no se sabe cuál cambió de opinión.
+
+### El contrasalto, y las dos sondas que Measure mal
+
+**Instrumento:** 5/5 → **0/5**. **Contrasalto:** **5/5 sondas cazadas**,
+`rc=0` al restaurar, y **verificado después de `ruff format`** — que es lo que
+desancló las cinco de B28 en una sola pasada.
+
+Dos cosas de este harness que los anteriores no tenían, y las dos salieron de
+que la sonda **no era la sonda**:
+
+- **Las sondas de existencia son multi-fichero.** M1 y M2 preguntan si el ADT
+  declara la ventana y si la tabla tiene la columna de supersesión. La sonda
+  honesta es **renombrar el identificador de punta a punta** —campo, columna,
+  `ALTER TABLE`, mapper, `INSERT`— para que el árbol siga cargando y las otras
+  cuatro preguntas sigan midiendo. Borrar la columna hace reventar el mapper:
+  una sonda «cazada» por un crash, que no es la propiedad rota sino el árbol
+  roto. Es el error 32 de B26 y de WI-113, por tercera vez.
+- **M3 resultó INOCUA, y el motivo es el hallazgo más útil del bloque.** Apuntaba
+  a `knowledge_repository.py`, pero `Storage.claims_at_revision` lo hereda de
+  `KnowledgeDelegations`. Lo que se renombró fue el método interno; el público
+  quedó intacto y P3 siguió cerrada — la lectura que miente en verde. MEDIDO, no
+  supuesto: `getattr(Storage, 'claims_at_revision').__module__`.
+
+Y M4 y M5 tocan el mismo `if` y **no son intercambiables**: M4 rompe la primera
+mitad del contrasalto y abre P4; M5 deja HEAD **intacto** y abre P5 y **no** P4.
+Un arreglo que comprase «cero conflictos» apagando el detector pasaría P4 en
+verde.
+
+### Un test que falló al escribirlo, con razón
+
+`test_una_revision_ANTERIOR_no_supersede_a_una_posterior` afirmaba que en `rc3`
+las dos afirmaciones de `false` coexistían. En el orden inverso de ingesta **no
+es cierto**: ahí `rc3` ocupa la posición 1 del store y la otra todavía no se ha
+aprendido.
+
+No es un defecto. Es la **consecuencia declarada** de que `seq` sea el orden en
+que el store aprendió, y fingir que `rc3` es siempre la posición 2 sería
+inventarlo. Lo que sí es independiente del orden —y es lo que el test mide ahora—
+es cuántas ventanas siguen abiertas al llegar el cambio.
 
 ---
 
