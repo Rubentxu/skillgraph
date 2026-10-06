@@ -280,7 +280,31 @@ class KnowledgeRepository(Protocol):
     def get_evidences_for_claim(
         self, *, tenant_id: str, project_id: str, claim_id: str
     ) -> tuple[Any, ...]: ...
-    def record_claim(self, *, tenant_id: str, project_id: str, claim: Any) -> str: ...
+    def record_claim(self, *, tenant_id: str, project_id: str, claim: Any) -> Any:
+        """Registra un claim.
+
+        **B27: EL RETORNO DEJO DE SER UN `str`.** Antes devolvia el `claim_id`
+        dado, y con `INSERT OR IGNORE` eso miente: el `UNIQUE` de la tupla
+        natural puede rechazar el INSERT y devolvia igual, como si hubiera
+        escrito. Ahora devuelve un valor con `.claim_id` y `.conflicto`, y el
+        conflicto dice **que se solapa y con que valor**.
+
+        Se declara `Any` y no el ADT concreto porque este modulo es un puerto:
+        no debe conocer el ADT de `knowledge.graph`, que es del lado de arriba.
+        """
+        ...
+
+    def conflicts_for(
+        self, *, tenant_id: str, project_id: str, subject_entity_id: str
+    ) -> tuple[Any, ...]:
+        """B27: los conflictos de un sujeto, consultables y ESTABLES.
+
+        En el puerto, para que un consumidor pueda preguntar por los conflictos
+        sin abrir el componente de SQLite. Un dato que se guarda y no se puede
+        preguntar es peor que no tenerlo.
+        """
+        ...
+
     def get_claim(self, *, tenant_id: str, project_id: str, claim_id: str) -> Any | None: ...
     def list_claims_for_source(
         self, *, tenant_id: str, project_id: str, source_id: str

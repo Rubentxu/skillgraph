@@ -13,13 +13,61 @@ import sqlite3
 from typing import Any
 
 from skillgraph.core.errors import InvalidEntityIDError
-from skillgraph.knowledge.graph import Claim
+from skillgraph.knowledge.graph import Claim, ClaimRecorded
 from skillgraph.platform.knowledge_mappers import (
     objeto_del_claim,
     row_to_claim as _row_to_claim,
     row_to_stored_claim as _row_to_stored_claim,
 )
 from skillgraph.platform.storage import Storage, StoredClaim
+
+
+def _registro(claim: Claim, previo: sqlite3.Row | None) -> ClaimRecorded:
+    """Traduce la fila previa a `ClaimRecorded`, y decide si hubo conflicto.
+
+    **LA DISTINCION QUE SOSTIENE TODO EL BLOQUE, Y ES DE TRES ESTADOS, NO DE
+    DOS.** Hay tres cosas que pueden pasar al escribir un claim, y confundirlas
+    es el defecto que B27 arregla:
+
+        no habia nada        -> se escribe, NO es conflicto
+        habia lo MISMO      -> idempotente, NO es conflicto
+        habia OTRA COSA     -> el `UNIQUE` rechaza el INSERT: CONFLICTO
+
+    El segundo estado es el que hace que esto **no rompa la idempotencia de
+    B26**. Si reingerir lo mismo se reportara como conflicto, `ingerir` dos
+    veces dejaria de ser una operacion inocua y todo el bloque anterior se
+    desharia para tapar un defecto que no es un defecto. MEDIDO, no supuesto:
+    es el primer test que pasa en verde de este fichero, y pasa precisamente
+    porque los tres estados estan separados.
+
+    `valor_previo` se devuelve DESERIALIZADO, no como el string crudo de la
+    base: quien recibe el aviso necesita comparar `true` con `false`, no
+    `'true'` con `'false'`.
+    """
+    if previo is None:
+        return ClaimRecorded(claim_id=claim.claim_id, conflicto=False)
+
+    ref_previo = previo["object_entity_id"]
+    if ref_previo:
+        previo_valor: Any = {"kind": "entity", "entity_id": ref_previo}
+    else:
+        try:
+            previo_valor = json.loads(previo["object_literal_json"])
+        except (TypeError, ValueError):
+            previo_valor = previo["object_literal_json"]
+
+    if claim.object_entity is not None:
+        intento_valor: Any = {"kind": "entity", "entity_id": claim.object_entity.entity_id}
+    else:
+        intento_valor = claim.object_literal
+
+    hubo_conflicto = previo_valor != intento_valor
+    return ClaimRecorded(
+        claim_id=claim.claim_id,
+        conflicto=hubo_conflicto,
+        valor_previo=previo_valor,
+        valor_intento=intento_valor,
+    )
 
 
 class SqliteClaimRepository:
@@ -71,6 +119,34 @@ class SqliteClaimRepository:
             ref = ""
 
         with self._storage._atomic() as cur:
+            # B27: se mide QUE se va a escribir ANTES de escribir, porque un
+            # `INSERT OR IGNORE` que colisiona no dice nada por si mismo. La
+            # fila anterior se lee de la tupla natural —NO del `claim_id`—,
+            # porque la colisiona la produce el `UNIQUE`
+            # `(subject_entity_id, predicate, source_id, checked_at_revision)`
+            # y no la clave primaria: dos `claim_id` distintos se solapan igual.
+            #
+            # Se lee DENTRO de la transaccion y no antes, porque fuera de ella
+            # la lectura y el INSERT no son atomicos y dos escritores concurrentes
+            # podrian leer «no hay fila» los dos y escribir los dos.
+            previo = cur.execute(
+                """
+                SELECT claim_id, object_literal_json, object_entity_id
+                FROM claims
+                WHERE subject_entity_id = ? AND predicate = ?
+                  AND source_id = ? AND checked_at_revision = ?
+                  AND tenant_id = ? AND project_id = ?
+                """,
+                (
+                    claim.subject_entity_id,
+                    claim.predicate,
+                    claim.source_id,
+                    claim.checked_at_revision,
+                    tenant_id,
+                    project_id,
+                ),
+            ).fetchone()
+
             cur.execute(
                 """
                 INSERT OR IGNORE INTO claims
@@ -103,7 +179,7 @@ class SqliteClaimRepository:
                     "INSERT OR IGNORE INTO claim_evidence (claim_id, evidence_id) VALUES (?, ?)",
                     (claim.claim_id, evidence_id),
                 )
-        return claim.claim_id
+        return _registro(claim, previo)
 
     def _exige_que_exista_la_entidad(
         self, *, tenant_id: str, project_id: str, entity_id: str

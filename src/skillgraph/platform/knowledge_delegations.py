@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 from skillgraph.knowledge.graph import (
     Claim,
+    ClaimRecorded,
+    Conflicto,
     Entity,
     Evidence,
     Finding,
@@ -250,10 +252,36 @@ class KnowledgeDelegations:
         tenant_id: str,
         project_id: str,
         claim: Claim,
-    ) -> str:
-        """Delegado WI-56: ver ``SqliteKnowledgeRepository.record_claim``."""
+    ) -> ClaimRecorded:
+        """Delegado WI-56: ver ``SqliteKnowledgeRepository.record_claim``.
+
+        **B27: el retorno paso de `str` a `ClaimRecorded`.** El `str` mivia:
+        con `INSERT OR IGNORE` el `UNIQUE` puede rechazar el INSERT y devolvia
+        el `claim_id` de todos modos, como si hubiera escrito. MEDIDO: dos
+        afirmaciones opuestas con la misma fuente y la misma revision dejaban
+        una fila —la primera— y quien escribia creia haber registrado la suya.
+        """
         return self.knowledge_repository().record_claim(
             tenant_id=tenant_id, project_id=project_id, claim=claim
+        )
+
+    def conflicts_for(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+    ) -> tuple[Conflicto, ...]:
+        """B27: los conflictos de un sujeto, consultables y ESTABLES.
+
+        Va en la fachada por el mismo motivo que en B25: un dato que se guarda
+        y no se puede preguntar es peor que no tenerlo, porque quien lo
+        escribio creera que si.
+        """
+        return self.knowledge_repository().conflicts_for(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=subject_entity_id,
         )
 
     def list_claims_by_object_entity(

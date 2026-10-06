@@ -323,9 +323,65 @@ class OutcomeTrace:
     evidence_refs: tuple[EvidenceID, ...] = field(default_factory=tuple)
 
 
+@dataclass(frozen=True, slots=True)
+class ClaimRecorded:
+    """Lo que `record_claim` devuelve: **el claim_id y si colisiono**.
+
+    **POR QUE NO ES UN `str`.** Antes `record_claim` devolvia el `claim_id` que
+    se le habia dado, y con `INSERT OR IGNORE` eso miente: el `UNIQUE` de
+    `(subject_entity_id, predicate, source_id, checked_at_revision)` puede
+    rechazar el INSERT y el metodo devuelve igual, como si hubiera escrito.
+
+    MEDIDO en B27: dos afirmaciones opuestas con la MISMA fuente y la MISMA
+    revision dejan **una** fila —la primera— y quien escribe cree haber
+    registrado la suya. No se pierde una fila: se pierde **la verdad de lo que
+    se afirmo**, en silencio.
+
+    **`valor_previo` Y `valor_intento`, POR QUE LOS DOS.** Un aviso de
+    «conflicto» sin los dos valores no es accionable: quien lo recibe no sabe si
+    lo que se solapa es `true` o `false`, y el aviso se vuelve un «algo va mal»
+    sin poder hacer nada con el.
+    """
+
+    claim_id: ClaimID
+    conflicto: bool
+    valor_previo: Any = None
+    valor_intento: Any = None
+
+
+@dataclass(frozen=True, slots=True)
+class Conflicto:
+    """Dos o mas afirmaciones sobre lo MISMO que dicen cosas DISTINTAS.
+
+    **UN CONFLICTO ES UN GRUPO, NO UN PAR.** Tres afirmaciones que se
+    contradicen son un conflicto con tres afirmaciones, no tres conflictos. Sin
+    agrupar, «cuantas contradicciones hay» seria el numero de claims y no el de
+    contradicciones —dos grupos de tres darian seis— y quien lo leyera contaria
+    algo que no es lo que cree.
+
+    **`afirmaciones` es ORDENADO Y ESTABLE**, y es la propiedad que hace posible
+    B28. Un conflict set que dependa del orden en que SQLite devuelva las filas
+    no es un conflict set: es el estado de un `SELECT` sin `ORDER BY`. Dos
+    consultas iguales darian listas distintas y cualquier consumidor que las
+    comparara fallaria de forma intermitente —que es la forma mas cara de
+    fallar, porque no falla en la prueba que lo escribio.
+    """
+
+    subject_entity_id: EntityID
+    predicate: str
+    afirmaciones: tuple[Claim, ...]
+
+    @property
+    def claim_ids(self) -> tuple[ClaimID, ...]:
+        """Los ids, en el mismo orden estable que `afirmaciones`."""
+        return tuple(c.claim_id for c in self.afirmaciones)
+
+
 __all__ = [
     "Claim",
     "ClaimID",
+    "ClaimRecorded",
+    "Conflicto",
     "Entity",
     "EntityID",
     "EntityRef",

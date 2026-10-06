@@ -21,6 +21,8 @@ from typing import Any
 from skillgraph.core.errors import IdentityConflictError, NotFoundError, ValidationError
 from skillgraph.knowledge.graph import (
     Claim,
+    ClaimRecorded,
+    Conflicto,
     Entity,
     Evidence,
     Finding,
@@ -28,6 +30,7 @@ from skillgraph.knowledge.graph import (
     Source,
 )
 from skillgraph.platform.knowledge_claims import SqliteClaimRepository
+from skillgraph.platform.knowledge_conflicts import SqliteConflictRepository
 
 # WI-60 (ADR-0020 fase 1): mappers reubicados; re-export para la clase,
 # los shims de storage.py y cualquier consumidor del simbolo.
@@ -60,6 +63,10 @@ class SqliteKnowledgeRepository:
     def __init__(self, storage: Storage) -> None:
         self._storage = storage
         self._claims = SqliteClaimRepository(storage)
+        # B27: el conflicto es una RELACION entre claims, no un claim. Vive en
+        # su propio componente porque tiene su propio contrato —inmutable y
+        # ordenado— y porque su error, si lo tuviera, seria distinto.
+        self._conflicts = SqliteConflictRepository(storage)
 
     @property
     def _conn(self) -> sqlite3.Connection:
@@ -533,9 +540,37 @@ class SqliteKnowledgeRepository:
         tenant_id: str,
         project_id: str,
         claim: Claim,
-    ) -> str:
-        """Delega en `SqliteClaimRepository.record_claim` (WI-61)."""
+    ) -> ClaimRecorded:
+        """Delega en `SqliteClaimRepository.record_claim` (WI-61).
+
+        **B27: EL RETORNO DEJO DE SER UN `str`.** Antes devolvia el `claim_id`
+        que se le habia dado, y con `INSERT OR IGNORE` eso miente: el `UNIQUE`
+        de la tupla natural puede rechazar el INSERT y el metodo devuelve
+        igual, como si hubiera escrito. Ahora devuelve `ClaimRecorded`, que
+        dice si hubo conflicto y que se solapa.
+        """
         return self._claims.record_claim(tenant_id=tenant_id, project_id=project_id, claim=claim)
+
+    def conflicts_for(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+    ) -> tuple[Conflicto, ...]:
+        """B27: los conflictos de un sujeto, consultables y ESTABLES.
+
+        **POR QUE ESTA EN LA FACHADA Y NO SOLO EN EL COMPONENTE.** Un dato que
+        se guarda y no se puede preguntar es peor que no tenerlo, porque quien
+        lo escribio creera que si. Y por el mismo motivo que en B25: la consulta
+        tiene que travels por la API publica, o cada quien abriria el componente
+        por su cuenta y cada copia divergiria el dia que una se actualice.
+        """
+        return self._conflicts.conflicts_for(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=subject_entity_id,
+        )
 
     def get_claim(
         self,
