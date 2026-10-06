@@ -435,6 +435,70 @@ def bloque_del_roadmap(raiz: Path) -> str:
     return m.group(1)
 
 
+@dataclass(frozen=True, slots=True)
+class Ventana:
+    """Una linea de la respuesta del ROADMAP, descompuesta.
+
+    Inmutable porque es una fotografia de un instante, como `Estado`: dos
+    ventanas del mismo fichero describen el mismo instante, y si una pudiera
+    cambiarse sola, el cruce entre ellas no mediria nada.
+
+    `linea` guarda el texto ENTERO para que el mensaje pueda citar lo que el
+    fichero dice, no una reconstruccion de lo que el regex entendio: un
+    verificador que nombra la paraphrasis de un defecto y no el defecto se
+    deja a quien corrige el trabajo de reconocerlo.
+    """
+
+    linea: str
+    version: str
+    tag: str
+    tests: int | None
+
+
+def ventanas_del_roadmap(raiz: Path) -> tuple[Ventana, ...]:
+    """Las ventanas que declara el ROADMAP. Puede no declarar ninguna.
+
+    **Por que el RECUENTO puede ser cero y no es una contradiccion.** Una
+    seccion que no publica ventana no esta mintiendo: no esta afirmando nada
+    que este instrumento pueda contrastar. Un guard que exigiera una ventana
+    inventaria una propiedad que el fichero no promete, y el dia que el
+    formato cambiara dira «falso» sin que haya un defecto.
+
+    **Por que se recorta por SECCION y no por el fichero entero.** Es el
+    mismo razonamiento que `workitem_de_current` recorta en `<details>`: la
+    primera coincidencia del fichero entero mide el bloque mas antiguo el dia
+    que alguien reordene las secciones, y el bloque mas antiguo no es la
+    respuesta. La seccion tiene nombre estable y es la que el propio ROADMAP
+    declara como «la respuesta a ¿donde esta el proyecto y que toca
+    despues?».
+
+    **Por que version y tag exigen comillas invertidas.** Un numero suelto en
+    la prosa no es la version. Sin las comillas, un «B22» o un «16/16 UAT» se
+    leeria como una verdad, y el guard estaria midiendo algo que nadie
+    declaro.
+    """
+    texto = _lee(raiz, "ROADMAP.md")
+    seccion = _SECCION_PROYECTO.search(texto)
+    if seccion is None:
+        return ()
+    ventanas: list[Ventana] = []
+    for linea in _LINEA_VENTANA.findall(seccion.group(1)):
+        if _TESTS_VENTANA.search(linea) is None:
+            continue  # Una cita de la seccion que no publica cifras no es ventana.
+        version = _VERSION_VENTANA.search(linea)
+        tag = _TAG_VENTANA.search(linea)
+        tests = _TESTS_VENTANA.search(linea)
+        ventanas.append(
+            Ventana(
+                linea=linea.strip(),
+                version=version.group(1) if version else "",
+                tag=tag.group(1) if tag else "",
+                tests=int(tests.group(1)) if tests else None,
+            )
+        )
+    return tuple(ventanas)
+
+
 def workitem_de_state(raiz: Path) -> str:
     roadmap = _seccion(raiz, "roadmap")
     if roadmap is None or "current_workitem" not in roadmap:
@@ -479,7 +543,8 @@ class Estado:
     workitem_state: str
     workitem_current: str
     roadmap: str
-    contradicciones: tuple[str, ...]
+    ventanas: tuple[Ventana, ...] = ()
+    contradicciones: tuple[str, ...] = ()
 
     @property
     def coherente(self) -> bool:
@@ -505,8 +570,80 @@ def _objetivo_del_bloque(raiz: Path, bloque: str) -> str:
     return m.group(1).strip() if m else bloque
 
 
+def _contradicciones_de_la_ventana(v: dict[str, Any], ventanas: tuple[Ventana, ...]) -> list[str]:
+    """Cada ventana contra la verdad. Una funcion, una pregunta.
+
+    MEDIDO en B23: sin esto, `project_truth.py` cruzaba `release`, `tests`,
+    `workitem` y `version` —todas bien— y no cruzaba NADA de la ventana que
+    el propio ROADMAP declara ser «la respuesta a ¿donde esta el proyecto?».
+    El resultado era `coherente: true` con seis contradicciones a la vista, y
+    dos releases de desfase en el fichero.
+
+    La regla es «una linea que declara una verdad, se contrasta con esa
+    verdad». Una ventana que no declara version no se queixa de la version: no
+    esta afirmando nada sobre ella.
+    """
+    problemas: list[str] = []
+    for ventana in ventanas:
+        if ventana.version and ventana.version != v["version"]:
+            problemas.append(
+                f"ventana: el ROADMAP publica la version {ventana.version!r}, "
+                f"la verdad es {v['version']!r} — {ventana.linea!r}"
+            )
+        if ventana.tag and ventana.tag != v["release"]:
+            problemas.append(
+                f"ventana: el ROADMAP publica el tag v{ventana.tag!r}, "
+                f"la release es v{v['release']!r} — {ventana.linea!r}"
+            )
+        if ventana.tests is not None and ventana.tests != v["tests_declarados"]:
+            problemas.append(
+                f"ventana: el ROADMAP publica {ventana.tests} tests, "
+                f"el estado declara {v['tests_declarados']} — {ventana.linea!r}"
+            )
+    return problemas
+
+
+def _ventanas_entre_si(ventanas: tuple[Ventana, ...]) -> list[str]:
+    """Las ventanas unas contra otras. El fichero no puede contradecirse.
+
+    MEDIDO en B23: `ROADMAP.md` publicaba dos ventanas consecutivas —una con
+    `3444 tests` y otra con `3431 tests`, las dos con `v0.32.7`—, y el
+    defecto no es que mentieran: es que **se contradijian entre si** mientras
+    el fichero es la respuesta. Por eso esta regla mira ventana contra
+    ventana y no solo contra la verdad: dos ventanas que sean las dos
+    igualmente wrong y distintas entre si son todavia un defecto, y un cruce
+    que solo mirara la verdad no lo veria — la verdad es una sola.
+    """
+    if len(ventanas) < 2:
+        return []
+    problemas: list[str] = []
+    primera = ventanas[0]
+    for otra in ventanas[1:]:
+        if primera.version and otra.version and primera.version != otra.version:
+            problemas.append(
+                f"ventana: el ROADMAP publica dos versiones distintas, "
+                f"{primera.version!r} y {otra.version!r} — el fichero se "
+                f"contradice a si mismo"
+            )
+        if primera.tag and otra.tag and primera.tag != otra.tag:
+            problemas.append(
+                f"ventana: el ROADMAP publica dos tags distintos, "
+                f"v{primera.tag!r} y v{otra.tag!r} — el fichero se contradice a si mismo"
+            )
+        if primera.tests is not None and otra.tests is not None and primera.tests != otra.tests:
+            problemas.append(
+                f"ventana: el ROADMAP publica dos cifras distintas, "
+                f"{primera.tests} y {otra.tests} tests — el fichero se contradice a si mismo"
+            )
+    return problemas
+
+
 def _contradicciones(
-    v: dict[str, Any], *, head_en_la_etiqueta: bool | None = None, raiz: Path | None = None
+    v: dict[str, Any],
+    *,
+    head_en_la_etiqueta: bool | None = None,
+    raiz: Path | None = None,
+    ventanas: tuple[Ventana, ...] = (),
 ) -> tuple[str, ...]:
     """Cruza las siete verdades. Cada comparacion nombra las dos caras.
 
@@ -526,12 +663,20 @@ def _contradicciones(
     este script tiene debajo, que no es necesariamente el que se esta
     midiendo.
 
+    `ventanas` es PARAMETRO y no clave del dict, por el mismo motivo que
+    `head_en_la_etiqueta`: los tests que cruzan un literal de ocho claves
+    siguen midiendo lo que media, y el camino real —`estado()`— pasa
+    SIEMPRE las ventanas. Un defecto que se puede dejar sin mirar no es un
+    defecto que este guard.
+
     El mensaje dice SIEMPRE las dos partes. Un verificador que dice
     «falso» sin decir «cual era la verdad» deja a quien corrige haciendo
     la cuenta a mano, que es el trabajo que el guard existe para evitar.
     """
     problemas: list[str] = []
     donde = raiz if raiz is not None else RAIZ_POR_DEFECTO
+    problemas.extend(_contradicciones_de_la_ventana(v, ventanas))
+    problemas.extend(_ventanas_entre_si(ventanas))
 
     if v["tag_vcs"] is not None and v["tag_vcs"] != v["release"]:
         problemas.append(
@@ -549,6 +694,22 @@ def _contradicciones(
             f"{v['workitem_current']}"
         )
 
+    # El `bloque` del ROADMAP contra los otros dos. MEDIDO en B23: el bloque
+    # se LEIA y se PUBLICABA, y no se cruzaba con nadie. STATE y CURRENT se
+    # cruzaban ENTRE SI, luego los tres podian estar mal y dar
+    # `coherente: true`: el ROADMAP decia B99 mientras STATE y CURRENT decian
+    # B22 los dos, y nada lo notaba. Un identificador que se publica sin
+    # cruzarse es una afirmacion sin contraparte.
+    if v["bloque"] != v["workitem_state"]:
+        problemas.append(
+            f"bloque: el ROADMAP declara {v['bloque']}, STATE declara {v['workitem_state']}"
+        )
+
+    if v["bloque"] != v["workitem_current"]:
+        problemas.append(
+            f"bloque: el ROADMAP declara {v['bloque']}, CURRENT declara {v['workitem_current']}"
+        )
+
     # La version activa tiene que ser la del ultimo tag mas el sufijo de
     # desarrollo. Sin esta regla, `__version__` podria quedar en el tag
     # Release y el guard de WI-109 (`package_version`) pasaria mientras el
@@ -564,7 +725,9 @@ def _contradicciones(
     if (
         v["tag_vcs"] is not None
         and not (
-            head_en_la_etiqueta if head_en_la_etiqueta is not None else _head_esta_en_la_etiqueta(donde)
+            head_en_la_etiqueta
+            if head_en_la_etiqueta is not None
+            else _head_esta_en_la_etiqueta(donde)
         )
         and v["version"] != f"{v['tag_vcs']}.dev0"
     ):
@@ -586,6 +749,11 @@ def estado(raiz: Path) -> Estado:
     estado sano.
     """
     raiz = _exige_raiz(raiz)
+    # El ROADMAP se lee UNA vez y se reparte. Leerlo dos veces —una para el
+    # bloque, otra para las ventanas— es la misma trampa que B14 cerro en
+    # STATE.yaml: dos lectores del mismo fichero pueden discrepar en
+    # silencio, y aqui discreparia sobre la misma verdad.
+    ventanas = ventanas_del_roadmap(raiz)
     v: dict[str, Any] = {
         "bloque": bloque_del_roadmap(raiz),
         "version": version_activa(raiz),
@@ -599,7 +767,8 @@ def estado(raiz: Path) -> Estado:
     return Estado(
         objetivo=_objetivo_del_bloque(raiz, v["bloque"]),
         roadmap="ROADMAP.md",
-        contradicciones=_contradicciones(v, raiz=raiz),
+        ventanas=ventanas,
+        contradicciones=_contradicciones(v, raiz=raiz, ventanas=ventanas),
         **v,
     )
 
@@ -625,8 +794,7 @@ def _argumentos(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         metavar="RUTA",
         help=(
-            "la raiz del proyecto que se mide. Por defecto, el repositorio "
-            "donde vive este script."
+            "la raiz del proyecto que se mide. Por defecto, el repositorio donde vive este script."
         ),
     )
     return parser.parse_args(argv)
