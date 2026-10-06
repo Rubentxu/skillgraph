@@ -1523,7 +1523,7 @@ release:
   # mantiene: tests/test_state_release_integrity.py
   releases:
     - tag: v0.39.0
-      sha: PENDIENTE
+      sha: dcd572eb017584380454c16a787a8cd1b8add12f   # TOMADO de `git rev-list -n1 v0.39.0`, que es el unico momento en que responde. `test_every_listed_sha_matches_its_tag` lo contrasta contra ese mismo comando, y un sha escrito a mano pone la suite en rojo. Es la segunda vez en la serie que esto se hace en el instante equivocado - en v0.38.0 dio el commit ANTERIOR a su etiqueta - y lo cazo ese guard: `project_truth.py` no mira los shas, asi que la verdad del proyecto no podia verlo.
       fecha: 2026-10-06
       semver_bump: MINOR
       package_version: 0.39.0
