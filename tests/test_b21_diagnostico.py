@@ -540,18 +540,56 @@ class TestElInstrumentoNoRompeLaCorridaQueLoCertifica:
         )
 
     def test_el_log_del_repo_no_se_reescribio(self, corrida: Corrida) -> None:
-        """El log SI es un reloj utilizable: solo lo escribe coverage.sh.
+        """El log del repo NO es el log de la corrida aislada.
 
-        Los ficheros de datos no sirven —los mueve el proceso que contiene al
-        guard—, pero este lo escribe una sola cosa en el mundo, que es la
-        corrida aislada. Por eso la medicion del log se conserva y la de los
-        datos no.
+         **Y POR QUE SE MIDIÓ ASÍ, Y NO COMPARANDO MTIMES — MEDIDO, NO SOSPECHADO.**
+         La primera versión comparaba el mtime del log del repo antes y después.
+         Es un reloj que escribe **el proceso que contiene al guard**, y eso lo
+         hace indeterminista:
+
+             scripts/coverage.sh:203
+                 uv run pytest -q ... 2>&1 | tee "$LOG"
+
+         `tee` vacía en bloques de ~8 KB cuando se llena el buffer de pytest, y
+         el log del repo **crece durante la suite**. Si un vaciado cae dentro de
+         los ~55 s que dura la corrida aislada, el mtime cambia y el guard
+         falla señalando una reescritura que no ocurrió.
+
+         MEDIDO: **dos corridas de la CI seguidas sobre el MISMO árbol
+        dieron un rojo DISTINTO cada una** — `test_release_governance` la
+         primera, este la segunda —, y en local el mismo test pasa siempre
+         porque no hay un `coverage.sh` por fuera escribiendo el log. Es la misma
+         clase que el resto de la nota del módulo —«el estado global no sirve
+         como reloj de este guard»—, y aquí el estado global es un fichero que
+         el contenedor está escribiendo mientras se mide.
+
+         **LO QUE SE MIDE AHORA ES LA PROPIEDAD Y NO OTRA COSA:** que el log del
+         repo no **sea** el de la corrida aislada. Si el aislamiento se
+         rompiera —si `COVERAGE_LOG` no llegara al subproceso— la corrida
+         aislada escribiría ahí y los dos ficheros serían el mismo. Esa es
+         exactamente la consecuencia que el bloque teme: *«la etapa que lo lee
+         mediría una corrida de un solo test»*.
+
+         Y se comprueba primero que el log aislado **tiene contenido**, porque
+         comparar dos vacíos sale verde sin decir nada — el error que este
+         mismo fichero ya cazó en `test_el_log_medido_existe`.
         """
-        antes_log = dict(corrida.estado_antes).get(LOG_DEL_REPO)
-        ahora_log = dict(corrida.estado_despues).get(LOG_DEL_REPO)
-        assert ahora_log == antes_log, (
-            "el log del repo se reescribio: la corrida aislada escribio donde "
-            "no debia, y la etapa que lo lee mediria una corrida de un test"
+        log_del_repo = RAIZ / LOG_DEL_REPO
+        log_aislado = corrida.aislado / "unit-tests.log"
+
+        contenido_aislado = log_aislado.read_text(encoding="utf-8", errors="replace")
+        assert contenido_aislado.strip(), (
+            f"la corrida aislada no escribio nada en {log_aislado}: si el log "
+            "aislado esta vacio, la comparacion de abajo compara dos ausencias "
+            "y sale verde sin mirar la propiedad"
+        )
+
+        contenido_repo = log_del_repo.read_text(encoding="utf-8", errors="replace")
+        assert contenido_repo != contenido_aislado, (
+            "el log del repo ES el log de la corrida aislada: el aislamiento "
+            "de COVERAGE_LOG no llego al subproceso, la corrida aislada "
+            "escribio donde no debia, y la etapa que lo lee mediria una "
+            "corrida de un solo test"
         )
 
     def test_el_log_medido_existe(self, corrida: Corrida) -> None:
