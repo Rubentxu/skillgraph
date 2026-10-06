@@ -30,7 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B21** — Una certificación en rojo no puede decir QUÉ falló
+> Bloque vivo: **B22** — La suite no puede cambiar el árbol por debajo de un instrumento
+> `0.32.7.dev0` · tag `v0.32.7` · 3444 tests · 16/16 UAT
 > Versión activa `0.32.7.dev0` · último tag `v0.32.7` · 3431 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*
@@ -71,6 +72,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B19** | «NO es reproducible» y «no he podido medirlo» son la misma frase | La entrada del paquete se mide antes de acusar, y el veredicto no culpa al proyecto de haber medido dos entradas distintas |
 | **B20** | El gate se contradecía a sí mismo | El conjunto de recursos se deriva del árbol, y un docstring que documenta la frontera no es una dependencia |
 | **B21** | Una certificación en rojo no puede decir QUÉ falló | Lo que pytest dice de sus fallos aparece después de la última tabla, y un guard no usa como reloj un estado que mueve su propio contenedor |
+| **B22** | La suite no puede cambiar el árbol por debajo de un instrumento, y un predicado reventado no borra el informe | Escribir y cambiar se separan, toda excepción va declarada, y cada predicado da su veredicto aunque lance |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -998,6 +1000,68 @@ deuda sin verificar, y sin verificar no era deuda.
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
 
+
+## B22 — El árbol de trabajo no puede cambiar bajo los pies de un instrumento
+
+**Objetivo cerrado.** Dos propiedades que solo se pueden violar a la vez, y por
+eso nunca se midieron:
+
+1. **Ningún test cambia el contenido de un fichero que git versiona**, salvo
+   los que declaran por qué.
+2. **Cuando un predicado del gate de 1.0 revienta, el informe conserva los
+   veredictos de los otros diecinueve.**
+
+**Medido antes de arreglar nada.** `measure_b9_gate_1_0.py` devolvió «Un
+predicado revanto y el informe NO esta completo» y con eso borró los veredictos
+de las otras diecinueve propiedades: cero información, no un OPEN. El
+predicado que reventó es `_distribution_reproducible`, y revienta porque su
+premisa —«nadie toca `src/skillgraph/__init__.py` mientras lo leo»— es falsa.
+Que el contenido fuera el inyectado no es una sospecha: el sha256 de
+`__version__ = "7.7.7"` es `7da24eaaf72e`, y durante la suite completa ese
+fichero tuvo dos contenidos —el real en 195 649 lecturas y ese en 1 214—.
+
+**Y el inventario sale de ejecutar, no de leer.** 25 escrituras que cambian
+contenido, en tres ficheros de test. El grep encuentra seis: el séptimo —
+`test_wi82`, que se llama «does not dirty tracked evidence» y por tanto declara
+lo contrario de lo que hace— solo apareció al instrumentar.
+
+**Lo que entra.** El guard vive en `tests/conftest.py` porque la propiedad es
+sobre *toda* la corrida, y decide en `tests/test_b22_arbol_real.py`. Separa
+**escribir** de **cambiar**: cinco escrituras sobre versionados no cambian
+contenido —los `finally` del gate y de B15— y son el mecanismo correcto del
+test que deforma y restaura; contarlas obligaría a prohibir restaurar. Toda
+infracción ha de estar declarada, y toda declaración ha de seguir en uso.
+
+**Lo que NO entra, con su motivo medido.** `test_b14` sigue deformando el árbol
+real. El arreglo no es un test: `project_truth.py` deriva su RAIZ de
+`__file__`, y medido que ningún sandbox da una respuesta de verdad — con los
+cuatro ficheros que el script lee la colecta sale rc=5 y el verificador
+responde `ilegible` por el motivo equivocado; con el árbol entero copiado sale
+rc=3 porque la copia no es un repositorio. Las dos salidas piden que el
+instrumento acepte su raíz por parámetro, que es la superficie de B0/B14.
+
+**R2.** Cada predicado se ejecuta aislado y su excepción se convierte en su
+veredicto, `NO_MEASURABLE` con la clase y el mensaje. `NO_MEASURABLE` y no
+`OPEN` porque `OPEN` es una afirmación sobre el **proyecto** y un predicado que
+revienta no ha medido nada. `listo_para_1_0` sigue exigiendo las veinte en
+`PASS`, así que el 1.0 no se puede declarar: correcto, no un castigo.
+
+**Cuatro defectos propios, que es lo que más costó.** La constante que programa
+el guard al final llevaba escrito a mano un nombre de fichero que no era el
+suyo: no casaba, no movía nada, y el guard corría **en cabeza** dando verde con
+diecinueve infracciones ya registradas. El contrasalto del caso base usó B14
+como ejemplo de escritor no declarado y se volvió no-op al registrar su deuda.
+El informe del instrumento imprimía con los nombres que deja un `for` normal,
+que ligan en el ámbito de la función, y por eso las dieciocho filas graves
+salían con el autor del último. Y el harness dio un **4/4 falso**: las cuatro
+sondas «cayaban» por un INTERNALERROR del propio hook al colectar, no por su
+aserción.
+
+**Harness 4/4** tras endurecerlo: exige que el test nombrado aparezca como
+`FAILED` y detecta anclas ambiguas —M2 deformaba la primera de dos apariciones y
+no miraba el sitio del guard—.
+
+---
 
 ## B20 — El gate se contradecía a sí mismo
 

@@ -1,3 +1,86 @@
+
+
+> **Bloque 2026-10-06 (B22) — La suite no puede cambiar el árbol por debajo de un instrumento.**
+>
+> **NO ES UN OPEN. ES CERO INFORMACIÓN.** `measure_b9_gate_1_0.py` devolvió
+> «Un predicado revanto y el informe NO esta completo» y con eso borró los
+> veredictos de las otras diecinueve propiedades del gate de 1.0. Una sola
+> excepción decidía sobre veinte preguntas.
+>
+> **LA CADENA, MEDIDA DE PUNTA A PUNTA.** `tests/test_b14_truth_single_reader.py`
+> deforma `src/skillgraph/__init__.py` con `__version__ = "7.7.7"`. El
+> predicado de reproducibilidad del gate lee ese fichero **real** como línea
+> base, construye el paquete y exige que el contenido siga igual. Su premisa
+> es que nadie lo toca.
+>
+> **Y LA PRUEBA DE QUE EL CONTENIDO ERA ESE, NO UNA SOSPECHA.** El sha256 de
+> `__version__ = "7.7.7"` es `7da24eaaf72e`. Durante la corrida completa ese
+> fichero tuvo **dos** contenidos: el real, `cb720d34aeac`, en 195 649 lecturas
+> y `7da24eaaf72e` en 1 214. Control: el gate en solitario da informe completo
+> 2 de 2; con la suite en paralelo, lo pierde.
+>
+> **LO QUE ESTO SE LLEVA POR DELANTE: EL INVENTARIO, Y SALIÓ DE EJECUTAR.**
+> 25 escrituras que cambian contenido de un versionado, en tres ficheros de
+> test. El grep encuentra seis. El séptimo —`test_wi82`, que se llama «does not
+> dirty tracked evidence» y por tanto declara lo contrario de lo que hace— solo
+> apareció al instrumentar. Es la misma razón por la que el guard está en
+> `tests/conftest.py` y no en un módulo: la propiedad es sobre **toda** la
+> corrida, y un módulo de guard solo ve los tests que se le negocien al pedir.
+>
+> **ESCRIBIR NO ES CAMBIAR, Y LA DIFERENCIA SOSTIENE LA PROPIEDAD.** Cinco
+> escrituras sobre ficheros versionados **no** cambian su contenido —los
+> `finally` del gate y de B15— y son el mecanismo correcto del test que deforma
+> y restaura. Contarlas como infracción obligaría a prohibir restaurar, que es
+> lo único que permite medir.
+>
+> **R2.** Cada predicado se ejecuta aislado y su excepción se convierte en su
+> veredicto: `NO_MEASURABLE` con la clase y el mensaje. Y `NO_MEASURABLE` y no
+> `OPEN` porque `OPEN` es una afirmación sobre el **proyecto**, y un predicado
+> que revienta no ha medido nada. `listo_para_1_0` sigue exigiendo las veinte en
+> `PASS`: el 1.0 no se puede declarar, y eso es lo correcto.
+>
+> **LO QUE NO SE CIERRA, Y POR QUÉ NO ERA UN ARREGLO DE TEST.** `test_b14`
+> sigue deformando el árbol real, declarado como deuda con motivo medido.
+> `project_truth.py` deriva su RAIZ de `__file__`, y medido que ningún sandbox
+> da una respuesta de verdad: con los cuatro ficheros que el script lee la
+> colecta sale **rc=5** y el verificador responde `ilegible` **por el motivo
+> equivocado** —los tests que esperan `ilegible` por motivo pasarían de
+> mentira—; copiando el árbol entero (722 ficheros) sale **rc=3** porque la
+> copia no es un repositorio. Las dos salidas piden que el instrumento acepte
+> su raíz por parámetro, que es la superficie de B0/B14.
+>
+> **CUATRO DEFECTOS PROPIOS, Y SON LO QUE MÁS CUESTÓ.** La constante que
+> programa el guard al final llevaba escrito a mano un nombre de fichero que no
+> era el suyo: no casaba, no movía nada, y el guard corría **en cabeza** dando
+> verde con diecinueve infracciones ya registradas detrás. El contrasalto del
+> caso base usó `test_b14` como ejemplo de escritor no declarado y se volvió
+> no-op en cuanto ese fichero entró en el mapa de excepciones. El informe del
+> instrumento imprimía con los nombres que deja un `for` normal —que ligan en el
+> ámbito de la función— y por eso las dieciocho filas graves salían con el
+> autor del último hallazgo. Y el harness dio un **4/4 falso**: las cuatro
+> sondas «cayaban» por un `INTERNALERROR` del propio hook al colectar, no por su
+> aserción, que es exactamente la forma que un guard no debe tener.
+>
+> **HARNESS 4/4**, cada una por su aserción, tras exigir que el test nombrado
+> aparezca como `FAILED` y detectar anclas ambiguas —M2 deformaba la primera de
+> dos apariciones y no miraba donde estaba el guard—.
+>
+> **CERTIFICADO** con los contratos de la receta, todos en verde: suite completa
+> `3441 passed + 3 skipped` bajo `coverage.sh` —3444 declarados y colectados—,
+> `check_public_surfaces.py`, `check_ci_recipe_parity.py`,
+> `check_package_build.py`, `ruff`, y `check_coverage_floors.py` con
+> `VEREDICTO: todo módulo gobernado por §6.3 cumple su suelo` al 95,87 % global.
+>
+> **LO QUE LA RECETA NO DIO, Y POR QUÉ NO ES DEFECTO DEL REPO.** `mise exec --
+> pipelinek` sí resuelve la 0.39.0 que fija `mise.toml` —el shim suelto da
+> 0.46.0—, pero el motor falla en la etapa 0 en 0,24 s con
+> `failureKind: INFRASTRUCTURE` y «Cookie file not created; wrapper may have
+> failed to start»: creó el directorio del run y `script.sh`, y nunca escribió
+> `wrapper.sh`. Es el binario en este entorno, no el repo, y es el mismo
+> veredicto no fiable en sesión agéntica que ya está registrado en
+> `bl-bl-01M3WJ3KCP000387S47TMRXK40`.
+
+---
 > **Bloque 2026-10-05 (B21) — Una certificación en rojo no puede decir QUÉ falló.**
 > (cerrado y publicado en `v0.32.7`)
 > Versión activa `0.32.7.dev0`; último tag `v0.32.7`.
