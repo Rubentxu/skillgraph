@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B22** — La suite no puede cambiar el árbol por debajo de un instrumento
-> Versión activa `0.33.0.dev0` · último tag `v0.33.0` · 3465 tests · 16/16 UAT
+> Bloque vivo: **B23** — El instrumento de la verdad puede equivocarse, y se le ve
+> Versión activa `0.34.0.dev0` · último tag `v0.34.0` · 3465 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
@@ -87,6 +87,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B20** | El gate se contradecía a sí mismo | El conjunto de recursos se deriva del árbol, y un docstring que documenta la frontera no es una dependencia |
 | **B21** | Una certificación en rojo no puede decir QUÉ falló | Lo que pytest dice de sus fallos aparece después de la última tabla, y un guard no usa como reloj un estado que mueve su propio contenedor |
 | **B22** | La suite no puede cambiar el árbol por debajo de un instrumento, y un predicado reventado no borra el informe | Escribir y cambiar se separan, toda excepción va declarada, y cada predicado da su veredicto aunque lance |
+| **B23** | El instrumento que responde «¿dónde está el proyecto?» no lo decía | La raíz es un parámetro, la ventana del ROADMAP se contrasta, y el bloque se cruza con STATE y CURRENT |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -1014,6 +1015,100 @@ deuda sin verificar, y sin verificar no era deuda.
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
 
+
+## B23 — El instrumento de la verdad puede equivocarse, y se le ve
+
+**Objetivo cerrado.** El instrumento que responde *«¿dónde está el proyecto y
+qué toca después?»* era el apoyo de B0 a B22. B23 no lo endureció: lo
+**encontró mintiendo**, y en tres dimensiones a la vez.
+
+### Lo que se midió antes de escribir nada
+
+`project_truth.py` no tenía línea de órdenes. `sys.argv` no se leía en ninguna
+parte del fichero, y su raíz venía de `Path(__file__)`. Ejecutado, decía:
+
+```
+$ project_truth.py --raiz /tmp          rc=0, imprime la verdad del REPO REAL
+$ project_truth.py --raiz /no/existe    rc=0, imprime la verdad del REPO REAL
+$ cd /otro/arbol && project_truth.py    rc=0, imprime la verdad del REPO REAL
+```
+
+No era una ergonomía que faltara. Era un instrumento que **afirmaba haber
+medido lo que no medía**, con la autoridad de quien publica la respuesta. Y
+un flag que se ignora en silencio no es una opción: es una afirmación falsa
+sobre lo que se acaba de contar.
+
+### La ventana del ROADMAP: seis contradicciones y un «coherente»
+
+`ROADMAP.md` declaraba, en su sección «Dónde está el proyecto», que esa línea
+«la produce `scripts/project_truth.py`». **No la producía nadie.** La escribía
+a mano, nadie la leía, y por eso el release `9961843` —que no tocó el fichero
+— la dejó dos versiones atrás:
+
+```
+ventanas que publicaba el ROADMAP
+  > `0.32.7.dev0` · tag `v0.32.7` · 3444 tests · 16/16 UAT
+  > Versión activa `0.32.7.dev0` · último tag `v0.32.7` · 3431 tests · 16/16 UAT
+
+la verdad: 0.33.0.dev0 · v0.33.0 · 3465 tests
+veredicto que publicaba el instrumento: coherente = true
+```
+
+Seis contradicciones a la vista. Dos líneas, además, que se contradecían
+**entre sí** —`3444 tests` y `3431 tests`— mientras el fichero era la
+respuesta. Y un tercer hueco de la familia B20-2: el `bloque` se leía y se
+publicaba, y no se cruzaba con nadie, de modo que STATE y CURRENT podían
+concordar entre sí y el ROADMAP decir `B99` sin que nada lo notara.
+
+### Lo que entra
+
+La raíz pasa a ser **parámetro** en los doce lectores, y las constantes de
+módulo desaparecen —su sola presencia es la invitación a leer de la raíz
+equivocada—. Un `set_raiz()` global habría sido más corto y sería el estado
+global mutable que `AGENTS.md` §1.4 prohíbe.
+
+La ventana se **contrasta**, no se regenera: el instrumento sigue con cero
+escrituras, porque uno que escribe el fichero de autoridad sería un problema
+nuevo y peor que el que arregla. Las tres reglas nuevas —ventana contra
+verdad, ventana contra ventana, bloque contra STATE y CURRENT— nombran
+siempre las dos caras, como las que ya había.
+
+Y `test_b14_truth_single_reader.py` **deja de deformar el árbol real**. Estaba
+bloqueado por diseño desde B22, y la razón era el instrumento, no el test: sin
+una raíz por parámetro, cualquier sandbox daba `ilegible` por el motivo
+equivocado. Con la raíz, el sandbox se construye entero —su `.git`, su estado,
+su ventana y un test propio— y las tres deformaciones apuntan allí. **MEDIDO**:
+sha256 de los cuatro ficheros del árbol real antes y después de la corrida,
+idénticos.
+
+### Lo que el harness cazó, y era un hueco de verdad
+
+Seis sondas, seis propiedades, 6/6. La primera corrida dio 5/6, y la sexta no
+cayó por una razón que no era del harness: desactivada la comprobación del
+código de salida de pytest, el verificador leía el **número parcial** de una
+colecta rota y publicaba `coherente: true` con `tests_reales: 2`. Como el
+parcial coincidía con el declarado, no había contradicción `tests:` que
+emitir, y el guard miraba precisamente eso.
+
+**Una aserción que mira la contradicción no ve la publicación.** Ese hueco
+llevaba desde B14: lo peligroso no era que el número se comparara —eso
+producía una contradicción visible— sino que coincidiera y no se notara. La
+aserción se endurece a lo que la propiedad decía: negarse a publicar el
+recuento y decirlo con `ilegible`.
+
+### Lo que este bloque NO cierra, con motivo medido
+
+- **`pipelinek` 0.39.0 no arranca en este entorno** (`INFRASTRUCTURE`, sin
+  `wrapper.sh`). Es el binario, no el repo: los contratos de la receta se
+  ejecutaron directo y están en verde. Backlog
+  `bl-bl-01M3WJ3KCP000387S47TMRXK40`.
+- **El instrumento no lo pide ninguna etapa de la receta.** El único
+  consumidor en producción es el gate de 1.0, que se ejecuta a mano. En CI la
+  red es `test_b0_truth_convergence.py`, que con B23 pasa de estar verde **por
+  la razón equivocada** a estar verde **por la correcta**. No se añade etapa:
+  el SHA-256 de `.pipeline.kts` es un invariante declarado desde WI-110.
+
+---
 
 ## B22 — El árbol de trabajo no puede cambiar bajo los pies de un instrumento
 

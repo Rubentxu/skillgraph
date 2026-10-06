@@ -1,5 +1,75 @@
 
 
+>
+
+> **Bloque 2026-10-06 (B23) — El instrumento de la verdad puede equivocarse, y se le ve.**
+>
+> Versión activa `0.34.0.dev0`; último tag `v0.34.0` (MINOR derivado: la regla pide
+> MINOR desde `v0.33.0`, con 0 breaking y feats y fixes por debajo).
+>
+> **EL INSTRUMENTO QUE RESPONDE «¿DÓNDE ESTÁ EL PROYECTO?» NO TENÍA LÍNEA DE
+> ÓRDENES.** `sys.argv` no se leía en ninguna parte de
+> `scripts/project_truth.py:48`, y su raíz venía de `Path(__file__)`. MEDIDO:
+>
+> ```
+> $ project_truth.py --raiz /tmp          rc=0, imprime la verdad del REPO REAL
+> $ project_truth.py --raiz /no/existe    rc=0, imprime la verdad del REPO REAL
+> $ cd /otro/arbol && project_truth.py    rc=0, imprime la verdad del REPO REAL
+> ```
+>
+> El tercero es el peor de los tres, y no lo había medido nadie: ignorando
+> `--raiz` **no se puede apuntar a ningún otro sitio**. No era una ergonomía
+> que faltara; era un instrumento que afirmaba haber medido lo que no medía.
+>
+> **LA VENTANA DEL ROADMAP DECÍA QUIÉN LA ESCRIBÍA, Y MENTÍA.** `ROADMAP.md:37-39`
+> afirmaba que su sección «Dónde está el proyecto» «la produce
+> `scripts/project_truth.py`». No la producía nadie: se escribía a mano y nadie
+> la leía. MEDIDO: el release `9961843` no tocó el fichero
+> (`git show --stat 9961843 -- ROADMAP.md` vacío) y la ventana se quedó en
+> `v0.32.7` dos versiones atrás, con el instrumento publicando
+> `coherente: true` y **seis contradicciones a la vista**. Dos de ellas eran que
+> el fichero se contradecía **consigo mismo**: `3444 tests` en una línea y
+> `3431 tests` en la siguiente.
+>
+> **EL TERCER HUECO DE LA FAMILIA B20-2.** `bloque` se leía del ROADMAP y se
+> publicaba, y no se cruzaba con nadie. STATE y CURRENT se cruzaban **entre
+> sí**, luego los tres podían estar mal y dar `coherente: true`: el ROADMAP
+> diciendo `B99` mientras los otros dos decían `B22`, y nada que lo notara.
+> El cruce vive en `scripts/project_truth.py:697`, y usa una clave que ya
+> existía.
+>
+> **LO QUE SE CORRIGIÓ, Y CÓMO.** La raíz pasa a ser **parámetro** en los doce
+> lectores y las constantes de módulo **desaparecen** —su sola presencia es la
+> invitación a leer de la raíz equivocada—. La ventana se **contrasta**, no se
+> regenera: el instrumento conserva sus cero escrituras, porque uno que escribe
+> el fichero de autoridad sería un problema nuevo y peor que el que arregla.
+>
+> **Y `test_b14` DEJO DE DEFORMAR EL ÁRBOL REAL**, que era la deuda
+> `bl-bl-01M48JHGJJ000388H523GPE6G0` que B22 dejó con nombre y motivo. Estaba
+> bloqueada por el instrumento, no por el test: sin raíz por parámetro, todo
+> sandbox daba `ilegible` por el motivo equivocado. MEDIDO con sha256 de los
+> cuatro ficheros del árbol real antes y después de su corrida: **idénticos**.
+>
+> **LO QUE EL HARNESS CAZÓ, Y ERA UN HUECO DE VERDAD.** Seis sondas, seis
+> propiedades. La primera corrida dio 5/6, y la sexta no cayó por una razón que
+> no era del harness: desactivada la comprobación del código de salida de
+> pytest, el verificador leía el **número parcial** de una colecta rota y
+> publicaba `coherente: true` con `tests_reales: 2`. Como el parcial coincidía
+> con el declarado, no había contradicción que emitir, y el guard miraba
+> precisamente eso. **Una aserción que mira la contradicción no ve la
+> publicación** — hueco que venía de B14. Ahora exige que el verificador se
+> niegue a publicar el recuento y lo diga con `ilegible`.
+>
+> **LO QUE NO SE CIERRA, CON MOTIVO MEDIDO.** (1) `pipelinek` 0.39.0 no arranca
+> en este entorno (`INFRASTRUCTURE`, nunca escribe `wrapper.sh`); es el
+> binario, no el repo, y los contratos de la receta se ejecutaron directo.
+> (2) El instrumento no lo pide ninguna etapa de la receta; la red en CI es
+> `test_b0_truth_convergence.py`, que con B23 pasa de estar verde por la razón
+> equivocada a estar verde por la correcta. No se añade etapa porque el
+> SHA-256 de `.pipeline.kts` es un invariante desde WI-110. (3) La credencial
+> de runtime real y la persona para el TUI operacional siguen siendo
+> imposibles desde el repositorio.
+
 > **Bloque 2026-10-06 (B22) — La suite no puede cambiar el árbol por debajo de un instrumento.**
 >
 > Versión activa `0.33.0.dev0`; último tag `v0.33.0` (MINOR derivado: `b/f/x/n/d 0/1/0/4/0`).
