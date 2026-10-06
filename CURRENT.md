@@ -2,6 +2,8 @@
 
 > **Bloque 2026-10-06 (B22) — La suite no puede cambiar el árbol por debajo de un instrumento.**
 >
+> Versión activa `0.33.0.dev0`; último tag `v0.33.0` (MINOR derivado: `b/f/x/n/d 0/1/0/4/0`).
+>
 > **NO ES UN OPEN. ES CERO INFORMACIÓN.** `measure_b9_gate_1_0.py` devolvió
 > «Un predicado revanto y el informe NO esta completo» y con eso borró los
 > veredictos de las otras diecinueve propiedades del gate de 1.0. Una sola
