@@ -14,6 +14,46 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.33.0] - 2026-10-06 — El árbol no puede cambiar bajo los pies de un instrumento
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.7`:
+`b/f/x/n/d 0/1/0/4/0`, la regla pide **MINOR -> v0.33.0**. Es la primera
+MINOR desde `v0.17.0`: un `feat`, y el primer bloque de la serie que **cambia
+el comportamiento de un instrumento de gates** en vez de añadirle otro.
+
+No es un OPEN nuevo. Es **cero información**: `measure_b9_gate_1_0.py` devolvió
+«Un predicado revanto y el informe NO esta completo» y con eso borró los
+veredictos de las otras diecinueve propiedades del gate de 1.0. Una sola
+excepción decidía sobre veinte preguntas.
+
+**La cadena, medida.** `tests/test_b14_truth_single_reader.py` deforma
+`src/skillgraph/__init__.py` con `__version__ = "7.7.7"`; el predicado de
+reproducibilidad del gate lee ese fichero real como línea base y exige que el
+contenido siga igual. El sha256 de ese texto es `7da24eaaf72e`, y durante la
+suite completa el fichero tuvo **dos** contenidos —el real en 195 649 lecturas y
+ese en 1 214—.
+
+**El inventario salió de ejecutar.** 25 escrituras que cambian contenido de un
+fichero versionado, en tres ficheros de test. El grep encuentra seis: el séptimo
+—`test_wi82`, que se llama «does not dirty tracked evidence» y declara lo
+contrario de lo que hace— solo apareció al instrumentar.
+
+**Añadido**
+- R1: la sesión no cambia contenido de un versionado sin declaración. Separa
+  **escribir** de **cambiar**, porque cinco escrituras que restauran los mismos
+  bytes son el mecanismo correcto del test que deforma y restaura.
+- R2: cada predicado del gate se ejecuta aislado y su excepción se convierte en
+  su veredicto, `NO_MEASURABLE` con la causa. Antes una excepción borraba el
+  informe entero.
+
+**Conocido**
+- `test_b14` sigue deformando el árbol real: declarado como deuda
+  `bl-bl-01M48JHGJJ000388H523GPE6G0`. El arreglo pide que `project_truth.py`
+  acepte su raíz por parámetro, que es superficie de B0/B14.
+- La receta `pipelinek` no dio veredicto en este entorno: el motor 0.39.0 falla
+  en la etapa 0 con `failureKind: INFRASTRUCTURE`. Los contratos se ejecutaron
+  de forma directa y están en verde.
+
 ## [0.32.7] - 2026-10-05 — Una certificación en rojo no puede decir QUÉ falló
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.6`:
