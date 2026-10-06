@@ -2,9 +2,35 @@
 
 >
 
-> **Bloque 2026-10-06 (B27) — Los conflictos avisan y son consultables.**
+> **Bloque 2026-10-06 (B28) — La autoridad se decide por intención.**
 >
-> Versión activa `0.37.0.dev0`; último tag `v0.37.0`; **3560 tests**.
+> Versión activa `0.37.0.dev0`; último tag `v0.37.0`; **3607 tests**.
+>
+> **LA FILA ACUSABA Y EL CÓDIGO NO TENÍA EL DEFECTO.** Decía que resolver un
+> conflicto «es un ranking global». Medido: no hay ranking —no hay nada—,
+> porque B27 dejó los conflictos consultables y no había forma de decidir. Lo
+> que sí estaba **armado** es la tentación: `AssertionOrigin` ya declara cuatro
+> valores y su docstring dice que **no** son un ranking, y nada dice en qué
+> orden. Ordenarlos es una línea, y el orden depende de la pregunta.
+>
+> Por eso la propiedad medida no es «se elige alguien» sino **«el mismo
+> conflicto, con dos intenciones, elige afirmaciones DISTINTAS»**. Un ranking
+> fijo pasaría cualquier prueba que comprobara que hay ganador.
+>
+> **El guard del agente es un campo, no una posición en la lista**, y está
+> medido por qué: un perfil que pone al agente el primero lo sigue dejando
+> perder. Como última posición, el guard se rompería reordenando una tupla.
+>
+> **La contrasalto encontró un fallo del instrumento, no del código.** La primera
+> versión de P4 usaba el perfil por defecto, donde el humano ya gana por rango:
+> la pregunta contestaba «no» por una razón que no era la que vigilaba, y la
+> sonda del flag a `True` no fue cazada. De ahí que los siete perfiles
+> nombren los **cuatro** orígenes: un origen no listado valía por una
+> prohibición silenciosa. Contrasalto **5/5**, con anclas regex porque
+> `ruff format` desancló las cinco de una pasada.
+>
+> **B27 cerrado en `v0.37.0`**. B27 avisa, no resuelve; B28 resuelve por
+> intención, no borra. Borrar es B29, con ventanas de vigencia.
 >
 > **LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTÓ SER FALSA**, y eso importa
 > más que el resultado. Decía «dos claims incompatibles se pisan»; medido sobre

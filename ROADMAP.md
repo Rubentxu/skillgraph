@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B27** — Dos claims incompatibles se pisan y no hay forma de saberlo · conflict sets consultables y estables, sin overwrite
-> Versión activa `0.37.0.dev0` · último tag `v0.37.0` · 3560 tests · 16/16 UAT
+> Bloque vivo: **B28** — Resolver un conflicto es un ranking global, y la respuesta correcta depende de para qué se pregunta · `AuthorityProfile` por `QueryIntent`, no un ranking único
+> Versión activa `0.37.0.dev0` · último tag `v0.37.0` · 3607 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
@@ -1072,9 +1072,9 @@ como imports. La frontera de diseño que esta serie atraviesa ya tiene dueño.
 
 ### Estado
 
-**B25, B26 y B27 cerrados** (`v0.35.0`, `v0.36.0` y `v0.36.1`). Los otros siete
-siguen en el mapa como fila, sin sección, guard, harness ni criterio de
-aceptación escrito.
+**B25, B26, B27 y B28 cerrados** (`v0.35.0`, `v0.36.0`, `v0.37.0` y pendiente de
+release). Los otros seis siguen en el mapa como fila, sin sección, guard,
+harness ni criterio de aceptación escrito.
 
 **Y LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTO SER FALSA**, lo cual importa
 mas que el resultado. Decía: *«Dos claims incompatibles se pisan y no hay forma
@@ -1106,7 +1106,105 @@ filas coexisten y se pueden leer, en vez de pisarse.
 El orden que queda es el del bundle, con una dependencia que sí es dura:
 **B28 no es ejecutable sin B27**, porque no se puede resolver un conflicto por
 intención de consulta si antes no hay conflicto que consultar. El resto del
-orden puede reordenarlo un gate.
+orden puede reordenarlo un gate. **Esa dependencia está ya satisfecha**: B28
+está cerrado y es lo que convierte los conflict sets de B27 en respuestas.
+
+---
+
+## B28 — La autoridad se decide por intención
+
+**Objetivo cerrado.** Un conflicto deja de ser una lista de afirmaciones que se
+oponen y pasa a ser **una respuesta a una pregunta**, con la explicación de por
+qué una gana y la otra pierde.
+
+### Lo que se midió antes de escribir nada
+
+`scripts/measure_b28_autoridad.py` → **5/5 ABIERTAS**. Y la primera sorpresa
+está en el enunciado:
+
+**La fila acusa a un «ranking global», y MEDIDO no hay ranking: no hay nada.**
+B27 dejó los conflictos consultables y ordenados; lo único que faltaba era
+decidir. La acusación sigue siendo útil, pero como **tentación medida**:
+
+```
+AssertionOrigin = observed | derived-deterministically
+                | agent-inferred | human-asserted
+```
+
+Esos cuatro valores ya están en `core/runtime_types.py`, y su docstring dice
+en sus propias palabras que **no son un ranking** —son «quién afirma». Los
+datos para ordenar están a mano, y el orden depende de la pregunta:
+
+```
+¿qué devolvió producción?        observed > derived-deterministically
+¿qué dependencia está permitida?  human-asserted > derived-deterministically
+```
+
+Por eso la propiedad que se mide **no es «se elige alguien»** sino **«el mismo
+conflicto, con dos intenciones, elige afirmaciones DISTINTAS»**. Un resolver con
+ranking fijo pasaría cualquier prueba que comprobara que hay ganador.
+
+### Lo que entra
+
+`QueryIntent` (los siete valores del «ADT inicial» de 05-SPEC §3, con smart
+constructor), `AuthorityProfile`, `MotivoDescarte`, `Descartada` y
+`Resolution`, con `resolver()` **puro**: sin disco, sin reloj y sin `Storage`.
+Y **`sg knowledge resolve`**, porque una capacidad que no se puede preguntar es
+el mismo defecto que B6 midió en `extraction_method` — un eje al que no
+escribe nadie en `src/`.
+
+### El guard del agente es un campo, no una posición en la lista
+
+La spec (§7) dice que `agent-inferred` «no puede por defecto cerrar conflicto».
+La lectura tentadora es ponerlo el último de la preferencia. **Eso sería un
+guard roto**, por una razón concreta: se rompe **reordenando una lista**, que
+es el cambio más barato que puede hacer quien no sabe lo que hace, y solo en el
+perfil equivocado.
+
+Aquí es un campo explícito (`permitir_inferencia_de_agente`, default `False`),
+y está medido: un perfil que pone al agente **el primero** lo sigue dejando
+perder. El opt-in existe y es auditable, pero lo concede quien escribe la
+política, no el módulo.
+
+### La contrasalto encontró un fallo del INSTRUMENTO, y por eso los perfiles nombran los cuatro orígenes
+
+La primera versión de P4 usaba el perfil por defecto de `actual_behavior`,
+donde `human-asserted` está por encima de `agent-inferred`. Ahí el agente
+perdía **por rango** aunque el guard estuviera borrado, luego la pregunta
+contestaba «no» por una razón que **no era la que vigilaba** — y la sonda M2
+(flag del agente a `True`) **no fue cazada**.
+
+Un origen **no listado** valía por una prohibición silenciosa. Los siete
+perfiles por defecto nombran ahora los **cuatro**, de modo que P4 —que es el
+guard del bloque— no pueda pasar aunque el guard se borrara. Y poner al
+agente el último **no es lo que lo prohíbe**: lo prohíbe el flag, y sigue
+valiendo aunque el orden cambiara.
+
+**Instrumento:** 5/5 → **0/5**. **Contrasalto:** **5/5 sondas cazadas**,
+`rc=0` al restaurar. Las anclas son **regex**, no texto literal, porque
+`ruff format` desancló las cinco de una pasada — y el guard de sintaxis las
+clasificó `ROTA` en vez de fingir que las cazó, que es lo que tiene que hacer.
+
+### Lo que este bloque NO hace
+
+1. **No borra.** Resolver para una intención no elimina afirmaciones: las dos
+   siguen consultables. Lo que las borra es **B29**, con ventanas de vigencia.
+2. **No persiste** la resolución, y **no carga perfiles de YAML**. Que quien
+   llama pueda traer el suyo es el punto de extensión, y una carga declarativa
+   es trabajo futuro — declararla como hecho sería documentar un hueco.
+3. **No elige entre perfiles.** `resolver` recibe una intención; quién usa qué
+   política es de quien pregunta, y es la misma línea que dice que no hay un
+   ranking global.
+
+### Una discrepancia de la spec, resuelta y said
+
+`05-SPEC` no es coherente consigo misma: **§3** lista `intended_behavior` y
+**§2 ejemplo B** usa `queryIntent: intended_architecture`. Se sigue §3 por dos
+razones: es la lista normativa y explícitamente cerrada, y `AGENTS.md` §2.1
+exige ADR para crecer un `Literal` — y el ADR que cubre esto (ADR-0028) no lo
+pide. Crecerlo sería inventar un valor donde más se lee como verdad.
+
+---
 
 ### Lo que esta línea NO sustituye
 
