@@ -201,17 +201,28 @@ def cmd_knowledge_resolve(args: argparse.Namespace) -> int:
             tenant_id=tenant_id,
             project_id=project_id,
             subject_entity_id=args.subject,
+            revision=args.at_revision,
         )
         if not conflictos:
+            # B29: el mensaje dice DE QUE REVISION. Un «sin conflicto» a secas
+            # para `--at-revision revA` es indistinguible de la respuesta de
+            # HEAD, y son dos preguntas distintas: en revA no se contradice
+            # nadie porque el hecho viejo era el unico cierto, no porque el
+            # sistema no sepa.
+            cuando = args.at_revision if args.at_revision is not None else "HEAD"
             print(
-                f"{args.subject}: sin conflicto. Nadie se contradice, y no hay nada que resolver."
+                f"{args.subject}: sin conflicto en {cuando}. "
+                "Nadie se contradice, y no hay nada que resolver."
             )
             return EXIT_OK
 
         # Cada conflicto se resuelve CON SU PROPIA respuesta. Un sujeto con dos
         # predicados que se contradicen tiene dos respuestas, y escolher una
         # seria el mismo error de authority por el otro lado.
-        resoluciones = [resolver(conflicto, intencion=args.intent) for conflicto in conflictos]
+        resoluciones = [
+            resolver(conflicto, intencion=args.intent, revision=args.at_revision)
+            for conflicto in conflictos
+        ]
 
     if args.json:
         print(
@@ -242,6 +253,7 @@ def _como_dict(r: Resolution) -> dict[str, object]:
         "predicate": r.conflicto.predicate,
         "query_intent": r.intencion,
         "profile": r.perfil,
+        "revision": r.revision,
         "winner": (
             {
                 "claim_id": r.ganadora.claim_id,
@@ -272,9 +284,13 @@ def _render(r: Resolution) -> list[str]:
     otra; un `json.dumps` lo esconde detras de una coma. `--json` lo da
     cuando lo que se quiere es el dato, no la lectura.
     """
+    # B29: la linea dice DE QUE REVISION se responde. Sin ella, un «gana
+    # NADIE» no se puede distinguir de una pregunta hecha en el instante
+    # equivocado — y esa es exactamente la confusion que el bloque cierra.
+    cuando = r.revision if r.revision is not None else "HEAD"
     out = [
         f"conflicto: {r.conflicto.subject_entity_id} {r.conflicto.predicate}",
-        f"  pregunta:   {r.intencion}  (politica: {r.perfil})",
+        f"  pregunta:   {r.intencion}  (politica: {r.perfil}, revision: {cuando})",
     ]
     if r.ganadora is not None:
         out.append(f"  gana:       {r.ganadora.claim_id} = {r.ganadora.object_literal!r}")

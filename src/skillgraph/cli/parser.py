@@ -539,5 +539,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Salida en JSON en vez de la lectura humana.",
     )
+    krz.add_argument(
+        "--at-revision",
+        default=None,
+        help=(
+            "Pregunta POR UNA REVISION en vez de por HEAD (B29). Sin este "
+            "flag solo se ve lo que no ha caducado, que es una pregunta "
+            "distinta de la que hace un mes."
+        ),
+    )
 
     return p
