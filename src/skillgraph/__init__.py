@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.38.0"  # B28: 0 breaking, 2 feat, 2 fix, 3 otros => MINOR, derivado con scripts/derive_semver.py sobre el tramo v0.37.0..HEAD. El MINOR viene de los dos `feat` del bloque: la politica de autoridad, y el comando que la pregunta. **POR QUE EL SEMVER PUERO Y NO `.dev0`:** este commit es el que recibe la etiqueta `v0.38.0`, y la version activa tiene que DESCRIBIR ese commit. El commit de gobernanza que va despues la devuelve a `.dev0`, porque ahi HEAD ya esta por encima de la etiqueta. Es el caso 2 de `test_version_matches_git_tag`, y es la quinta vez que esta cifra se descuadra en la serie.
+__version__ = "0.38.0.dev0"  # B28: 0 breaking, 2 feat, 2 fix, 3 otros => MINOR, derivado con scripts/derive_semver.py sobre el tramo v0.37.0..HEAD. **POR QUE `.dev0` Y NO EL SEMVER PUERO:** el commit de gobernanza del release esta UN COMMIT POR ENCIMA de la etiqueta `v0.38.0`, porque se hizo DESPUES de crearla. Es el caso 2 de `test_version_matches_git_tag`. **ES LA QUINTA VEZ QUE ESTO SE DESCUADRA EN LA SERIE**, y las cinco son la misma clase de error: un numero que describe un instante y se lee en otro. En B24 fue la ventana del ROADMAP, en B25 `tests.package_version`, y en B26, B27 y B28 el caso entre «HEAD esta en la etiqueta» y «HEAD esta por encima». La version activa describe el ARBOL, no la etiqueta: el release queda, el arbol sigue.
 
 from skillgraph.core.errors import (
     IdentityConflictError,

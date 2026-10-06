@@ -4,7 +4,7 @@
 
 > **Bloque 2026-10-06 (B28) — La autoridad se decide por intención.**
 >
-> Versión activa `0.38.0`; último tag `v0.38.0`; **3608 tests**.
+> Versión activa `0.38.0.dev0`; último tag `v0.38.0`; **3608 tests**.
 >
 > **LA FILA ACUSABA Y EL CÓDIGO NO TENÍA EL DEFECTO.** Decía que resolver un
 > conflicto «es un ranking global». Medido: no hay ranking —no hay nada—,

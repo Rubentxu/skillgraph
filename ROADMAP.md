@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B28** — Resolver un conflicto es un ranking global, y la respuesta correcta depende de para qué se pregunta · `AuthorityProfile` por `QueryIntent`, no un ranking único
-> Versión activa `0.38.0` · último tag `v0.38.0` · 3608 tests · 16/16 UAT
+> Versión activa `0.38.0.dev0` · último tag `v0.38.0` · 3608 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
