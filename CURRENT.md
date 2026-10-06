@@ -11,7 +11,11 @@
 > deforma `src/skillgraph/__init__.py` con `__version__ = "7.7.7"`. El
 > predicado de reproducibilidad del gate lee ese fichero **real** como línea
 > base, construye el paquete y exige que el contenido siga igual. Su premisa
-> es que nadie lo toca.
+> es que nadie lo toca: el aserto está en
+> `scripts/measure_b9_gate_1_0.py:1595::_distribution_reproducible`, y el punto donde un predicado puede
+> reventar sin que nadie lo contenga es `scripts/measure_b9_gate_1_0.py:1830::evaluar`
+> —antes de este bloque esa línea era `predicado()` a pelo, y la excepción
+> subía hasta `main()` y borraba el informe entero.
 >
 > **Y LA PRUEBA DE QUE EL CONTENIDO ERA ESE, NO UNA SOSPECHA.** El sha256 de
 > `__version__ = "7.7.7"` es `7da24eaaf72e`. Durante la corrida completa ese
@@ -34,9 +38,10 @@
 > lo único que permite medir.
 >
 > **R2.** Cada predicado se ejecuta aislado y su excepción se convierte en su
-> veredicto: `NO_MEASURABLE` con la clase y el mensaje. Y `NO_MEASURABLE` y no
-> `OPEN` porque `OPEN` es una afirmación sobre el **proyecto**, y un predicado
-> que revienta no ha medido nada. `listo_para_1_0` sigue exigiendo las veinte en
+> veredicto: `NO_MEASURABLE` con la clase y el mensaje. El aislamiento está en
+> `scripts/measure_b9_gate_1_0.py:1771::_aisla`. Y `NO_MEASURABLE` y no `OPEN`
+> porque `OPEN` es una afirmación sobre el **proyecto**, y un predicado que
+> revienta no ha medido nada. `listo_para_1_0` sigue exigiendo las veinte en
 > `PASS`: el 1.0 no se puede declarar, y eso es lo correcto.
 >
 > **LO QUE NO SE CIERRA, Y POR QUÉ NO ERA UN ARREGLO DE TEST.** `test_b14`
