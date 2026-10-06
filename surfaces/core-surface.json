@@ -2,6 +2,7 @@
   "superficie": [
     "ASSERTION_ORIGINS",
     "AssertionOrigin",
+    "AuthorityProfileInvalido",
     "CLAIM_PREDICATES",
     "ClaimPredicate",
     "ContextRecipe",
@@ -35,6 +36,7 @@
     "OverflowStrategy",
     "PROMOTION_STATUSES",
     "ParseError",
+    "PerfilIncoherenteError",
     "PredicadoDePack",
     "PromotionStatus",
     "RecipeNotFoundError",
@@ -59,6 +61,7 @@
     "UnknownEntityError",
     "UnknownEnvelopeVersionError",
     "UnknownKindError",
+    "UnknownQueryIntentError",
     "UnknownSourceError",
     "ValidationError",
     "is_terminal_node_state",
