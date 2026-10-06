@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B24** — La ruta de certificación nunca se ejecutaba, y sus instrucciones apuntaban a un fichero que no existe
-> Versión activa `0.34.1.dev0` · último tag `v0.34.1` · 3489 tests · 16/16 UAT
+> Bloque vivo: **B25** — Un hecho entre dos entidades no se puede expresar: `Claim.object_literal` solo admite literales, y los predicados son un conjunto cerrado
+> Versión activa `0.34.1.dev0` · último tag `v0.34.1` · 3509 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 

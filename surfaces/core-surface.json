@@ -34,6 +34,7 @@
     "OverflowStrategy",
     "PROMOTION_STATUSES",
     "ParseError",
+    "PredicadoDePack",
     "PromotionStatus",
     "RecipeNotFoundError",
     "RefreshFailedError",
@@ -59,7 +60,8 @@
     "UnknownSourceError",
     "ValidationError",
     "is_terminal_node_state",
-    "is_terminal_run_state"
+    "is_terminal_run_state",
+    "predicado_de_pack"
   ],
   "version": "sggw_superficie/v1"
 }
