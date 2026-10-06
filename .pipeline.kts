@@ -145,12 +145,32 @@ pipeline {
             // AGENTS.md lo describe porque sin `--rerun` el motor
             // reutiliza el veredicto previo. Aqui se mide.
             //
-            // POR QUE VERIFICA EL RUN ANTERIOR: la receta no puede
-            // verificar el suyo, porque cuando esta etapa corre el run en
-            // curso aun no tiene `RunFinished`. El motor resuelve la
-            // gallina por si solo: el `RunFinished` mas reciente es, durante
-            // un run, el run anterior. El mismo script con `--run-id` sirve
-            // para la certificacion puntual.
+            // POR QUE VERIFICA SU PROPIO RUN, Y NO EL ANTERIOR. B24:
+            // antes verificaba el ultimo run TERMINADO, y suena sensato
+            // porque cuando esta etapa corre el run en curso aun no tiene
+            // `RunFinished`. Es un TRINQUETE: si el anterior fallo de
+            // verdad, este se juzga con ese fallo y falla; y el siguiente se
+            // juzga con ESTE, que termino en `failure` porque su etapa
+            // `evidence` fallo. MEDIDO en este repo: tras el fallo real de
+            // `v0.34.0` —tres reds de estado— cuatro runs seguidos con la
+            // suite en verde y las ocho etapas de codigo en `success`
+            // terminaron en `failure`, todos aqui. La exculpacion minima de
+            // WI-110 no lo arregla: perdona el `StepFailed` de
+            // `evidence/sh-0`, nunca el VEREDICTO del run.
+            //
+            // Ahora el verificador elige el run EN CURSO —el suyo— y mide lo
+            // que ya existe: sus `StepStarted`, sus `EchoOutputCaptured` y
+            // sus `StepFailed`. El veredicto final no se verifica aqui porque
+            // todavia no se ha emitido, y no se finge que si: esa
+            // certificacion puntual es el mismo script con `--run-id`.
+            //
+            // MEDIDO al cambiarlo: `informes()` devolvia 5 informes para 2
+            // runs, porque un `defaultdict` usado como conjunto no crea la
+            // clave con `in` y el `continue` por payload vacio pasaba antes de
+            // registrarla. Un run cuyo primer evento va vacio se anadia una
+            // vez POR CADA evento suyo, y la eleccion se hace sobre esa lista.
+            // Contasalto de 4 sondas, 4/4 cazadas
+            // (`.pipelinek/b24_trinquete_mutate.py`).
             sh("cd " + repo + " && uv run python scripts/check_pipeline_receipt.py --db .pipelinek/db.sqlite --control-root .pipelinek/control 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
         }
     }
