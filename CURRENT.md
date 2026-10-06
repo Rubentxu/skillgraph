@@ -4,7 +4,7 @@
 
 > **Bloque 2026-10-06 (B24) — La ruta de certificación nunca se ejecutaba.**
 >
-> Versión activa `0.34.0.dev0`; último tag `v0.34.0`.
+> Versión activa `0.34.1.dev0`; último tag `v0.34.1` (SemVer derivado: `0 feat, 0 breaking, 3 fix, 2 test, 2 chore` → PATCH, `scripts/derive_semver.py`).
 >
 > **MEDIDO AL ABRIR: EL MÓDULO DECLARABA OCHO FRONTERAS Y SUS TRES TESTS
 > TOCABAN TRES.** `tests/test_uat_real_provider.py` promete
