@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B25** — Un hecho entre dos entidades no se puede expresar: `Claim.object_literal` solo admite literales, y los predicados son un conjunto cerrado
-> Versión activa `0.35.0.dev0` · último tag `v0.35.0` · 3514 tests · 16/16 UAT
+> Bloque vivo: **B26** — Una herramienta externa no tiene forma de aportar conocimiento sin escribir en el store · `Observation Envelope` versionado, normalizers puros e ingesta idempotente
+> Versión activa `0.35.0.dev0` · último tag `v0.35.0` · 3537 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 

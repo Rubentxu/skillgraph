@@ -2,18 +2,26 @@
 
 >
 
-> **Bloque 2026-10-06 (B25) — Un hecho entre dos entidades no se puede expresar.**
+> **Bloque 2026-10-06 (B26) — Una herramienta externa aporta conocimiento sin
+> escribir en el store.**
 >
-> Versión activa `0.35.0.dev0`; último tag `v0.35.0`; **3514 tests**.
+> Versión activa `0.35.0.dev0`; último tag `v0.35.0`; **3537 tests**.
 >
-> `EntityRef` es un TIPO, no una etiqueta: con `object_literal` anotado `Any`, una
-> etiqueta dentro del JSON colisionaría con un literal legítimo. La invariante
-> «exactamente uno» la sostienen Python y el CHECK de la tabla con el **mismo XOR**.
-> `CLAIM_PREDICATES` sigue en siete: un pack añade un predicado con namespace
-> **sin tocar el núcleo**, que es literalmente lo que promete la fila del roadmap.
-> Medido con `scripts/measure_b25_relaciones.py`: 4/4 → **2/4**, y las dos que
-> quedan abiertas son a propósito (el CHECK del `predicate` exigiría reconstruir la
-> tabla; la superficie de aportación del pack es B26).
+> `ObservationEnvelope` versionado, `normalizar` **puro** e `ingerir` idempotente
+> por contenido. `observed_at` **entra** en el envelope, y eso es lo que hace
+> posible la pureza: si el normalizador leyera el reloj, dos normalizaciones darían
+> `checked_at_revision` distintas, el `claim_id` saldría distinto —porque
+> `make_claim_id` lo incluye en la semilla— y la idempotencia **se rompería sola**,
+> sin que nada lo indicara.
+>
+> **El bloque no empezó por una idea: empezó por un bug.** B25 metió una segunda
+> forma de objeto en `Claim`, y la promoción —que serializa y deserializa **a
+> mano**— se quedó con la de antes. Medido sobre una base real: un claim cuyo
+> objeto es una entidad **no se podía promover**, y el fallo salía en el proyecto
+> **destino**, que es el que nadie mira. El arreglo no fue «añadir el campo al
+> dict»: `_claim_to_payload` deriva ahora el payload de `dataclasses.asdict`, de
+> modo que un campo nuevo viaja solo. Medido con `scripts/measure_b26_ingesta.py`:
+> 5/5 → **0/5**. Contrasalto **5/5**.
 >
 > **B25 cerrado en `v0.35.0`** (SemVer derivado: `0 breaking, 1 feat, 1 fix, 3 otros`
 > → MINOR, `scripts/derive_semver.py`). **B24 cerrado en `v0.34.1`**. La ruta de certificación se ejecuta
