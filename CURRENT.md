@@ -5,7 +5,7 @@
 > **Bloque 2026-10-06 (B26) — Una herramienta externa aporta conocimiento sin
 > escribir en el store.**
 >
-> Versión activa `0.35.0.dev0`; último tag `v0.35.0`; **3537 tests**.
+> Versión activa `0.36.0`; último tag `v0.36.0`; **3537 tests**.
 >
 > `ObservationEnvelope` versionado, `normalizar` **puro** e `ingerir` idempotente
 > por contenido. `observed_at` **entra** en el envelope, y eso es lo que hace

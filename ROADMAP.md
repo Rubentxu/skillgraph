@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B26** — Una herramienta externa no tiene forma de aportar conocimiento sin escribir en el store · `Observation Envelope` versionado, normalizers puros e ingesta idempotente
-> Versión activa `0.35.0.dev0` · último tag `v0.35.0` · 3537 tests · 16/16 UAT
+> Versión activa `0.36.0` · último tag `v0.36.0` · 3537 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
