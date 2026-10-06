@@ -1525,6 +1525,7 @@ release:
   # mantiene: tests/test_state_release_integrity.py
   releases:
     - tag: v0.34.1
+      sha: 0876cc93ebccd1204424b3c702a9db499ce07a56
       fecha: 2026-10-06
       semver_bump: PATCH
       package_version: 0.34.1.dev0
