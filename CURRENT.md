@@ -2,35 +2,58 @@
 
 >
 
-> **Bloque 2026-10-06 (B28) — La autoridad se decide por intención.**
+> **Bloque 2026-10-06 (B29) — Un cambio en el tiempo deja de leerse como una contradicción.**
 >
-> Versión activa `0.38.0.dev0`; último tag `v0.38.0`; **3608 tests**.
+> Versión activa `0.39.0.dev0`; último tag `v0.39.0`; **3645 tests**.
 >
-> **LA FILA ACUSABA Y EL CÓDIGO NO TENÍA EL DEFECTO.** Decía que resolver un
-> conflicto «es un ranking global». Medido: no hay ranking —no hay nada—,
-> porque B27 dejó los conflictos consultables y no había forma de decidir. Lo
-> que sí estaba **armado** es la tentación: `AssertionOrigin` ya declara cuatro
-> valores y su docstring dice que **no** son un ranking, y nada dice en qué
-> orden. Ordenarlos es una línea, y el orden depende de la pregunta.
+> **LA FILA EXAGERABA EN SU PRIMERA MITAD.** Decía que no se puede preguntar
+> qué se sabía en una revisión, y `checked_at_revision` está en cada claim desde
+> antes de esta serie: lo que no había era la **consulta**.
 >
-> Por eso la propiedad medida no es «se elige alguien» sino **«el mismo
-> conflicto, con dos intenciones, elige afirmaciones DISTINTAS»**. Un ranking
-> fijo pasaría cualquier prueba que comprobara que hay ganador.
+> La mitad grave es la otra, y se midió antes de escribir nada:
 >
-> **El guard del agente es un campo, no una posición en la lista**, y está
-> medido por qué: un perfil que pone al agente el primero lo sigue dejando
-> perder. Como última posición, el guard se rompería reordenando una tupla.
+> ```
+> filas en claims:   c-A "psycopg" @revA    c-B "sqlite3" @revB
+> conflicts_for  ->  1 conflicto: [c-A, c-B]
+> resolver       ->  gana NADIE
+> ```
 >
-> **La contrasalto encontró un fallo del instrumento, no del código.** La primera
-> versión de P4 usaba el perfil por defecto, donde el humano ya gana por rango:
-> la pregunta contestaba «no» por una razón que no era la que vigilaba, y la
-> sonda del flag a `True` no fue cazada. De ahí que los siete perfiles
-> nombren los **cuatro** orígenes: un origen no listado valía por una
-> prohibición silenciosa. Contrasalto **5/5**, con anclas regex porque
-> `ruff format` desancló las cinco de una pasada.
+> **El sistema responde «nadie gana» a algo que tiene respuesta definitiva en
+> cada instante**, porque `conflicts_for` compara valores sin mirar el tiempo.
 >
-> **B27 cerrado en `v0.37.0`**. B27 avisa, no resuelve; B28 resuelve por
-> intención, no borra. Borrar es B29, con ventanas de vigencia.
+> **El orden de las revisiones es una tabla, y no es git.** Los SHAs se
+> comparan lexicográficamente y eso es arbitrario: `revision_registro(seq)`
+> da el **orden en que este store aprendió** de ellas. La ascendencia real de
+> commits es `GitHistory`, que es B32, y el nombre lo declara para que nadie lo
+> lea como más.
+>
+> **La ventana es `[desde, hasta)`**, y no es una elección de gusto: el gate de
+> `06-SPEC` §9 dice `at(B) → calls C` y no las dos.
+>
+> **Tres condiciones de la supersesión que nadie había escrito, y que
+> aparecieron al ejecutar la suite de B25–B28 sobre el código ya
+> implementado**: la consulta elegía «la vigente más reciente» sin mirar el
+> **orden** (reingerir caducía el propio claim — idempotencia de B26), sin
+> mirar el **valor** (el comentario decía «y el valor es otro» y el SQL no lo
+> miraba — rompía el conflict set estable de B27) y cerraba solo la más
+> reciente, dejando abiertas las anteriores de esa fuente.
+>
+> **La contrasalto fue la primera multi-fichero**, porque las sondas de
+> existencia tienen que renombrar el identificador de punta a punta: borrar la
+> columna hace reventar el mapper, y eso es una sonda cazada por un crash, no
+> por la propiedad.
+>
+> **Y M3 salió INOCUA la primera vez**, que es el hallazgo más útil del bloque:
+> apuntaba al método interno de `knowledge_repository.py`, pero
+> `Storage.claims_at_revision` lo hereda de `KnowledgeDelegations`. Renombrar el
+> interno dejó el público intacto y la pregunta siguió cerrada.
+>
+> Detalle completo en `ROADMAP.md` §B29 y en la entrada `0.39.0` del
+> `CHANGELOG.md`.
+>
+> **B28 cerrado en `v0.38.0`**. B28 resuelve por intención; B29 le da el tiempo.
+> Un ranking sin eje temporal contesta «quién gana» a algo que tiene respuesta
+> distinta en cada instante.
 >
 > **LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTÓ SER FALSA**, y eso importa
 > más que el resultado. Decía «dos claims incompatibles se pisan»; medido sobre

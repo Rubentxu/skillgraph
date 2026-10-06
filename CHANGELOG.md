@@ -14,6 +14,149 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.39.0] - 2026-10-06 — Un cambio en el tiempo deja de leerse como una contradicción
+
+SemVer **derivado** desde `v0.38.0`: `0 breaking · 2 feat · 1 fix · 5 otros`
+(`git log v0.38.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.39.0**.
+
+## La fila exagera en su primera mitad, y la segunda se puede medir
+
+Decía *«No se puede preguntar qué se sabía en una revisión, ni cómo fue
+reemplazado»*. Medido antes de escribir nada, con
+`scripts/measure_b29_vigencia.py` → **5/5 ABIERTAS**, y lo primero que hay que
+decir es que **la primera mitad es falsa**:
+
+`checked_at_revision` está en cada claim desde antes de esta serie. Lo que no
+había era la **consulta**, y esa diferencia —«el dato está» frente a «se puede
+preguntar»— es la que separa este bloque de una fila.
+
+La mitad grave es la otra, y se mide:
+
+```
+filas en claims:   c-A "psycopg" @revA    c-B "sqlite3" @revB
+conflicts_for  ->  1 conflicto: [c-A, c-B]
+resolver       ->  gana NADIE
+```
+
+**El sistema responde «nadie gana» a algo que tiene respuesta definitiva en cada
+instante.** En `revA` era `psycopg`; en `revB` es `sqlite3`. Las dos
+afirmaciones están, con su revisión, y no sabe. La causa es precisa:
+`conflicts_for` compara valores **sin mirar el tiempo**, así que un hecho que
+**cambió** se lee igual que uno que se **contradice**.
+
+## El orden de las revisiones: `revision_registro`
+
+Las revisiones reales son SHAs, y compararlos **es lexicográfico y arbitrario**
+(`rev10 < rev9`). Se introduce `revision_registro(seq, revision)`, donde `seq`
+es **el orden en que ESTE store aprendió de esas revisiones**.
+
+No es ascendencia de git — eso es `GitHistory`, que es B32 — y el nombre lo
+declara para que nadie lo lea como más de lo que es.
+
+## La ventana es `[desde, hasta)`, y el gate lo dice
+
+No es una elección de gusto. El gate de `06-SPEC` §9:
+
+```
+commit A: A -> calls B        commit B: A -> calls C
+at(A) -> calls B             at(B)  -> calls C
+```
+
+En `revB` la respuesta es `calls C`, y **no las dos**. Con el extremo superior
+inclusivo, `at(B)` devolvería las dos — media mitad de un conflicto. La primera
+versión del bloque hizo la ventana cerrada por los dos lados, y por eso
+`claims_at_revision(revB)` daba `['c-A', 'c-B']`.
+
+## La asimetría de los `NULL`, interpretada en un solo sitio
+
+| columna | `NULL` significa |
+|---|---|
+| `valid_from_revision` | «desde `checked_at_revision`» |
+| `valid_until_revision` | «todavía vigente» |
+
+`valid_from` en `NULL` es «desde que lo vimos», no «desde el principio de todo»,
+que solo es cierto para el primer hecho de una cadena. Y `valid_until` en
+`NULL` es «todavía vigente», que es lo que hace que un hecho sin reemplazo siga
+compitiendo en HEAD.
+
+`valid_from_revision` se escribe **tal cual lo declara el llamante**. Rellenarlo
+con `checked_at_revision` rompía la ida y vuelta `get_claim(...) == Claim(...)`,
+que es un contrato de B25: el store estaba guardando un campo que nadie había
+declarado.
+
+## Tres condiciones de la supersesión que nadie había escrito, y que aparecieron al ejecutar
+
+Ejecutar la suite de B25–B28 **sobre el bloque ya implementado** dejó dos tests
+rojos que este bloque había roto. Los dos tienen la misma causa, y la causa es
+que la consulta elegía «la vigente más reciente de la misma fuente» **sin mirar
+el orden ni el valor**:
+
+1. **Orden.** Reingerir el mismo envelope **cerraba la ventana del propio
+   claim**, rompiendo la idempotencia de la ingesta de B26.
+2. **Valor.** El comentario del propio bloque decía «y el valor es otro» y el
+   SQL **no lo miraba**. Reingerir la misma afirmación cerraba la anterior, y
+   la ventana dependía del orden de ingesta —rompiendo la propiedad de B27 de
+   que el conflict set no dependa del orden.
+3. **Alcance.** Se cerraba solo la más reciente y las anteriores de esa fuente
+   quedaban abiertas, luego «cuál era la más reciente» dependía de cuál se
+   guardara primero.
+
+Ahora se cierran **todas** las afirmaciones abiertas de esa fuente que digan
+otro valor —una fuente no sostiene dos cosas a la vez—, mientras que
+`supersedes_claim_id` sigue siendo **singular** y apunta a la más reciente: la
+cadena es una línea, y lo que se cierra es una ventana.
+
+## Lo que este bloque NO hace
+
+1. **No borra.** El claim viejo se queda, con su ventana cerrada.
+2. **No añade `GitHistory`** ni inventa el orden entre revisiones de dos
+   almacenes distintos. B32 es quien trae la ascendencia real.
+3. **No reabre B27.** Misma fuente, misma revisión y otro valor **siguen
+   avisando**: eso es una discrepancia de verdad, no un cambio en el tiempo.
+4. **No supersede entre fuentes.** `06-SPEC` §2 habla de *source family*, y dos
+   fuentes son dos familias: no se sabe cuál cambió de opinión.
+
+## El contrasalto, y las dos sondas que Measure mal
+
+**Instrumento:** 5/5 → **0/5**. **Contrasalto:** **5/5 sondas cazadas**,
+`rc=0` al restaurar, y **verificado después de `ruff format`** —que es lo que
+desancló las cinco sondas de B28 en una sola pasada.
+
+Dos cosas del harness que los anteriores no tenían, y las dos salieron de que
+la sonda **no era la sonda**:
+
+- **Las sondas de existencia son multi-fichero.** M1 y M2 preguntan si el ADT
+  declara la ventana y si la tabla tiene la columna de supersesión. La sonda
+  honesta es **renombrar el identificador de punta a punta** —campo del ADT,
+  columna, `ALTER TABLE`, mapper, `INSERT`— para que el árbol siga cargando y
+  las otras cuatro preguntas sigan midiendo. Borrar la columna hace reventar el
+  mapper: una sonda «cazada» por un crash, que no es la propiedad rota sino el
+  árbol roto.
+- **M3 resultó INOCUA, y el motivo es el hallazgo más útil del bloque.** Apuntaba
+  a `knowledge_repository.py`, pero `Storage.claims_at_revision` lo hereda de
+  `KnowledgeDelegations`. Lo que se renombró fue el método **interno**; el
+  público quedó intacto y la pregunta siguió cerrada —la lectura que miente en
+  verde. MEDIDO, no supuesto:
+  `getattr(Storage, 'claims_at_revision').__module__`.
+
+Y M4 y M5 tocan el mismo `if` y **no son intercambiables**: M4 rompe la primera
+mitad del contrasalto y abre P4; M5 deja HEAD **intacto** y abre P5 y **no** P4.
+Un arreglo que comprase «cero conflictos» apagando el detector pasaría P4 en
+verde.
+
+## Un test que falló al escribirlo, con razón
+
+`test_una_revision_ANTERIOR_no_supersede_a_una_posterior` afirmaba que en `rc3`
+las dos afirmaciones de `false` coexistían. En el orden inverso de ingesta **no
+es cierto**: ahí `rc3` ocupa la posición 1 del store y la otra todavía no se ha
+aprendido.
+
+No es un defecto. Es la **consecuencia declarada** de que `seq` sea el orden en
+que el store aprendió, y fingir que `rc3` es siempre la posición 2 sería
+inventarlo. Lo que sí es independiente del orden —y es lo que el test mide ahora—
+es cuántas ventanas siguen abiertas al llegar el cambio.
+
 ## [0.38.0] - 2026-10-06 — La autoridad se decide por intención, no hay un ranking global
 
 SemVer **derivado** desde `v0.37.0`: `0 breaking · 2 feat · 2 fix · 3 otros`
