@@ -1072,12 +1072,23 @@ como imports. La frontera de diseño que esta serie atraviesa ya tiene dueño.
 
 ### Estado
 
-**Ninguno empezado.** Los diez están en el mapa como fila; ninguno tiene sección,
-guard, harness ni criterio de aceptación escrito. El orden es el del bundle, con
-una dependencia que sí es dura y que el propio orden respeta: **B28 no es
-ejecutable sin B27**, porque no se puede resolver un conflicto por intención de
-consulta si antes no hay conflicto que consultar. El resto del orden es el que
-propone el bundle, y los gates pueden reordenarlo.
+**B25 y B26 cerrados y publicados** (`v0.35.0` y `v0.36.0`). Los otros ocho
+siguen en el mapa como fila, sin sección, guard, harness ni criterio de
+aceptación escrito.
+
+**LO QUE B26 DEJO ABIERTO PARA B27, DICHO EN SU PROPIO RECIBO.** La ingesta de
+un envelope **no borra historia**: si una herramienta cambia lo que dice sin
+cambiar de versión, quedan **dos** afirmaciones, y las dos son válidas porque
+las dos tienen fuente. Eso es exactamente el caso del enunciado de B27 —«dos
+claims incompatibles se pisan y no hay forma de saberlo»— y B26 lo hace
+**consultable** antes de que exista forma de resolverlo: el `claim_id` es
+determinista sobre `(subject, predicate, source, revision)`, así que las dos
+filas coexisten y se pueden leer, en vez de pisarse.
+
+El orden que queda es el del bundle, con una dependencia que sí es dura:
+**B28 no es ejecutable sin B27**, porque no se puede resolver un conflicto por
+intención de consulta si antes no hay conflicto que consultar. El resto del
+orden puede reordenarlo un gate.
 
 ### Lo que esta línea NO sustituye
 
