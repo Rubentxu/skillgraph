@@ -21,6 +21,35 @@ No «que el YAML tenga una clave repetida» —eso lo hace el parser— sino que
 **el verificador no pueda decir coherente cuando el estado no lo es**, y que
 diga POR QUE. Los cuatro conjuntos son disjuntos y cada uno declara en su
 docstring que es lo UNICO que mide, para que ninguno tape a otro.
+
+LA DEFORMACION, Y POR QUE B23 LA MUDO DE SITIO (B23)
+----------------------------------------------------
+Hasta B22 este fichero deformaba el ARBOL REAL: escribia `__version__ =
+"7.7.7"` en `src/skillgraph/__init__.py`, escribia en `STATE.yaml` y BORRABA
+`CURRENT.md`. MEDIDO por que era peligroso y no por que se viera: durante la
+suite completa ese `__init__.py` tuvo DOS contenidos —el real en 195 649
+lecturas y el inyectado en 1 214— y el predicado de reproducibilidad del gate
+de 1.0 lo leia como linea base. Perdio el informe entero de veinte
+propiedades.
+
+Bloqueado por diseno, porque `project_truth.py` derivaba su RAIZ de `__file__`
+y ningun sandbox daba una respuesta de verdad. MEDIDO entonces: con los
+cuatro ficheros que el script lee, la colecta sale `rc=5` y el verificador
+responde `ilegible` POR EL MOTIVO EQUIVOCADO; copiando el arbol entero salen
+722 ficheros y `rc=3` porque la copia no es un repositorio.
+
+B23 le dio al instrumento una raiz por parametro, y con ella se abre esto: las
+tres deformaciones apuntan a un arbol EN `tmp_path`. Los mecanismos NO se
+borran —miden cosas reales: la version incoherente, la clave duplicada, el
+fichero ausente y la coleccion interrumpida—; lo que cambia es DONDE, no QUE.
+
+**Y LO QUE NO SE PUEDE REPRODUCIR EN UN SANDBOX, MEDIDO, NO SUPUESTO.** Romper
+el `__init__.py` del sandbox NO hace fallar la colecta: si el test no importa
+`skillgraph` el fichero no se lee, y si lo importa resuelve al PAQUETE
+INSTALADO, no al `src/` del sandbox. Los dos casos dan `rc=0` y 1 test
+colectado. La interrupcion se provoca por donde de verdad interrumpe: un test
+con error de sintaxis, que deja `2 tests collected, 1 error` con `rc=2` — la
+misma linea parcial que B14 cerro.
 """
 
 from __future__ import annotations
@@ -30,13 +59,118 @@ import hashlib
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 RAIZ = Path(__file__).resolve().parents[1]
 STATE = RAIZ / "STATE.yaml"
 SCRIPT = RAIZ / "scripts" / "project_truth.py"
+
+
+# --------------------------------------------------------------------------
+# El arbol de verdad (B23)
+# --------------------------------------------------------------------------
+
+BLOQUE = "B14"
+VERSION = "0.14.0.dev0"
+RELEASE = "0.14.0"
+
+
+def _arbol_de_verdad(base: Path) -> Path:
+    """Un proyecto que el verificador puede leer DE VERDAD.
+
+    Lo minimo que hace falta, y por que cada cosa esta:
+
+    - `.git` con un tag: `tag_real()` lo consulta, y sin el daria `None` y
+      el cruce de release no tendria contra que medir.
+    - un `tests/` con un test propio: `total_colectado()` cuenta lo que
+      colecta, y sin tests daria `rc=5` — el motivo equivocado, que es justo
+      lo que hacia que un sandbox no sirviera.
+    - `tests.total` igual a lo que ese test colecta: si no, el verificador
+      direia que el proyecto se contradice, y todos los tests que deforman
+      una sola cosa medirian el ruido de fondo en vez de su mutacion.
+
+    Se construye por COPIA de los ficheros reales y no escritos a mano: un
+    estado sintetico que no se parece al del proyecto haria que los tests
+    midieran una forma de estado que no existe.
+    """
+    (base / "src" / "skillgraph").mkdir(parents=True)
+    (base / "tests").mkdir(parents=True)
+    shutil.copy2(RAIZ / "STATE.yaml", base / "STATE.yaml")
+    shutil.copy2(RAIZ / "CURRENT.md", base / "CURRENT.md")
+    (base / "src" / "skillgraph" / "__init__.py").write_text(
+        f'__version__ = "{VERSION}"\n', encoding="utf-8"
+    )
+    (base / "tests" / "test_del_arbol.py").write_text(
+        "def test_del_arbol() -> None:\n    assert True\n", encoding="utf-8"
+    )
+    _con_git(base, RELEASE)
+    return base
+
+
+def _con_git(base: Path, tag: str) -> None:
+    for cmd in (
+        ["git", "init", "-q"],
+        ["git", "config", "user.email", "b23@b23"],
+        ["git", "config", "user.name", "b23"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-qm", "arbol"],
+        ["git", "tag", f"v{tag}"],
+    ):
+        subprocess.run(cmd, cwd=base, capture_output=True, check=False)
+
+
+def _rota(raiz: Path, bloque: str, version: str, release: str, total: int) -> None:
+    """Deja el estado del sandbox cuadrando con el sandbox.
+
+    `STATE.yaml` y `ROADMAP.md` se copian del repo real, asi que declaran la
+    version y la cifra del REPO, no las del arbol. Sin esta rotacion el
+    verificador mediria seis contradicciones de fondo y cada test que deforma
+    una sola cosa veria un rojo que no es el suyo.
+
+    Se reescriben los TRES sitios que declaran esas truths —el estado, la
+    version y la ventana del roadmap— porque ahora los tres se cruzan. Y esa
+    es justamente la garantia que B23 compro: hasta hace un rato, mover el
+    bloque exigia tres ficheros y nadie lo notaba si se olvidaba uno.
+    """
+    import yaml
+
+    estado = yaml.safe_load((raiz / "STATE.yaml").read_text(encoding="utf-8"))
+    estado["release"]["tag"] = f"v{release}"
+    estado["roadmap"]["current_workitem"] = bloque
+    estado["tests"]["total"] = total
+    (raiz / "STATE.yaml").write_text(
+        yaml.safe_dump(estado, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
+
+    (raiz / "CURRENT.md").write_text(
+        f"> **Bloque {bloque} del arbol de prueba.**\n>\n> Lo unico que dice es el bloque.\n",
+        encoding="utf-8",
+    )
+
+    (raiz / "ROADMAP.md").write_text(
+        "# Roadmap\n\n"
+        "## Dónde está el proyecto\n\n"
+        f"> Bloque vivo: **{bloque}** — El árbol de la prueba\n"
+        f"> Versión activa `{version}` · último tag `v{release}` · {total} tests · 16/16 UAT\n"
+        "\n"
+        "## El mapa\n\n"
+        "| Bloque | Objetivo | Resultado |\n|---|---|---|\n"
+        f"| **{bloque}** | El árbol de la prueba | Se mide de verdad |\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.fixture
+def arbol(tmp_path: Path) -> Path:
+    """Un proyecto completo, disposable y coherente."""
+    base = _arbol_de_verdad(tmp_path / "arbol")
+    _rota(base, BLOQUE, VERSION, RELEASE, 1)
+    return base
 
 
 def _carga() -> object:
@@ -48,17 +182,25 @@ def _carga() -> object:
     return modulo
 
 
-def _ejecuta() -> tuple[int, dict | None, str]:
+def _ejecuta(raiz: Path | None = None) -> tuple[int, dict | None, str]:
     """El verificador de verdad, en subproceso: es lo que importa.
 
     Importarlo y llamarlo dentro de la sesion que ya esta colectando tests da
     un `pytest --collect-only` que colecta la sesion equivocada, y el
     recuento real sale mal. Es el mismo motivo por el que el propio tool usa
     subproceso, y por eso aqui no se hace la excepcion.
+
+    `raiz` es el arbol que se mide, y es un PARAMETRO desde B23: sin el,
+    medir un sandbox era imposible y por eso todos los tests deformaban el
+    arbol real. `None` significa «el repositorio», que es lo que necesitan los
+    tests que solo comprueban que el verificador responde.
     """
+    comando = [sys.executable, str(SCRIPT)]
+    if raiz is not None:
+        comando += ["--raiz", str(raiz)]
     proc = subprocess.run(
-        [sys.executable, str(SCRIPT)],
-        cwd=RAIZ,
+        comando,
+        cwd=raiz if raiz is not None else RAIZ,
         capture_output=True,
         text=True,
         check=False,
@@ -72,34 +214,35 @@ def _ejecuta() -> tuple[int, dict | None, str]:
 
 
 class _EstadoRestaurado:
-    """Muta STATE.yaml y lo devuelve byte a byte, o falla ruidosamente.
+    """Muta un `STATE.yaml` —el del sandbox— y lo devuelve byte a byte.
 
     Un test que deja el estado sucio es peor que un test que no existe: el
     siguiente lee un estado que nadie escribio y el fallo aparece en el sitio
     equivocado. Por eso se comprueba el sha256, no se «deshace» en silencio.
     """
 
-    def __init__(self) -> None:
-        self._original = STATE.read_bytes()
+    def __init__(self, raiz: Path) -> None:
+        self._estado = raiz / "STATE.yaml"
+        self._original = self._estado.read_bytes()
         self._sha = hashlib.sha256(self._original).hexdigest()
 
     def __enter__(self) -> _EstadoRestaurado:
         return self
 
     def __exit__(self, *_exc: object) -> None:
-        STATE.write_bytes(self._original)
-        actual = hashlib.sha256(STATE.read_bytes()).hexdigest()
+        self._estado.write_bytes(self._original)
+        actual = hashlib.sha256(self._estado.read_bytes()).hexdigest()
         assert actual == self._sha, "STATE.yaml no volvio a su estado original"
 
 
-def _con_clave_duplicada(clave: str, valor_nuevo: str) -> str:
+def _con_clave_duplicada(raiz: Path, clave: str, valor_nuevo: str) -> str:
     """El estado con la MISMA clave declarada dos veces, con valores distintos.
 
     Se hace sobre el fichero real, no sobre una copia: el defecto nacio de dos
     consumidores leyendo el mismo fichero, y una copia sintetica no lo
     reproduce.
     """
-    texto = STATE.read_text(encoding="utf-8")
+    texto = (raiz / "STATE.yaml").read_text(encoding="utf-8")
     patron = re.compile(rf"^(\s*){re.escape(clave)}:\s*(.+)$", re.MULTILINE)
     if patron.search(texto) is None:
         raise AssertionError(f"STATE.yaml ya no declara la clave {clave!r}")
@@ -111,7 +254,7 @@ def _con_clave_duplicada(clave: str, valor_nuevo: str) -> str:
     )
 
 
-def _valor_de(clave: str) -> str:
+def _valor_de(raiz: Path, clave: str) -> str:
     """El valor que el estado REAL declara para `clave`, leido del fichero.
 
     Se deriva en vez de escribirse porque un contrasalto atado a un valor vivo
@@ -120,7 +263,7 @@ def _valor_de(clave: str) -> str:
     manifestacion. MEDIDO en este fichero: con `current_workitem: B13` escrito a
     mano, el paso a B14 dejo de mutar el estado y el test seguia dando verde.
     """
-    texto = STATE.read_text(encoding="utf-8")
+    texto = (raiz / "STATE.yaml").read_text(encoding="utf-8")
     patron = re.compile(rf"^(\s*){re.escape(clave)}:\s*(\S+)", re.MULTILINE)
     encontrado = patron.search(texto)
     if encontrado is None:
@@ -136,20 +279,21 @@ class _inyectado:
     segunda via que se pueda olvidar.
     """
 
-    def __init__(self, texto: str) -> None:
+    def __init__(self, raiz: Path, texto: str) -> None:
+        self._estado = raiz / "STATE.yaml"
         self._texto = texto
-        self._restaurador = _EstadoRestaurado()
+        self._restaurador = _EstadoRestaurado(raiz)
 
     def __enter__(self) -> _inyectado:
         self._restaurador.__enter__()
-        STATE.write_text(self._texto, encoding="utf-8")
+        self._estado.write_text(self._texto, encoding="utf-8")
         return self
 
     def __exit__(self, *exc: object) -> None:
         self._restaurador.__exit__(*exc)
 
 
-def _rechaza(estado_nuevo: str, campo: str, que: str) -> None:
+def _rechaza(raiz: Path, estado_nuevo: str, campo: str, que: str) -> None:
     """El verificador rechaza un valor mal tipado POR EL TIPO, y lo dice.
 
     **Por que se exige el `ilegible` y no basta `coherente: false`.** La
@@ -164,8 +308,8 @@ def _rechaza(estado_nuevo: str, campo: str, que: str) -> None:
     no ha comprobado NADA de la cosa que se rompio. Por eso el rechazo tiene
     que ser el del TIPO: `ilegible` nombrando el campo.
     """
-    with _inyectado(estado_nuevo):
-        salida = _ejecuta()[1]
+    with _inyectado(raiz, estado_nuevo):
+        salida = _ejecuta(raiz)[1]
     if salida is None:
         raise AssertionError(
             f"{que}: el verificador no devolvio JSON. Si fallo al LEER el estado, "
@@ -250,7 +394,7 @@ class TestElEstadoSeLeeDeUnaSolaManera:
 class TestUnaClaveDuplicadaNoPasaPorAlto:
     """Lo UNICO que mide: el comportamiento ante una clave repetida."""
 
-    def test_una_clave_repetida_hace_el_estado_ilegible(self) -> None:
+    def test_una_clave_repetida_hace_el_estado_ilegible(self, arbol: Path) -> None:
         """El contrato: con la misma clave dos veces, el estado NO se lee.
 
         **Por que se exige `ilegible` y no basta con que cambie el veredicto.**
@@ -266,11 +410,8 @@ class TestUnaClaveDuplicadaNoPasaPorAlto:
         negarse a leer. Un `0` o un `None` aqui seria el cero silencioso
         contra el que WI-115 puso un contrasalto, un nivel mas arriba.
         """
-        with (
-            _EstadoRestaurado(),
-            _inyectado(_con_clave_duplicada("current_workitem", "B99_inventado")),
-        ):
-            salida = _ejecuta()[1]
+        with _inyectado(arbol, _con_clave_duplicada(arbol, "current_workitem", "B99_inventado")):
+            salida = _ejecuta(arbol)[1]
         assert salida is not None, "el verificador no devolvio JSON con la clave repetida"
         assert "ilegible" in salida, (
             f"una clave repetida no hizo el estado ilegible: {salida}. El verificador "
@@ -281,7 +422,7 @@ class TestUnaClaveDuplicadaNoPasaPorAlto:
             f"el estado es ilegible pero el mensaje no nombra la clave: {salida['ilegible']!r}"
         )
 
-    def test_el_valor_que_se_lee_no_es_uno_de_los_dos_a_eleccion(self) -> None:
+    def test_el_valor_que_se_lee_no_es_uno_de_los_dos_a_eleccion(self, arbol: Path) -> None:
         """CONTRA-SALTO del anterior por su otra via de manifestacion.
 
         Si alguien arregla la excepcion poniendo un `break` en el bucle de
@@ -297,12 +438,9 @@ class TestUnaClaveDuplicadaNoPasaPorAlto:
         describe. Un contrasalto que se desactiva al cambiar el calendario ya
         no es un contrasalto.
         """
-        declarado = _valor_de("current_workitem")
-        with (
-            _EstadoRestaurado(),
-            _inyectado(_con_clave_duplicada("current_workitem", "B99_inventado")),
-        ):
-            salida = _ejecuta()[1]
+        declarado = _valor_de(arbol, "current_workitem")
+        with _inyectado(arbol, _con_clave_duplicada(arbol, "current_workitem", "B99_inventado")):
+            salida = _ejecuta(arbol)[1]
         assert salida is not None
         publicado = str(salida.get("workitem_state", ""))
         assert publicado not in {declarado, "B99_inventado"}, (
@@ -322,12 +460,13 @@ class TestLosTiposNoSeAdelantan:
     convierte en `coherente: true` con un campo sin sentido.
     """
 
-    def test_un_total_que_no_es_entero_se_rechaza(self) -> None:
+    def test_un_total_que_no_es_entero_se_rechaza(self, arbol: Path) -> None:
         _rechaza(
+            arbol,
             re.sub(
                 r"^(\s*total:)\s*\d+",
                 r"\g<1> 'muchos'",
-                STATE.read_text(encoding="utf-8"),
+                (arbol / "STATE.yaml").read_text(encoding="utf-8"),
                 count=1,
                 flags=re.MULTILINE,
             ),
@@ -335,12 +474,13 @@ class TestLosTiposNoSeAdelantan:
             "un total que no es entero",
         )
 
-    def test_un_tag_sin_la_v_se_rechaza(self) -> None:
+    def test_un_tag_sin_la_v_se_rechaza(self, arbol: Path) -> None:
         _rechaza(
+            arbol,
             re.sub(
                 r"^(\s*tag:\s*)v",
                 r"\g<1>",
-                STATE.read_text(encoding="utf-8"),
+                (arbol / "STATE.yaml").read_text(encoding="utf-8"),
                 count=1,
                 flags=re.MULTILINE,
             ),
@@ -348,12 +488,13 @@ class TestLosTiposNoSeAdelantan:
             "un tag sin la v",
         )
 
-    def test_un_workitem_vacio_se_rechaza(self) -> None:
+    def test_un_workitem_vacio_se_rechaza(self, arbol: Path) -> None:
         _rechaza(
+            arbol,
             re.sub(
                 r"^(\s*current_workitem:).*$",
                 r"\g<1>",
-                STATE.read_text(encoding="utf-8"),
+                (arbol / "STATE.yaml").read_text(encoding="utf-8"),
                 count=1,
                 flags=re.MULTILINE,
             ),
@@ -382,14 +523,24 @@ class TestUnRecuentoQueNoSeTerminoNoSePublica:
     arbol colecta 2867». Sin 417 tests y sin decir por que.
     """
 
-    def test_una_colecta_interrumpida_no_publica_un_recuento(self) -> None:
-        init = RAIZ / "src" / "skillgraph" / "__init__.py"
-        original = init.read_bytes()
-        try:
-            init.write_text('__version__ = "7.7.7"\n', encoding="utf-8")
-            _, salida, crudo = _ejecuta()
-        finally:
-            init.write_bytes(original)
+    def test_una_colecta_interrumpida_no_publica_un_recuento(self, arbol: Path) -> None:
+        """MEDIDO, y por que la interrupcion va por aqui y no por `__init__.py`.
+
+        Romper el `__init__.py` del SANDBOX no hace fallar su colecta: si el
+        test no importa `skillgraph` el fichero no se lee, y si lo importa
+        resuelve al PAQUETE INSTALADO, no al `src/` del sandbox. Los dos casos
+        dan `rc=0` con 1 test colectado — MEDIDO, no supuesto.
+
+        En el arbol real el mecanismo era otro: todos los tests importan el
+        paquete del repo, luego mutilar su `__init__.py` los rompia a todos.
+        Aqui la interrupcion se provoca donde de verdad interrumpe: un test
+        con error de sintaxis deja `2 tests collected, 1 error` con `rc=2`,
+        que es EXACTAMENTE la linea parcial que B14 cerro. Lo que el guard
+        vigila —que un recuento de una colecta que no termino no se
+        publique— se reproduce igual.
+        """
+        (arbol / "tests" / "test_roto.py").write_text("def roto(:\n    pass\n", encoding="utf-8")
+        _, salida, crudo = _ejecuta(arbol)
         assert salida is not None, crudo[:250]
         contras = salida.get("contradicciones") or []
         assert not any(c.startswith("tests:") for c in contras), (
@@ -418,6 +569,12 @@ class TestLoQueYaFuncionabaSigueFuncionando:
     """
 
     def test_el_verificador_corre_y_devuelve_json_valido(self) -> None:
+        """Sin `raiz`: este mira el REPOSITORIO REAL, y es deliberado.
+
+        Es el control de que el verificador responde sobre el proyecto de
+        verdad, no solo sobre un sandbox construido por los tests. No deforma
+        nada —solo lee— luego no tiene por que moverse a `tmp_path`.
+        """
         rc, salida, crudo = _ejecuta()
         assert rc in (0, 1), f"el verificador no sabe responder: rc={rc} {crudo[:250]!r}"
         assert salida is not None, f"la salida no es JSON: {crudo[:250]!r}"
@@ -426,6 +583,14 @@ class TestLoQueYaFuncionabaSigueFuncionando:
             assert clave in salida, f"falta {clave} en el veredicto: {salida}"
 
     def test_el_endurecimiento_no_introdujo_contradicciones_nuevas(self) -> None:
+        """Sin `raiz`, como el anterior: control del repositorio REAL.
+
+        Es el otro sentido del contrasalto. Los tests de arriba comprueban que
+        el verificador RECHAZA lo que esta mal; este comprueba que no
+        inventa contradicciones donde no hay nada. Sin el, un verificador que
+        dijera «incoherente» a todo —por cualquier cosa, o por una ventana
+        desfasada— seria indistinguible de uno que endurece de verdad.
+        """
         _, salida, _ = _ejecuta()
         assert salida is not None
         nuevas = [c for c in (salida.get("contradicciones") or []) if not c.startswith("tests:")]
@@ -433,22 +598,22 @@ class TestLoQueYaFuncionabaSigueFuncionando:
             f"contradicciones que no son del recuento, y por tanto no son de WI-115: {nuevas}"
         )
 
-    def test_un_total_desalineado_sigue_detectandose(self) -> None:
+    def test_un_total_desalineado_sigue_detectandose(self, arbol: Path) -> None:
         texto = re.sub(
             r"^(\s*total:)\s*\d+",
             r"\g<1> 9999",
-            STATE.read_text(encoding="utf-8"),
+            (arbol / "STATE.yaml").read_text(encoding="utf-8"),
             count=1,
             flags=re.MULTILINE,
         )
-        with _EstadoRestaurado(), _inyectado(texto):
-            _, salida, _ = _ejecuta()
+        with _inyectado(arbol, texto):
+            _, salida, _ = _ejecuta(arbol)
         assert salida is not None and salida.get("coherente") is False
         assert any("tests" in c for c in salida.get("contradicciones") or []), (
             f"la contradiccion no habla de los tests: {salida.get('contradicciones')}"
         )
 
-    def test_un_workitem_que_no_existe_sigue_detectandose(self) -> None:
+    def test_un_workitem_que_no_existe_sigue_detectandose(self, arbol: Path) -> None:
         """El workitem se DERIVA del estado, no esta escrito en el test.
 
         MEDIDO: la primera version hacia `.replace("  current_workitem: B13",
@@ -460,7 +625,7 @@ class TestLoQueYaFuncionabaSigueFuncionando:
         texto, cambios = re.subn(
             r"^(\s*current_workitem:).*$",
             r"\g<1> B99_inventado",
-            STATE.read_text(encoding="utf-8"),
+            (arbol / "STATE.yaml").read_text(encoding="utf-8"),
             count=1,
             flags=re.MULTILINE,
         )
@@ -468,29 +633,25 @@ class TestLoQueYaFuncionabaSigueFuncionando:
             "STATE.yaml ya no declara `current_workitem` con esa forma; este test "
             "no sabria que mutar y pasaria por no hacer nada"
         )
-        with _inyectado(texto):
-            _, salida, _ = _ejecuta()
+        with _inyectado(arbol, texto):
+            _, salida, _ = _ejecuta(arbol)
         assert salida is not None and salida.get("coherente") is False
         assert any("workitem" in c for c in salida.get("contradicciones") or []), (
             f"la contradiccion no habla del workitem: {salida.get('contradicciones')}"
         )
 
-    def test_una_version_incoherente_sigue_detectandose(self) -> None:
-        init = RAIZ / "src" / "skillgraph" / "__init__.py"
-        original = init.read_bytes()
-        try:
-            init.write_text('__version__ = "7.7.7"\n', encoding="utf-8")
-            _, salida, _ = _ejecuta()
-        finally:
-            init.write_bytes(original)
+    def test_una_version_incoherente_sigue_detectandose(self, arbol: Path) -> None:
+        init = arbol / "src" / "skillgraph" / "__init__.py"
+        init.write_text('__version__ = "7.7.7"\n', encoding="utf-8")
+        _, salida, _ = _ejecuta(arbol)
         assert salida is not None and salida.get("coherente") is False
 
-    def test_falta_de_un_fichero_sigue_siendo_ruidosa(self) -> None:
-        actual = RAIZ / "CURRENT.md"
+    def test_falta_de_un_fichero_sigue_siendo_ruidosa(self, arbol: Path) -> None:
+        actual = arbol / "CURRENT.md"
         original = actual.read_bytes()
         try:
             actual.unlink()
-            rc, salida, crudo = _ejecuta()
+            rc, salida, crudo = _ejecuta(arbol)
         finally:
             actual.write_bytes(original)
         assert rc != 0, f"sin CURRENT.md el verificador deberia fallar: {crudo[:200]}"

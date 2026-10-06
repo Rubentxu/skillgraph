@@ -100,27 +100,20 @@ EXCEPCIONES_DECLARADAS: dict[str, str] = {
         "modulo trae `test_suite_run_leaves_tree_clean` para que el estado "
         "no se propague."
     ),
-    "test_b14_truth_single_reader.py": (
-        "DEUDA CONOCIDA, y la razon de no arreglarla aqui esta MEDIDA, no "
-        "supuesta. Este fichero deforma `STATE.yaml`, `CURRENT.md` y "
-        "`src/skillgraph/__init__.py` REALES, y de ahi salio la perdida "
-        "concreta del informe del gate de 1.0. La causa no es el test: es que "
-        "`project_truth.py` deriva su RAIZ de `__file__`, asi que para "
-        "deformar sin tocar el arbol hay que ejecutarlo desde OTRO arbol, y "
-        "MEDIDO ese otro arbol no sirve tal cual. (a) Con solo los cuatro "
-        "ficheros que el script lee, la colecta de tests sale rc=5 —no hay "
-        "`tests/`— y el verificador responde `ilegible`, con lo que los "
-        "tests que esperan `ilegible` POR MOTIVO pasanian por el motivo "
-        "equivocado: un sandbox que no puede responder de verdad no es un "
-        "sandbox, es otra pregunta. (b) Copiando el arbol versionado entero "
-        "(722 ficheros) la colecta sale rc=3, error interno, porque el arbol "
-        "copiado no es un repositorio: `git describe` no responde y el "
-        "recuento no cierra. Ninguna de las dos es un arreglo de un test: las "
-        "dos piden que `project_truth.py` acepte su raiz por parametro, y eso "
-        "es cambiar el instrumento de la verdad de B0, no un test. Se "
-        "registra en vez de parcheado, porque un parche que deja el sandbox a "
-        "medio hacer es peor que una deuda con el motivo escrito."
-    ),
+    # `test_b14_truth_single_reader.py` ESTUVO AQUI hasta B23, y su entrada
+    # ahora es un BITACORA, no una excepcion. Se puede leer porque el motivo
+    # por el que se concedio la excepcion —«no hay ningun sandbox que de una
+    # respuesta de verdad, y por eso hay que deformar el arbol real»— es el
+    # hallazgo que B23 mids y cerro. MEDIDO entonces: con solo los cuatro
+    # ficheros que el script lee, la colecta sale rc=5 y el verificador
+    # responde `ilegible` POR EL MOTIVO EQUIVOCADO; copiando los 722 ficheros
+    # versionados sale rc=3 porque la copia no es un repositorio.
+    #
+    # B23 le dio a `project_truth.py` una raiz por parametro, y con ella un
+    # sandbox que responde de verdad: su `.git` con un tag, su estado, su
+    # ventana y un test propio. Las tres deformaciones apuntan alla. MEDIDO
+    # con sha256 de los cuatro ficheros del arbol real antes y despues de la
+    # corrida: IDENTICOS.
 }
 
 
