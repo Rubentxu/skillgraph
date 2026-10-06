@@ -38,6 +38,7 @@
     "cmd_knowledge_compile",
     "cmd_knowledge_invalidate",
     "cmd_knowledge_refresh",
+    "cmd_knowledge_resolve",
     "cmd_knowledge_stale",
     "cmd_knowledge_trace",
     "cmd_pack_import",
@@ -73,6 +74,7 @@
       "compile",
       "invalidate",
       "refresh",
+      "resolve",
       "stale",
       "trace"
     ],
