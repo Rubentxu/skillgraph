@@ -62,7 +62,7 @@ es B27/B29. Se dice ahora para que no se lea despues como un olvido.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
 
 from skillgraph.core.errors import EnvelopeInvalido, UnknownEnvelopeVersionError
@@ -193,6 +193,11 @@ class ObservationIngesta:
     source: Source
     entity: Entity
     claims: tuple[Claim, ...]
+    #: B27. Los `claim_id` cuyo INSERT fue rechazado por el `UNIQUE` de la
+    #: tupla natural, en orden de aparicion. **VACIO cuando la ingesta fue
+    #: limpia**, y eso incluye reingerir lo mismo, que es idempotencia y no
+    #: conflicto —por eso es una tupla y no un contador-.
+    conflictos: tuple[ClaimID, ...] = ()
 
     @property
     def claim_ids(self) -> tuple[ClaimID, ...]:
@@ -341,6 +346,19 @@ def ingerir(
         project_id=project_id,
         entity=ingesta.entity,
     )
+    conflictos: tuple[ClaimID, ...] = ()
     for claim in ingesta.claims:
-        storage.record_claim(tenant_id=tenant_id, project_id=project_id, claim=claim)
+        # B27: el aviso se RECOGE, no se tira. Descartarlo seria volver a
+        # perderlo una capa mas arriba, y el `conflicts_for` de B27 daria lo
+        # mismo con una consulta: lo que se pierde es el aviso en el MOMENTO
+        # en que ocurre, que es el unico momento en que el que escribe sabe
+        # que ha dicho otra cosa.
+        registro = storage.record_claim(tenant_id=tenant_id, project_id=project_id, claim=claim)
+        if registro.conflicto:
+            conflictos = (*conflictos, registro.claim_id)
+    if conflictos:
+        return replace(
+            ingesta,
+            conflictos=conflictos,
+        )
     return ingesta

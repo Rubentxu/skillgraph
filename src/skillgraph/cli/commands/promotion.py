@@ -86,6 +86,24 @@ def _apply_pending_promotions(
 
         final_status = apply_proposal(storage, proposal["proposal_id"], apply_fn=apply_fn)
         results.append({"proposal_id": proposal["proposal_id"], "status": final_status})
+
+    # B27: los conflictos del destino se ANEXAN al resultado, no se descartan.
+    # Un aviso que se recoge y no se imprime es un aviso que no existio, y
+    # quien promovio el claim creeria que quedo registrado cuando en destino ya
+    # habia otra afirmacion sobre lo mismo.
+    #
+    # No los convierte en `FAILED`: el apply se completo, y el destino tiene su
+    # propia version. Decir «fallido» seria mentir sobre el estado del
+    # proyecto, y decidir cual vale es B28.
+    conflictos = getattr(base_apply, "conflictos", [])
+    if conflictos:
+        results.append(
+            {
+                "proposal_id": "CONFLICTOS",
+                "status": f"{len(conflictos)} claim(s) ya afirmaban otra cosa en destino: "
+                + ", ".join(conflictos),
+            }
+        )
     return results
 
 
@@ -120,6 +138,11 @@ def _default_claim_importer(storage: Storage, *, tenant_id: str, target_project:
     """
 
     from skillgraph.knowledge.graph import Claim, Entity, entity_ref
+
+    #: B27. Los `claim_id` que el destino ya tenia con OTRO valor. Vive fuera
+    #: de `_apply` para que el comando pueda leerlo sin que `_apply` tenga que
+    #: devolver algo distinto de `bool` —que es lo que espera `apply_proposal`.
+    conflictos: list[str] = []
 
     def _apply(payload: dict) -> bool:
         c = payload.get("claim")
@@ -183,9 +206,21 @@ def _default_claim_importer(storage: Storage, *, tenant_id: str, target_project:
             # asumir que un campo no existe.
             object_entity=entity_ref(c["object_entity_id"]) if c.get("object_entity_id") else None,
         )
-        storage.record_claim(tenant_id=tenant_id, project_id=target_project, claim=claim)
+        registro = storage.record_claim(tenant_id=tenant_id, project_id=target_project, claim=claim)
+        # B27: el apply NO se declara fallido por un conflicto, porque el
+        # destino ya puede tener su propia afirmacion sobre lo mismo y quien
+        # promocio no va a resolverlo —eso es B28—. Lo que no se hace es
+        # TIRAR el aviso: se anota en la lista que lleva el `apply_fn`, y el
+        # comando la imprime.
+        #
+        # Guardarlo en una variable local seria perderlo igual, y `ruff` lo
+        # dice con F841: un lint que hace de guard de una decision de diseño no
+        # sobra.
+        if registro.conflicto:
+            conflictos.append(registro.claim_id)
         return True
 
+    _apply.conflictos = conflictos  # type: ignore[attr-defined]
     return _apply
 
 

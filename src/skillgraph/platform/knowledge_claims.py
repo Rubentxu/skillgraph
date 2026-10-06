@@ -89,7 +89,7 @@ class SqliteClaimRepository:
         tenant_id: str,
         project_id: str,
         claim: Claim,
-    ) -> str:
+    ) -> ClaimRecorded:
         """Registra una Claim. Devuelve su claim_id. Idempotente por
         (subject, predicate, source, checked_at_revision).
 

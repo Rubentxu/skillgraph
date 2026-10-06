@@ -544,10 +544,10 @@ class SqliteKnowledgeRepository:
         """Delega en `SqliteClaimRepository.record_claim` (WI-61).
 
         **B27: EL RETORNO DEJO DE SER UN `str`.** Antes devolvia el `claim_id`
-        que se le habia dado, y con `INSERT OR IGNORE` eso miente: el `UNIQUE`
-        de la tupla natural puede rechazar el INSERT y el metodo devuelve
-        igual, como si hubiera escrito. Ahora devuelve `ClaimRecorded`, que
-        dice si hubo conflicto y que se solapa.
+        que se le habia dado, y con una escritura condicional eso miente: el
+        `UNIQUE` de la tupla natural puede rechazar la fila y el metodo
+        devuelve igual, como si hubiera escrito. Ahora devuelve
+        `ClaimRecorded`, que dice si hubo conflicto y que se solapa.
         """
         return self._claims.record_claim(tenant_id=tenant_id, project_id=project_id, claim=claim)
 
