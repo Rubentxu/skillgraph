@@ -110,6 +110,24 @@ pipeline {
             sh("cd " + repo + " && uv run python scripts/check_public_surfaces.py 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
         }
 
+        stage("architecture-ratchet") {
+            // R1. LAS FRONTERAS COMO LEYES, Y NO COMO DESCRIPCIONES.
+            //
+            // El audit de arquitectura DETECTA deuda y sale 0. Este sale
+            // distinto de cero, y esa es toda la diferencia: una propiedad
+            // que llego a cero no vuelve a convertirse en advertencia.
+            //
+            // Las cinco que vigila: god modules > 800 LoC, complejidad
+            // publica cc>=20, SQL en el dominio, dominio -> platform
+            // (el puerto NO cuenta) y referencias normativas rotas.
+            //
+            // Y cuenta CODIGO, no prosa: `grep sqlite3 knowledge/` marca
+            // cuatro ficheros y tres solo lo nombran en un docstring. Un
+            // gate que senale la mitad de las cosas correctas entrena a
+            // ignorar el gate.
+            sh("cd " + repo + " && uv run python scripts/check_architecture_ratchet.py 2>&1 | tail -20; test \${PIPESTATUS[0]} -eq 0")
+        }
+
         stage("ci-parity") {
             // El CUARTO contrato declarado (WI-98), y el que vigila a los
             // otros tres: comprueba que todo runner remoto invoque esta

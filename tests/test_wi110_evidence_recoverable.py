@@ -392,7 +392,12 @@ def test_la_receta_no_cambio() -> None:
     # siempre. El digest cambia con el motivo escrito al lado, que es
     # exactamente lo que este test exige. Detector de cambios: los comentarios
     # no ejecutan codigo, asi que este digest mide que alguien leyo el bloque.
-    esperado = "a8c59c949362a12b97a00a9df3bfa47201589d098d507a03412da89c937b32a3"
+    # R1 anadio `architecture-ratchet` (decima etapa), que hace lo que un
+    # audit no puede: salir distinto de cero cuando una propiedad vuelve a
+    # dejar de cumplirse. Las cinco que vigila llegaron a 0/5 medidas, y el
+    # contrasalto 5/5. El digest cambia con el motivo escrito al lado, que es
+    # exactamente lo que este test exige.
+    esperado = "7f32b93b0a13c1f6d6a7fe822c55678d5276a3c6a8b242b1798de77fb0e933a1"
     real = hashlib.sha256((RAIZ / ".pipeline.kts").read_bytes()).hexdigest()
     assert real == esperado, (
         f"`.pipeline.kts` cambio: {real}\n"
