@@ -415,9 +415,45 @@ class TestLaPuertaExiste:
 
         # Y la idempotencia: la segunda pasada no crece y no avisa de nada.
         segunda = _sg("knowledge", "ingest-code", "demo", str(proyecto / "app.py"))
+        # **B35, AL CERTIFICAR: ESTA ASERCION DEJO DE PODER FALLAR.** El print
+        # que imprimia la palabra «conflicto» se borro porque era codigo muerto
+        # —`ObservationIngesta.conflictos` no tiene productor—, luego la palabra
+        # ya no puede aparecer en ninguna salida y la asercion pasa siempre.
+        # Una asercion que no puede fallar esta DECORADA. Se queda por
+        # documentar la intension; lo que puede fallar es el guard de AST de
+        # abajo, `test_la_cli_no_vuelve_a_imprimir_un_aviso_imposible`.
         assert "conflicto" not in segunda.stdout
         with sqlite3.connect(db) as con:
             assert con.execute("SELECT COUNT(*) FROM claims").fetchone()[0] == len(filas)
+
+    def test_la_cli_no_vuelve_a_imprimir_un_aviso_imposible(self) -> None:
+        """**EL QUE SI PUEDE FALLAR, MEDIDO SOBRE EL AST DEL MODULO REAL.**
+
+        El aviso que la CLI imprimia salia de `ingesta.conflictos`, y ese campo
+        no lo produce nadie: `normalizar` deriva el `claim_id` de (sujeto,
+        predicado, objeto, fuente, revision), luego dos claims distintos tienen
+        id distinto y el `UNIQUE` no puede rechazar ninguno.
+
+        Reintroducir el aviso no rompe una asercion de texto —la palabra volveria
+        a salir y el `assert "conflicto" not in ...` la cazaria— pero si nadie
+        escribe esa asercion, el modulo volveria a mentir con la misma
+        tranquila. El guard mide la MENTIRA, no su sintomas.
+        """
+        import ast
+        import inspect
+
+        from skillgraph.cli.commands import knowledge as modulo
+
+        arbol = ast.parse(inspect.getsource(modulo))
+        usa_el_campo = any(
+            isinstance(nodo, ast.Attribute) and nodo.attr == "conflictos"
+            for nodo in ast.walk(arbol)
+        )
+        assert not usa_el_campo, (
+            "la CLI vuelve a leer ingesta.conflictos: ese campo no lo produce "
+            "nadie y lo que volveria a imprimir es un aviso que no puede "
+            "existir"
+        )
 
     def test_un_fichero_con_dos_imports_no_avisa_de_un_conflicto_falso(
         self, tmp_path: Path
@@ -462,6 +498,9 @@ class TestLaPuertaExiste:
             "dos hechos ciertos se han reportado como conflicto: es el aviso "
             "falso que la migracion 0008 vino a cerrar"
         )
+        # MEDIDO al certificar: con el print borrado, esta asercion ya no puede
+        # fallar. Lo que la sustituye como guarda real es
+        # `test_la_cli_no_vuelve_a_imprimir_un_aviso_imposible`.
 
     def test_el_vocabulario_no_contamina_el_envelope(self) -> None:
         """`vocabulario` estaba DENTRO del dict que dice ser un envelope.
