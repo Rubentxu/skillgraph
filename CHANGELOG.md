@@ -14,6 +14,108 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.41.0] - 2026-10-06 — Las fronteras arquitectónicas como leyes ejecutables
+
+SemVer **derivado** desde `v0.40.0`: `0 breaking · 1 feat · 1 refactor · 5 otros`
+(`git log v0.40.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.41.0**.
+
+## Un audit detecta deuda. Un ratchet cierra.
+
+Toda la propuesta de R1 es esa diferencia. Un audit informa de que hay módulos
+grandes y sale `0`; el ratchet sale **distinto de cero**, y por eso la
+construcción falla.
+
+```
+god modules > 800                = 0    knowledge_repository.py 895 -> 719
+complejidad publica cc >= 20     = 0
+SQL en el dominio                = 0    8 usos -> 0
+dominio -> platform (no ports)  = 0
+referencias normativas rotas    = 0    16/16
+```
+
+**Lo que hace que las cinco midan** es la mitad que ningún audit tiene: un
+`check_architecture_ratchet.py` que devolviera siempre `rc=0` cumpliría las
+cinco líneas de arriba. Está en `.pipeline.kts` como décima etapa.
+
+## R0 — la frontera estaba invertida
+
+El objetivo nombra textualmente `seq_de(cur, revision)` y
+`_sigiente_revision(cur, revision)`. Existían, en `knowledge/graph.py`, como
+funciones libres que recibían un cursor — y **`platform/` las importaba**. El
+dominio servía de utilidad de base de datos para el adapter.
+
+```
+platform/ports/revisions.py    RevisionRegistry          (el puerto)
+platform/revision_registry.py  SqliteRevisionRegistry    (el SQL)
+platform/translation.py        traduciendo_integridad()  (el borde)
+```
+
+`seq` sigue siendo **el orden en que este store aprendió de las revisiones**,
+no ascendencia de git: comparar SHAs es lexicográfico y arbitrario. La
+ascendencia real es `GitHistory`, que es B32.
+
+## El dominio deja de ver `sqlite3`
+
+`knowledge_controller.py` importaba `sqlite3` para capturar
+`IntegrityError`. Ahora el adapter traduce y el dominio captura un error de
+**dominio**, que cuelga de `SkillGraphError` y por tanto traduce a exit code.
+
+**Y lo que no es FK se propaga intacto.** Un `UNIQUE` violado y un `CHECK`
+llegan como el mismo tipo que una FK, porque SQLite no los distingue en el
+tipo; traducirlos todos perdería el motivo.
+
+**Un defecto real salió al arreglar otro:** se arregló `record_claim` y los
+tests siguieron rojos — `record_evidence` es el otro `INSERT` con FK. Un
+`sqlite3.IntegrityError` que atraviesa el dominio sale como **Traceback al
+usuario**, que es el defecto que WI-109 cerró por el otro lado de la misma
+frontera. Un solo camino traducido habría sido medio arreglo con apariencia de
+entero.
+
+## El god module, partido por responsabilidad
+
+```
+knowledge_repository.py  895 -> 719 LoC
+  SqliteOutcomeTraceRepository   record_trace + link_trace
+  SqliteSourceRepository         register_source … find_entity (8 métodos)
+```
+
+**Por responsabilidad, no por tamaño**: trocear por N líneas produce mitades
+que no son unidades. Y **verbatim** — un refactor que reescribe el SQL
+mientras mueve el código son dos cambios a la vez, y cuando algo falla no se
+sabe cuál de los dos fue.
+
+## TRES FALSOS POSITIVOS DEL INSTRUMENTO, CORREGIDOS ANTES DE QUE DIERA NÚMERO
+
+1. **`platform.ports.*` contado como fuga.** `ports/` contiene `Protocol` y
+   DTOs: es el puerto. Contarlo es medir lo contrario de lo que dice el nombre.
+2. **`blueprint-v1` marcada como rota.** Es un **directorio** de 12
+   documentos, y vive en `external/` fuera de git **por decisión del repo**:
+   es el *source of truth* de `AGENTS.md` §0.
+3. **`if TYPE_CHECKING` contado como fuga.** `observation.py` importa
+   `Storage` ahí, y en runtime ese import no existe.
+
+**Y un test que impide el arreglo trivial:** se **exige** que ese import siga
+estando. Borrarlo dejaría el guard en verde degradando el type-checker, que
+es pagar con el código por una medición.
+
+## La evidencia
+
+```
+measure_r1_architecture.py    rc=0   0/5 ABIERTAS   (venía 3/5)
+check_architecture_ratchet.py rc=0   las cinco a cero
+mutate_r1_architecture.py     rc=0   5/5 cazadas
+pytest                       rc=0   3709 passed, 3 skipped
+```
+
+## Lo que NO hace
+
+- No borra el bloque `if TYPE_CHECKING` (exigido por un test).
+- No cambia la métrica: el umbral de 800 es el que ya usan la auditoría y los
+  guardas de `docs/`.
+- No reescribe los tests que no cambiaron de contrato.
+- No fabrica un `merge-receipt`.
+
 ## [0.40.0] - 2026-10-06 — Un contexto truncado dice qué se cayó
 
 SemVer **derivado** desde `v0.39.0`: `0 breaking · 2 feat · 3 fix · 2 otros`
