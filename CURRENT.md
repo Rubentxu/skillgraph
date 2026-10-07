@@ -5,7 +5,7 @@
 > **Bloque 2026-10-07 (B36) — Un guard que obliga a apagar el gate que lo contiene.**
 > (B35 cerrado y certificado en `evidence/b35-vertical-2026-10-07.md`: `4104 passed, 3 skipped, 0 failed, 855,42 s`, suelos rc=0 con `observation_ingestion.py` de 84 % a 100 %, ratchet 5/5 a cero, sondas 8/8. B36 abre medido con `scripts/measure_b36_commit_gate.py`, y lo que midió es un guard que **no puede pasar por la puerta que vigila**.)
 >
-> Versión activa `0.42.0.dev0`; último tag `v0.42.0`; **4107 tests**.
+> Versión activa `0.42.0.dev0`; último tag `v0.42.0`; **4116 tests**.
 >
 > **LA PREMISA DE B31 ERA FALSA, Y ESO FUE LO PRIMERO QUE SE MIDIÓ.**
 > La fila decía «no hay análisis estructural real: `line_count = 137` es todo
@@ -136,7 +136,7 @@
 > **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.** (cerrado y certificado)
 > (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 con `runtime_observation`, `Source` +2 columnas, migración `0007` e índice parcial `idx_sources_ventana` — **solo en la migración**, porque en el DDL una base vieja reventa antes de migrar. El kind lo declara el envelope, no se deduce de que tenga ventana: una medición de test también cubre un periodo.)
 >
-> Versión activa `0.42.0.dev0`; último tag `v0.42.0`; **4107 tests**.
+> Versión activa `0.42.0.dev0`; último tag `v0.42.0`; **4116 tests**.
 >
 > **LA FILA DECÍA «HAY QUE AÑADIR SEIS CONSULTAS», Y CINCO YA EXISTÍAN.**
 > Medido antes de escribir una línea (`/tmp/b34_preflight.py`):
