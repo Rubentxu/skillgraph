@@ -169,3 +169,121 @@ volvió a mirar.
 `superficie.py` y el bloque de CLI de `knowledge.py` entran nuevos. Hay que
 medirlos, no suponerlos: el suelo es el del paquete —90 %— y el de `cli/` es
 70 %.
+
+---
+
+# LO QUE SALIÓ AL CERTIFICAR
+
+Y no es un ajuste de cifras: son **dos cosas que el bloque affirmaba y que
+no eran verdad todavía**.
+
+## 1. La superficie de la CLI se había movido y el snapshot no lo sabía
+
+Los dos guards de B10 se pusieron rojos, que es exactamente su trabajo:
+
+```
+[cli_subcomando_movido]  `sg knowledge` expone 12 subcomandos y el snapshot declara 6
+[cli_runner_all_movido]  runner.__all__ cambio: 6 símbolos (45 reales frente a 39)
+```
+
+`sg knowledge` **6 → 12** y `runner.__all__` **39 → 45**. Se regenera desde el
+árbol con `check_public_surfaces.py --actualizar`, **como B28**, y no a mano:
+ADR-0018 declara esa superficie estable, y un snapshot escrito a mano es
+justo la declaración que puede mentir.
+
+## 2. `knowledge_query.py` estaba en 86,21 % — y las líneas sin cubrir eran la entrega de B34
+
+Esto es lo que importa, y no aparece mirando los tests: aparece **midiendo
+el suelo del módulo**.
+
+```
+src/skillgraph/knowledge/knowledge_query.py   86,21 %   suelo 90 %   BAJO
+```
+
+Las líneas sin cubrir eran **162-163 y 184**, y son literalmente esto:
+
+```python
+respuesta = self._superficie.responder(self._consulta_b34(request, consulta))
+return CapabilityResult(...)
+...
+return Consulta(pregunta=pregunta(consulta), ...)
+```
+
+**La delegación.** El entregable de B34 escrito en el roadmap es «las mismas
+query models alimentan CLI y **agent handoff**». Las 55 pruebas atacaban
+`responder` directamente y la CLI, y **`invoke` no se llamaba nunca con una de
+las seis preguntas**. La mitad del agent handoff del gate era **prosa**.
+
+### Por qué los guards no lo vieron
+
+Porque miden otra cosa, y lo hacen bien:
+
+`TestUnaSolaSuperficieParaTodas` mide que la capability **no reconstruya** el
+retrieval. Eso lo cumple un puente que responde siempre `what`.
+
+MEDIDO, con la sonda M10 puesta (`pregunta=pregunta("what")`):
+
+```
+TestUnaSolaSuperficieParaTodas              3 passed     <- VERDE
+TestLaCapabilityEjecutaLaDelegacion         CAZADA       <- ROJO
+```
+
+**Un guard que mide que se DELEGA no mide que se delegue EN LA PREGUNTA
+PEDIDA.** Es la tercera vez que sale este defecto en el repo —el guard de
+B15, el de WI-92, y el de este propio bloque, que ya lo había detectado en
+`_responder_y_salir`— y por eso la clase nueva no es «más cobertura».
+
+### Lo que se añadió
+
+`TestLaCapabilityEjecutaLaDelegacion`, 4 tests:
+
+| | |
+|---|---|
+| las seis se preguntan por la capability | el bucle sale de `CONSULTAS`, no de una lista escrita aquí |
+| el puente es transparente | el payload es **el de `responder`**, comparado contra la respuesta directa |
+| lo que no está en el vocabulario no se construye | y el caso sin `kind`, que es distinto del caso con `kind` inválido |
+| las dos de B30 NO pasan por la superficie | `claims` y `resource` no deben mezclarse con las seis |
+
+Y las sondas suben de **8 a 10**, porque M9 y M10 **no podían existir antes**:
+las ocho anteriores miden la FORMA.
+
+| sonda | rompe | la caza |
+|---|---|---|
+| M10 | `pregunta=pregunta("what")` — el puente pide siempre lo mismo | `test_las_seis_se_preguntan_por_la_capability` |
+| M9 | el puente reescribe el payload en vez de delegar | `test_lo_que_responde_es_lo_que_responde_la_superficie` |
+
+**10/10 cazadas, 0 inválidas, 0 sin sonda.**
+
+`knowledge_query.py`: 86,21 % → **100 %**.
+
+## El recibo
+
+```
+pytest              4021 passed, 3 skipped, 0 failed   892,75 s   rc=0
+cobertura global    97,11 %   (fail_under 80 %)
+floors §6.3         todo modulo cumple su suelo          rc=0
+  cli/              93,18 %  (suelo 70 %)   11 modulos
+  runtime/          98,41 %  (suelo 90 %)   12 modulos
+  superficie.py     100 %
+  knowledge_query.py 100 %   <- era 86,21 %
+  cli/commands/knowledge.py  93,99 %  (suelo 70 %)
+arquitectura        5/5 a cero                             rc=0
+project_truth       4024 declarados == 4024 colectados     rc=0
+sondas              10/10                                   rc=0
+```
+
+4024 = 4021 + 3, y las 4024 se cuentan con `pytest --collect-only` sobre el
+árbol real, no contra una copia (WI-115).
+
+## Lo que este bloque deja escrito
+
+Tres cosas que la certificación encontró y que el bloque no declaraba:
+
+1. **El puente era prosa.** Ahora se ejecuta, y dos sondas de comportamiento
+   lo vigilan —que es lo que faltaba, porque la forma ya estaba vigilada.
+2. **Un guard de forma no sustituye a un test de camino.** El AST mide que
+   no llames al retrieval; no mide qué preguntaste. Son dos propiedades y
+   este bloque tiene las dos por primera vez.
+3. **La cobertura es un guard de camino gratis.** El suelo de §6.3 no es
+   burocracia: encontró una ruta muerta de tres líneas que era la entrega
+   del bloque.

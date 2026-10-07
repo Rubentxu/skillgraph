@@ -2,89 +2,108 @@
 
 >
 
-> **Bloque 2026-10-07 (B33) — La telemetría y la intención/documentación se contradicen y una pisa a la otra.**
-> (B32 cerrado y certificado: `GitHistory` con `es_ancestro` —nunca `ordena`—, `claims_desde_commit`, migración `0006` y el índice parcial `idx_sources_commit`. B32 cerraba el **CUÁNDO** y el **DESDE QUÉ**, y explícitamente no el **POR QUÉ**.)
+> **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.**
+> (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 con `runtime_observation`, `Source` +2 columnas, migración `0007` e índice parcial `idx_sources_ventana` — **solo en la migración**, porque en el DDL una base vieja reventa antes de migrar. El kind lo declara el envelope, no se deduce de que tenga ventana: una medición de test también cubre un periodo.)
 >
 > Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4024 tests**.
 >
-> **EL GATE DE B33 YA ESTABA CERRADO, Y MEDIRLO FUE LO PRIMERO.** El gate
-> del roadmap dice «un claim runtime que contradice un ADR abre conflicto;
-> `actual_behavior` prefiere runtime e `intended_architecture` prefiere la
-> decisión aceptada». Montado sobre un store de verdad:
+> **LA FILA DECÍA «HAY QUE AÑADIR SEIS CONSULTAS», Y CINCO YA EXISTÍAN.**
+> Medido antes de escribir una línea (`/tmp/b34_preflight.py`):
 >
 > ```
-> fuentes:  adr:0001  kind=external_doc        c-adr       "psycopg"  human-asserted
->           runtime:ventana-1  kind=external_doc  c-runtime  "sqlite3"  observed
-> conflicts_for       -> 1 conflicto: [c-adr, c-runtime]
-> resolver actual_behavior    -> c-runtime
-> resolver intended_behavior  -> c-adr
+> what      SI  — list_claims_for_subject
+> changed   SI  — claims_at_revision (B29), claims_desde_commit (B32)
+> conflicts SI  — conflicts_for (B27) + resolver (B28)
+> evidence  SI  — get_evidences_for_claim
+> impact    SI en Storage, NO en el Protocol — list_claims_by_object_entity (B25)
+> why       NO  — pero es composición de tres lecturas que ya existían
+>
+> sg.knowledge.query   CONSULTAS = {"claims", "resource"}   -> de las seis, NINGUNA
+> MCP                  0 ficheros, 0 menciones en src/
 > ```
 >
-> Funciona. **Y es exactamente el ejemplo con el que B28 certificó su propio
-> bloque** — su `_el_conflicto_del_bloque` se llama `c-runtime` contra
-> `c-adr`. Un gate que otro bloque ya certified se puede «cerrar» sin
-> escribir una línea de B33, y eso no es un gate: es una segunda lectura
-> del mismo resolver.
+> **B34 NO ES UN BLOQUE DE CONSULTAS: ES UN BLOQUE DE SUPERFICIE.** Lo que no
+> existía era un modelo único que las nombrara. Y `impact` era el caso
+> interesante: la consulta estaba escrita y era **inalcanzable** desde donde
+> el núcleo puede mirar, porque el `Protocol` no la declaraba.
 >
-> **EL HUECO REAL NO ESTÁ EN LA AUTORIDAD, ESTÁ EN LA VERTICAL QUE LA
-> ALIMENTA.** Medido sobre las cinco entregas de B33:
+> **MCP NO EXISTE**, así que la mitad del gate «MCP/agent handoff» se sustituye
+> por el handoff real —que es la capability— y se declara en vez de fingir.
+>
+> **UN SOLO MÉTODO `responder`.** Con seis métodos públicos, «cada superficie
+> reconstruye el retrieval» pasaría a ser la forma del código. Y la capability
+> **no implementa ninguna** de las seis: construye la `Consulta` y pregunta.
+> Dos modelos es exactamente lo que el gate prohíbe.
+>
+> **CUATRO DECISIONES QUE NO SON DE GUSTO.** `why` es **procedencia**, no
+> causa: `Procedencia` no tiene campo `motivo` y hay un test que lo ata.
+> `what` **no jerarquiza**: devuelve las contradictorias y elegir es trabajo de
+> `conflicts` con `--intent`. `conflicts` **sin `--intent` devuelve el conflicto
+> sin resolver**, porque un default sería el ranking global que B28 cerró. Y
+> `commit` solo es de `changed` — un `Consulta` con `commit` en otra pregunta es
+> error de construcción.
+>
+> **Y LO QUE SALIÓ AL CERTIFICAR, que es más que el arreglo del bloque.**
+>
+> **1. La superficie de la CLI se había movido.** Los dos guards de B10 se
+> pusieron rojos —que es su trabajo—: `sg knowledge` 6→12 subcomandos y
+> `runner.__all__` 39→45. El snapshot se regenera desde el árbol con
+> `check_public_surfaces.py --actualizar`, como B28, **nunca a mano**.
+>
+> **2. El puente de la capability nunca se ejecutaba.** Esto es lo que importa,
+> y no aparece mirando los tests: aparece **midiendo el suelo del módulo**.
 >
 > ```
-> E1 telemetry.query.v1        NO existe. CERO en src/, fuera de prosa.
-> E2 adapter Chronos/OTel      NO existe. No hay adapters/ en ninguna parte.
-> E3 temporal window sources   NO existe. Source.checked_at es un INSTANTE;
->                             ObservationEnvelope.observed_at tambien; y la
->                             ventana de Claim es por REVISION (B29), no
->                             por tiempo.
-> E4 runtime claims            la MECANICA existe (normalizar ya pone
->                             assertion_origin="observed"), pero la fuente
->                             sale como external_doc
-> E5 perfil actual_behavior    YA EXISTE (B28)
+> src/skillgraph/knowledge/knowledge_query.py   86,21 %   suelo 90 %   BAJO
 > ```
 >
-> **Y PARA METER UNA OBSERVACIÓN DE RUNTIME HAY QUE MENTIR.** Lo medido:
+> Las líneas sin cubrir eran **162-163 y 184**, y son literalmente la
+> delegación que este bloque existe para hacer. Las 55 pruebas atacaban
+> `responder` directamente y la CLI, y **`invoke` no se llamaba nunca con una de
+> las seis preguntas**. La mitad «agent handoff» del gate era **prosa**.
+>
+> **POR QUÉ LOS GUARDS NO LO VIERON, MEDIDO.** Porque miden otra cosa, y la
+> hacen bien: que la capability no reconstruya el retrieval. Eso lo cumple un
+> puente que responde siempre `what`. Con la sonda M10 puesta
+> (`pregunta=pregunta("what")`):
 >
 > ```
-> [1] las dos filas se ven IGUALES por kind
->     adr:0001           kind=external_doc
->     runtime:ventana-1  kind=external_doc        -> 1 valor distinto
-> [2] json_extract(locator_json, '$.producer')  FUNCIONA
-> [3] indices sobre sources: idx_sources_project, idx_sources_commit
->     NINGUNO sobre locator_json, NINGUNO sobre kind
-> [4] columnas de sources: NO hay columna producer, ni adapter, ni type_name
+> TestUnaSolaSuperficieParaTodas              3 passed     <- VERDE
+> TestLaCapabilityEjecutaLaDelegacion         CAZADA       <- ROJO
 > ```
 >
-> El discriminante existe y se puede consultar, pero cuesta abrir el JSON y
-> recorrer la tabla. Y sobre todo: la pregunta que B33 quiere responder es
-> **precisamente** la que responde `actual_behavior` —«¿qué devolvió
-> producción de verdad?»—, y una pregunta que obliga a un `json_extract`
-> sobre una columna sin índice no es una pregunta que la arquitectura de
-> fuentes debería tener que responder.
+> **Un guard que mide que se DELEGA no mide que se delegue EN LA PREGUNTA
+> PEDIDA.** Es la tercera vez que sale este defecto en el repo —el guard de B15,
+> el de WI-92, y el de este propio bloque, que ya lo había detectado en
+> `_responder_y_salir`— y por eso la clase nueva no es «más cobertura».
 >
-> **LA DECISIÓN ESTÁ PENDIENTE DESDE B26, Y ESTÁ ESCRITA EN EL CÓDIGO.**
-> `src/skillgraph/knowledge/observation.py:250::normalizar` dice, sobre el kind que
-> usa:
+> Se añaden `TestLaCapabilityEjecutaLaDelegacion` (+4) y dos sondas de
+> **comportamiento** (M9, M10) que antes no podían existir: las ocho anteriores
+> miden la forma. **10/10 cazadas.** `knowledge_query.py`: 86,21 % → **100 %**.
 >
-> > `external_doc`, y NO un kind nuevo. `SourceKind` es un Literal cerrado y
-> > AGENTS.md 2.1 dice que anadir un valor es un cambio de contrato que
-> > necesita ADR.
+> **LO QUE QUEDA ABIERTO EN LA SERIE: B31.** Y medido ya, porque no se abre
+> sin medir (`/tmp/b31_preflight.py`):
 >
-> **Esa ADR nunca se abrió.** Sigue sin abrirse en B32, y B33 es el bloque
-> que la necesita. Abrirla es lo primero del bloque, y su radio de impacto
-> está medido: `Source.__post_init__` valida contra
-> `typing.get_args(SourceKind)` (acepta el valor nuevo sin tocar nada), la
-> regla `kind.startswith("git_")` no aplica a un kind de runtime, y **no hay
-> `CHECK` de SQL sobre `sources.kind`**, luego no hay migración que forzar
-> sobre filas que ya existen.
+> ```
+> E1  capabilities de análisis de código en src/          CERO
+> E2  de los 7 predicadores del Literal, con escritor       1 de 7
+>     (y los 3 usos de `line_count` NO son un claim: dos son
+>      method="line_count" y uno es un comentario)
+> E3  el análisis estructural SÍ existe: file_signature.py son
+>     431 líneas puras que ya calculan line_count,
+>     function_count, imports_module y defines_symbol — pero
+>     record_evidence_for_file_signature lo persiste como
+>     Evidence kind="file_signature", NUNCA como Claim
+> E5  el guard de la frontera ya existe y `cognicode` NO es
+>     dependencia declarada, igual que `chronos` en B33
+> ```
 >
-> **LO QUE B33 NO VA A HACER.** No va a abrir el `por_que` de B32/B34: es
-> la pregunta siguiente y tiene su propio bloque. No va a decidir el kind
-> por la FORMA del envelope («trae ventana → es de runtime»), porque una
-> medición de test también cubre un periodo y esa regla publicaría un kind
-> distinto para el mismo tipo de observación según quién la mire. Y no va a
-> declarar cerrado el gate que escribe el roadmap, porque ese gate mide el
-> resolver de B28.
-
+> **LA LECTURA QUE DEFINE B31: el enunciado del roadmap es FALSO.** Dice «no
+> hay análisis estructural real» y el análisis es real, puro y determinista.
+> Lo que falta es el **último paso**: el análisis nunca se convierte en
+> conocimiento. Es evidencia que nadie puede preguntar — `evidence` de B34 la
+> devuelve mientras `what` no la ve.
+>
 > **Bloque 2026-10-06 (B32) — No se puede responder cuándo cambió una relación ni por qué.**
 > (R0+R1 cerrados: el ratchet arquitectónico **sale distinto de cero** y las cinco fronteras llegan a cero — sin SQL en el dominio, con `RevisionRegistry` como puerto, y `knowledge_repository.py` de 895 a 719 LoC. B30 cerrado en `v0.40.0`; B31 sigue abierto.)
 >
