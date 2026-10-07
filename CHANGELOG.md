@@ -14,6 +14,112 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.40.0] - 2026-10-06 — Un contexto truncado dice qué se cayó
+
+SemVer **derivado** desde `v0.39.0`: `0 breaking · 2 feat · 3 fix · 2 otros`
+(`git log v0.39.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.40.0**.
+
+## La fila tenía dos mitades, y la primera es falsa
+
+Decía *«Traer el contexto es traerlo todo, o traerlo truncado sin decir qué se
+cayó»*. Medido antes de escribir nada, con
+`scripts/measure_b30_contexto.py` → **5/5 ABIERTAS**.
+
+`apply_budget` **ya funcionaba y ya era exacto**: los obligatorios no se
+truncan, y los opcionales entran en orden hasta que uno no cabe. Eso no es lo
+que la fila acusaba.
+
+La segunda mitad es cierta, y **más grave de lo que la fila decía**: no solo no
+se declaraba, es que **no se podía ni calcular**. `included` guardaba lo que
+entró, pero no el total de candidatos — el receptor no tenía forma de deducir
+la diferencia.
+
+## La mitad grave que la fila no mencionaba
+
+Está en el otro lado del módulo, y es la que le dio valor al bloque:
+
+```
+should_skip_adapter(*, manifest) -> manifest.is_complete and manifest.all_fresh
+```
+
+Esa función decide **no invocar al Adapter** (UAT-EVO-11: la respuesta
+determinista es completa, no hace falta un LLM), y **recibía solo el manifest**:
+nunca veía el `Handoff` compilado, luego no podía saber que el presupuesto había
+cortado. Medido, antes de arreglar nada:
+
+```
+omitidos=3 | manifest.is_complete=True | should_skip_adapter=True
+```
+
+El sistema se quedaba **sin agente por el motivo de que la respuesta era
+completa, cuando la respuesta se había cortado**. Eso no es «truncar sin decir»:
+es **declarar completo lo que no lo está**, que es justo lo que la cabecera de
+`file_handoff.py` prohíbe en `HandoffBlockedError` — *«NUNCA debe presentarse
+como completado»*.
+
+## Lo que entra
+
+- `Omision` (`kind`, `namespace`, `name`, `chars`) y `PresupuestoAplicado`
+  (`incluidos`, `omitidos`, `chars_usados`, `budget_chars`).
+- `apply_budget` deja de devolver la tupla `(incluidos, total_chars)` y devuelve
+  el registro. El contrato viejo **no puede expresar** la propiedad que B30
+  arregla.
+- `HandoffKnowledge.omitidos`, **al final** y como **tuplas**: un `dict` dentro
+  de un `frozen` deja la estructura mutable por dentro (lo que midió WI-113 en
+  `AgentResult.result`), y aquí el receptor es código externo al repo.
+- `should_skip_adapter(manifest=..., omitidos=())`: cuarta regla, con default
+  para no romper a quien ya llamaba.
+
+## Tres decisiones que se midieron, y no son de gusto
+
+1. **`chars` es `approx_chars(body)`**, la misma medida que el presupuesto usó
+   para decidir. Declarar el largo del texto crudo haría que el receptor
+   recalculara con un número que el Core no usó.
+2. **El corte declara el que no cupo *y todos los que iban detrás***. Declarar
+   solo el primero deja un número que **subestima** lo que se perdió, y un
+   informe que subestima se lee como «se cayó casi nada».
+3. **`Omision` no lleva `motivo`**. Los tres `OverflowStrategy` que producen una
+   omisión la producen por lo mismo (no cabía) y el tercero lanza excepción:
+   sería el `empate_en_la_jerarquia` de B28, un `Literal` que nombra algo que
+   ninguna ejecución puede producir.
+
+`cobertura` es una **propiedad derivada** de si hay omisiones, no un campo —un
+campo lo puede mentir sin que nada lo note— y **no hay constante `Final` al
+lado**, porque nadie valida entrada contra ella: publicarla sería un segundo
+sitio donde la verdad vive.
+
+## Un defecto que salió al escribir los tests, y no era de los tests
+
+`omitidos` declaraba en el dataclass y **no estaba en `to_dict`**, luego **no
+entraba en el `context_hash` firmado**: el Adapter veía unas omisiones que el
+Core no firmó. Es la distancia que WI-111 midió entre el instante en que el Core
+calcula el hash y el que lo consumen los eventos, **reproducida dentro del propio
+handoff**.
+
+Lo cazaron los tests de P3 y no una revisión visual: el campo se veía en el
+dataclass y en el `to_dict` de al lado, y eso no basta.
+
+## Y el instrumento tenía un *vacuous pass*
+
+P5 se formuló como «omitidos **y** salta **y** completo», que da `False` cuando
+`omitidos` está vacío — y antes del bloque **siempre** lo estaba. El guard
+cerraba **precisamente porque el defecto estaba presente**. Reformulado a «¿puede
+el skip siquiera verlas?», vía `inspect.signature`.
+
+Contrasalto **5/5**, verificado **después de `ruff format`**. **M3 abre 1
+pregunta y M2 abre 2**, porque M3 borra la **firma** sin tocar el campo: un
+arreglo que comprobara «el handoff declara omisiones» pasaría M2 sin ver M3.
+
+## Lo que NO hace, y es el límite
+
+- **No cambia la política de presupuesto**: los obligatorios no se truncan.
+- **No implementa `why`/`impact`**. La fila los metía bajo el mismo número, pero
+  son otro corte; queda declarado en `roadmap.current_workitem`.
+- No cambia `ContextRecipe`.
+- **No desactiva el skip**: sin omisiones se salta igual. Desactivarlo sería
+  cambiar un defecto por otro.
+
 ## [0.39.0] - 2026-10-06 — Un cambio en el tiempo deja de leerse como una contradicción
 
 SemVer **derivado** desde `v0.38.0`: `0 breaking · 2 feat · 1 fix · 5 otros`
