@@ -1,6 +1,6 @@
 # B32 — GitHistory: lo que se pudo responder ANTES de escribir una línea
 
-Fecha: 2026-10-07 · Medición: `.pipelinek/b32_measure.py` (ejecutada sobre una base real)
+Fecha: 2026-10-07 · Medición: `scripts/measure_b32_git_history.py` (ejecutada sobre una base real)
 
 La fila del roadmap dice: **«No se puede responder cuándo cambió una relación
 ni por qué»**. Lo que se midió antes de implementar nada:

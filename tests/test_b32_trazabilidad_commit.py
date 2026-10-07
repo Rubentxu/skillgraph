@@ -18,7 +18,7 @@ una pregunta de intención sobre la evidencia, que es exactamente lo que B33
 tienen que decidir. Implementar aquí un `por_qué` de un campo sería escribir
 el contrato de dos bloques siguientes sin haberlos discutido.
 
-**MEDIDO ANTES DE ESCRIBIR**, con `.pipelinek/b32_measure.py`:
+**MEDIDO ANTES DE ESCRIBIR**, con `scripts/measure_b32_git_history.py`:
 
     P1  claim -> source                      SI
     P2  commit -> claims                     SI   <- solo por SQL escrito a mano

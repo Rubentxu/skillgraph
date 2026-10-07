@@ -103,7 +103,7 @@ habría salido en runtime, en la primera línea que leyera un campo. Ahora es
 
 ## Las sondas: 8/8, y dos estuvieran en verde
 
-`.pipelinek/b34_mutate.py`, con baseline verificado antes.
+`scripts/mutate_b34_superficie.py`, con baseline verificado antes.
 
 | sonda | qué rompe |
 |---|---|

@@ -2,7 +2,7 @@
 
 # LA MEDIDA QUE ABRE ESTE FICHERO
 
-`.pipelinek/b32_measure.py` sobre una base real, con un claim real:
+`scripts/measure_b32_git_history.py` sobre una base real, con un claim real:
 
     P1  claim -> source (el commit del que vino)      SI
     P2  commit -> claims (al reves)                   SI

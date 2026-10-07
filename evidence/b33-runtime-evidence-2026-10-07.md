@@ -139,7 +139,7 @@ volvería a poner.
 
 ## Las sondas: 8/8, y una estuvo mal anclada
 
-`.pipelinek/b33_mutate.py`, con baseline verificado antes (si el baseline
+`scripts/mutate_b33_telemetria.py`, con baseline verificado antes (si el baseline
 está roto, cada sonda sería «cazada» por una causa que no es la suya):
 
 ```
