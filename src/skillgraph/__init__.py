@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.42.1"  # PATCH derivado con scripts/derive_semver.py sobre v0.42.0..HEAD: b/f/x/n/d 0/0/2/5/0. Cero feat es lo que hace correcto el PATCH: B36 no anade superficie, arregla la instrumentacion. El commit que sella el sha de la etiqueta vuelve a .dev0, caso 2 de test_version_matches_git_tag.
+__version__ = "0.42.1.dev0"  # v0.42.1 esta etiquetada y este commit es el que SELLA SU SHA, luego HEAD queda despues de la etiqueta: caso 2 de test_version_matches_git_tag. El sha se escribe ahora y no antes porque test_every_listed_sha_matches_its_tag lo contrasta contra `git rev-list -n1 v0.42.1`, y escrito antes guardaria el commit ANTERIOR.
 
 from skillgraph.core.errors import (
     IdentityConflictError,

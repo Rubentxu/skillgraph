@@ -1233,7 +1233,7 @@ release:
   # `pre-push` de B29): hay TRES declaraciones de version activa —esta,
   # `__init__.__version__` y la ventana del ROADMAP— y basta mover una para que
   # el guard las cruce y se ponga rojo.
-  package_version: "0.42.1"
+  package_version: "0.42.1.dev0"
   fecha: 2026-10-07
   # `semver_bump` NO se repite aqui: vive en la entrada de `release.releases`, y
   # declararlo dos veces es justo lo que el verificador rechaza —`STATE.yaml declara
@@ -1575,6 +1575,18 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.42.1
+      sha: a8ebf49f1815403e1f8b9097d2c06fbee818252e
+      fecha: 2026-10-07
+      semver_bump: PATCH
+      package_version: '0.42.1'
+      rationale_b36: |-
+        BLOQUE B36 - UN GUARD QUE OBLIGA A APAGAR EL GATE QUE LO CONTIENE. SemVer derivado con scripts/derive_semver.py sobre v0.42.0..HEAD: b/f/x/n/d 0/0/2/5/0 -> PATCH. CERO FEAT es lo que hace correcto el PATCH: el bloque no anade superficie, cambia la instrumentacion.
+        **MEDIDO ANTES DE ESCRIBIR NADA, con scripts/measure_b36_commit_gate.py, cinco rondas.** RONDA 1: `git status --porcelain` devuelve 'M  src/a.py' para un cambio STAGEADO y ' M src/a.py' para uno sin stagear, y el guard exigia la salida VACIA. El hook de pre-commit corre pytest SOBRE LO STAGEADO (scripts/hooks/pre-commit:113), luego todo commit que tocaba src/ o scripts/ se ponia rojo. **CAPTURADO EN VIVO, no en un repo de pruebas: el hook real rechazo 5f3a739, que era un commit correcto.** RONDA 2: `git checkout --` restaura DEL INDICE — SIN stagear lo destruye, STAGEADO sobrevive — luego el estado peligroso es el unico que el hook nunca produce y el seguro el unico que se puede encontrar. RONDA 5: el bypass NO apaga tres gates, apaga UNO, el smoke de pytest, que es la unica comprobacion de que lo stageado sigue pasando.
+        **Y EL GUARD NO VEIA SU PROPIO TRABAJO.** RONDA 3: SIETE scripts/mutate_*.py con `_restaura()` -> `git checkout --` y `cwd=RAIZ`, el antipatron exacto que el guard nacio para impedir, y no podia verlo porque mira el ESTADO del arbol y no el CODIGO que lo rompe. Los SIETE restauran ahora escribiendo lo que leyeron antes de mutar: `_congela()` toma la foto y `_restaura()` la devuelve. Verificado EJECUTANDO uno de verdad: 6/6 sondas cazadas y `git status` queda vacio. Y el motivo del pre-flight de B9 —que decia que el checkout «borraria el trabajo»— DEJO DE SER CIERTO y se reescribio por lo que queda de verdad: las sondas deforman el texto real de esos ficheros y con trabajo sin commitear el resultado mezcla tu cambio con el de la sonda.
+        **DOS GUARDS, PORQUE MIDEN COSAS DISTINTAS.** El de ESTADO pasa a mirar la COLUMNA Y, que es lo unico que un checkout puede perder, y su decision sale del modulo para poder probarse con las cuatro formas reales de porcelain mas la que no es porcelain. El de CAPACIDAD deriva de scripts/ y exige por AST que ninguna llamada sea `git checkout/restore/reset/clean/stash` EN POSICION DE ARGUMENTO, con contrasalto de que el derivado traiga al menos veinte modulos: sin el, una derivacion rota daria verde con la propiedad rota. El alcance es scripts/ y no todo el repo POR UNA MEDICION: tests/test_r1e_harness_comun.py:204 llama `git checkout --` legitimamente sobre un repo temporal que el propio test crea, y escanear el arbol entero sin excluir lo que no es codigo de este repo devolvio 34 falsos positivos de dulwich y urllib3 dentro de una copia vendorizada en .pipelinek/.
+        **EL INSTRUMENTO MENTIO TRES VECES, LAS TRES ANTES DE ESCRIBIR UN GUARD.** (1) Contaba PROSA como llamada —`print("... QUE ESTADO DESTRUYE git checkout --")`—: la quinta vez que sale este defecto en el repo. (2) PEOR: exigia que el primer argumento fuera cadena, luego `subprocess.run(["git", "checkout", ...])` —una LISTA— nunca se miraba, y los «0 instrumentos» del primer borrador eran CEROS FALSOS. (3) La ronda del hook filtraba las etapas que redirigen su salida, lo que excluia JUSTO la que se apaga, y decia «se apagan 0, siguen corriendo 2», que es lo contrario de lo que hace el hook. Un instrumento que se contradice con el fichero que mide no mide.
+        CIERRE: suite 4113 passed + 3 skipped + 0 failed en 858.89 s, suelos rc=0 con cli/ 93.31 % y global 97.13 %, project_truth rc=0 con 4116 declarados == 4116 colectados, ratchet rc=0 con las CINCO a cero, sondas de B36 5/5 y las de B35 8/8 — estas ultimas son la comprobacion que no existia antes del bloque, porque B36 cambia un guard que comparten y si lo hubiera roto la suite entera seguiria en verde.
     - tag: v0.42.0
       sha: ca5f0570ab5af5698b33acb19161b8e3dfef9ae3
       fecha: 2026-10-07
