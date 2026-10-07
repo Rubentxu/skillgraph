@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B31** — El código no tiene análisis estructural real: `line_count = 137` es todo lo que se sabe · CogniCode → CodeAnalysis → Knowledge, sin imports en el núcleo · (B30 cerrado en `v0.40.0`: un contexto truncado dice qué se cayó)
-> Versión activa `0.40.0.dev0` · último tag `v0.39.0` · 3683 tests · 16/16 UAT
+> Versión activa `0.40.0.dev0` · último tag `v0.40.0` · 3683 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
