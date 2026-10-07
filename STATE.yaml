@@ -1233,7 +1233,7 @@ release:
   # `pre-push` de B29): hay TRES declaraciones de version activa —esta,
   # `__init__.__version__` y la ventana del ROADMAP— y basta mover una para que
   # el guard las cruce y se ponga rojo.
-  package_version: "0.42.2"
+  package_version: "0.42.2.dev0"
   fecha: 2026-10-07
   # `semver_bump` NO se repite aqui: vive en la entrada de `release.releases`, y
   # declararlo dos veces es justo lo que el verificador rechaza —`STATE.yaml declara
@@ -1585,6 +1585,21 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.42.2
+      sha: c3af1fbdc9bdd34d3e0cee326ce161b3420a2c2b
+      fecha: 2026-10-07
+      semver_bump: PATCH
+      package_version: '0.42.2'
+      rationale_b37: |-
+        BLOQUE B37 - EL BYPASS QUE QUEDA, Y LO QUE EL HOOK DE PRE-PUSH NO LLEGA A MEDIR. SemVer derivado con scripts/derive_semver.py sobre v0.42.1..HEAD: b/f/x/n/d 0/0/1/4/0 -> PATCH. CERO FEAT vuelve a ser lo que hace correcto el PATCH: B37 no anade superficie, cambia lo que el hook DICE, y dice la verdad en los tres caminos por los que puede pasar.
+        **MEDIDO ANTES DE ESCRIBIR NADA, con scripts/measure_b37_smoke_subset.py, cuatro rondas sobre los 1163 commits del repo:** 551 no stagean .py y el smoke no lanza pytest; 252 stagean solo codigo y `pytest -q src/...` colecta cero con rc=5 y el hook sigue; 264 stagean un solo test y el hook no lo dice; 3 stagean el guard de WI-116 tocando codigo. **803 de 1163 commits -- el 69 % -- pasaron por el hook sin ejecutar un test.**
+        **LO QUE NO SE ARREGLA, Y LO DICE EL PROPIO HOOK.** El smoke es un FILTRO, no una certificacion: el veredicto sobre el repo entero lo dan el pre-push y la receta canonica. Que 252 commits puedan parecer verdes sin que nada se haya medido es lo que hace un filtro, y sustituirlo por la suite entera es lo que WI-100 ya midio a 12x mas lento.
+        **LO QUE SI ESTABA ROTO ES EL SILENCIO, Y ESO ES LO UNICO QUE SE ARREGLA.** El `OK` final era el MISMO en los tres caminos, de modo que un commit que no midio nada imprimia exactamente el mismo `OK` que uno medido. El bloque 4 del hook declara SIEMPRE que ha pasado, en los tres, y pegado al `OK`, que es donde se lee.
+        **POR QUE LOS TESTS EJECUTAN EL HOOK Y NO LO LEEN.** Un guard que buscara una cadena aprueba el defecto entero: el hook TIENE `pytest` --el defecto de WI-100-- y TIENE `tests:` aunque este dentro del `if` del smoke, que es literalmente donde estaba. Se copia el hook sin tocarlo a un repo de pruebas, se anteponen stubs de mise/ruff/uv al PATH y se mira lo que imprime. CINCO TESTS, y el quinto mira el ORDEN: sin el, declarar la nota dos lineas mas abajo deja el `OK` exactamente igual de indistinguible y el arreglo estaria a medio hacer sin que ningun test lo notase.
+        **SONDAS 6/6, Y LAS DOS QUE IMPORTAN SON M1 Y M6.** M1 mete el bloque entero dentro del `if` del smoke -- el defecto exacto en su forma literal, que un guard por busqueda aprueba porque el bloque se ejecuta y la cadena esta. M6 lo deja DETRAS del `OK`. Entre las dos quitan exactamente las dos cosas nuevas que el arreglo afirmaba. M5 es la sonda de la mentira: no basta con que el hook diga algo, tiene que decir lo que ES.
+        **EL INSTRUMENTO MINTIO ANTES DE CONTAR.** El BLOQUE_4 de M1 llevaba guiones ASCII donde el hook tiene em-dash: la sustitucion no ocurria, la sonda no mutaba nada, y el harness se habria reportado a si mismo como seis cosas cazadas sin haber medido una -- el error de WI-113 repetido. Por eso el harness comprueba ANTES de mutar que las tres lineas de la declaracion siguen siendo las declaradas y para en seco, `CAZADA` exige el diagnostico NOMBRADO de esa sonda y no cualquier test rojo, y `mutado == original` es SIN_SONDA. Las sondas se cerraron DESPUES del `ruff format`, que es cuando tienen que volver a probarse.
+        CIERRE: suite 4118 passed + 3 skipped + 0 failed en 904,48 s sobre `a4dbb96` con el arbol limpio y sin escribir durante la corrida, 4118+3 = 4121 = tests.total; suelos rc=0 con cli/ 93.31 %, runtime/ 98.41 % y global 97.13 %; ratchet rc=0 con las CINCO a cero; sondas de B37 6/6 y las de B36 5/5 y B35 8/8 -- estas ultimas son la comprobacion que B37 necesita, porque toca un guard compartido y si lo hubiera roto la suite entera seguiria en verde.
+        **Y ABRE B38 CON UNA AFIRMACION QUE ESTABA SIN MEDIR.** El subtitulo de B37 era «lo que el hook de pre-push no llega a medir», y eso no tenia instrumento: es el mismo defecto que este gate me caza en el push de v0.42.1. MEDIDO al cerrar con scripts/measure_b38_pre_push.py: con HOOK_SKIP_PUSH_TESTS=1 la ULTIMA LINEA del pre-push es `OK: la receta canonica dio SUCCESS sobre <sha>`, con la receta sin ejecutar; y TestPrePushHookDelega::test_el_bypass_salta_la_verificacion_de_verdad exige solo `returncode == 0` y que el stub no saliera en la salida, luego aprueba con los ojos cerrados un hook que miente con esa palabra. El instrumento de B38 tambien mintio en su primera ronda: miraba splitlines()[-1] y reporto «el bypass no imprime SUCCESS», porque el repo de pruebas no era git y `git rev-parse` reventaba dejando la linea del SUCCESS dos lineas mas arriba. Corregido con repo git de verdad y busqueda sobre toda la salida.
     - tag: v0.42.1
       sha: a8ebf49f1815403e1f8b9097d2c06fbee818252e
       fecha: 2026-10-07
