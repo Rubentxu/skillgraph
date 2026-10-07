@@ -134,6 +134,24 @@ def sujeto_de(path: str) -> str:
     (`file:a.py`) y el que `_poblar` de sus tests siembra. Elegir otro
     obligaria a sembrar dos vocabularios de sujeto en el mismo grafo.
 
+    **Y POR QUE NO HAY UN `try` ALREDEDOR, MEDIDO.** La primera version
+    envolvia la llamada a `entity_id` en un `except Exception` que re-
+    lanzaba tipado «porque puede reventar por mas de una razon». MEDIDO
+    sobre `graph.py:96`, que es toda la regla:
+
+        entity_id rechaza DOS cosas: vacio, o sin `:`.
+
+    Y como aqui siempre se antepone `file:`, el resultado SIEMPRE tiene
+    dos puntos. **La rama era inalcanzable**, y una rama inalcanzable con
+    un `except Exception` dentro es la peor version de un guard —no mide
+    nada y ademas obliga a fabricar una entrada falsa para poder probarla,
+    que es fabricar una prueba que no prueba el caso real—.
+
+    Lo que se deja es lo que de verdad anade valor: el `strip` y el error
+    de la ruta vacia, que es la unica entrada que este modulo rechaza por
+    su cuenta. El resto lo decide `entity_id`, que ya tiene su error
+    tipado y su exit code.
+
     Args:
         path: la ruta, con o sin el prefijo `file:`.
 
@@ -141,7 +159,9 @@ def sujeto_de(path: str) -> str:
         La ruta con `file:` delante, validada por `entity_id`.
 
     Raises:
-        ValidationError: si la ruta queda vacia o no admite el namespace.
+        ValidationError: si la ruta queda vacia.
+        InvalidEntityIDError: si `entity_id` la rechaza —que hoy no ocurre,
+            porque el namespace garantiza los dos puntos—.
     """
     limpio = path.strip()
     if not limpio:
@@ -150,20 +170,7 @@ def sujeto_de(path: str) -> str:
         )
     if limpio.startswith(f"{_NAMESPACE}:"):
         return entity_id(limpio)
-    try:
-        return entity_id(f"{_NAMESPACE}:{limpio}")
-    except Exception as exc:
-        # El ancho es deliberado y se re-lanza tipado: `entity_id` puede
-        # reventar por mas de una razon —formato, prefijo, tipo— y la unica
-        # accion posible para todas es la misma. Estrecharlo dejaria fuera
-        # alguna, y el operador recibiria un `InvalidEntityIDError` sobre el
-        # nombre de una funcion interna en vez de un `ValidationError` que
-        # dice que espera `file:<ruta>`.
-        raise ValidationError(
-            f"{CODE_ANALYSIS}: {path!r} no es un sujeto valido para un fichero. "
-            f"Se espera `file:<ruta>`, y la regla que lo rechaza es "
-            f"`entity_id`, no esta funcion"
-        ) from exc
+    return entity_id(f"{_NAMESPACE}:{limpio}")
 
 
 _NAMESPACE: Final[str] = "file"

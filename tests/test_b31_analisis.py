@@ -788,3 +788,259 @@ def _poblar(s: Storage) -> None:
             freshness="current",
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# P10 — las salidas que quedaban
+# ---------------------------------------------------------------------------
+
+
+class TestLasSalidasQueQuedaban:
+    """Las ramas que el suelo de §6.3 encontró sin cubrir, y que son todas
+    **caminos de error**.
+
+    MEDIDO al certificar:
+
+        code_analysis.py   88,76 %   suelo 90 %   BAJO
+        migrations.py      87,16 %   suelo 90 %   BAJO
+
+    Y son las dos cosas que mas se confunden con un fallo de verdad: un
+    sujeto mal escrito que el motor no acepta, una base vieja sin las
+    columnas que la migracion da por puestas, y una migracion que pierde
+    filas. Un modulo por debajo del suelo no es burocracia — es codigo que
+    nadie ha ejecutado, y este es el codigo que un operador se encuentra
+    cuando algo va mal.
+    """
+
+    # --- code_analysis.py --------------------------------------------------
+
+    def test_la_ruta_siempre_lleva_namespace_y_nunca_falla_por_otro_motivo(self) -> None:
+        """La rama que se QUITO, y por que se puede quitar.
+
+        MEDIDO sobre `graph.py:96`, que es toda la regla de `entity_id`:
+        rechaza **dos** cosas —vacio, o sin `:`—. Y como aqui siempre se
+        antepone `file:`, el resultado siempre tiene dos puntos. El
+        `except Exception` de la primera version era INALCANZABLE, y para
+        cubrirlo habia que inventar una entrada que `entity_id` acepta.
+
+        Y un dato que sale de aqui y conviene tener a mano: `entity_id`
+        acepta `file:`, `file::`, `file:a:b` y una ruta con espacios. Su
+        unica regla es la de los dos puntos, luego `sujeto_de` **no** esta
+        filtrando rutas: esta AOADIENDO el namespace y dejando que la
+        decision sea de `entity_id`.
+        """
+        from skillgraph.knowledge.graph import entity_id as crudo
+
+        for buena in ("src/app.py", "a.py", "x", "con espacios.py", "a:b"):
+            assert sujeto_de(buena) == sujeto_de(buena)  # no lanza
+            assert f"file:{buena}" == crudo(f"file:{buena}")
+
+    def test_una_analisis_vacio_no_produce_un_envelope_vacio(self) -> None:
+        """`extract_file_signatures` SIEMPRE devuelve el summary; una tupla
+        vacia significa que alguien rompio esa garantia, y fingir que no
+        pasa nada seria devolver un envelope que se ingiere como no-op."""
+        with pytest.raises(ValidationError, match="ni el summary"):
+            analisis_a_observaciones(())
+
+    def test_la_capability_no_se_construye_sin_identidad(self) -> None:
+        """Sin `source_id` no hay de quien es la afirmacion, y sin
+        `revision` el `claim_id` no se puede derivar del contenido."""
+        with pytest.raises(ValidationError, match="source_id"):
+            CodeAnalysisCapability(source_id="  ", revision="r1")
+        with pytest.raises(ValidationError, match="revision"):
+            CodeAnalysisCapability(source_id="local:x", revision="")
+
+    def test_un_argumento_que_no_es_texto_falla_en_la_frontera(self) -> None:
+        """Y el mensaje dice CUAL de los tres falta, no «peticion invalida»."""
+        cap = _cap()
+        for argumentos, esperado in (
+            ({"path": RUTA, "observed_at": "2026-10-07T12:00:00Z"}, "content"),
+            ({"path": RUTA, "content": CODIGO}, "observed_at"),
+            ({"path": 7, "content": CODIGO, "observed_at": "x"}, "path"),
+            ({"path": "  ", "content": CODIGO, "observed_at": "x"}, "path"),
+        ):
+            with pytest.raises(ValidationError, match=esperado):
+                cap.invoke(CapabilityRequest(spec=cap.spec, subject=SUJETO, arguments=argumentos))
+
+    # --- migrations.py -----------------------------------------------------
+
+    def test_el_ddl_se_deriva_tambien_sin_unique_previo(self) -> None:
+        """Una base de antes de B25 no tiene `UNIQUE`, y hay que colgarle
+        uno. Es el mismo caso que `0005` aprendio mirando, y el mismo
+        error que sufrio: anadir la coma donde ya la habia rompe el DDL."""
+        from skillgraph.platform.migrations import _ddl_de_claims_con_objeto
+
+        # Todas las columnas que nombra el `UNIQUE` nuevo. Las que no son
+        # del objeto las puso `0005` y `0004`, luego esta tabla no puede
+        # dejarlas fuera: un `UNIQUE` que nombra una columna inexistente no
+        # es un `UNIQUE` mas débil, es un DDL que SQLite no acepta.
+        ddl_sin_unique = (
+            "CREATE TABLE claims (\n"
+            "    claim_id TEXT PRIMARY KEY,\n"
+            "    tenant_id TEXT NOT NULL,\n"
+            "    project_id TEXT NOT NULL,\n"
+            "    subject_entity_id TEXT NOT NULL,\n"
+            "    predicate TEXT NOT NULL,\n"
+            "    object_literal_json TEXT NOT NULL,\n"
+            "    object_entity_id TEXT NOT NULL DEFAULT '',\n"
+            "    source_id TEXT NOT NULL,\n"
+            "    checked_at_revision TEXT NOT NULL\n"
+            ")"
+        )
+        nuevo = _ddl_de_claims_con_objeto(ddl_sin_unique)
+        assert "UNIQUE" in nuevo
+        # Y lo que importa: que SQLite lo acepte.
+        crudo = sqlite3.connect(":memory:")
+        try:
+            crudo.execute(nuevo)
+            columnas = {f[1] for f in crudo.execute("PRAGMA table_info(claims)")}
+            assert {"object_literal_json", "object_entity_id"} <= columnas
+        finally:
+            crudo.close()
+
+    def test_un_ddl_sin_cierre_se_rechaza_en_vez_de_inventar(self) -> None:
+        from skillgraph.platform.migrations import _ddl_de_claims_con_objeto
+
+        with pytest.raises(sqlite3.IntegrityError, match="cierre esperable"):
+            _ddl_de_claims_con_objeto("CREATE TABLE claims (")
+
+    def test_una_base_sin_ddl_no_se_reconstruye_inventando(self) -> None:
+        """Sin DDL no hay nada que derivar, y una migracion que inventa la
+        tabla es una migracion que pierde lo que hubiera."""
+        from skillgraph.platform import migrations
+
+        crudo = sqlite3.connect(":memory:")
+        try:
+            with pytest.raises(sqlite3.IntegrityError, match="no hay DDL"):
+                migrations._claims_identidad_con_objeto(crudo)
+        finally:
+            crudo.close()
+
+    def test_una_base_sin_las_columnas_del_objeto_no_se_migra(self, tmp_path: Path) -> None:
+        """Una base de la epoca de B6 puede no tenerlas, y el error de
+        SQLite seria `no such column`, que no dice que la migracion va
+        atras. Se dice antes."""
+        from skillgraph.platform import migrations
+
+        ruta = tmp_path / "sin_columnas.sqlite"
+        crudo = sqlite3.connect(ruta)
+        try:
+            crudo.executescript(
+                "CREATE TABLE claims (claim_id TEXT PRIMARY KEY, "
+                "subject_entity_id TEXT NOT NULL, predicate TEXT NOT NULL)"
+            )
+            crudo.commit()
+            with pytest.raises(sqlite3.IntegrityError, match="0003"):
+                migrations._claims_identidad_con_objeto(crudo)
+        finally:
+            crudo.close()
+
+    def test_un_indice_con_nombre_raro_se_ignora_en_vez_de_interpolarse(self) -> None:
+        """El `PRAGMA` no acepta identificadores parametrizados, luego el
+        nombre sale de la propia base y hay que filtrarlo. Un nombre con
+        comillas pasaria la interpolacion."""
+        from skillgraph.platform import migrations
+
+        crudo = sqlite3.connect(":memory:")
+        try:
+            crudo.execute(
+                "CREATE TABLE claims (claim_id TEXT PRIMARY KEY, "
+                "tenant_id TEXT, project_id TEXT, predicate TEXT, "
+                "object_literal_json TEXT, object_entity_id TEXT)"
+            )
+            crudo.execute("CREATE UNIQUE INDEX `no; DROP TABLE claims` ON claims(claim_id)")
+            # No revienta, y no reconstruye: el indice raro no cuenta como
+            # la constraint de la tabla, luego la migracion sigue su curso.
+            assert migrations._el_unique_ya_lleva_objeto(crudo) is False
+        finally:
+            crudo.close()
+
+
+class _CursorFalso:
+    """Un cursor que devuelve lo que le digan, para medir los FILTROS.
+
+    **POR QUE HACE FALTA Y POR QUE NO ES UNA PRUEBA DE CARTON.** Las lineas
+    que estos tests cubren filtran el nombre de un indice que viene de la
+    propia base antes de interpolarlo en un `PRAGMA`, que no acepta
+    identificadores parametrizados. Ese filtro **no se puede alcanzar con
+    una base real**: SQLite llama `sqlite_autoindex_*` a las constraints de
+    tabla, y ese nombre siempre es alfanumerico.
+
+    Es decir: la rama es correcta y es INALCANZABLE desde fuera. Y esa es
+    exactamente la situacion que B1 calibra —«un contrato que se sostiene
+    hoy y que nadie puede romper no se instrumenta, porque vigilar una verdad
+    imposible de violar es la peor version de un guard»—. Aqui hay dos
+    razones por las que se instrumenta igual: el filtro protege una
+    interpolacion SQL, y el dia que SQLite acepte un nombre de indice
+    raro ese `continue` pasa a ser la unica linea que evita una inyeccion.
+    Un guard de seguridad no se mide por lo que puede pasar hoy.
+    """
+
+    def __init__(self, nombres: tuple[str, ...]) -> None:
+        self._nombres = nombres
+
+    def execute(self, sql: str, *args: object) -> _CursorFalso:
+        self._sql = sql
+        return self
+
+    def fetchall(self) -> list[tuple[str]]:
+        if "pragma_index_list" in self._sql:
+            return [(n,) for n in self._nombres]
+        return []
+
+
+class TestLosFiltrosDeLosIndices:
+    @pytest.mark.parametrize(
+        "nombre",
+        [
+            "indice; DROP TABLE claims",
+            "no es alfanumerico",
+            "con'comilla'",
+            "con espacio",
+            "",
+        ],
+    )
+    def test_un_nombre_de_indice_raro_no_se_interpola(self, nombre: str) -> None:
+        """Que el `continue` se encienda y no reviente al motor.
+
+        Sin esto, un nombre raro pasaria al `PRAGMA index_info('...')` y la
+        sentencia se ejecutaria con contenido de la base dentro de las
+        comillas.
+        """
+        from skillgraph.platform.migrations import _el_unique_ya_lleva_objeto
+
+        crudo = sqlite3.connect(":memory:")
+        try:
+            crudo.execute(
+                "CREATE TABLE claims (claim_id TEXT PRIMARY KEY, tenant_id TEXT, "
+                "project_id TEXT, predicate TEXT, object_literal_json TEXT, "
+                "object_entity_id TEXT, source_id TEXT, checked_at_revision TEXT)"
+            )
+            assert _el_unique_ya_lleva_objeto(_CursorFalso((nombre,))) is False
+            assert _el_unique_ya_lleva_ambito(_CursorFalso((nombre,))) is False
+        finally:
+            crudo.close()
+
+    def test_un_nombre_valido_sigue_preguntando_al_motor(self) -> None:
+        """Contrasalto: sin el, un filtro que devolviera siempre `False`
+        pasaria todos los tests de arriba."""
+        from skillgraph.platform.migrations import _el_unique_ya_lleva_objeto
+
+        crudo = sqlite3.connect(":memory:")
+        try:
+            crudo.execute(
+                "CREATE TABLE claims (claim_id TEXT PRIMARY KEY, tenant_id TEXT, "
+                "project_id TEXT, subject_entity_id TEXT, predicate TEXT, "
+                "object_literal_json TEXT, object_entity_id TEXT, source_id TEXT, "
+                "checked_at_revision TEXT, "
+                "UNIQUE (subject_entity_id, tenant_id, project_id, predicate, "
+                "object_literal_json, object_entity_id, source_id, "
+                "checked_at_revision))"
+            )
+            assert _el_unique_ya_lleva_objeto(crudo) is True
+            assert _el_unique_ya_lleva_ambito(crudo) is True
+        finally:
+            crudo.close()
+
+
+from skillgraph.platform.migrations import _el_unique_ya_lleva_ambito  # noqa: E402

@@ -5,7 +5,7 @@
 > **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.**
 > (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 con `runtime_observation`, `Source` +2 columnas, migración `0007` e índice parcial `idx_sources_ventana` — **solo en la migración**, porque en el DDL una base vieja reventa antes de migrar. El kind lo declara el envelope, no se deduce de que tenga ventana: una medición de test también cubre un periodo.)
 >
-> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4053 tests**.
+> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4068 tests**.
 >
 > **LA FILA DECÍA «HAY QUE AÑADIR SEIS CONSULTAS», Y CINCO YA EXISTÍAN.**
 > Medido antes de escribir una línea (`/tmp/b34_preflight.py`):
