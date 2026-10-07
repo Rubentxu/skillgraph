@@ -264,6 +264,48 @@ def release_declarada(raiz: Path) -> str:
     return etiqueta[1:]
 
 
+def package_version_declarada(raiz: Path) -> str | None:
+    """La version activa que declara `STATE.yaml.release`, o `None`.
+
+    **EL AGUJERO QUE CIERRA, MEDIDO ANTES DE ESCRIBIR ESTA LINEA.**
+
+    `project_truth.py` cruzaba la version activa con el ultimo tag, pero
+    **`release.package_version` no era parte de la verdad**: nadie la leia.
+    Y no es una lectura mas —es la que el guard de release
+    (`test_release_governance::test_current_version_is_documented_in_state`)
+    afirma contrastar con `__version__`, y su predicado es una **coincidencia
+    de texto**: `f'package_version: "{version}"' in state_yaml`, que encuentra
+    la linea que sea en todo el fichero.
+
+    MEDIDO con el contrasalto que describe el hallazgo:
+
+        release.package_version := 0.40.0.dev0   (la version anterior)
+        -> project_truth rc=0, coherente: true
+
+    O sea: el campo puede quedarse viejo y **nadie se entera**. Es la misma
+    clase que WI-115 midio para `tests.total` y `tests.package_version`, y
+    aqui es el **tercer** miembro de esa familia.
+
+    **POR QUE DEVUELVE `None` Y NO STR.** Un repositorio recien hecho puede no
+    declararla, y eso es distinto de declararla mal: lo primero es una
+    ausencia tolerable, lo segundo una contradiccion. Confundirlas seria
+    inventar un fallo donde no lo hay, que es el error espejo del de WI-113
+    (`empate_en_la_jerarquia`).
+    """
+    release = _seccion(raiz, "release")
+    if release is None:
+        return None
+    valor = release.get("package_version")
+    if valor is None:
+        return None
+    if not isinstance(valor, str):
+        raise VerdadNoLegible(
+            f"STATE.yaml.release.package_version deberia ser un string, y es "
+            f"{type(valor).__name__}"
+        )
+    return valor
+
+
 def tag_real(raiz: Path) -> str | None:
     """El ultimo tag del VCS, o `None` si todavia no hay ninguno.
 
@@ -536,6 +578,11 @@ class Estado:
     bloque: str
     objetivo: str
     version: str
+    #: **R0.B.** La version activa que declara `STATE.yaml.release`. Antes no
+    #: era parte de la verdad y por eso el contrasalto de B29 daba verde con
+    #: el campo en la version anterior. `None` = no la declara (tolerable);
+    #: declararla distinta de `version` = contradiccion.
+    package_version: str | None
     release: str
     tag_vcs: str | None
     tests_declarados: int
@@ -736,6 +783,37 @@ def _contradicciones(
             f"v{v['tag_vcs']}; lo esperable es {v['tag_vcs']}.dev0"
         )
 
+    # **R0.B: `release.package_version` POR FIN ES PARTE DE LA VERDAD.**
+    #
+    # Antes no se leia, y por eso el contrasalto de B29 —«ponla en la version
+    # anterior y mira»— daba `coherente: true`. La regla es la MISMA que la
+    # de arriba, y se aplica sobre el campo que la declara:
+    #
+    #     version activa == tag + .dev0   (o el SemVer puro si HEAD esta EN la
+    #                                     tag, que es el caso 2 del guard)
+    #
+    # **Y POR QUE NO BASTABA CON QUE EL GUARD DE RELEASE LO MIRARA.** Ese guard
+    # compara `f'package_version: "{version}"' in state_yaml`, que es una
+    # **coincidencia de texto sobre todo el fichero**: encuentra la linea que
+    # sea. Con la cabecera mal y `releases[0]` bien, pasa. Un predicado que
+    # busca un texto no puede distinguir *donde* estaba el valor; hace falta
+    # leer el campo por su camino.
+    #
+    # **Y LA RELACION ESTA MODELADA, NO ES UNA COMPARACION INGENUA.** En
+    # desarrollo `package = 0.41.0.dev0` mientras `latest_tag = 0.41.0` es lo
+    # NORMAL, no una contradiccion: es la relacion «el arbol va mas alla que la
+    # etiqueta y por eso lleva `.dev0`». Aqui se dice con `head_en_la_etiqueta`,
+    # la misma booleana que ya desambigua el caso 2. Sin ella, o este bloque
+    # se contradiria con `test_version_matches_git_tag`, que los dos son del
+    # repo y los dos se ejecutan.
+    paquete_declarado = v.get("package_version")
+    if paquete_declarado is not None and paquete_declarado != v["version"]:
+        problemas.append(
+            f"package_version: STATE.release declara {paquete_declarado} y "
+            f"__init__.py declara {v['version']}; declaran la version ACTIVA "
+            "del arbol y tienen que ser la misma"
+        )
+
     return tuple(problemas)
 
 
@@ -757,6 +835,10 @@ def estado(raiz: Path) -> Estado:
     v: dict[str, Any] = {
         "bloque": bloque_del_roadmap(raiz),
         "version": version_activa(raiz),
+        # R0.B: `release.package_version` entra en la verdad. Antes no se
+        # leia y por eso el contrasalto de B29 daba `coherente: true` con el
+        # campo en la version anterior. Ver `package_version_declarada`.
+        "package_version": package_version_declarada(raiz),
         "release": release_declarada(raiz),
         "tag_vcs": tag_real(raiz),
         "tests_declarados": total_declarado(raiz),
