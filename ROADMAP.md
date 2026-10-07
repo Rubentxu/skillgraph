@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B35** — De la capability al store hay tres pasos que no existen · el deserializador, el registro y la puerta · (B31 cerrado y certificado: `sg.code.analysis` con `ADR-0035` y la migración `0008`. **La fila de este roadmap era FALSA en su primera mitad**: el análisis estructural sí existía —`file_signature.py`, 431 líneas puras— y lo que faltaba era el último paso, convertirlo en `Claim`. Al medirlo de punta a punta salió `7 observaciones -> 7 claims -> 5 filas`: el objeto no formaba parte de la identidad del claim, y dos hechos ciertos sobre el mismo par se comían en silencio. Al cerrar B31 se midió lo siguiente: `CapabilityRegistry(...)` se construye **0 veces en `src/`** y las tres capabilities de conocimiento **0 veces fuera de los tests**. Para `AgentAdapter` sí hay ensamblado en la CLI; para `Capability` no, porque una `sg.*` no se elige, se registra. Ver más abajo)
-> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 4104 tests · 16/16 UAT
+> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 4106 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 

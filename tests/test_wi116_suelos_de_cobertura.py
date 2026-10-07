@@ -20,15 +20,31 @@ mayor, para que cada commit que sube la cifra sea pequeno y medible.
 `observation_ingestion.py` —el modulo que creo R1.C— quedo en **84 %** al
 nacer, por debajo del 90 % que su ubicacion declara. AGENTS 6.3 no perdona
 ese suelo, y lo primero que se hace con un modulo nuevo es medirlo. Lo que
-faltaba eran las dos lineas de la rama de CONFLICTO de la ingesta, que es
-justo la propiedad que B27 construyo: el aviso se recoge, no se tira.
+faltaban eran las dos lineas de la rama de CONFLICTO de la ingesta.
+
+**Y B35 VUELVIO A DEJARLO EN 84 %, Y POR ESO ESTA OTRA VEZ AQUI.**
+
+Se tapo la rama con un test que afirmaba lo contrario —«la ingesta no
+recoge el conflicto»—, que era verdad y ademas hacia subir el suelo por el
+motivo equivocado. MEDIDO al certify B35: la rama **no se puede ejecutar**, ni
+siquiera con un test nuevo, porque `ingerir` es la unica funcion publica del
+modulo y su unico camino es `normalizar(env)`. Fabricar un test que la
+ejecute habria exigido monkeypatchear el normalizador, que es poner un
+peine en la cobertura.
+
+Aqui esta el segundo motivo por el que este fichero dice que no baja
+suelos: **tambien hay que poder QUITAR codigo**. Un suelo que obliga a
+fabricar una prueba para cubrir una rama inalcanzable no esta midiendo el
+codigo que se ejecuta: esta obligando a que quede escrito. La rama se borro
+—con un guard por AST que avise si vuelve— y el modulo subio de 84 % a 100 %.
 
 # LO QUE ESTE FICHERO NO HACE
 
 No baja ningun suelo. `SUELOS_ESPECIALES` y `EXCEPCIONES` siguen exactamente
 como estaban: tocar un suelo para que un gate de en verde es la forma de
 guarda que este repo lleva cinco bloques cerrando. Aqui la unica palanca es
-**escribir los tests que faltan**.
+**escribir los tests que faltan** y, cuando no faltan y no se pueden
+escribir, **borrar lo que no se ejecuta**.
 """
 
 from __future__ import annotations
