@@ -155,7 +155,13 @@ class TestMixinsAreDisjoint:
         # de B29 (`M3`) apunta a `knowledge_repository.py`, renombro el metodo
         # INTERNO, y P3 siguio cerrada — porque este, el que sale de
         # `Storage`, lo hereda de `KnowledgeDelegations`.
-        assert len(seen) == 70, f"esperados 70 metodos, hay {len(seen)}"
+        # B32 lo subio a 71 con `claims_desde_commit`, que hace preguntable
+        # el DESDE QUE: sin el, el SHA se guardaba en `sources` y no habia
+        # por donde preguntar «que se afirmo desde este commit». Y esa
+        # pregunta no es la del POR QUE (B33/B34): `claims_at_revision` y
+        # `claims_desde_commit` responden a dos relojes distintos y por eso
+        # son dos nombres y no uno con un parametro.
+        assert len(seen) == 71, f"esperados 71 metodos, hay {len(seen)}"
 
     def test_each_mixin_delegates_to_exactly_one_accessor(self) -> None:
         """AST, no grep: los `return self.x(...)` multilinea no se leen
@@ -235,7 +241,12 @@ class TestPublicSurfacePreserved:
     # que se escribe y no se puede consultar es la misma trampa con otra
     # palabra — quien sabe que cada afirmacion caduca y no tiene por donde
     # preguntar «que se creia en la revision X»-.
-    EXPECTED_PUBLIC = 80
+    # B32 lo subio a 81 con `claims_desde_commit`, por la misma trampa con
+    # la tercera palabra: una ascendencia de commits que se PERSISTE y no
+    # se puede consultar deja el rastro escrito sin puerta de entrada. El
+    # indice parcial `idx_sources_commit` existe desde este commit, pero un
+    # indice sin consulta que lo use es un indice para otro.
+    EXPECTED_PUBLIC = 81
     # Solo los privados no-dunder: `__init__`/`__enter__`/`__exit__`
     # estan cubiertos por LIVE_SQL_METHODS y por `close`/`uow`.
     EXPECTED_PRIVATE = 5

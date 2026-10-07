@@ -149,6 +149,9 @@ class TestStorageStillInherits:
         # el que de verdad importa: un metodo que sube la cifra pero se deja
         # de alcanzar desde `Storage` seria un delegate muerto, y la cifra no
         # lo veria.
-        assert len(moved) == 70, f"esperados 70 metodos de delegacion, hay {len(moved)}"
+        # B32 lo subio a 71 con `claims_desde_commit`, el delegate que hace
+        # preguntable que se afirmo DESDE UN COMMIT, y por eso mismo exige
+        # que el bucle de alcanzabilidad de abajo lo encuentre en `Storage`.
+        assert len(moved) == 71, f"esperados 71 metodos de delegacion, hay {len(moved)}"
         for name in moved:
             assert callable(getattr(Storage, name, None)), f"{name} ya no es alcanzable"
