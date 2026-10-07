@@ -442,11 +442,18 @@ class TestApplyBudget:
 
     Aplica budget a obligatorios (sin truncar) y luego intenta incluir
     opcionales segun `overflow_strategy` ('fail' | 'drop_optional' |
-    'truncate_finding'). Devuelve (included, total_chars).
+    'truncate_finding').
 
     - obligatorios que NO caben solos -> TokenBudgetExceededError.
     - opcional que no cabe + overflow='fail' -> TokenBudgetExceededError.
     - opcional que no cabe + 'drop_optional' | 'truncate_finding' -> para.
+
+    **B30: DEVUELVE `PresupuestoAplicado`, NO UNA TUPLA.** Antes devolvia
+    `(included, total_chars)` y lo que se caia **no se decia por ninguna
+    parte**: el receptor recibia una lista mas corta sin ninguna forma de
+    saberlo ni de calcularlo. Este fichero mide el corte, que es lo que ya
+    garantizaba el contrato viejo; la declaracion se mide en
+    `tests/test_b30_contexto.py`.
     """
 
     def test_obligatory_exceeds_budget_raises(self) -> None:
@@ -471,14 +478,14 @@ class TestApplyBudget:
         # 20+26 = 46; dos caben en budget=200.
         obligatory: list[object] = [_cr_with_size(20)]
         optional: list[object] = [_cr_with_size(20)]
-        included, total = apply_budget(
+        resultado = apply_budget(
             obligatory=obligatory,
             optional=optional,
             budget_chars=200,
             overflow_strategy="fail",
         )
-        assert total == 92
-        assert len(included) == 2
+        assert resultado.chars_usados == 92
+        assert len(resultado.incluidos) == 2
 
     def test_optional_overflow_fail_raises(self) -> None:
         import pytest
@@ -504,14 +511,24 @@ class TestApplyBudget:
         # Segundo opt (46+46=92 > 70) -> para.
         obligatory: list[object] = [_cr_with_size(20)]
         optional: list[object] = [_cr_with_size(20), _cr_with_size(20)]
-        included, total = apply_budget(
+        resultado = apply_budget(
             obligatory=obligatory,
             optional=optional,
             budget_chars=70,
             overflow_strategy="drop_optional",
         )
-        assert total == 46
-        assert len(included) == 1
+        assert resultado.chars_usados == 46
+        assert len(resultado.incluidos) == 1
+
+        # B30: lo que entra no cambia, y ademas ahora se DECLARA. Este test
+        # fijaba "para"; el corte sigue siendo el corte. Lo que se anade es
+        # que lo que se quedo fuera queda nombrado, no descartado en silencio.
+        #
+        # `_cr_with_size(20)` fabrica siempre el MISMO `resource_name`, asi
+        # que los dos nombres declarados coinciden y no los puedo usar para
+        # distinguir cual se cayo: lo que se comprueba es que se declaran
+        # **todos** los que no entraron, no que el nombre sea distinto.
+        assert len(resultado.omitidos) == len(optional) - (len(resultado.incluidos) - 1)
 
 
 class TestBuildCapabilities:
