@@ -6,7 +6,7 @@
 > (B37 cerrado y certificado en `evidence/b37-smoke-subset-2026-10-07.md`: `4118 passed, 3 skipped, 0 failed, 904,48 s`, y `4118 + 3 = 4121` = `tests.total`; suelos rc=0, `project_truth` rc=0, ratchet 5/5 a cero, sondas B37 6/6, B36 5/5 y B35 8/8. B37 cerro el silencio del pre-commit: el `OK` final era el MISMO en los tres caminos, y **803 de 1163 commits — el 69 % — pasaron por ahi sin ejecutar un test**; el bloque 4 declara ahora siempre que ha pasado, pegado al `OK`, y cinco tests lo EJECUTAN y miran lo que imprime, porque un guard por busqueda de cadena aprueba el defecto entero. B38 abre con lo que B37 dejo escrito **sin medir**: su propio subtitulo era «lo que el hook de pre-push no llega a medir». MEDIDO con `scripts/measure_b38_pre_push.py`: con `HOOK_SKIP_PUSH_TESTS=1` la ultima linea del pre-push es `OK: la receta canonica dio SUCCESS sobre <sha>`, con la receta sin ejecutar — y el guard que ya existe sobre ese bypass solo exige `returncode == 0` y que el stub no saliera en la salida, luego aprueba un hook que miente con la palabra SUCCESS.)
 > (B36 cerrado y certificado en `evidence/b36-commit-gate-2026-10-07.md`: `4113 passed, 3 skipped, 0 failed, 858,89 s`, suelos rc=0, ratchet 5/5 a cero, sondas 5/5 y las de B35 siguen 8/8. El guard de estado ahora mira la columna Y de `git status --porcelain` —lo único que un `git checkout --` puede perder—, nace una guarda de capacidad derivada de `scripts/`, y los **siete** instrumentos que restauraban con `git checkout --` restauran escribiendo. B37 abre con lo que queda: el bypass todavía necesario, y lo que el hook de pre-push no llega a medir.)
 >
-> Versión activa `0.42.1.dev0`; último tag `v0.42.1`; **4121 tests**.
+> Versión activa `0.42.2`; último tag `v0.42.2`; **4121 tests**.
 >
 > **LA PREMISA DE B31 ERA FALSA, Y ESO FUE LO PRIMERO QUE SE MIDIÓ.**
 > La fila decía «no hay análisis estructural real: `line_count = 137` es todo
@@ -137,7 +137,7 @@
 > **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.** (cerrado y certificado)
 > (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 con `runtime_observation`, `Source` +2 columnas, migración `0007` e índice parcial `idx_sources_ventana` — **solo en la migración**, porque en el DDL una base vieja reventa antes de migrar. El kind lo declara el envelope, no se deduce de que tenga ventana: una medición de test también cubre un periodo.)
 >
-> Versión activa `0.42.1.dev0`; último tag `v0.42.1`; **4121 tests**.
+> Versión activa `0.42.2`; último tag `v0.42.2`; **4121 tests**.
 >
 > **LA FILA DECÍA «HAY QUE AÑADIR SEIS CONSULTAS», Y CINCO YA EXISTÍAN.**
 > Medido antes de escribir una línea (`/tmp/b34_preflight.py`):
@@ -250,7 +250,7 @@
 > **Bloque 2026-10-06 (B32) — No se puede responder cuándo cambió una relación ni por qué.**
 > (R0+R1 cerrados: el ratchet arquitectónico **sale distinto de cero** y las cinco fronteras llegan a cero — sin SQL en el dominio, con `RevisionRegistry` como puerto, y `knowledge_repository.py` de 895 a 719 LoC. B30 cerrado en `v0.40.0`; B31 sigue abierto.)
 >
-> Versión activa `0.42.1.dev0`; último tag `v0.42.1`; **3712 tests**.
+> Versión activa `0.42.2`; último tag `v0.42.2`; **3712 tests**.
 >
 > **LA FILA EXAGERABA EN SU PRIMERA MITAD.** Decía que no se puede preguntar
 > qué se sabía en una revisión, y `checked_at_revision` está en cada claim desde

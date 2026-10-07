@@ -14,6 +14,108 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.42.2] - 2026-10-07 — El hook se callaba en dos de los tres caminos
+
+SemVer **derivado** desde `v0.42.1` con `scripts/derive_semver.py`
+(`git log v0.42.1..HEAD`, 6 commits): `0 breaking · 0 feat · 1 fix · 4 neutros`
+y la regla pide **PATCH -> v0.42.2**. Cero `feat` vuelve a ser lo que hace
+correcto el PATCH: este bloque no añade superficie.
+
+### 803 de 1163 commits pasaron por el hook sin ejecutar un test
+
+Medido antes de escribir una línea, con `scripts/measure_b37_smoke_subset.py`
+en cuatro rondas sobre los 1163 commits del repo:
+
+| commits | qué stagean | qué pasa |
+|---|---|---|
+| **551** | ningún `.py` | el smoke no lanza pytest |
+| **252** | solo código | `pytest -q src/...` colecta cero, rc=5, y el hook sigue |
+| **264** | un solo test | corre ese y nada más, sin decirlo |
+| **3** | el guard de WI-116 tocando código | — |
+
+**803 de 1163 — el 69 %.** El defecto no era que el smoke no corriera: es un
+filtro, y así lo declara su propio docstring. El defecto era que **se callaba**.
+
+### El `OK` era el mismo en los tres caminos
+
+`scripts/hooks/pre-commit` terminaba con la misma línea en los tres caminos por
+los que puede pasar:
+
+```
+[pre-commit] OK
+```
+
+Un `OK` que se lee igual cuando no se midió nada y cuando sí es un `OK` que no
+dice nada. Es la misma forma de fallo que WI-100 —donde el hook anunciaba
+«smoke, N files staged» y corría la suite entera durante 124 s— y que WI-108,
+donde un `skip` sin declarar se leía como una suite limpia.
+
+**Lo que no se arregla, y el propio hook lo dice:** que 252 commits puedan
+parecer verdes sin que nada se haya medido es lo que hace un filtro.
+Sustituirlo por la suite entera es lo que WI-100 ya midió a 12× más lento.
+
+**Lo que sí se arregla es el silencio.** El bloque 4 del hook declara siempre
+qué ha pasado, en los tres caminos, y lo declara pegado al `OK`:
+
+```
+[pre-commit] tests: NINGUNO stageado — este commit no ha medido nada
+[pre-commit] tests: OMITIDOS por HOOK_SKIP_TESTS=1 — este commit no ha ejecutado ninguno
+[pre-commit] tests: el smoke de arriba es lo UNICO que ha corrido; el resto no se ha medido
+[pre-commit] OK
+```
+
+### Los tests ejecutan el hook, y el quinto mira el orden
+
+Cinco tests, por **ejecución** del hook real y no por búsqueda de texto: un
+guard que buscara una cadena aprueba el defecto entero, porque el hook **tiene**
+`tests:` aunque esté dentro del `if` del smoke — que es literalmente donde
+estaba. Se copia el hook sin tocarlo a un repo de pruebas, se anteponen stubs
+de `mise`/`ruff`/`uv` al PATH y se mira lo que imprime.
+
+El quinto comprueba el **orden**: que la declaración sea la línea
+inmediatamente anterior al `OK`. Sin él, declarar la nota dos líneas más abajo
+deja el `OK` exactamente igual de indistinguible, y el arreglo estaría a medio
+hacer sin que ningún test lo notase.
+
+### Sondas: 6/6, y las dos que importan son M1 y M6
+
+Las sondas deshacen el **silencio**, no la lógica. **M1** mete el bloque entero
+dentro del `if` del smoke — el defecto exacto, en su forma literal, que un
+guard por búsqueda aprueba. **M6** deja la declaración detrás del `OK`. Entre
+las dos quitan exactamente las dos cosas nuevas que el arreglo afirmaba.
+
+**El instrumento mintió antes de contar.** El `BLOQUE_4` de M1 llevaba guiones
+ASCII donde el hook tiene em-dash, la sustitución no ocurría y el harness se
+habría reportado a sí mismo como seis cosas cazadas sin haber medido una — el
+error de WI-113 repetido. Por eso el harness comprueba *antes de mutar* que
+las tres líneas siguen siendo las declaradas, y `mutado == original` es
+`SIN_SONDA`, nunca `CAZADA`.
+
+### Cierre
+
+4118 passed, 3 skipped, 0 failed, 904,48 s sobre el árbol limpio — y
+`4118 + 3 = 4121` = `STATE.yaml tests.total`. Suelos rc=0 (`cli/` 93,31 %,
+`runtime/` 98,41 %, global 97,13 %), `project_truth` rc=0, ratchet 5/5 a
+cero, sondas de B37 6/6 **y las de B36 5/5 y B35 8/8**, que se vuelven a correr
+porque B37 toca un guard compartido.
+
+### Y abre B38, con una medición que B37 dio por hecha
+
+El subtítulo de B37 era «lo que el hook de pre-push no llega a medir», y eso
+estaba escrito **sin haberlo medido** — el mismo defecto que el gate de
+`v0.42.1` me cazó a mí. Medido entonces
+(`scripts/measure_b38_pre_push.py`):
+
+```
+[pre-push] HOOK_SKIP_PUSH_TESTS=1 -> saltando la verificacion canonica
+[pre-push] OK: la receta canonica dio SUCCESS sobre 9114cb0
+```
+
+**La última línea del push con bypass es un `SUCCESS` con el sha del commit**, y
+la receta no se ejecutó. Y el guard que ya existe sobre ese bypass exige dos
+cosas —`returncode == 0` y que el stub no saliera en la salida—, ninguna de las
+dos sobre lo que el hook **imprime**.
+
 ## [0.42.1] - 2026-10-07 — Un guard que obliga a apagar el gate que lo contiene
 
 SemVer **derivado** desde `v0.42.0` con `scripts/derive_semver.py`
