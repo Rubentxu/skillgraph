@@ -397,7 +397,30 @@ def test_la_receta_no_cambio() -> None:
     # dejar de cumplirse. Las cinco que vigila llegaron a 0/5 medidas, y el
     # contrasalto 5/5. El digest cambia con el motivo escrito al lado, que es
     # exactamente lo que este test exige.
-    esperado = "7f32b93b0a13c1f6d6a7fe822c55678d5276a3c6a8b242b1798de77fb0e933a1"
+    # WI-117 cambio la etapa `lint`, y el digest cambia con el motivo escrito
+    # al lado, que es exactamente lo que este test exige. Las dos mitades:
+    #
+    # (1) `scripts` entra en el alcance del lint, y ahi viven los instrumentos
+    # de medicion del repo. MEDIDO: `scripts/project_truth.py` se quedo sin
+    # formatear en `d2c47e3` y ningun gate lo vio — porque `scripts` no estaba
+    # ni en esta etapa ni en el hook. Un guard que puede romperse en silencio
+    # es un guard que no vigila.
+    #
+    # (2) Anade un gate de FORMATO a la receta, que no existia. Solo estaba en
+    # el hook, y el hook es un aviso que se puede saltar con `--no-verify`: la
+    # via del CI no comprobaba que el codigo estuviera formateado. Las dos
+    # mitades son el mismo defecto mirado desde dos sitios —un gate que no
+    # mira donde estan los instrumentos, y un gate de mas que no existe.
+    #
+    # LO QUE ESTA REINTERPRETACION CUESTA, y por que se acepta aqui. El
+    # digest es el invariante de la certificacion anterior: las corridas que
+    # se hicieron con la etapa `lint` antigua no comprobaban `scripts` ni el
+    # formato. Esas corridas SERAN mas laxas de lo que creian, y ese es el
+    # precio de cerrar el hueco. La razon de aceptarlo es que el hueco era
+    # REAL y medido: habia un fichero sin formatear en el arbol desde `d2c47e3`
+    # que ningun gate podia ver. Un invariante que protege un hueco es peor que
+    # un digest que se actualiza con su motivo al lado.
+    esperado = "514ebef769b513c7d03cf0dfc0682975c9127418cc060ee1b2083de9346e2af7"
     real = hashlib.sha256((RAIZ / ".pipeline.kts").read_bytes()).hexdigest()
     assert real == esperado, (
         f"`.pipeline.kts` cambio: {real}\n"

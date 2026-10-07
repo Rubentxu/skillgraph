@@ -2,8 +2,8 @@
 # Pre-commit hook for SkillGraph.
 #
 # Enforces:
-#   1. `ruff check src tests`        (lint)
-#   2. `ruff format --check src tests` (format gate)
+#   1. `ruff check src tests scripts`   (lint)
+#   2. `ruff format --check src tests scripts` (format gate)
 #   3. `pytest -q` smoke SOBRE LOS FICHEROS .py STAGED
 #
 # MEDIDO en WI-100: hasta entonces el punto 3 decia "smoke" pero corria la
@@ -11,6 +11,12 @@
 # por eso filtra. El veredicto sobre el repo entero lo dan
 # `scripts/hooks/pre-push` y la receta canonica, ambos con el instrumento
 # correcto.
+#
+# MEDIDO en WI-117: `scripts/` NO estaba en ninguno de los dos, y ahi viven
+# los instrumentos de medicion del repo — los guards que certifican todo lo
+# demas. Consecuencia medida: `scripts/project_truth.py` se quedo sin
+# formatear en `d2c47e3` y ningun gate lo vio. Un guard que puede romperse
+# en silencio es un guard que no vigila.
 #
 # Bypass for emergency or doc-only commits:
 #   git commit --no-verify
@@ -37,22 +43,22 @@ run_in_toolchain() {
 # -------------------------------------------------------------------
 # 1. Ruff check (lint) — catches E/F/I/B/UP/SIM/RUF violations.
 # -------------------------------------------------------------------
-echo "[pre-commit] ruff check src tests..."
-run_in_toolchain run ruff check src tests || {
+echo "[pre-commit] ruff check src tests scripts..."
+run_in_toolchain run ruff check src tests scripts || {
     echo ""
     echo "ERROR: ruff check failed."
-    echo "Fix: uv run ruff check --fix src tests"
+    echo "Fix: uv run ruff check --fix src tests scripts"
     exit 1
 }
 
 # -------------------------------------------------------------------
 # 2. Ruff format check — enforces line-length=100 and docstring-code-format.
 # -------------------------------------------------------------------
-echo "[pre-commit] ruff format --check src tests..."
-run_in_toolchain run ruff format --check src tests || {
+echo "[pre-commit] ruff format --check src tests scripts..."
+run_in_toolchain run ruff format --check src tests scripts || {
     echo ""
     echo "ERROR: ruff format --check failed."
-    echo "Fix: uv run ruff format src tests"
+    echo "Fix: uv run ruff format src tests scripts"
     exit 1
 }
 

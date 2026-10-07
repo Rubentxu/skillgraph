@@ -142,7 +142,22 @@ pipeline {
         }
 
         stage("lint") {
-            sh("cd " + repo + " && uv run ruff check src tests 2>&1 | tail -5; test \${PIPESTATUS[0]} -eq 0")
+            // MEDIDO en WI-117, y las dos mitades estaban rotas.
+            //
+            // (1) `scripts` no estaba, y ahi viven los instrumentos de
+            // medicion del repo: los guards que certifican todo lo demas.
+            // Consecuencia medida: `scripts/project_truth.py` se quedo sin
+            // formatear en `d2c47e3` y esta etapa no lo vio.
+            //
+            // (2) NO HABIA un gate de FORMATO en la receta. Solo lo habia en
+            // el hook, y el hook no es un gate: es un aviso que se puede
+            // saltar con `--no-verify`. Una etapa que solo comprueba `check`
+            // deja pasar un fichero mal formateado por la via que el CI usa.
+            //
+            // El `PIPESTATUS` es el de ruff y no el de `tail`; el patron lo
+            // fija WI-93 («if pipeline | tail; then» mide el `tail`).
+            sh("cd " + repo + " && uv run ruff check src tests scripts 2>&1 | tail -5; test \${PIPESTATUS[0]} -eq 0")
+            sh("cd " + repo + " && uv run ruff format --check src tests scripts 2>&1 | tail -5; test \${PIPESTATUS[0]} -eq 0")
         }
 
         stage("evidence") {
