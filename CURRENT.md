@@ -2,7 +2,7 @@
 
 >
 
-> **Bloque 2026-10-07 (B35) — Hay capabilities que nadie puede resolver.**
+> **Bloque 2026-10-07 (B35) — De la capability al store hay tres pasos que no existen.**
 > (B31 cerrado y certificado: `sg.code.analysis` con `ADR-0035` y la migración `0008`. La serie B0..B34 queda cerrada; B35 es el corte siguiente, y también se abre medido.)
 >
 > Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4068 tests**.
@@ -67,29 +67,58 @@
 > con 4068 declarados == 4068 colectados, sondas 7/7.
 >
 > **B35 SE ABRE MEDIDO, porque no se abre sin medir**
-> (`scripts/measure_b35_ensamblado.py`):
+> (`scripts/measure_b35_vertical.py`), y el alcance resultó **mayor que el
+> que se suponía**. No es un hueco: son **tres**, y se miden por separado.
 >
 > ```
-> CapabilityRegistry(...) en src/     : 0
-> CapabilityRegistry(...) en tests/   : 26
-> CodeAnalysisCapability     src/=0   tests/=3
-> TelemetryQueryCapability   src/=0   tests/=10
-> KnowledgeQueryCapability   src/=0   tests/=3
-> --adapter (Protocol AgentAdapter)  : fake, http, anthropic, openai
-> capabilities sg.* alcanzables desde la CLI : 0
+> 1. EL REGISTRO
+>    CapabilityRegistry(...) en src/     : 0
+>    CapabilityRegistry(...) en tests/   : 26
+>    CodeAnalysisCapability     src/=0   tests/=3
+>    TelemetryQueryCapability   src/=0   tests/=10
+>    KnowledgeQueryCapability   src/=0   tests/=3
+>
+> 2. EL SERIALIZADOR — 2 definiciones, 1 nombre
+>    code_analysis.envelope_a_payload  : añade `vocabulario`, observations = list
+>    telemetry_query.envelope_a_payload: asdict pelado,      observations = tuple
+>    -> EJECUTADAS sobre el MISMO envelope: claves distintas y forma distinta
+>
+> 3. EL DESERIALIZADOR — el inverso no existe
+>    funciones `*de_payload*` en src/   : 0
+>    reconstructores en tests/          : test_b31::`envelope_real`
+>                                        test_b33::`_envelope_de`
+>    -> Y YA DIVERGEN: una usa el `producer` DEL PAYLOAD y la otra
+>       `cap.spec` DE LA CAPABILITY
+>
+> LA PUERTA — AST sobre los imports de `cli/`, no sobre el texto
+>    importa code_analysis / telemetry_query / knowledge_query : NO / NO / NO
+>    importa CapabilityRegistry, CapabilityController         : NO / NO
+>    PERO el texto de la CLI contiene `KnowledgeQueryCapability`: SI
+>    -> porque esta dentro de un DOCSTRING que lo describe en pasado
 > ```
 >
-> **EL CONTRASTE ES EL HALLAZGO.** Para el Protocol `AgentAdapter` **sí** hay
-> ensamblado: el operador elige el adaptador por nombre y el proceso lo
-> construye. Para el Protocol `Capability` no hay nada equivalente, porque una
-> `sg.*` **no se elige, se registra** — y el registro no tiene quién lo
-> construya. De las tres capabilities de conocimiento, **cero se instancian en
-> `src/`**: se lanzan solo desde los tests.
+> **EL INVERSO ESTÁ ESCRITO EN LOS TESTS.** `ingerir(...)` exige un
+> `ObservationEnvelope` y la capability devuelve un `dict`: el paso del uno al
+> otro está escrito a mano en **dos** ficheros de test y **no está en
+> producción**. Y como son dos copias, **ya divergen** — una lee el `producer`
+> del payload y la otra `cap.spec` de la capability. Eso no es estilo: una
+> copia que lee el `producer` de la capability **no está probando la ida y la
+> vuelta**, está probando que la capability sabe su propio nombre.
 >
-> O sea que `sg.code.analysis` **no se puede ni invocar mal**, porque no hay
-> quién la meta en un registro y luego no hay forma de que llegue a existir el
-> error. B31 entregó una capability impecable, al 100 %, que ningún despliegue
-> puede resolver.
+> **Y LA RONDA 4 DIÓ `SI` LA PRIMERA VEZ, POR BUSCAR EN EL TEXTO.** Es la
+> **cuarta vez** que sale este defecto en el repo —el guard de B15, el de
+> WI-92, el de B34 con su sonda M10, y ahora este instrumento—, y por eso la
+> ronda busca `ast.ImportFrom`, que es lo que de verdad ata un módulo a otro.
+> Un docstring no ata nada.
+>
+> **EL CONTRASTE CON `AgentAdapter` SIGUE SIENDO EL QUE EXPLICA EL HUECO.**
+> Para ese Protocol **sí** hay ensamblado: el operador elige el adaptador por
+> nombre y el proceso lo construye. Para `Capability` no hay nada equivalente,
+> porque una `sg.*` **no se elige, se registra** — y el registro no tiene quién
+> lo construya. O sea que `sg.code.analysis` **no se puede ni invocar mal**:
+> no hay quién la meta en un registro, luego no hay forma de que llegue a
+> existir el error. B31 entregó una capability impecable, al 100 %, que
+> ningún despliegue puede resolver.
 >
 > **Y NO ES UN DESCUIDO DE B31.** Es el estado que
 > `src/skillgraph/runtime/runcontroller.py:148::__init__` DECLARA
@@ -98,6 +127,11 @@
 > despliega. Y aquí está la pinja: **no hay quien despliegue**. El repo tiene
 > un ejecutable (`sg`) y ninguna forma de que `sg` monte un registro. Eso no es
 > una decisión de arquitectura; es una decisión que nadie ha tomado.
+>
+> **LO QUE B35 NO TOCA, Y POR QUÉ.** La política de `capabilities=` con default
+> `None` queda igual: B35 le da **quién despliega**, que hoy no existe. Si el
+> mismo cambio hiciera las dos cosas, sería otro bloque y habría que medirlo
+> aparte.
 >
 > **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.** (cerrado y certificado)
 > (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 con `runtime_observation`, `Source` +2 columnas, migración `0007` e índice parcial `idx_sources_ventana` — **solo en la migración**, porque en el DDL una base vieja reventa antes de migrar. El kind lo declara el envelope, no se deduce de que tenga ventana: una medición de test también cubre un periodo.)
