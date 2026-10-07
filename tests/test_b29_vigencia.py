@@ -50,10 +50,10 @@ from skillgraph.knowledge.graph import (
     Conflicto,
     Entity,
     Source,
-    seq_de,
     source_id,
     vigente_en,
 )
+from skillgraph.platform.revision_registry import SqliteRevisionRegistry
 from skillgraph.platform.storage import Storage
 
 SUJETO = "file:a.py"
@@ -411,8 +411,12 @@ class TestLaSupersesion:
             nuevo = s.get_claim(tenant_id="t", project_id="p", claim_id="c-B")
             conn = s._conn
 
-            def seq(rev: str) -> int:
-                return seq_de(conn, rev)
+            # R0: `seq_de` era una funcion libre que hablaba SQL desde el
+            # dominio. Ahora el mismo contrato lo cumple `RevisionRegistry`,
+            # y el test migra con el —si no, estaria probando que un simbolo
+            # que ya no existe sigue existiendo.
+            def seq(rev: str) -> int | None:
+                return SqliteRevisionRegistry(conn).seq_de(rev)
 
             inicio_viejo = seq(viejo.valid_from_revision or viejo.checked_at_revision)
             cierre_viejo = seq(viejo.valid_until_revision) if viejo.valid_until_revision else None

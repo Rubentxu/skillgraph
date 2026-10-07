@@ -41,8 +41,9 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from skillgraph.knowledge.graph import Conflicto, seq_de, vigente_en
+from skillgraph.knowledge.graph import Conflicto, vigente_en
 from skillgraph.platform.knowledge_mappers import row_to_claim as _row_to_claim
+from skillgraph.platform.revision_registry import SqliteRevisionRegistry
 from skillgraph.platform.storage import Storage
 
 __all__ = ["SqliteConflictRepository"]
@@ -200,7 +201,8 @@ def _vigente_en_revision(conn: sqlite3.Connection, row: sqlite3.Row, revision: s
     """
     if revision is None:
         return row["valid_until_revision"] is None
-    seq = seq_de(conn, revision)
+    registro = SqliteRevisionRegistry(conn)
+    seq = registro.seq_de(revision)
     if seq is None:
         return False
     # `valid_from_revision` en NULL cae en `checked_at_revision`. Es el unico
@@ -209,8 +211,8 @@ def _vigente_en_revision(conn: sqlite3.Connection, row: sqlite3.Row, revision: s
     # sitios pueden interpretarlo distinto.
     desde_row = row["valid_from_revision"] or row["checked_at_revision"]
     return vigente_en(
-        seq_de(conn, desde_row),
-        seq_de(conn, row["valid_until_revision"]),
+        registro.seq_de(desde_row),
+        registro.seq_de(row["valid_until_revision"]),
         seq,
     )
 

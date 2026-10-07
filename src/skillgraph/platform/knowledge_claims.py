@@ -13,14 +13,16 @@ import sqlite3
 from typing import Any
 
 from skillgraph.core.errors import InvalidEntityIDError
-from skillgraph.knowledge.graph import Claim, ClaimRecorded, _sigiente_revision
+from skillgraph.knowledge.graph import Claim, ClaimRecorded
 from skillgraph.platform.knowledge_conflicts import _vigente_en_revision
 from skillgraph.platform.knowledge_mappers import (
     objeto_del_claim,
     row_to_claim as _row_to_claim,
     row_to_stored_claim as _row_to_stored_claim,
 )
+from skillgraph.platform.revision_registry import SqliteRevisionRegistry
 from skillgraph.platform.storage import Storage, StoredClaim
+from skillgraph.platform.translation import traduciendo_integridad
 
 
 def _registro(claim: Claim, previo: sqlite3.Row | None) -> ClaimRecorded:
@@ -119,7 +121,17 @@ class SqliteClaimRepository:
             obj_json = json.dumps(claim.object_literal, sort_keys=True)
             ref = ""
 
-        with self._storage._atomic() as cur:
+        # **R0: LA FRONTERA DE VERDAD.** El `with` de abajo es el unico sitio
+        # donde se hace SQL de `claims`, luego es el unico donde puede aparecer
+        # un `sqlite3.IntegrityError`. `traduciendo_integridad` lo convierte en
+        # `IntegrityError` de DOMINIO y lo propaga intacto si no es FK.
+        #
+        # Con esto `knowledge_controller.py` deja de importar `sqlite3`: el
+        # dominio ya no nombra tipos del adapter. Y el caso que QUEDA en el
+        # dominio —decidir si lo que falta es la entidad o la fuente— es
+        # logica de negocio, porque depende de lookups que el repositorio tiene
+        # y el error no.
+        with traduciendo_integridad(), self._storage._atomic() as cur:
             # B27: se mide QUE se va a escribir ANTES de escribir, porque un
             # `INSERT OR IGNORE` que colisiona no dice nada por si mismo. La
             # fila anterior se lee de la tupla natural —NO del `claim_id`—,
@@ -153,7 +165,7 @@ class SqliteClaimRepository:
             # asigna al primer contacto con la revision. Sin este paso, dos
             # claims de la MISMA revision recibirian `seq` distintos y su
             # ventana seria arbitraria.
-            _sigiente_revision(cur, claim.checked_at_revision)
+            SqliteRevisionRegistry(cur).registrar(claim.checked_at_revision)
 
             # B29: la SUPERSESION. Si la MISMA fuente vuelve a afirmar este
             # sujeto y este predicado en una revision POSTERIOR, y el valor

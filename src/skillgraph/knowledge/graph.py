@@ -460,49 +460,6 @@ def vigente_en(
     return not (hasta is not None and seq >= hasta)
 
 
-def _sigiente_revision(cur: Any, revision: str) -> int:
-    """El `seq` de `revision`, registrandola la PRIMERA vez que se ve.
-
-    **POR QUE UN `AUTOINCREMENT` Y NO UN MAX+1.** Con `MAX(seq)+1`, dos
-    conexiones que registraran revisiones a la vez podrian leer el mismo
-    maximo y escribir el mismo `seq` — y entonces dos ventanas distintas
-    dirian lo mismo sobre el mismo instante, que es peor que no tener orden.
-    El `UNIQUE` sobre `revision` evita el otro extremo, que es dos filas con la
-    misma revision y distinto `seq`.
-
-    **Y DEVUELVE UN `int`, NO UN `str`.** El `seq` es lo que se compara; la
-    revision es lo que se guarda. Ver la nota de `revision_registro` en
-    `platform/schema.py`: comparar SHAs seria un orden lexicografico y
-    arbitrario.
-    """
-    fila = cur.execute(
-        "SELECT seq FROM revision_registro WHERE revision = ?", (revision,)
-    ).fetchone()
-    if fila is not None:
-        return int(fila[0])
-    cur.execute("INSERT INTO revision_registro (revision) VALUES (?)", (revision,))
-    fila = cur.execute(
-        "SELECT seq FROM revision_registro WHERE revision = ?", (revision,)
-    ).fetchone()
-    return int(fila[0])
-
-
-def seq_de(cur: Any, revision: str | None) -> int | None:
-    """El `seq` de una revision, o `None` si este store no la ha visto.
-
-    **UNA REVISION DESCONOCIDA NO ES UN ERROR: ES QUE NO HAY NADA QUE DIJERA
-    DE ELLA.** Y se distingue de «hay claims pero ninguno en esa revision»
-    precisamente porque una revision desconocida **no aparece** en
-    `revision_registro` y por tanto no tiene `seq` con el que comparar.
-    """
-    if revision is None:
-        return None
-    fila = cur.execute(
-        "SELECT seq FROM revision_registro WHERE revision = ?", (revision,)
-    ).fetchone()
-    return None if fila is None else int(fila[0])
-
-
 __all__ = [
     "Claim",
     "ClaimID",
@@ -522,7 +479,6 @@ __all__ = [
     "entity_id",
     "entity_ref",
     "predicado_de_pack",
-    "seq_de",
     "source_id",
     "vigente_en",
 ]
