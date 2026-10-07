@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B23** — El instrumento de la verdad puede equivocarse, y se le ve
-> Versión activa `0.34.0.dev0` · último tag `v0.34.0` · 3465 tests · 16/16 UAT
+> Bloque vivo: **B32** — No se puede responder cuándo cambió una relación ni por qué · cadena de commits trazable por entidad, con el SHA como identidad · (R0+R1 cerrados: el ratchet arquitectónico sale distinto de cero y las cinco fronteras llegan a cero · B30 en `v0.40.0`, B31 queda como el corte siguiente)
+> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 3733 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
@@ -88,6 +88,17 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B21** | Una certificación en rojo no puede decir QUÉ falló | Lo que pytest dice de sus fallos aparece después de la última tabla, y un guard no usa como reloj un estado que mueve su propio contenedor |
 | **B22** | La suite no puede cambiar el árbol por debajo de un instrumento, y un predicado reventado no borra el informe | Escribir y cambiar se separan, toda excepción va declarada, y cada predicado da su veredicto aunque lance |
 | **B23** | El instrumento que responde «¿dónde está el proyecto?» no lo decía | La raíz es un parámetro, la ventana del ROADMAP se contrasta, y el bloque se cruza con STATE y CURRENT |
+| **B24** | La ruta de certificación nunca se ejecutaba, y sus instrucciones apuntaban a un fichero que no existe | Las ocho fronteras se ejecutan contra el adapter de verdad, sin credencial ni dinero, y una instrucción que apunta a un path inexistente se mide como lo que es |
+| **B25** | Un hecho entre dos entidades no se puede expresar: `Claim.object_literal` solo admite literales, y los predicados son un conjunto cerrado | `object` pasa a ser literal **o** `EntityRef`, y un pack añade un predicado sin tocar el núcleo |
+| **B26** | Una herramienta externa no tiene forma de aportar conocimiento sin escribir en el store | `Observation Envelope` versionado, normalizers puros e ingesta idempotente |
+| **B27** | Dos claims incompatibles se pisan y no hay forma de saberlo | conflict sets consultables y estables, sin overwrite |
+| **B28** | Resolver un conflicto es un ranking global, y la respuesta correcta depende de para qué se pregunta | `AuthorityProfile` por `QueryIntent`, no un ranking único |
+| **B29** | No se puede preguntar qué se sabía en una revisión, ni cómo fue reemplazado | ventanas de vigencia, supersession y query por revisión |
+| **B30** | Traer el contexto es traerlo todo, o traerlo truncado sin decir qué se cayó | **cerrado en v0.40.0** — `PresupuestoAplicado` declara lo omitido con su tamaño, `HandoffKnowledge.omitidos` lo carga y lo firma, y `should_skip_adapter` ya no declara completo un slice truncado. La mitad `why`/`impact` queda para el siguiente corte |
+| **B31** | No hay análisis estructural real: `line_count = 137` es todo lo que se sabe del código | CogniCode → CodeAnalysis → Knowledge, **sin imports en el núcleo** · (sigue abierto: es el corte después de B32, o el que se tome antes) |
+| **B32** | No se puede responder cuándo cambió una relación ni por qué | cadena de commits trazable por entidad, con el SHA como identidad |
+| **B33** | La telemetría y la intención/documentación se contradicen y una pisa a la otra | ambos se preservan, y la autoridad decide según el intent |
+| **B34** | No hay forma de preguntar al sistema por lo que sabe | `what`/`why`/`impact`/`changed`/`conflicts`/`evidence`, con CLI y transporte agent sobre el mismo modelo de query |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1
 antes de tocar funcionalidad nueva, porque hacerlo sobre verdades que se
@@ -1014,6 +1025,370 @@ deuda sin verificar, y sin verificar no era deuda.
 
 **Resultado:** gate de 1.0 **sin cambios**, 18 PASS / 1 OPEN / 1 NO_MEASURABLE, y
 `coherente: true` con `tests.total` cuadrando contra el árbol.
+
+
+## B25..B34 — La serie epistemológica
+
+**Objetivo cerrado.** Diez bloques que convierten el grafo de conocimiento de
+«un almacen de claims» en «algo que se puede preguntar». B0..B24 construyeron
+un motor que sabe **ejecutar** un workflow y **certificar** que lo ejecuta; esta
+serie le da un tercer eje: **qué se sabe**, **quién lo afirma** y **cuándo dejó
+de ser cierto**.
+
+No es una ampliación de B24 ni continúa su serie: es una línea distinta, con su
+propio vocabulario, y arranca con **ningún bloque empezado**.
+
+### Lo que hay hoy, medido
+
+**B25 parte de un defecto real y presente en el código.** `Claim` declara
+
+    object_literal: Any  # int | str | bool; depende del predicate
+
+(`src/skillgraph/knowledge/graph.py:189`). El `object` de un claim es
+**siempre un literal**: no hay forma de decir «A usa B» sin escribir el nombre
+de B dentro de un string. Y los predicados son un `Final[frozenset[str]]` de
+**siete** literales escrito en el núcleo
+(`src/skillgraph/core/runtime_types.py:241`), validado en `__post_init__`: un
+pack no puede añadir ni el objeto ni el predicado sin tocar el core. Las dos
+mitades de la fila de B25 en el mapa están medidas, no temidas.
+
+**Y el primer predicado de esa lista es `line_count`**, que es la prueba de que
+la fila de B31 no es una hipótesis: B31 dice «no hay análisis estructural real:
+`line_count = 137` es todo lo que se sabe del código», y ese `line_count` es el
+primer elemento de un conjunto de siete valores que alguien decidió de
+antemano. Un conjunto de siete no crece solo.
+
+**B31 no tiene que inventar su frontera: ya está instrumentada.**
+`TestElNucleoNoImportaAdapters` (`tests/test_b3_capability_kernel.py:539`) rastrea
+los paquetes `("runtime", "core", "resources")` y falla si alguno conoce un
+producto externo, con un contrasalto declarado aparte (`NUCLEO_MINIMO`) para que
+reducir el rastreo no lo vacíe en verde. `knowledge/knowledge_query.py:17` ya
+nombra `CodeAnalysis`, `TelemetryQuery` y `SecretAccess` como capabilities y no
+como imports. La frontera de diseño que esta serie atraviesa ya tiene dueño.
+
+**Lo que NO existe todavía, medido:** `EntityRef`, `Observation Envelope`,
+`AuthorityProfile`, `ContextSlice`, supersession y conflict sets **no aparecen en
+`src/`**. Cero de los diez bloques tiene código.
+
+### Estado
+
+**B25, B26, B27, B28 y B29 cerrados** (`v0.35.0`, `v0.36.0`, `v0.37.0`, `v0.38.0`
+y pendiente de release). Los otros cinco siguen en el mapa como fila, sin sección,
+guard, harness ni criterio de aceptación escrito.
+
+**Y LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTO SER FALSA**, lo cual importa
+mas que el resultado. Decía: *«Dos claims incompatibles se pisan y no hay forma
+de saberlo»*. MEDIDO antes de escribir nada, con
+`scripts/measure_b27_conflictos.py`:
+
+    P1  dos fuentes, hechos opuestos  -> 2 filas, COEXISTEN
+    P2  misma fuente, hechos opuestos -> 1 fila, SE PISA
+
+El overwrite **no** depende de que dos herramientas discrepen: depende de la
+MISMA fuente con la MISMA revisión, porque el `UNIQUE` de `claims` es
+`(subject_entity_id, predicate, source_id, checked_at_revision)` y lleva
+`source_id` dentro. Dos herramientas distintas ya coexistían de sobra.
+
+Lo que sí era cierto era la otra mitad —«y no hay forma de saberlo»— y esa mitad
+es la que B27 arregla: `conflicts_for` por la fachada, y `record_claim` que
+devuelve si hubo conflicto y **qué se solapa** en vez de devolver siempre el
+`claim_id` como si hubiera escrito.
+
+**LO QUE B26 DEJO ABIERTO PARA B27, DICHO EN SU PROPIO RECIBO.** La ingesta de
+un envelope **no borra historia**: si una herramienta cambia lo que dice sin
+cambiar de versión, quedan **dos** afirmaciones, y las dos son válidas porque
+las dos tienen fuente. Eso es exactamente el caso del enunciado de B27 —«dos
+claims incompatibles se pisan y no hay forma de saberlo»— y B26 lo hace
+**consultable** antes de que exista forma de resolverlo: el `claim_id` es
+determinista sobre `(subject, predicate, source, revision)`, así que las dos
+filas coexisten y se pueden leer, en vez de pisarse.
+
+El orden que queda es el del bundle, con una dependencia que sí es dura:
+**B28 no es ejecutable sin B27**, porque no se puede resolver un conflicto por
+intención de consulta si antes no hay conflicto que consultar. El resto del
+orden puede reordenarlo un gate. **Esa dependencia está ya satisfecha**: B28
+está cerrado y es lo que convierte los conflict sets de B27 en respuestas.
+
+---
+
+## B28 — La autoridad se decide por intención
+
+**Objetivo cerrado.** Un conflicto deja de ser una lista de afirmaciones que se
+oponen y pasa a ser **una respuesta a una pregunta**, con la explicación de por
+qué una gana y la otra pierde.
+
+### Lo que se midió antes de escribir nada
+
+`scripts/measure_b28_autoridad.py` → **5/5 ABIERTAS**. Y la primera sorpresa
+está en el enunciado:
+
+**La fila acusa a un «ranking global», y MEDIDO no hay ranking: no hay nada.**
+B27 dejó los conflictos consultables y ordenados; lo único que faltaba era
+decidir. La acusación sigue siendo útil, pero como **tentación medida**:
+
+```
+AssertionOrigin = observed | derived-deterministically
+                | agent-inferred | human-asserted
+```
+
+Esos cuatro valores ya están en `core/runtime_types.py`, y su docstring dice
+en sus propias palabras que **no son un ranking** —son «quién afirma». Los
+datos para ordenar están a mano, y el orden depende de la pregunta:
+
+```
+¿qué devolvió producción?        observed > derived-deterministically
+¿qué dependencia está permitida?  human-asserted > derived-deterministically
+```
+
+Por eso la propiedad que se mide **no es «se elige alguien»** sino **«el mismo
+conflicto, con dos intenciones, elige afirmaciones DISTINTAS»**. Un resolver con
+ranking fijo pasaría cualquier prueba que comprobara que hay ganador.
+
+### Lo que entra
+
+`QueryIntent` (los siete valores del «ADT inicial» de 05-SPEC §3, con smart
+constructor), `AuthorityProfile`, `MotivoDescarte`, `Descartada` y
+`Resolution`, con `resolver()` **puro**: sin disco, sin reloj y sin `Storage`.
+Y **`sg knowledge resolve`**, porque una capacidad que no se puede preguntar es
+el mismo defecto que B6 midió en `extraction_method` — un eje al que no
+escribe nadie en `src/`.
+
+### El guard del agente es un campo, no una posición en la lista
+
+La spec (§7) dice que `agent-inferred` «no puede por defecto cerrar conflicto».
+La lectura tentadora es ponerlo el último de la preferencia. **Eso sería un
+guard roto**, por una razón concreta: se rompe **reordenando una lista**, que
+es el cambio más barato que puede hacer quien no sabe lo que hace, y solo en el
+perfil equivocado.
+
+Aquí es un campo explícito (`permitir_inferencia_de_agente`, default `False`),
+y está medido: un perfil que pone al agente **el primero** lo sigue dejando
+perder. El opt-in existe y es auditable, pero lo concede quien escribe la
+política, no el módulo.
+
+### La contrasalto encontró un fallo del INSTRUMENTO, y por eso los perfiles nombran los cuatro orígenes
+
+La primera versión de P4 usaba el perfil por defecto de `actual_behavior`,
+donde `human-asserted` está por encima de `agent-inferred`. Ahí el agente
+perdía **por rango** aunque el guard estuviera borrado, luego la pregunta
+contestaba «no» por una razón que **no era la que vigilaba** — y la sonda M2
+(flag del agente a `True`) **no fue cazada**.
+
+Un origen **no listado** valía por una prohibición silenciosa. Los siete
+perfiles por defecto nombran ahora los **cuatro**, de modo que P4 —que es el
+guard del bloque— no pueda pasar aunque el guard se borrara. Y poner al
+agente el último **no es lo que lo prohíbe**: lo prohíbe el flag, y sigue
+valiendo aunque el orden cambiara.
+
+**Instrumento:** 5/5 → **0/5**. **Contrasalto:** **5/5 sondas cazadas**,
+`rc=0` al restaurar. Las anclas son **regex**, no texto literal, porque
+`ruff format` desancló las cinco de una pasada — y el guard de sintaxis las
+clasificó `ROTA` en vez de fingir que las cazó, que es lo que tiene que hacer.
+
+### Lo que este bloque NO hace
+
+1. **No borra.** Resolver para una intención no elimina afirmaciones: las dos
+   siguen consultables. Lo que las borra es **B29**, con ventanas de vigencia.
+2. **No persiste** la resolución, y **no carga perfiles de YAML**. Que quien
+   llama pueda traer el suyo es el punto de extensión, y una carga declarativa
+   es trabajo futuro — declararla como hecho sería documentar un hueco.
+3. **No elige entre perfiles.** `resolver` recibe una intención; quién usa qué
+   política es de quien pregunta, y es la misma línea que dice que no hay un
+   ranking global.
+
+### Una discrepancia de la spec, resuelta y said
+
+`05-SPEC` no es coherente consigo misma: **§3** lista `intended_behavior` y
+**§2 ejemplo B** usa `queryIntent: intended_architecture`. Se sigue §3 por dos
+razones: es la lista normativa y explícitamente cerrada, y `AGENTS.md` §2.1
+exige ADR para crecer un `Literal` — y el ADR que cubre esto (ADR-0028) no lo
+pide. Crecerlo sería inventar un valor donde más se lee como verdad.
+
+---
+
+## B29 — Un cambio en el tiempo deja de leerse como una contradicción
+
+**Objetivo cerrado.** Dos afirmaciones de la misma fuente que fueron ciertas en
+instantes distintos dejan de contradecirse, y se puede preguntar qué se sabía
+en una revisión dada.
+
+### Lo que se midió antes de escribir nada
+
+`scripts/measure_b29_vigencia.py` → **5/5 ABIERTAS**. Y la fila exagera en su
+primera mitad: **decía que no se puede preguntar qué se sabía en una revisión, y
+eso es falso** — `checked_at_revision` está en cada claim desde antes de esta
+serie. Lo que no había era la **consulta**.
+
+La mitad grave es otra, y es la que duele:
+
+```
+filas en claims:   c-A "psycopg" @revA    c-B "sqlite3" @revB
+conflicts_for  ->  1 conflicto: [c-A, c-B]
+resolver       ->  gana NADIE
+```
+
+**El sistema responde «nadie gana» a algo que tiene respuesta definitiva en cada
+instante.** En `revA` era `psycopg`; en `revB` es `sqlite3`. Las dos
+afirmaciones están, con su revisión, y no sabe. La causa es precisa:
+`conflicts_for` compara valores **sin mirar el tiempo**, luego un hecho que
+**cambió** se lee igual que uno que se **contradice**.
+
+### El orden: por qué nace `revision_registro`
+
+Las revisiones reales son SHAs, y compararlos **es lexicográfico y arbitrario**
+(`rev10 < rev9`). Se introduce `revision_registro(seq, revision)`, donde `seq`
+es **el orden en que ESTE store aprendió de esas revisiones**. No es ascendencia
+de git — eso es `GitHistory`, que es B32 — y el nombre lo declara para que nadie
+lo lea como más de lo que es.
+
+### La ventana es `[desde, hasta)`, y el gate lo dice
+
+No es una elección de gusto. El gate de `06-SPEC` §9, escrito por el bloque:
+
+```
+commit A: A -> calls B        commit B: A -> calls C
+at(A) -> calls B             at(B)  -> calls C
+```
+
+En `revB` la respuesta es `calls C`, y **no las dos**. Con el extremo superior
+inclusivo, `at(B)` devolvería las dos — media mitad de un conflicto. La primera
+versión del bloque hizo la ventana cerrada por los dos lados, y por eso
+`claims_at_revision(revB)` daba `['c-A', 'c-B']`.
+
+### La asimetría de los `NULL`, interpretada en un solo sitio
+
+| columna | `NULL` significa |
+|---|---|
+| `valid_from_revision` | «desde `checked_at_revision`» |
+| `valid_until_revision` | «todavía vigente» |
+
+`valid_from` en `NULL` es «desde que lo vimos», no «desde el principio de todo»,
+que solo es cierto para el primer hecho de una cadena. Y `valid_until` en
+`NULL` es «todavía vigente», que es lo que hace que un hecho sin reemplazo siga
+compitiendo en HEAD.
+
+`valid_from_revision` se escribe **tal cual lo declara el llamante**. Rellenarlo
+con `checked_at_revision` rompía la ida y vuelta `get_claim(...) == Claim(...)`,
+que es un contrato de B25: el store estaba guardando un campo que nadie había
+declarado.
+
+### La supersesión cierra ventanas; la cadena encadena una secuencia
+
+Son dos cosas distintas y el bloque las separa. **Se cierran TODAS** las
+afirmaciones abiertas de esa fuente que dijeran otro valor — una fuente no
+sostiene dos cosas a la vez —, mientras que `supersedes_claim_id` es **singular**
+y apunta a la más reciente, porque la cadena de `06-SPEC` §2 es una línea y
+recorrerla hacia atrás tiene que tener un único predecesor.
+
+Las tres condiciones que la supersesión **no** puede tocar, y que no estaban
+escritas en ninguna parte, salieron de ejecutar la suite de B25–B28 sobre el
+bloque ya implementado:
+
+1. **Orden.** La consulta elegía «la vigente más reciente» sin mirar el orden:
+   reingerir el mismo envelope cerraba la ventana del propio claim (rompía la
+   idempotencia de B26).
+2. **Valor.** Tampoco miraba el valor, pese a que el propio comentario del bloque
+   decía «y el valor es otro». Reingerir la misma afirmación no es un cambio, y
+   sin ese filtro la ventana dependía del orden de ingesta (rompía la propiedad
+   de B27 de que el conflict set no dependa del orden).
+3. **Alcance.** Cerraba solo la más reciente y dejaba abiertas las anteriores de
+   esa fuente: entonces «cuál era la más reciente» dependía de cuál se guardara
+   primero.
+
+### Lo que este bloque NO hace
+
+1. **No borra.** El claim viejo se queda, con su ventana cerrada. B27 no borra y
+   B29 tampoco: lo que deja de competir no es lo que se elimina.
+2. **No añade `GitHistory`** ni inventa el orden entre revisiones de dos
+   almacenes distintos. B32 es quien trae la ascendencia real de commits.
+3. **No reabre B27.** Misma fuente, misma revisión y otro valor **siguen
+   avisando**: eso es una discrepancia de verdad, no un cambio en el tiempo.
+4. **No supersede entre fuentes.** `06-SPEC` §2 habla de *source family*, y dos
+   fuentes son dos familias: no se sabe cuál cambió de opinión.
+
+### El contrasalto, y las dos sondas que Measure mal
+
+**Instrumento:** 5/5 → **0/5**. **Contrasalto:** **5/5 sondas cazadas**,
+`rc=0` al restaurar, y **verificado después de `ruff format`** — que es lo que
+desancló las cinco de B28 en una sola pasada.
+
+Dos cosas de este harness que los anteriores no tenían, y las dos salieron de
+que la sonda **no era la sonda**:
+
+- **Las sondas de existencia son multi-fichero.** M1 y M2 preguntan si el ADT
+  declara la ventana y si la tabla tiene la columna de supersesión. La sonda
+  honesta es **renombrar el identificador de punta a punta** —campo, columna,
+  `ALTER TABLE`, mapper, `INSERT`— para que el árbol siga cargando y las otras
+  cuatro preguntas sigan midiendo. Borrar la columna hace reventar el mapper:
+  una sonda «cazada» por un crash, que no es la propiedad rota sino el árbol
+  roto. Es el error 32 de B26 y de WI-113, por tercera vez.
+- **M3 resultó INOCUA, y el motivo es el hallazgo más útil del bloque.** Apuntaba
+  a `knowledge_repository.py`, pero `Storage.claims_at_revision` lo hereda de
+  `KnowledgeDelegations`. Lo que se renombró fue el método interno; el público
+  quedó intacto y P3 siguió cerrada — la lectura que miente en verde. MEDIDO, no
+  supuesto: `getattr(Storage, 'claims_at_revision').__module__`.
+
+Y M4 y M5 tocan el mismo `if` y **no son intercambiables**: M4 rompe la primera
+mitad del contrasalto y abre P4; M5 deja HEAD **intacto** y abre P5 y **no** P4.
+Un arreglo que comprase «cero conflictos» apagando el detector pasaría P4 en
+verde.
+
+### Un test que falló al escribirlo, con razón
+
+`test_una_revision_ANTERIOR_no_supersede_a_una_posterior` afirmaba que en `rc3`
+las dos afirmaciones de `false` coexistían. En el orden inverso de ingesta **no
+es cierto**: ahí `rc3` ocupa la posición 1 del store y la otra todavía no se ha
+aprendido.
+
+No es un defecto. Es la **consecuencia declarada** de que `seq` sea el orden en
+que el store aprendió, y fingir que `rc3` es siempre la posición 2 sería
+inventarlo. Lo que sí es independiente del orden —y es lo que el test mide ahora—
+es cuántas ventanas siguen abiertas al llegar el cambio.
+
+---
+
+### Lo que esta línea NO sustituye
+
+**El gate de 1.0 sigue vivo y sigue siendo B9**, con sus dos propiedades que no
+se abren desde el código: runtime real certificado (`OPEN` — una credencial) y
+TUI operacional (`NO_MEASURABLE` — una persona). B25..B34 son ortogonales a las
+dos y pueden avanzar sin tocarlas; lo que no pueden es declararlas resueltas, y
+esta sección no lo hace.
+
+### Procedencia, y lo que de ella llega a todo el mundo
+
+`docs/skillgraph-epistemic-evolution-2026-10-06/` — 18 documentos: baseline,
+visión, arquitectura objetivo, siete specs, roadmap, hitos, UAT/AAT, migración,
+playbook, riesgos y nueve ADR (`ADR-0025`..`ADR-0033`).
+
+**Esa carpeta no está versionada.** `.gitignore` deja `docs/*` fuera salvo
+`docs/blueprint/` y `docs/architecture/`, por la política de WI-99 que separa la
+evidencia que los UAT leen del material de trabajo. Consecuencia concreta: **la
+tabla del mapa es la copia que llega a todo el mundo**, y quien solo tenga git
+tiene el orden y los objetivos, pero no las specs ni los ADR. Es una deuda
+conocida y asumida, no un olvido.
+
+**Numeración: dos rebaseos, y el primero estaba mal.** La serie venía como
+B22..B31 sobre un árbol donde B21 era el último cerrado. El primer rebaseo la
+llevó a **B32..B41** y fue un error: si B22, B23 y B24 están ocupados, el
+siguiente libre es **B25**, y B32..B41 dejaba B25..B31 —siete bloques— sin usar
+en la autoridad. Segundo rebaseo a **B25..B34**, que es lo que está aquí.
+
+### La frontera que los atraviesa
+
+**El contrato va de SkillGraph a la herramienta, nunca al revés.**
+
+```
+              contrato de SkillGraph
+                       ▲
+                       │
+   Adaptador CogniCode ┘
+```
+
+B31 es donde se paga caro si se invierte: si el modelo epistemológico se
+diseñara alrededor de la forma de salida de un analizador concreto, cada
+analizador nuevo obligaría a cambiar el núcleo, que es lo que `AGENTS.md` §4.3
+prohíbe con `Protocol` y lo que el guard citado arriba ya mide.
 
 
 ## B23 — El instrumento de la verdad puede equivocarse, y se le ve

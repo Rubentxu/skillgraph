@@ -386,7 +386,18 @@ def test_la_receta_no_cambio() -> None:
     # 7541ced5... era el digest con las ocho etapas. B10 anadio
     # `public-surfaces` (nona), el guard WI-98 lo exigio al descubrir el
     # checker huerfano, y el digest paso a de3fbf76... al registrarlo aqui.
-    esperado = "de3fbf7618c584fda952ef9febba2c9cdc97e4dda7dcdbb36d0af78bb2c176c4"
+    # B24 cambio el COMENTARIO de la etapa `evidence`, no su comando: la
+    # etapa paso de verificar el run ANTERIOR a verificar el EN CURSO, porque
+    # lo anterior era un trinquete que tras un rojo real impedia publicar para
+    # siempre. El digest cambia con el motivo escrito al lado, que es
+    # exactamente lo que este test exige. Detector de cambios: los comentarios
+    # no ejecutan codigo, asi que este digest mide que alguien leyo el bloque.
+    # R1 anadio `architecture-ratchet` (decima etapa), que hace lo que un
+    # audit no puede: salir distinto de cero cuando una propiedad vuelve a
+    # dejar de cumplirse. Las cinco que vigila llegaron a 0/5 medidas, y el
+    # contrasalto 5/5. El digest cambia con el motivo escrito al lado, que es
+    # exactamente lo que este test exige.
+    esperado = "7f32b93b0a13c1f6d6a7fe822c55678d5276a3c6a8b242b1798de77fb0e933a1"
     real = hashlib.sha256((RAIZ / ".pipeline.kts").read_bytes()).hexdigest()
     assert real == esperado, (
         f"`.pipeline.kts` cambio: {real}\n"

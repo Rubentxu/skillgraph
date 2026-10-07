@@ -27,6 +27,7 @@ vocabulario se escribe a mano; se deriva de su Literal**.
 
 from __future__ import annotations
 
+import re
 from typing import Final, Literal, NewType, get_args
 
 # --- Tipos suma (ADT cerradas) -------------------------------------------
@@ -238,6 +239,15 @@ Cualquier ``source_kind`` fuera de este set falla validacion.
 """
 
 #: Conjunto canonico de predicados de Claim (H3).
+#:
+#: **ESTE CONJUNTO NO CRECE, Y ES LA PROMESA DE B25.** La fila del roadmap
+#: dice «un pack añade un predicado sin tocar el núcleo»: si para aceptar un
+#: predicado nuevo hubiera que añadirlo aquí, la promesa sería untrue, porque
+#: este fichero es justamente el núcleo. Lo que se abre es la FORMA —un
+#: predicado con namespace—, no la lista.
+#:
+#: Su docstring de siempre ya lo anunciaba: «extensibles en H5 con Domain
+#: Packs». B25 implementa lo que el vocabulario prometía.
 CLAIM_PREDICATES: Final[frozenset[str]] = frozenset(
     {
         "line_count",
@@ -249,6 +259,49 @@ CLAIM_PREDICATES: Final[frozenset[str]] = frozenset(
         "spec_revision",
     }
 )
+
+#: Forma de un predicado que viene de un pack: `namespace.nombre`.
+#:
+#: `NewType` y no `Literal` porque el vocabulario es abierto POR DISEÑO, y
+#: `AGENTS.md` §2.2 es exactamente este caso: strings que vienen de fuera y
+#: tienen semántica propia. El type-checker separa así un predicado del núcleo
+#: de uno del pack sin ningún coste en runtime.
+PredicadoDePack = NewType("PredicadoDePack", str)
+"""Predicado que aporta un pack, con namespace `namespace.nombre`."""
+
+#: Un namespace, y al menos un nombre. **Al menos un punto**, que es la parte
+#: que importa: `not_a_real_predicate` no lo tiene, y por eso
+#: `test_claim_unknown_predicate_raises` —el unico test que depende del
+#: rechazo— sigue verde sin tocarlo.
+#:
+#: Se regex y no un conjunto de separadores porque el criterio tiene que ser
+#: una FUNCION del string, no un registro: un registro seria estado global
+#: mutable (`AGENTS.md` §1.4) y haria que construir un `Claim` dependiera del
+#: orden en que se instalo nada.
+#:
+#: La regex no lleva ancla `$` porque `re.match` ya la impone desde el inicio,
+#: y una segunda ancla aqui seria ruido que sugiere que se comprueba el final.
+_FORMA_PREDICADO_DE_PACK = re.compile(r"[a-z0-9][a-z0-9_-]*(\.[a-z0-9][a-z0-9_-]*)+")
+
+
+def predicado_de_pack(raw: str) -> PredicadoDePack:
+    """Smart constructor: un predicado de pack es `namespace.nombre` o nada.
+
+    Lanza `UnknownClaimPredicateError` —el mismo error que el predicado
+    desconocido del núcleo— porque desde fuera del dominio el fallo es el
+    mismo: ese texto no nombra un predicado que exista. La exception vive en
+    `core.errors`, que no importa aqui, asi que se importa perezoso: un modulo
+    de tipos que importa errores termina creando el ciclo que §1.3 prohibe.
+    """
+    from skillgraph.core.errors import UnknownClaimPredicateError
+
+    if not _FORMA_PREDICADO_DE_PACK.match(raw):
+        raise UnknownClaimPredicateError(
+            f"predicado {raw!r} no es del nucleo ({sorted(CLAIM_PREDICATES)}) "
+            f"ni de un pack: un predicado de pack se escribe 'namespace.nombre'"
+        )
+    return PredicadoDePack(raw)
+
 
 #: Conjunto canonico de resultados de Finding.
 FINDING_RESULTS: Final[frozenset[str]] = frozenset({"pass", "fail", "inconclusive"})
@@ -284,6 +337,7 @@ __all__ = [
     "NodeName",
     "NodeState",
     "OutcomeLabel",
+    "PredicadoDePack",
     "PromotionStatus",
     "RevisionNumber",
     "RuleRef",
@@ -292,4 +346,5 @@ __all__ = [
     "TraceKind",
     "is_terminal_node_state",
     "is_terminal_run_state",
+    "predicado_de_pack",
 ]

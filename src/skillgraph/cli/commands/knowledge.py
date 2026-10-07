@@ -18,6 +18,7 @@ from pathlib import Path
 from skillgraph.cli.support import EXIT_OK, exit_para, resolve_project
 from skillgraph.core.errors import ParseError, SkillGraphError
 from skillgraph.core.recipe import ContextRecipe
+from skillgraph.knowledge.authority import Resolution
 from skillgraph.knowledge.context_controller import (
     ContextController,
     OutcomeTracer,
@@ -171,3 +172,136 @@ def cmd_knowledge_trace(args: argparse.Namespace) -> int:
             )
         )
         return EXIT_OK
+
+
+# ---------------------------------------------------------------------------
+# B28 — «¿qué creo, y por qué?»
+# ---------------------------------------------------------------------------
+
+
+def cmd_knowledge_resolve(args: argparse.Namespace) -> int:
+    """Resuelve los conflictos de un sujeto PARA UNA INTENCION.
+
+    **POR QUE ESTE SUBCOMANDO ES EL ENTREGABLE Y NO UN ADONO.** Sin el, la
+    politica de B28 seria un eje que nadie rellena — MEDIDO en B6 que
+    `extraction_method` era un `str` al que no escribia NADIE en `src/`, y por
+    eso no podia ser donde viviera el origen. Un bloque que anade capacidad y
+    no la deja preguntar es el mismo defecto con mas codigo.
+
+    **Y POR QUE EL `--intent` ES OBLIGATORIO Y NO UN DEFAULT.** Es lo unico que
+    separa dos respuestas distintas sobre el mismo conflicto. Poner un valor
+    por defecto seria exactement el ranking global que la fila del roadmap
+    acusa: la respuesta «correcta» sin preguntar. Sin `--intent` no hay
+    pregunta, y sin pregunta no hay respuesta honesta.
+    """
+    from skillgraph.knowledge.authority import resolver
+
+    with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
+        conflictos = storage.conflicts_for(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=args.subject,
+            revision=args.at_revision,
+        )
+        if not conflictos:
+            # B29: el mensaje dice DE QUE REVISION. Un «sin conflicto» a secas
+            # para `--at-revision revA` es indistinguible de la respuesta de
+            # HEAD, y son dos preguntas distintas: en revA no se contradice
+            # nadie porque el hecho viejo era el unico cierto, no porque el
+            # sistema no sepa.
+            cuando = args.at_revision if args.at_revision is not None else "HEAD"
+            print(
+                f"{args.subject}: sin conflicto en {cuando}. "
+                "Nadie se contradice, y no hay nada que resolver."
+            )
+            return EXIT_OK
+
+        # Cada conflicto se resuelve CON SU PROPIA respuesta. Un sujeto con dos
+        # predicados que se contradicen tiene dos respuestas, y escolher una
+        # seria el mismo error de authority por el otro lado.
+        resoluciones = [
+            resolver(conflicto, intencion=args.intent, revision=args.at_revision)
+            for conflicto in conflictos
+        ]
+
+    if args.json:
+        print(
+            json.dumps(
+                [_como_dict(r) for r in resoluciones],
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return EXIT_OK
+
+    for r in resoluciones:
+        for ln in _render(r):
+            print(ln)
+    return EXIT_OK
+
+
+def _como_dict(r: Resolution) -> dict[str, object]:
+    """La resolucion en JSON: la MISMA informacion que `_render` imprime.
+
+    **POR QUE NO SE REIMPLEMENTA LA LOGICA.** Un `--json` que cuenta otra
+    historia que el texto es un camino a dos verdades, y el dia que cambien
+    una, el otro dira la cosa contraria sin avisar. Se deriva del mismo
+    objeto.
+    """
+    return {
+        "subject_entity_id": r.conflicto.subject_entity_id,
+        "predicate": r.conflicto.predicate,
+        "query_intent": r.intencion,
+        "profile": r.perfil,
+        "revision": r.revision,
+        "winner": (
+            {
+                "claim_id": r.ganadora.claim_id,
+                "object_literal": r.ganadora.object_literal,
+                "assertion_origin": r.ganadora.assertion_origin,
+            }
+            if r.ganadora is not None
+            else None
+        ),
+        "unresolved": r.sin_resolver,
+        "discarded": [
+            {
+                "claim_id": d.afirmacion.claim_id,
+                "object_literal": d.afirmacion.object_literal,
+                "assertion_origin": d.afirmacion.assertion_origin,
+                "motivo": d.motivo,
+            }
+            for d in r.descartadas
+        ],
+    }
+
+
+def _render(r: Resolution) -> list[str]:
+    """La resolucion explicada, como texto.
+
+    **POR QUE NO ES JSON POR DEFECTO.** El campo `perfil` y los `motivo` de
+    descarte existen para que un humano entienda por que gano una y perdio la
+    otra; un `json.dumps` lo esconde detras de una coma. `--json` lo da
+    cuando lo que se quiere es el dato, no la lectura.
+    """
+    # B29: la linea dice DE QUE REVISION se responde. Sin ella, un «gana
+    # NADIE» no se puede distinguir de una pregunta hecha en el instante
+    # equivocado — y esa es exactamente la confusion que el bloque cierra.
+    cuando = r.revision if r.revision is not None else "HEAD"
+    out = [
+        f"conflicto: {r.conflicto.subject_entity_id} {r.conflicto.predicate}",
+        f"  pregunta:   {r.intencion}  (politica: {r.perfil}, revision: {cuando})",
+    ]
+    if r.ganadora is not None:
+        out.append(f"  gana:       {r.ganadora.claim_id} = {r.ganadora.object_literal!r}")
+    else:
+        out.append("  gana:       NADIE — la politica no pudo elegir")
+    if r.sin_resolver:
+        out.append(
+            f"  sin resolver: {len(r.elegidas)} afirmaciones empatadas en la misma jerarquia"
+        )
+    for d in r.descartadas:
+        out.append(
+            f"  descartada: {d.afirmacion.claim_id} = {d.afirmacion.object_literal!r}  [{d.motivo}]"
+        )
+    return out

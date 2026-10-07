@@ -92,7 +92,7 @@ SONDAS: tuple[Sonda, ...] = (
         fichero="scripts/project_truth.py",
         # La raiz se vuelve a derivar del script: el fallo exacto que B23
         # midio. `--raiz` deja de affectar la lectura.
-        antes='    raiz = args.raiz if args.raiz is not None else RAIZ_POR_DEFECTO',
+        antes="    raiz = args.raiz if args.raiz is not None else RAIZ_POR_DEFECTO",
         despues="    raiz = RAIZ_POR_DEFECTO",
         esperados=("test_el_veredicto_del_arbol_no_es_el_del_repo",),
         porque="el sandbox volveria a devolver la verdad del repo",
@@ -121,7 +121,7 @@ SONDAS: tuple[Sonda, ...] = (
         antes=(
             '    if v["bloque"] != v["workitem_state"]:\n'
             "        problemas.append(\n"
-            '            f"bloque: el ROADMAP declara {v[\'bloque\']}, STATE declara {v[\'workitem_state\']}"\n'
+            "            f\"bloque: el ROADMAP declara {v['bloque']}, STATE declara {v['workitem_state']}\"\n"
             "        )"
         ),
         despues="    if False:\n        pass",
@@ -152,7 +152,7 @@ SONDAS: tuple[Sonda, ...] = (
         fichero="scripts/project_truth.py",
         # La derivacion deja de encontrar ventanas. Si devolviera (), los
         # tests de R2 y R4 pasarian sin leer nada.
-        antes='    if _TESTS_VENTANA.search(linea) is None:\n            continue',
+        antes="    if _TESTS_VENTANA.search(linea) is None:\n            continue",
         despues="    if True:\n            continue",
         esperados=("test_encuentra_las_dos_ventanas_que_hay",),
         porque="la derivacion devolveria la lista vacia y R2/R4 pasarían sin medir",
@@ -183,7 +183,19 @@ def _anclas_validas() -> list[str]:
 
 
 def _nombres_validos() -> list[str]:
-    proc = _corre([PY, "-m", "pytest", "-q", "--collect-only", "--no-header", "-p", "no:cacheprovider", *SUITES])
+    proc = _corre(
+        [
+            PY,
+            "-m",
+            "pytest",
+            "-q",
+            "--collect-only",
+            "--no-header",
+            "-p",
+            "no:cacheprovider",
+            *SUITES,
+        ]
+    )
     colectados = {ln.strip() for ln in proc.stdout.splitlines() if "::" in ln}
     errores: list[str] = []
     for s in SONDAS:
@@ -269,7 +281,9 @@ def main() -> int:
 
     rc, caidos, no_colecto = _corre_suite()
     verde = rc == 0 and not caidos and not no_colecto
-    limpio = not _corre(["git", "status", "--porcelain", "--", *[str(m.relative_to(RAIZ)) for m in MUTABLES]]).stdout.strip()
+    limpio = not _corre(
+        ["git", "status", "--porcelain", "--", *[str(m.relative_to(RAIZ)) for m in MUTABLES]]
+    ).stdout.strip()
 
     print()
     print("=" * 78)

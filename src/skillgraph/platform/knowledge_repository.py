@@ -18,19 +18,17 @@ import json
 import sqlite3
 from typing import Any
 
-from skillgraph.core.errors import IdentityConflictError, NotFoundError, ValidationError
+from skillgraph.core.errors import IdentityConflictError, NotFoundError
 from skillgraph.knowledge.graph import (
     Claim,
-    Entity,
+    ClaimRecorded,
+    Conflicto,
     Evidence,
     Finding,
     OutcomeTrace,
-    Source,
 )
 from skillgraph.platform.knowledge_claims import SqliteClaimRepository
-
-# WI-60 (ADR-0020 fase 1): mappers reubicados; re-export para la clase,
-# los shims de storage.py y cualquier consumidor del simbolo.
+from skillgraph.platform.knowledge_conflicts import SqliteConflictRepository
 from skillgraph.platform.knowledge_mappers import (
     row_to_claim,
     row_to_evidence,
@@ -40,6 +38,11 @@ from skillgraph.platform.knowledge_mappers import (
     row_to_stored_claim,
     row_to_stored_evidence,
 )
+
+# WI-60 (ADR-0020 fase 1): mappers reubicados; re-export para la clase,
+# los shims de storage.py y cualquier consumidor del simbolo.
+from skillgraph.platform.knowledge_sources import SqliteSourceRepository
+from skillgraph.platform.knowledge_traces import SqliteOutcomeTraceRepository
 from skillgraph.platform.ports import (
     StoredClaim,
     StoredEvidence,
@@ -48,6 +51,7 @@ from skillgraph.platform.ports import (
 )
 from skillgraph.platform.row_mappers import _uid
 from skillgraph.platform.storage import Storage
+from skillgraph.platform.translation import traduciendo_integridad
 from skillgraph.resources.bricks import Brick
 from skillgraph.resources.status import ResourceStatus, status_from_json, status_to_json
 
@@ -60,6 +64,16 @@ class SqliteKnowledgeRepository:
     def __init__(self, storage: Storage) -> None:
         self._storage = storage
         self._claims = SqliteClaimRepository(storage)
+        # B27: el conflicto es una RELACION entre claims, no un claim. Vive en
+        # su propio componente porque tiene su propio contrato —inmutable y
+        # ordenado— y porque su error, si lo tuviera, seria distinto.
+        self._conflicts = SqliteConflictRepository(storage)
+        # R1: los traces son un cluster con su propia transaccion (1+N
+        # sentencias), asi que van en su componente y no como metodos sueltos.
+        self._traces = SqliteOutcomeTraceRepository(storage)
+        # R1: `sources` y `entities` comparten una FK y una politica de
+        # # frescura, asi que van juntos en su componente.
+        self._sources = SqliteSourceRepository(storage)
 
     @property
     def _conn(self) -> sqlite3.Connection:
@@ -302,180 +316,37 @@ class SqliteKnowledgeRepository:
         rows = self._conn.execute("SELECT * FROM relations WHERE target_uid = ?", (uid,)).fetchall()
         return [_row_to_relation(r) for r in rows]
 
-    def register_source(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-        source: Source,
-    ) -> None:
-        """Registra una Source. Idempotente por `source_id` (PK)."""
+    def register_source(self, *a: Any, **k: Any) -> Any:
+        """**R1: delega en `SqliteSourceRepository`.** Cuerpo movido verbatim."""
+        return self._sources.register_source(*a, **k)
 
-        locator_json = json.dumps(source.locator, sort_keys=True)
-        wts_json = (
-            json.dumps(source.working_tree_status, sort_keys=True)
-            if source.working_tree_status is not None
-            else None
-        )
-        with self._storage._tx() as cur:
-            cur.execute(
-                """
-                INSERT OR REPLACE INTO sources
-                    (source_id, tenant_id, project_id, kind, content_hash,
-                     locator_json, git_commit_sha, git_tree_sha,
-                     working_tree_status_json, checked_at, freshness)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    source.source_id,
-                    tenant_id,
-                    project_id,
-                    source.kind,
-                    source.content_hash,
-                    locator_json,
-                    source.git_commit_sha,
-                    source.git_tree_sha,
-                    wts_json,
-                    source.checked_at,
-                    source.freshness,
-                ),
-            )
+    def get_source(self, *a: Any, **k: Any) -> Any:
+        """**R1: delega en `SqliteSourceRepository`.** Cuerpo movido verbatim."""
+        return self._sources.get_source(*a, **k)
 
-    def get_source(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-        source_id: str,
-    ) -> Source | None:
-        """Recupera una Source por ID; `None` si no existe."""
+    def list_sources(self, *a: Any, **k: Any) -> Any:
+        """**R1: delega en `SqliteSourceRepository`.** Cuerpo movido verbatim."""
+        return self._sources.list_sources(*a, **k)
 
-        row = self._conn.execute(
-            "SELECT * FROM sources WHERE source_id = ? AND tenant_id = ? AND project_id = ?",
-            (source_id, tenant_id, project_id),
-        ).fetchone()
-        if row is None:
-            return None
-        return _row_to_source(row, json)
+    def update_source_freshness(self, *a: Any, **k: Any) -> Any:
+        """**R1: delega en `SqliteSourceRepository`.** Cuerpo movido verbatim."""
+        return self._sources.update_source_freshness(*a, **k)
 
-    def list_sources(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-    ) -> tuple[Source, ...]:
-        """Sources del tenant/project (read-only, orden determinista por source_id).
+    def source_exists_anywhere(self, *a: Any, **k: Any) -> Any:
+        """**R1: delega en `SqliteSourceRepository`.** Cuerpo movido verbatim."""
+        return self._sources.source_exists_anywhere(*a, **k)
 
-        WI-03: migra el escape hatch ``storage._conn.execute('SELECT source_id
-        FROM sources ...')`` que hacia ``receipts.list_applicable_receipts``.
-        Devuelve tupla inmutable (regla AGENTS §1.1).
-        """
+    def upsert_entity(self, *a: Any, **k: Any) -> Any:
+        """**R1: delega en `SqliteSourceRepository`.** Cuerpo movido verbatim."""
+        return self._sources.upsert_entity(*a, **k)
 
-        rows = self._conn.execute(
-            "SELECT * FROM sources WHERE tenant_id = ? AND project_id = ? ORDER BY source_id",
-            (tenant_id, project_id),
-        ).fetchall()
-        return tuple(_row_to_source(row, json) for row in rows)
+    def get_entity(self, *a: Any, **k: Any) -> Any:
+        """**R1: delega en `SqliteSourceRepository`.** Cuerpo movido verbatim."""
+        return self._sources.get_entity(*a, **k)
 
-    def update_source_freshness(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-        source_id: str,
-        freshness: str,
-    ) -> None:
-        """Cambia `freshness` de una Source (e.g. fresh -> stale)."""
-        with self._storage._tx() as cur:
-            cur.execute(
-                "UPDATE sources SET freshness = ? WHERE source_id = ? AND tenant_id = ? AND project_id = ?",
-                (freshness, source_id, tenant_id, project_id),
-            )
-
-    def source_exists_anywhere(self, *, source_id: str) -> bool:
-        """True si el ``source_id`` existe en cualquier tenant/project.
-
-        WI-02b: distingue typo de source vs pertenencia a otro proyecto
-        (regla de leakage cross-tenant ADR-0015).
-        """
-        row = self._conn.execute(
-            "SELECT 1 FROM sources WHERE source_id = ? LIMIT 1",
-            (source_id,),
-        ).fetchone()
-        return row is not None
-
-    def upsert_entity(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-        entity: Entity,
-    ) -> None:
-        """Inserta o reemplaza una Entity. UNIQUE(kind, stable_key) por tenant/project."""
-        with self._storage._tx() as cur:
-            cur.execute(
-                """
-                INSERT OR REPLACE INTO entities
-                    (entity_id, tenant_id, project_id, kind, stable_key)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    entity.entity_id,
-                    tenant_id,
-                    project_id,
-                    entity.kind,
-                    entity.stable_key,
-                ),
-            )
-
-    def get_entity(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-        entity_id: str,
-    ) -> Entity | None:
-        row = self._conn.execute(
-            "SELECT * FROM entities WHERE entity_id = ? AND tenant_id = ? AND project_id = ?",
-            (entity_id, tenant_id, project_id),
-        ).fetchone()
-        if row is None:
-            return None
-        return Entity(
-            entity_id=row["entity_id"],
-            kind=row["kind"],
-            stable_key=row["stable_key"],
-        )
-
-    def find_entity(
-        self,
-        *,
-        tenant_id: str,
-        project_id: str,
-        kind: str,
-        stable_key: str,
-    ) -> Entity | None:
-        """Busca una Entity por (kind, stable_key). None si no existe.
-
-        WI-02b: nuevo metodo del ``KnowledgeRepository`` Protocol que
-        elimina el acceso directo a ``storage._conn`` que hacia
-        ``KnowledgeController.find_entity``.
-        """
-        row = self._conn.execute(
-            """
-            SELECT * FROM entities
-            WHERE tenant_id = ? AND project_id = ?
-              AND kind = ? AND stable_key = ?
-            """,
-            (tenant_id, project_id, kind, stable_key),
-        ).fetchone()
-        if row is None:
-            return None
-        return Entity(
-            entity_id=row["entity_id"],
-            kind=row["kind"],
-            stable_key=row["stable_key"],
-        )
+    def find_entity(self, *a: Any, **k: Any) -> Any:
+        """**R1: delega en `SqliteSourceRepository`.** Cuerpo movido verbatim."""
+        return self._sources.find_entity(*a, **k)
 
     def record_evidence(
         self,
@@ -492,7 +363,13 @@ class SqliteKnowledgeRepository:
             if not isinstance(evidence.content, str)
             else json.dumps(evidence.content)
         )
-        with self._storage._tx() as cur:
+        # **R0: MISMA FRONTERA QUE EN `knowledge_claims.py`.** Este es el otro
+        # sitio que hace SQL sobre `evidences`, luego es el otro donde puede
+        # aparecer un `sqlite3.IntegrityError`. Sin esto, `record_evidence`
+        # dejaba pasar el error crudo y el `knowledge_controller` —que ya no
+        # importa `sqlite3`— no lo podia convertir, y el mensaje de dominio
+        # se perdia por el camino.
+        with traduciendo_integridad(), self._storage._tx() as cur:
             cur.execute(
                 "INSERT OR IGNORE INTO evidences (evidence_id, tenant_id, project_id, kind, content_json, source_id, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -533,9 +410,63 @@ class SqliteKnowledgeRepository:
         tenant_id: str,
         project_id: str,
         claim: Claim,
-    ) -> str:
-        """Delega en `SqliteClaimRepository.record_claim` (WI-61)."""
+    ) -> ClaimRecorded:
+        """Delega en `SqliteClaimRepository.record_claim` (WI-61).
+
+        **B27: EL RETORNO DEJO DE SER UN `str`.** Antes devolvia el `claim_id`
+        que se le habia dado, y con una escritura condicional eso miente: el
+        `UNIQUE` de la tupla natural puede rechazar la fila y el metodo
+        devuelve igual, como si hubiera escrito. Ahora devuelve
+        `ClaimRecorded`, que dice si hubo conflicto y que se solapa.
+        """
         return self._claims.record_claim(tenant_id=tenant_id, project_id=project_id, claim=claim)
+
+    def conflicts_for(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None = None,
+    ) -> tuple[Conflicto, ...]:
+        """B27: los conflictos de un sujeto, consultables y ESTABLES.
+
+        **POR QUE ESTA EN LA FACHADA Y NO SOLO EN EL COMPONENTE.** Un dato que
+        se guarda y no se puede preguntar es peor que no tenerlo, porque quien
+        lo escribio creera que si. Y por el mismo motivo que en B25: la consulta
+        tiene que travels por la API publica, o cada quien abriria el componente
+        por su cuenta y cada copia divergiria el dia que una se actualice.
+        """
+        return self._conflicts.conflicts_for(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=subject_entity_id,
+            revision=revision,
+        )
+
+    def claims_at_revision(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None,
+    ) -> tuple[Claim, ...]:
+        """B29: ¿qué afirmaciones de este sujeto eran ciertas en `revision`?
+
+        `revision=None` es HEAD. Una revision que este store nunca ha visto
+        devuelve vacio, que no es un error: es que no hay nada que dijera de
+        ella.
+
+        Va en la fachada por el mismo motivo que en B25 y B27: la consulta que
+        se guarda tiene que poder PREGUNTARSE por la API publica.
+        """
+        return self._claims.claims_at_revision(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=subject_entity_id,
+            revision=revision,
+        )
 
     def get_claim(
         self,
@@ -617,6 +548,24 @@ class SqliteKnowledgeRepository:
         """Delega en `SqliteClaimRepository.list_claims_by_predicate` (WI-61)."""
         return self._claims.list_claims_by_predicate(
             tenant_id=tenant_id, project_id=project_id, predicate=predicate
+        )
+
+    def list_claims_by_object_entity(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        object_entity_id: str,
+    ) -> tuple[StoredClaim, ...]:
+        """B25: los claims cuyo objeto es esa entidad. Delega en
+        `SqliteClaimRepository` (WI-61).
+
+        Sin este metodo, una referencia a entidad se podria escribir pero no
+        preguntar: seria un dato que se guarda y no se lee, que es peor que no
+        tenerlo porque el que lo escribio creeria que si.
+        """
+        return self._claims.list_claims_by_object_entity(
+            tenant_id=tenant_id, project_id=project_id, object_entity_id=object_entity_id
         )
 
     def list_evidences_for_source(
@@ -727,48 +676,12 @@ class SqliteKnowledgeRepository:
     ) -> None:
         """Registra un OutcomeTrace y sus enlaces (claim/evidence en orden).
 
-        Idempotente por `trace_id` y por `(trace_id, link_kind, link_id)`.
-
-        Usa `_atomic()` (BEGIN/COMMIT/ROLLBACK explicitos) en vez de
-        `_tx()` para garantizar que un fallo a mitad de las 1+N
-        sentencias no deje un `outcome_traces` orphan (sin sus
-        `outcome_trace_links`). H9-LIMITACION-7 V4.
+        **R1: LA FACADA SOLO COMPONE.** El cuerpo vive en
+        `SqliteOutcomeTraceRepository`; aqui queda una linea que delega.
+        Moverlo no cambia el comportamiento: el mismo SQL, la misma
+        transaccion y el mismo contrato.
         """
-        with self._storage._atomic() as cur:
-            cur.execute(
-                """
-                INSERT OR REPLACE INTO outcome_traces
-                    (trace_id, tenant_id, project_id, kind, name, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    trace.trace_id,
-                    tenant_id,
-                    project_id,
-                    trace.kind,
-                    trace.name,
-                    trace.created_at,
-                ),
-            )
-            # Enlazar claims y evidences preservando orden via `position`.
-            for position, claim_id in enumerate(trace.claim_refs):
-                cur.execute(
-                    """
-                    INSERT OR REPLACE INTO outcome_trace_links
-                        (trace_id, link_kind, link_id, position)
-                    VALUES (?, 'claim', ?, ?)
-                    """,
-                    (trace.trace_id, claim_id, position),
-                )
-            for position, evidence_id in enumerate(trace.evidence_refs):
-                cur.execute(
-                    """
-                    INSERT OR REPLACE INTO outcome_trace_links
-                        (trace_id, link_kind, link_id, position)
-                    VALUES (?, 'evidence', ?, ?)
-                    """,
-                    (trace.trace_id, evidence_id, position),
-                )
+        self._traces.record_trace(tenant_id=tenant_id, project_id=project_id, trace=trace)
 
     def link_trace(
         self,
@@ -780,21 +693,16 @@ class SqliteKnowledgeRepository:
         link_id: str,
         position: int,
     ) -> None:
-        """Adjunta un enlace adicional a un trace. `link_kind` ∈
-        {'claim', 'evidence', 'relation'}."""
-        if link_kind not in {"claim", "evidence", "relation"}:
-            raise ValidationError(
-                f"link_kind invalido: {link_kind!r} (esperado claim/evidence/relation)"
-            )
-        with self._storage._tx() as cur:
-            cur.execute(
-                """
-                INSERT OR REPLACE INTO outcome_trace_links
-                    (trace_id, link_kind, link_id, position)
-                VALUES (?, ?, ?, ?)
-                """,
-                (trace_id, link_kind, link_id, position),
-            )
+        """Adjunta un enlace adicional a un trace. `link_kind` in
+        {'claim', 'evidence', 'relation'}. **R1: delega en el componente.**"""
+        self._traces.link_trace(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            trace_id=trace_id,
+            link_kind=link_kind,
+            link_id=link_id,
+            position=position,
+        )
 
 
 # Los cuerpos extraidos verbatim llaman a los mappers por su nombre

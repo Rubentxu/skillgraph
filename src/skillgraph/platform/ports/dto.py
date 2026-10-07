@@ -283,6 +283,11 @@ class StoredClaim:
     #: campo con default antes de otro que no lo lleva. Ponerlo aqui por
     #: orden logico rompia la clase al importarla.
     assertion_origin: str = "observed"
+    #: B25. `""` significa «el objeto es un literal»; un `entity_id` significa
+    #: que el objeto es esa entidad. Mismo criterio de XOR que la tabla y que
+    #: `Claim`, porque los tres tienen que decir lo mismo.
+    #: Va al final por la misma razon que `assertion_origin`.
+    object_entity_id: str = ""
 
     def __getitem__(self, key: str) -> Any:
         """Compatibilidad explícita con consumidores históricos basados en filas."""

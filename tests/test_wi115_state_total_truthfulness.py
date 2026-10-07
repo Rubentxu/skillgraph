@@ -84,6 +84,31 @@ def _colectados_reales() -> int:
         env={**os.environ, "TMPDIR": tempfile.gettempdir()},
     )
     m = _COLECTADOS.search(proc.stdout)
+    # **EL CODIGO DE SALIDA, Y POR QUE SE COMPRUEBA AHORA Y NO ANTES.**
+    #
+    # MEDIDO al certificar R0.A: este guard pasa en la suite completa y falla
+    # en aislamiento, con el MISMO arbol:
+    #
+    #     suite completa   3717 passed + 3 skipped  -> verde
+    #     este test solo   3720 declarado vs 3728    -> rojo, con la verdad
+    #
+    # 3720 es justo 3717 + 3, o sea **el numero de PASSED**, y tambien lo que
+    # el estado declaraba. Lo que hacia era esto:
+    #
+    #     la colecta del subproceso salia con rc != 0,
+    #     pytest imprimia «3720 tests collected» como conteo PARCIAL,
+    #     aqui no se miraba el rc, se leia el numero,
+    #     y 3720 == lo declarado, luego VERDE.
+    #
+    # **Un guard que pasa porque su propio instrumento fallo.** Es la clase
+    # que este repo ya ha pagado en `total_colectado()` de project_truth.py,
+    # que si avisa del rc, y que aqui se leia el numero y se aceptaba.
+    assert proc.returncode == 0, (
+        f"la colecta de tests fallo (rc={proc.returncode}) y su numero NO es "
+        "el recuento real: un conteo parcial comparado con el declarado "
+        "puede coincidir por casualidad y dar verde. "
+        f"stdout:\n{proc.stdout[-600:]}\nstderr:\n{proc.stderr[-600:]}"
+    )
     if m is None:
         pytest.fail(
             "no he podido leer el recuento real de tests. Un guard que no "

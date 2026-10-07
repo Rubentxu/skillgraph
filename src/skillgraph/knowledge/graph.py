@@ -34,10 +34,10 @@ from typing import Any, NewType
 
 from skillgraph.core.errors import (
     InvalidAssertionOriginError,
+    InvalidClaimObjectError,
     InvalidEntityIDError,
     InvalidSourceError,
     InvalidSourceIDError,
-    UnknownClaimPredicateError,
 )
 from skillgraph.core.runtime_types import (
     ASSERTION_ORIGINS,
@@ -46,9 +46,11 @@ from skillgraph.core.runtime_types import (
     ClaimPredicate,
     FindingResult,
     FreshnessState,
+    PredicadoDePack,
     RuleRef,
     SourceKind,
     TraceKind,
+    predicado_de_pack,
 )
 
 # --- Identificadores nominales (NewType sobre str) -----------------------
@@ -96,6 +98,20 @@ def entity_id(raw: str) -> EntityID:
     if not raw or ":" not in raw:
         raise InvalidEntityIDError(f"entity_id debe tener formato 'kind:key' (recibido {raw!r})")
     return EntityID(raw)
+
+
+def entity_ref(raw: str) -> EntityRef:
+    """Smart constructor para EntityRef: delega en `entity_id`.
+
+    **POR QUE NO DUPLICA EL FORMATO.** Un `EntityRef` **es** una `EntityID`,
+    asi que la validacion del `kind:key` ya existe y ya tiene su error. Copiarla
+    aqui seria una segunda version de la misma regla, que divergiria el dia que
+    cambie la de `entity_id` — y divergiria en silencio, porque las dos seguirian
+    dando verde por separado.
+
+    Un constructor por `NewType`, que es lo que pide `AGENTS.md` §2.3.
+    """
+    return EntityRef(entity_id(raw))
 
 
 # --- ADT inmutables -------------------------------------------------------
@@ -174,6 +190,24 @@ class Evidence:
 
 
 @dataclass(frozen=True, slots=True)
+class EntityRef:
+    """Una referencia a otra Entity, usada como OBJETO de un Claim.
+
+    **POR QUE UN TIPO Y NO UNA CADENA.** Antes de B25, `Claim.object_literal`
+    era `Any`, luego cualquier cadena era un literal legitimo y el sistema no
+    tenia forma de decir si una de ellas apuntaba a algo. Eso se midio: dos
+    claims cuyo objeto era `str` en los dos casos, y el sistema incapaz de
+    distinguirlos.
+
+    Escalar a tipo es lo que hace que la pregunta del bloque —«¿lo diferencia?»—
+    tenga respuesta. `EntityRef` NO es igual a la cadena que lleva dentro, que
+    es justo por lo que un round-trip que degrade a `str` se nota.
+    """
+
+    entity_id: EntityID
+
+
+@dataclass(frozen=True, slots=True)
 class Claim:
     """Afirmacion verificable sobre una Entity, sostenida por Evidences.
 
@@ -181,12 +215,28 @@ class Claim:
     `(subject_entity_id, predicate, source_id, checked_at_revision)`,
     asi que el mismo Claim se puede re-registrar bajo una nueva
     `checked_at_revision` para representar la evolucion historica.
+
+    **EL OBJETO ES EXACTAMENTE UNO: LITERAL O ENTIDAD (B25).** Antes era solo
+    literal, y por eso no se podia expresar «A usa B». Ahora el campo nuevo
+    `object_entity` es la puerta, y la invariante es que las dos no se puedan
+    usar a la vez ni dejar las dos fuera.
+
+    `object_literal` pasa a `Any = None`, y `None` deja de ser un literal
+    valido: es lo que significa «el objeto no es un literal, mira
+    `object_entity`». Se estrecha el dominio legal, y se puede: MEDIDO, nadie
+    usaba `object_literal=None` antes de este cambio.
     """
 
     claim_id: ClaimID
     subject_entity_id: EntityID
-    predicate: ClaimPredicate
-    object_literal: Any  # int | str | bool; depende del predicate
+    predicate: ClaimPredicate | PredicadoDePack
+    #: Sin default **a proposito**. En cuanto `object_literal` deja de ser
+    #: obligatorio —porque `None` pasa a significar «el objeto es la entidad»—
+    #: todos los campos de despues tendrian que llevar default, y `source_id`
+    #: acabaria siendo opcional. Prefiero que quien afirma sin fuente lo pase
+    #: explicito: un claim sin fuente es un claim sin respaldo, y que el
+    #: constructor lo admita es una forma de no notarlo.
+    object_literal: Any
     source_id: SourceID
     evidence_ids: tuple[EvidenceID, ...] = field(default_factory=tuple)
     extraction_method: str = "static_analysis"
@@ -198,12 +248,68 @@ class Claim:
     assertion_origin: AssertionOrigin = "observed"
     checked_at_revision: str = ""
     stale: bool = False
+    #: B25. Va **al final** a proposito: los campos siguientes ya tienen
+    #: default, y anadirlo aqui mantiene intacta la compatibilidad posicional
+    #: de los cinco anteriores. Un campo nuevo en medio habria hecho que
+    #: `Claim("id", "sujeto", "line_count", 42, "src")` —posicional, como
+    #: aparece en codigo existente— empezara a meter `source_id` en este.
+    object_entity: EntityRef | None = None
+    # --- B29: VENTANA DE VIGENCIA. Los tres AL FINAL, por el mismo motivo. ---
+    #: **VALID time**, y NO es `checked_at_revision`. Aquel dice cuando lo
+    #: VIMOS; este dice cuando el hecho ERA CIERTO. Son los dos ejes de
+    #: `06-SPEC` §1, y confundirlos no era una falta de estilo: era no tener
+    #: un eje con el que comparar, luego no poder distinguir «cambio» de
+    #: «contradiccion». MEDIDO: sin esto, dos filas de la MISMA fuente en
+    #: revisiones consecutivas daban un conflicto, y `resolver` contestaba
+    #: «gana NADIE» a algo que si tiene respuesta en cada instante.
+    #:
+    #: `None` = «no caduca». Es el valor del grafo que ya existia y es el
+    #: correcto por defecto: una afirmacion no caduca por no saber cuando.
+    valid_from_revision: str | None = None
+    valid_until_revision: str | None = None
+    #: La cadena de supersesion: que afirmacion **reemplazo** a cual.
+    #:
+    #: MEDIDO antes del bloque: NO existia ninguna columna ni funcion que
+    #: dijera que `c-B` sustituyo a `c-A`. Habia dos filas con dos revisiones,
+    #: y nada mas; podrian ser un cambio o dos herramientas discrepantes, y no
+    #: habia forma de saberlo.
+    supersedes_claim_id: ClaimID | None = None
 
     def __post_init__(self) -> None:
+        # B25: un predicado del nucleo o un predicado de pack. El conjunto de
+        # siete NO crece; lo que se abre es la forma. Un string sin punto no
+        # es de ninguno de los dos y se sigue rechazando, que es lo que hace
+        # que `test_claim_unknown_predicate_raises` siga verde.
         if self.predicate not in CLAIM_PREDICATES:
-            raise UnknownClaimPredicateError(
-                f"predicate {self.predicate!r} no registrado en CLAIM_PREDICATES"
+            predicado_de_pack(self.predicate)
+
+        # B25: exactamente uno de los dos objetos. Se comprueba con la MISMA
+        # pregunta que la base (un XOR), para que las dos capas no puedan
+        # discrepar: si aqui se invirtiera el criterio, la base rechazaria
+        # filas que Python acepta y el fallo apareceria en el sitio mas caro.
+        es_literal = self.object_literal is not None
+        es_entidad = self.object_entity is not None
+        if es_literal == es_entidad:
+            raise InvalidClaimObjectError(
+                f"Claim {self.claim_id!r} necesita exactamente un objeto: "
+                + (
+                    "llevo los dos (un literal y una entidad), y entonces no se sabe "
+                    "cual de los dos es la verdad"
+                    if es_literal
+                    else "no llevo ninguno; un claim tiene que afirmar algo"
+                )
             )
+
+        # B29: un claim no puede supersederse a si mismo. Es la unica
+        # invariante de la supersesion que se puede comprobar aqui, y se
+        # comprueba porque el bucle que la recorre en `claims_at_revision` no
+        # tiene por donde defenderse: entraria en un ciclo infinito.
+        if self.supersedes_claim_id == self.claim_id:
+            raise InvalidClaimObjectError(
+                f"Claim {self.claim_id!r} se supersede a si mismo: una cadena de "
+                "supersesion con un ciclo no se puede recorrer"
+            )
+
         if self.assertion_origin not in ASSERTION_ORIGINS:
             raise InvalidAssertionOriginError(
                 f"assertion_origin {self.assertion_origin!r} fuera de {sorted(ASSERTION_ORIGINS)}"
@@ -247,11 +353,121 @@ class OutcomeTrace:
     evidence_refs: tuple[EvidenceID, ...] = field(default_factory=tuple)
 
 
+@dataclass(frozen=True, slots=True)
+class ClaimRecorded:
+    """Lo que `record_claim` devuelve: **el claim_id y si colisiono**.
+
+    **POR QUE NO ES UN `str`.** Antes `record_claim` devolvia el `claim_id` que
+    se le habia dado, y con `INSERT OR IGNORE` eso miente: el `UNIQUE` de
+    `(subject_entity_id, predicate, source_id, checked_at_revision)` puede
+    rechazar el INSERT y el metodo devuelve igual, como si hubiera escrito.
+
+    MEDIDO en B27: dos afirmaciones opuestas con la MISMA fuente y la MISMA
+    revision dejan **una** fila —la primera— y quien escribe cree haber
+    registrado la suya. No se pierde una fila: se pierde **la verdad de lo que
+    se afirmo**, en silencio.
+
+    **`valor_previo` Y `valor_intento`, POR QUE LOS DOS.** Un aviso de
+    «conflicto» sin los dos valores no es accionable: quien lo recibe no sabe si
+    lo que se solapa es `true` o `false`, y el aviso se vuelve un «algo va mal»
+    sin poder hacer nada con el.
+    """
+
+    claim_id: ClaimID
+    conflicto: bool
+    valor_previo: Any = None
+    valor_intento: Any = None
+
+
+@dataclass(frozen=True, slots=True)
+class Conflicto:
+    """Dos o mas afirmaciones sobre lo MISMO que dicen cosas DISTINTAS.
+
+    **UN CONFLICTO ES UN GRUPO, NO UN PAR.** Tres afirmaciones que se
+    contradicen son un conflicto con tres afirmaciones, no tres conflictos. Sin
+    agrupar, «cuantas contradicciones hay» seria el numero de claims y no el de
+    contradicciones —dos grupos de tres darian seis— y quien lo leyera contaria
+    algo que no es lo que cree.
+
+    **`afirmaciones` es ORDENADO Y ESTABLE**, y es la propiedad que hace posible
+    B28. Un conflict set que dependa del orden en que SQLite devuelva las filas
+    no es un conflict set: es el estado de un `SELECT` sin `ORDER BY`. Dos
+    consultas iguales darian listas distintas y cualquier consumidor que las
+    comparara fallaria de forma intermitente —que es la forma mas cara de
+    fallar, porque no falla en la prueba que lo escribio.
+    """
+
+    subject_entity_id: EntityID
+    predicate: str
+    afirmaciones: tuple[Claim, ...]
+
+    @property
+    def claim_ids(self) -> tuple[ClaimID, ...]:
+        """Los ids, en el mismo orden estable que `afirmaciones`."""
+        return tuple(c.claim_id for c in self.afirmaciones)
+
+
+def vigente_en(
+    desde: int | None,
+    hasta: int | None,
+    seq: int,
+) -> bool:
+    """¿El hecho era cierto en la posicion `seq` de la historia?
+
+    **ES PURA A PROPOSITO, Y POR ESO VIVE AQUI Y NO EN EL REPOSITORIO.** La
+    ventana es un intervalo, y un intervalo necesita un orden; el orden vive en
+    `revision_registro`, que es una tabla. Si la comparacion viviera alli, no se
+    podria probar sin abrir un SQLite, y una regla de intervalo sin tests
+    unitarios es una regla que se rompe en silencio.
+
+    Args:
+        desde: `seq` de `valid_from_revision`, o `None` si no caduca por abajo.
+        hasta: `seq` de `valid_until_revision`, o `None` si sigue vigente.
+        seq: la posicion que se pregunta.
+
+    Returns:
+        `True` si el hecho era cierto en `seq`. **Cerrada por abajo, ABIERTA
+        por arriba**: una ventana es `[desde, hasta)`.
+
+        **Y LA SEMANTICA DEL EXTREMO SUPERIOR ESTA MEDIDA, NO ADOPTADA.** La
+        primera version de este bloque hizo la ventana **cerrada por los dos
+        lados**, y entonces en `revB` el claim viejo seguia vigente y la
+        consulta por revision devolvia `['c-A', 'c-B']` — las dos
+        afirmaciones, que es justo la respuesta que B29 viene a eliminar.
+
+        Lo que lo decide es el gate de `06-SPEC` §9, escrito por el bloque:
+
+            commit A: A -> calls B        commit B: A -> calls C
+            at(A) -> calls B             at(B)  -> calls C
+
+        En `revB` la respuesta es `calls C`, y **no** las dos. Si el extremo
+        superior fuera inclusivo, `at(B)` tendria que devolver las dos, que es
+        la mitad de un conflicto. Luego `hasta` es la PRIMERA revision en la
+        que el hecho ya no es cierto, y la ventana es `[desde, hasta)`.
+
+        Esa forma ademas hace que las ventanas sean **contiguas sin huecos**:
+        `[revA, revB)` y `[revB, ...)` no dejan instante sin respuesta, que es
+        lo que un intervalo semiabierto garantiza y lo que un intervalo cerrado
+        por los dos lados NO hacia —en el frontier se solaparian—.
+
+    **UNA VENTANA AL REVES DEVUELVE `False` EN TODAS PARTES.** Con `desde=5,
+    hasta=2` no hay ningun `seq` que la satisfaga, y eso es lo que hace que
+    `vigente_en` sea **total**: quien la llama nunca tiene que mirar
+    `desde <= hasta` antes de preguntar.
+    """
+    if desde is not None and seq < desde:
+        return False
+    return not (hasta is not None and seq >= hasta)
+
+
 __all__ = [
     "Claim",
     "ClaimID",
+    "ClaimRecorded",
+    "Conflicto",
     "Entity",
     "EntityID",
+    "EntityRef",
     "Evidence",
     "EvidenceID",
     "Finding",
@@ -261,5 +477,8 @@ __all__ = [
     "SourceID",
     "TraceID",
     "entity_id",
+    "entity_ref",
+    "predicado_de_pack",
     "source_id",
+    "vigente_en",
 ]

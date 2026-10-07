@@ -137,15 +137,37 @@ def test_current_version_is_documented_in_state() -> None:
 
     Si la versión cambia sin actualizar la documentación, este test
     falla con un mensaje que apunta al documento que falta.
+
+    **R0.B: ESTE GUARD LEÍA EL CAMPO POR TEXTO, Y NO FUNCIONABA.**
+
+    Era `f'package_version: "{version}"' in state_yaml`, y hay **DOS**
+    campos con ese nombre en `STATE.yaml`:
+
+        tests.package_version     (viejo desde B29: 0.39.0.dev0)
+        release.package_version   (el que declara la version activa)
+
+    Una coincidencia de texto encuentra la línea que sea, en cualquier
+    sección. Con la cabecera mal y `releases[0]` bien, pasaba en verde —
+    y MEDIDO: `project_truth` tampoco lo cruzaba, así que nadie se enteraba
+    de la clase de fallo que este guard dice cubrir.
+
+    **AHORA LEE EL CAMPO POR SU CAMINO** (`yaml.safe_load` → `release` →
+    `package_version`). No es una mejora de estilo: un predicado que busca
+    texto no puede decir *dónde* estaba el valor, y aquí hay dos sitios.
     """
+    import yaml
+
     version = skillgraph.__version__
-    state_yaml = (REPO_ROOT / "STATE.yaml").read_text(encoding="utf-8")
+    state = yaml.safe_load((REPO_ROOT / "STATE.yaml").read_text(encoding="utf-8"))
     current_md = (REPO_ROOT / "CURRENT.md").read_text(encoding="utf-8")
 
-    # STATE.yaml debe contener una clave package_version con el valor.
-    assert f'package_version: "{version}"' in state_yaml, (
-        f'STATE.yaml no contiene package_version: "{version}". '
-        f"Actualice STATE.yaml al bump de versión."
+    # STATE.yaml: por su seccion, no por coincidencia de texto.
+    declarada = state.get("release", {}).get("package_version")
+    assert declarada == version, (
+        f"STATE.yaml release.package_version dice {declarada!r} y la version "
+        f"activa del paquete es {version!r}. Actualice STATE.yaml al bump de "
+        "version. (Nota: `tests.package_version` es un campo DISTINTO y viejo; "
+        "no confundirlos es justo lo que este guard no podia hacer antes.)"
     )
     # CURRENT.md debe contener la versión declarada en algún sitio.
     assert version in current_md, (

@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 from skillgraph.knowledge.graph import (
     Claim,
+    ClaimRecorded,
+    Conflicto,
     Entity,
     Evidence,
     Finding,
@@ -250,10 +252,74 @@ class KnowledgeDelegations:
         tenant_id: str,
         project_id: str,
         claim: Claim,
-    ) -> str:
-        """Delegado WI-56: ver ``SqliteKnowledgeRepository.record_claim``."""
+    ) -> ClaimRecorded:
+        """Delegado WI-56: ver ``SqliteKnowledgeRepository.record_claim``.
+
+        **B27: el retorno paso de `str` a `ClaimRecorded`.** El `str` mivia:
+        con `INSERT OR IGNORE` el `UNIQUE` puede rechazar el INSERT y devolvia
+        el `claim_id` de todos modos, como si hubiera escrito. MEDIDO: dos
+        afirmaciones opuestas con la misma fuente y la misma revision dejaban
+        una fila —la primera— y quien escribia creia haber registrado la suya.
+        """
         return self.knowledge_repository().record_claim(
             tenant_id=tenant_id, project_id=project_id, claim=claim
+        )
+
+    def conflicts_for(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None = None,
+    ) -> tuple[Conflicto, ...]:
+        """B27: los conflictos de un sujeto, consultables y ESTABLES.
+
+        Va en la fachada por el mismo motivo que en B25: un dato que se guarda
+        y no se puede preguntar es peor que no tenerlo, porque quien lo
+        escribio creera que si.
+        """
+        return self.knowledge_repository().conflicts_for(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=subject_entity_id,
+            revision=revision,
+        )
+
+    def claims_at_revision(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        subject_entity_id: str,
+        revision: str | None,
+    ) -> tuple[Claim, ...]:
+        """B29: ¿qué afirmaciones eran ciertas en `revision`? `None` = HEAD.
+
+        Va en la fachada por el mismo motivo que en B25 y B27.
+        """
+        return self.knowledge_repository().claims_at_revision(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            subject_entity_id=subject_entity_id,
+            revision=revision,
+        )
+
+    def list_claims_by_object_entity(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        object_entity_id: str,
+    ) -> tuple[StoredClaim, ...]:
+        """B25: los claims cuyo objeto es esa entidad.
+
+        Delegado WI-56 igual que sus hermanos. Sin este metodo sobre `Storage`,
+        la referencia a entidad se podria escribir por una puerta y no se podria
+        preguntar por ninguna: se guardaria y no se leeria nunca.
+        """
+        return self.knowledge_repository().list_claims_by_object_entity(
+            tenant_id=tenant_id, project_id=project_id, object_entity_id=object_entity_id
         )
 
     def get_claim(

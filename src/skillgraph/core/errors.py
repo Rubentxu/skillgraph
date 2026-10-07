@@ -149,6 +149,19 @@ class UnknownClaimPredicateError(ValidationError):
     code = "sg_unknown_predicate"
 
 
+class InvalidClaimObjectError(ValidationError):
+    """El objeto de un Claim no es exactamente UNO de: literal o entidad.
+
+    **EXISTE Y NO REUTILIZA `UnknownClaimPredicateError` A PROPÓSITO.** Son dos
+    ejes distintos —el predicado y el objeto— y `AGENTS.md` §1.2 exige que cada
+    clase declare su `code`: dos errores que comparten `code` no pueden salir
+    con exit codes distintos, y entonces el `code` deja de ser clave. Es
+    exactamente lo que WI-109 cerró.
+    """
+
+    code = "sg_invalid_claim_object"
+
+
 class InvalidAssertionOriginError(ValidationError):
     """El origen epistemico de un Claim no esta en el vocabulario B6.
 
@@ -159,6 +172,94 @@ class InvalidAssertionOriginError(ValidationError):
     """
 
     code = "sg_invalid_assertion_origin"
+
+
+class EnvelopeInvalido(ValidationError):
+    """Una `Observation` del envelope no afirma nada, o afirma las dos cosas.
+
+    **NO es `InvalidClaimObjectError` aunque la pregunta parezca la misma.** La
+    de B25 responde de un `Claim` ya construido, y la garantia la sostienen tres
+    capas (este error, `Claim.__post_init__` y el CHECK de SQL). Esta responde de
+    un `Observation`, que es todavia un **dato de entrada de una herramienta
+    externa**: lo que falla ahi es la frontera, y la frontera no es la misma
+    capa. Si las dos compartieran clase, una colapsaria a la otra y el
+    `code` —que es la clave con la que la CLI traduce a exit code— dejaria de
+    distinguir «el Claim esta mal» de «lo que llego de fuera esta mal».
+
+    Se declara en `core/errors.py` y no en `knowledge/observation.py` porque el
+    guard de WI-109 deriva el conjunto de clases **recorriendo el paquete
+    entero**: un error definido en el modulo que lo usa solo se contaria cuando
+    ese modulo se importara, y un guard que depende del orden de importacion no
+    mide.
+    """
+
+    code = "sg_envelope_invalido"
+
+
+class UnknownEnvelopeVersionError(ValidationError):
+    """El envelope declara una version que este sistema no entiende.
+
+     **POR QUE ESTO ES UN ERROR Y NO UN DEFAULT.** Un envelope con version
+     desconocida es una herramienta hablando un contrato que este core no
+    implementa. Aceptarla «con lo que haya» seria perder el dato en silencio y
+     descubrirlo mucho despues, en el dato; rechazarla aqui deja el fallo donde
+     es: en la frontera, con el mensaje diciendo que version se esperaba.
+
+     El mensaje lleva SIEMPRE la version que se espera, para que quien lo recibe
+     sepa que actualizar. Un «version no soportada» sin la version buena obliga a
+     buscar el numero en el codigo.
+    """
+
+    code = "sg_unknown_envelope_version"
+
+
+class UnknownQueryIntentError(ValidationError):
+    """La intencion de consulta no es una de las del ADT.
+
+    **POR QUE NO ES `ValidationError` SOLO.** Lo es: hereda de ahi, y por eso la
+    CLI la traduce como error de entrada de usuario y no como fallo interno.
+    Pero tiene clase propia porque `code` propio, y por la misma razon que
+    termino WI-109: **dos errores que comparten `code` no pueden salir con exit
+    codes distintos, y el `code` deja de ser clave**.
+
+    Y lo que falla aqui no es un dato cualquiera: es **la pregunta**. Un string
+    libre para la intencion (la spec lo prohibe, 05-SPEC §3) haria que dos
+    perfiles que quieren decir lo mismo se llamaran distinto, y nadie podria
+    notar que se estaban contradiciendo.
+    """
+
+    code = "sg_unknown_query_intent"
+
+
+class AuthorityProfileInvalido(ValidationError):
+    """La politica de autoridad no declara un ranking utilizable.
+
+    Tres formas de declararlo mal, y las tres son el mismo defecto: una
+    preferencia **vacia** (no dice quien manda), un origen **que no existe**
+    (no se puede cumplir) y un origen **repetido** (el orden deja de
+    signifcar algo, porque la prioridad se declara dos veces con valores
+    distintos).
+    """
+
+    code = "sg_authority_profile_invalido"
+
+
+class PerfilIncoherenteError(ValidationError):
+    """Se ha usado una politica que responde a OTRA pregunta.
+
+    **EL DEFECTO EXACTO QUE B28 EXISTE PARA EVITAR, declarado como error.** Un
+    perfil de `intended_behavior` aplicado a una consulta `actual_behavior`
+    responderia «¿que devolvio produccion?» con la politica de «¿que esta
+    permitido?». El resultado seria un ganador, y el ganador estaria equivocado
+    con una explicacion que pareciara convincent: es el fallo mas caro de esta
+    serie, porque no se ve.
+
+    No se corrige usando el perfil «de todos modos»: usar una politica que no
+    corresponde a la pregunta es un error de quien pregunta, y ocultarlo
+    convierte un error visible en uno invisible.
+    """
+
+    code = "sg_perfil_autoridad_incoerente"
 
 
 class SkillGraphWarning(UserWarning):
@@ -289,9 +390,11 @@ class RecipeNotFoundError(SkillGraphError):
 # Public API surface for `from skillgraph.core.errors import *`.
 # Mantener sincronizado con las clases definidas en este modulo.
 __all__ = [
+    "AuthorityProfileInvalido",
     "CyclicDependencyError",
     "CyclicDependencyWarning",
     "DulwichNotAvailableError",
+    "EnvelopeInvalido",
     "HopLimitExceededWarning",
     "IdempotencyError",
     "IdentityConflictError",
@@ -304,6 +407,7 @@ __all__ = [
     "NotFoundError",
     "OutcomeInvalidError",
     "ParseError",
+    "PerfilIncoherenteError",
     "RecipeNotFoundError",
     "RefreshFailedError",
     "SkillGraphError",
@@ -316,7 +420,9 @@ __all__ = [
     "UnknownClaimError",
     "UnknownClaimPredicateError",
     "UnknownEntityError",
+    "UnknownEnvelopeVersionError",
     "UnknownKindError",
+    "UnknownQueryIntentError",
     "UnknownSourceError",
     "ValidationError",
 ]

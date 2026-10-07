@@ -519,4 +519,34 @@ def build_parser() -> argparse.ArgumentParser:
     kt.add_argument("--run", required=True, help="run_id del que extraer trace.")
     kt.add_argument("--name", default=None, help="Nombre del trace (opcional).")
 
+    krz = kn_sub.add_parser(
+        "resolve",
+        help="Resuelve los conflictos de un sujeto PARA UNA INTENCION (B28).",
+    )
+    krz.add_argument("project", help="Proyecto destino.")
+    krz.add_argument("subject", help="subject_entity_id cuyas afirmaciones se oponen.")
+    krz.add_argument(
+        "--intent",
+        required=True,
+        help=(
+            "Para que se pregunta. El valor DECIDE que afirmacion gana, "
+            "y por eso no es una nota: es lo unico que separa dos respuestas "
+            "distintas sobre el mismo conflicto."
+        ),
+    )
+    krz.add_argument(
+        "--json",
+        action="store_true",
+        help="Salida en JSON en vez de la lectura humana.",
+    )
+    krz.add_argument(
+        "--at-revision",
+        default=None,
+        help=(
+            "Pregunta POR UNA REVISION en vez de por HEAD (B29). Sin este "
+            "flag solo se ve lo que no ha caducado, que es una pregunta "
+            "distinta de la que hace un mes."
+        ),
+    )
+
     return p

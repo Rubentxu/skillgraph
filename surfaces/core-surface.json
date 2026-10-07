@@ -2,12 +2,14 @@
   "superficie": [
     "ASSERTION_ORIGINS",
     "AssertionOrigin",
+    "AuthorityProfileInvalido",
     "CLAIM_PREDICATES",
     "ClaimPredicate",
     "ContextRecipe",
     "CyclicDependencyError",
     "CyclicDependencyWarning",
     "DulwichNotAvailableError",
+    "EnvelopeInvalido",
     "EventType",
     "FINDING_RESULTS",
     "FindingResult",
@@ -34,6 +36,8 @@
     "OverflowStrategy",
     "PROMOTION_STATUSES",
     "ParseError",
+    "PerfilIncoherenteError",
+    "PredicadoDePack",
     "PromotionStatus",
     "RecipeNotFoundError",
     "RefreshFailedError",
@@ -55,11 +59,14 @@
     "UnknownClaimError",
     "UnknownClaimPredicateError",
     "UnknownEntityError",
+    "UnknownEnvelopeVersionError",
     "UnknownKindError",
+    "UnknownQueryIntentError",
     "UnknownSourceError",
     "ValidationError",
     "is_terminal_node_state",
-    "is_terminal_run_state"
+    "is_terminal_run_state",
+    "predicado_de_pack"
   ],
   "version": "sggw_superficie/v1"
 }

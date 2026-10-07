@@ -42,6 +42,7 @@ from skillgraph.cli.commands.knowledge import (
     cmd_knowledge_compile,
     cmd_knowledge_invalidate,
     cmd_knowledge_refresh,
+    cmd_knowledge_resolve,
     cmd_knowledge_stale,
     cmd_knowledge_trace,
 )
@@ -483,6 +484,7 @@ _DISPATCH: Final[Mapping[str | tuple[str, str], Handler]] = MappingProxyType(
         ("knowledge", "refresh"): cmd_knowledge_refresh,
         ("knowledge", "compile"): cmd_knowledge_compile,
         ("knowledge", "trace"): cmd_knowledge_trace,
+        ("knowledge", "resolve"): cmd_knowledge_resolve,
         # --- expansion ---
         ("expansion", "propose"): cmd_expansion_propose,
         ("expansion", "apply"): cmd_expansion_apply,
@@ -612,6 +614,7 @@ __all__ = [
     "cmd_knowledge_compile",
     "cmd_knowledge_invalidate",
     "cmd_knowledge_refresh",
+    "cmd_knowledge_resolve",
     "cmd_knowledge_stale",
     "cmd_knowledge_trace",
     "cmd_pack_import",

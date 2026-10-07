@@ -189,8 +189,7 @@ roadmap:
   current_spike: null
   current_hito: H8-integracion-publica-cerrado  # ADR-0013: H7 original renumerado a H9
   next_milestone_gate: DT_PRE_PUSH_HOOK_cerrado  # Pre-push hook completo (suite completa pytest antes de push), 888/888 PASS, 9 tests nuevos
-  current_workitem: B23   # BLOQUE VIVO 2026-10-06. EL INSTRUMENTO QUE RESPONDE «¿DONDE ESTA EL PROYECTO?» NO LO DECIA. MEDIDO ANTES DE ESCRIBIR NADA: `project_truth.py` no leia `sys.argv` en ninguna parte y su raiz venia de `Path(__file__)`, luego `--raiz /tmp` salia rc=0 con la verdad del REPO REAL, una raiz inexistente salia rc=0 con `coherente: true`, y ejecutar el script desde otro directorio devolvia tambien la del repo —ignorar el flag no es una ergonomia que falte: es un instrumento que AFIRMA haber medido lo que no media—. Y LA VENTENA DEL ROADMAP DECIA QUIEN LA ESCRIBIA, Y MENTIA: `ROADMAP.md` afirmaba que su seccion «Donde esta el proyecto» la producia este script; no la producia nadie, se escribia a mano y nadie la leia. El release 9961843 no toco el fichero y la ventana se quedo en `v0.32.7` dos versiones atras, con el instrumento publicando `coherente: true` y SEIS CONTRADICCIONES A LA VISTA — dos de ellas porque el fichero se contradecia CONSIGO MISMO (`3444 tests` en una linea, `3431 tests` en la siguiente)—. Y el TERCER HUECO DE LA FAMILIA B20-2: `bloque` se leia y se publicaba sin cruzarse con nadie, de modo que STATE y CURRENT podian concordar entre si mientras el ROADMAP decia B99. LO QUE ENTRA: la raiz pasa a ser PARAMETRO en los doce lectores y las constantes de modulo desaparecen —su sola presencia es la invitacion a leer de la raiz equivocada—; la ventana se CONTRASTA y no se regenera, porque el instrumento conserva sus cero escrituras y uno que escribe el fichero de autoridad seria un problema nuevo y peor que el que arregla; `bloque` se cruza con STATE y CURRENT. R5 CERRADO: `test_b14` deja de deformar el arbol real —la deuda bl-bl-01M48JHGJJ000388H523GPE6G0 esta resuelta— y MEDIDO con sha256 de los cuatro ficheros reales antes y despues de su corrida: identicos. LO QUE EL HARNESS CAZO Y ERA UN HUECO REAL: con la comprobacion del codigo de salida de pytest desactivada, el verificador leia el numero PARCIAL de una colecta rota y publicaba `coherente: true` con `tests_reales: 2`; como el parcial coincidia con el declarado no habia contradiccion que emitir, y el guard de B14 miraba precisamente eso. UNA ASERCION QUE MIRA LA CONTRADICCION NO VE LA PUBLICACION, y ese hueco venia de B14.
-
+  current_workitem: B32   # BLOQUE VIVO 2026-10-06. R0+R1 cerrados (fronteras arquitectonicas como leyes ejecutables: ratchet que sale distinto de cero, 5/5 a cero, SQL fuera del dominio, puerto `RevisionRegistry`, `knowledge_repository.py` de 895 a 719 LoC). El bloque vivo pasa a **B32 - GIT HISTORY**: responder «cuando OCURRIO en la historia Git», que no es lo que responde B29 («cuando CONOCIO SkillGraph este dato»). **Y NO MEZCLAR LOS DOS**, que es el limite declarado del bloque. `GitHistoryPort` con `revision_exists` / `is_ancestor` / `merge_base` / `changes_between` / `introducing_commit` / `last_change` / `entity_history`, SHA como identidad, y **respetando que git es un DAG**: no imponer un orden total falso, que es justo lo que B29 hizo a proposito con `seq` y por que los dos no se pueden fusionar.
   previous_workitem: B19   # el bloque anterior, ya cerrado y publicado en v0.32.4
   retired_workitem_note: WI-96   # LA REGLA DE SEMVER ESTABA EN EL FICHERO EQUIVOCADO Y NO LA COMPROBABA NADIE. Tercera vez que se hace la pregunta «que declara el repo que nada comprueba», tras WI-93 (suelos de cobertura) y WI-95 (CHANGELOG contra git tag). Esta vez el contrato es la REGLA QUE DECIDE EL NUMERO DE VERSION. MEDIDA sobre las 47 etiquetas con la regla tal como estaba escrita: 9 releases cuyo SemVer NO se deduce de ella; 9 que la regla dice que no deberian existir; y 3 CON CAMBIO ROMPEDOR REAL QUE NO LLEGARON A 1.0.0 (v0.7.0, que elimino 20 shims de retro-compatibilidad; v0.15.0; v0.16.2). Y AGENTS.md §12, que se titula «Regla de release», NO LA CONTENIA: el unico enunciado estaba en la cabecera del CHANGELOG, que no es el dueno de la gobernanza de releases. LA EXENCION 0.x que explica las tres estaba escrita en el mensaje de esos commits y en ningun otro sitio. EL GIRO DEL BLOQUE: al escribir el detector resulto que los tres precedentes NO LLEVAN EL MARCADOR de la convencion — ni `!` ni un footer `BREAKING CHANGE:` al principio de una linea, sino una vineta de prosa. Con el marcador ninguna herramienta puede verlos; sin el, el bump se deduce mal y la exencion queda sin justificacion visible. El primer clasificador buscaba la cadena en el cuerpo y contaba como breaking el propio commit que describia la clausula; al exigir la forma de footer, los tres desaparecieron del recuento. La conclusion correcta no es «no eran breaking», sino «fueron breaking y no estaban marcados». SE REGISTRA APARTE Y NO CUENTA para el bump: ensanchar la convencion despues de ver los datos seria rehacer la regla. CAMBIOS: (1) la tabla se muda a AGENTS.md §12 «Derivar la version» con la salvedad 0.x y sus tres precedentes; (2) el CHANGELOG pasa a REFERENCIAR §12, porque dos enunciados de la misma regla son dos fuentes que se desincronizan y una ya se ha desincronizado; (3) scripts/derive_semver.py calcula el bump de cada etiqueta Y de HEAD; (4) las trece divergencias se registran y NO se corrigen, porque son etiquetas publicadas y su numero es provenance. El calculo: desde v0.16.3 hasta v0.16.20 el bump se deduce SIN excepcion de tipo (18/18), y ahi es donde el guard exige coincidencia. Mutaciones 3/3, y las dos primeras las encontro el propio guard: M1 vaciaba la clausula 0.x conservando el texto «0.x» y el test solo buscaba esa cadena; M2 era el patron que buscaba `->` en un fichero que usa la flecha tipografica. Evidencia: evidence/sddk-wi96-verify-2026-10-02.md
   next_workitem: la_red_de_la_verdad_en_ci   # VIGENTE 2026-10-06 al cerrar B23. LO QUE QUEDA ABIERTO NO ES TRABAJO PENDIENTE DE CODIGO. (1) MEDIDO EN B23 Y DECLARADO COMO NO BLOQUEANTE: `grep -l project_truth scripts/check_*.py .pipeline.kts` no devuelve NADA, con nueve etapas en la receta. El unico consumidor del instrumento en produccion es el gate de 1.0, que se ejecuta a mano. En CI la red es `test_b0_truth_convergence.py`, que con B23 pasa de estar verde POR LA RAZON EQUIVOCADA a estar verde POR LA CORRECTA. NO se anade una etapa porque el SHA-256 de `.pipeline.kts` es un invariante declarado desde WI-110, y un test es un test; lo que falta es una invariante mas, no una etapa. (2) UNA CREDENCIAL: runtime real certificado exige SG_UAT_REAL_PROVIDER=1 y ANTHROPIC_API_KEY u OPENAI_API_KEY. (3) UNA PERSONA: el TUI operacional es una propiedad de alguien usando un terminal. (4) EL BINARIO, no el repo: `pipelinek` 0.39.0 falla en la etapa 0 con failureKind INFRASTRUCTURE en este entorno, creando el directorio del run y `script.sh` y sin escribir nunca `wrapper.sh`. Los contratos de la receta se ejecutaron de forma directa y estan en verde. Es la misma clase de veredicto no fiable en sesion agentica de bl-bl-01M3WJ3KCP000387S47TMRXK40. (5) LA DEUDA QUE B23 CIERRA Y COMO SE VERIFICA: `bl-bl-01M48JHGJJ000388H523GPE6G0` —`test_b14` deformando el arbol real— queda resuelta, y su comprobacion no es una declaracion sino el hash del arbol antes y despues de la corrida.
@@ -607,10 +606,10 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 3465  # BLOQUE B23: 3444 -> 3465, +21 de tests/test_b23_instrumento_verdad.py entero: 16 de R1 (raiz por parametro, con los tres contrasaltos), 8 de R2/R3 (ventana y bloque cruzados), 5 de R4 (el roadmap no se contradice a si mismo), y 6 de R6 (la derivacion que lee ventanas tiene que encontrar ventanas, o el guard pasa sin medir). LA CIFRA SE ESCRIBE DESPUES DE LA CORRIDA, NUNCA ANTES: sale de `pytest --collect-only` sobre el arbol real, que es la unica magnitud comparable. LO QUE ESTA CIFRA PAGANDO, MEDIDO: antes de este bloque, `project_truth.py --raiz /tmp` salia rc=0 con la verdad del REPO REAL, y el ROADMAP publicaba `0.32.7` dos releases despues —con el instrumento diciendo `coherente: true` y seis contradicciones a la vista—. El release 9961843 no toco ROADMAP.md, y eso no lo noto nadie porque el instrumento no cruzaba la ventana que el propio ROADMAP declara ser la respuesta.
+  total: 3733  # BLOQUE R1.F: 3728 -> 3733, +13 de tests/test_r1f_identidad_claim.py (8 de propiedades + 3 de upgrade). MEDIDO con `pytest --collect-only` sobre el arbol real. **LO QUE MIDIO EL INSTRUMENTO ANTES DE ESCRIBIR UNA LINEA** (.pipelinek/wi_r1f_measure.py): `A/X escribe c-A -> OK`, `B/Y escribe c-B -> OK`, `A/X ve ['c-A']`, **`B/Y ve []`**, y la tabla tiene UNA sola fila. O sea: la escritura del segundo ambito se DESCARTA en silencio y `record_claim` devuelve `conflicto=False`. **LA CAUSA, MEDIDA EN EL SQL:** el `UNIQUE` era `(subject_entity_id, predicate, source_id, checked_at_revision)` —sin `tenant_id`/`project_id`—, y `record_claim` escribe con `INSERT OR IGNORE`. Dos tenants que observan el mismo fichero en la misma revision desde la misma fuente tienen la MISMA tupla natural, luego el segundo choca con el primero y desaparece. **DOS PROPIEDADES ROTAS POR UN SOLO CAMBIO:** (1) AISLAMIENTO: el dato de un tenant pisa al de otro; (2) VERDAD DEL RETORNO: `conflicto=False` afirma «no habia nada ahi», y habia. Un guard que dice la verdad sobre un estado que no guardo. **POR QUE NO VALIA UNA INDEX NUEVO:** SQLite no tiene `ALTER TABLE ... DROP CONSTRAINT`, luego cambiar un `UNIQUE` de tabla exige reconstruirla; un indice UNIQUE adicional NO sirve porque el viejo sigue rechazando. De ahi `0005_claims_identidad_con_ambito`, que renombra, crea con el ambito, copia **por nombre de columna** y **compara el COUNT** — si la copia pierde filas, la migracion FALLA en vez de seguir, porque una migracion que pierde evidencia en silencio es peor que una que se niega a correr. **Y `schema.py` LLEVA EL MISMO UNIQUE**, no solo la migracion: `CREATE TABLE IF NOT EXISTS` no reconstruye una base vieja, luego tocar solo la migracion arreglaria las existentes y dejaria rotas las nuevas. **EL UPGRADE ESTA MEDIDO CON DATOS, NO CON UNA BASE VACIA:** una base con el DDL VIEJO y una fila dentro migra a v5 sin perderla, y tras migrar B/Y ya puede escribir la misma tupla natural; abrir dos veces no reconstruye nada. Sin ese test, una base recien creada —que nace ya bien— daria verde sin que nadie comprobara la migracion. # BLOQUE R0.B: 3712 -> 3720. **Y AQUI HAY UN AGUJERO QUE ESTA CIFRA NO CUENTA:** `d2c47e3` anadio 7 tests a `test_r0b_package_version_truth.py` y dejo esta cifra en 3712, que era el numero de PASSED de la certificacion anterior (3712 passed + 3 skipped + 4 failed = 3719 colectados). El numero que este guard cruza es el de COLECTADOS, no el de los que pasaron: declarar el de passed hace que cualquier test que falle se esconda en la propia cifra que lo declara. La paradoja es medible: la certificacion que revelo el defecto ya decia «3712 passed» con la deformacion puesta. Este bloque: -2 tests (los dos que deformaban `STATE.yaml` en el arbol real) +3 (linea base, contrasalto sobre el dict, y el guard de no-escribir), mas 1 heredado. MEDIDO con `pytest --collect-only` sobre el arbol real, no estimado. # BLOQUE R1: 3683 -> 3712, +29 de tests/test_r1_architecture.py (14 tests mas 15 parametrizados del contrasalto). MEDIDO AL FINAL con `pytest --collect-only` sobre el arbol real: 3712. Los 14 nuevos mas los +15 del harness cubren las cinco propiedades del ratchet. **MEDIDO ANTES DE ESCRIBIR NADA** con scripts/measure_r1_architecture.py: **3/5 preguntas abiertas**, y las dos cerradas lo son de verdad. **DOS FALSOS POSITIVOS DEL INSTRUMENTO, CORREGIDOS ANTES DE QUE DIERA NUMERO, Y ESO IMPORTA MAS QUE EL RESULTADO:** P4 contaba `platform.ports.*` como fuga, cuando `ports/` contiene Protocol y DTOs — es el puerto, y la inyeccion de dependencias por ahi es lo correcto; contar es medir lo contrario de lo que dice el nombre. P5 marcaba `blueprint-v1` como referencia ROTA porque es un DIRECTORIO de 12 documentos y porque vive en `external/`, fuera de git **por decision del repo**: es el **source of truth** de AGENTS.md §0. Un guard que senale la referencia normativa mas importante del repo entrena a leer su salida sin creerla. LO QUE SE MIDIO Y ERA REAL: 8 usos de SQL en el dominio (`seq_de` y `_sigiente_revision` como funciones libres con cursor, en `knowledge/graph.py`), `knowledge_controller.py` importando `sqlite3` para capturar `IntegrityError`, y `knowledge_repository.py` en 895 LoC sobre el umbral de 800. **Y UNA TERCERA FUGA QUE EL INSTRUMENTO NO VIO HASTA QUE SE PREGUNTO:** el import de `Storage` en `observation.py` esta bajo `if TYPE_CHECKING`, luego en runtime no existe. El guard y su contrasalto distinguen los imports de ahi, y hay un test que **exige que ese import siga estando**: borrarlo para dejar el guard en verde degradaria el codigo para satisfacer una medicion. # BLOQUE B30: 3683, +38 de tests/test_b30_contexto.py.
   passed: 2735
   duration_s: 241.57   # MEDIDO en la CI canonica de WI-108, run 2387c4cc-c624-4793-a8ef-1a83f3df72ea, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. El resumen es «2735 passed in 241.57s» SIN la palabra skipped, que es lo que el criterio nuevo de WI-108 exige. Bloque WI-107, run 332e09e6-ba0b-449e-908e-9686dd35a898, stage unit-tests con la receta de cobertura, 8/8 etapas, 0 StepFailed, verificado por run_id con scripts/check_pipeline_receipt.py. Criterio 6 (SHA-256 del .pipeline.kts) registrado en sesion: 7541ced56193c9f2c846de84c7e96abff61dac7de2ed363b778a721738c2dd42, sin drift desde 283da96 (WI-105). Bloque anterior WI-105: (stage unit-tests, recipe de cobertura), run cd5124bb, sobre arbol quieto. 8/8 stages, 0 StepFailed. La etapa `evidence` por primera vez emitio un VEREDICTO en vez de un «present»: verifico el run ANTERIOR (4f407df9), que es lo que el motor permite porque el run en curso aun no tiene RunFinished.
-  package_version: "0.34.0.dev0"   # La version activa del paquete. La lee test_version_matches_git_tag y la compara con `__init__.py`: los dos campos son la MISMA verdad declarada dos veces, y por eso la segunda declaracion tiene que moverse con la primera. MEDIDO en WI-109: la primera certificacion de B23 dio este test en ROJO porque el post-release bumpeaba `__init__.py` y dejo este campo viejo —el hermano pequeno de la cifra que WI-115 vigilaba, y el motivo de que este guard exista.
+  package_version: "0.39.0.dev0"   # La version activa del paquete, y ESTA ES LA SEGUNDA VEZ QUE SE OLVIDABA en este bloque: el primer script subio `__init__.py` y `release.tag` y dejo este campo en `0.38.0.dev0`, y lo cazo `test_release_governance::test_current_version_is_documented_in_state` en el `pre-push`. No es la primera vez: la nota de WI-115 lo describe en su propio rationale para `tests.package_version`, y el hermano de aqui es `release.package_version`, que no quedo vigilado. **Son dos campos que declaran la version activa y un guard los cruza, y basta mover uno.** B25 lo subio con el release, y la que le `test_version_matches_git_tag` contrasta contra la etiqueta vigente. B25 la subio con el release: el tag `v0.35.0` ya existe y HEAD esta MAS ALLA de el, luego lo esperable es `<tag>.dev0` y no el tag a secas —el caso 2 del guard—. MEDIDO, no supuesto: con la ventana anterior en `0.34.1.dev0` este mismo guard falla.
   divergencia_clon_vs_arbol: 0   # MEDIDO en WI-99. Antes era 2: dos entregables de H9 declaraban en STATE.yaml evidencia que .gitignore no versionaba, asi que el guard de H9 —cuyo mensaje literal es "afirmacion sin respaldo"— fallaba solo en el clon.
   delta_wi21: "0 tests (graph_expansion.validate refactor surgical)"
   delta_wi22: "0 tests (parser.parse_markdown refactor surgical)"
@@ -1181,7 +1180,15 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.34.0
+  tag: v0.41.0
+  # La VERSION ACTIVA del arbol, que no es el semver puro de la etiqueta: entre
+  # la etiqueta y este commit hay uno de gobernanza, asi que lo que describe el
+  # arbol es `0.40.0.dev0`. Es el caso 2 de `test_version_matches_git_tag`, y es
+  # la segunda vez que este par se descuadra en la serie (la primera la cazó el
+  # `pre-push` de B29): hay TRES declaraciones de version activa —esta,
+  # `__init__.__version__` y la ventana del ROADMAP— y basta mover una para que
+  # el guard las cruce y se ponga rojo.
+  package_version: "0.41.0.dev0"
   fecha: 2026-10-06
   # `semver_bump` NO se repite aqui: vive en la entrada de `release.releases`, y
   # declararlo dos veces es justo lo que el verificador rechaza —`STATE.yaml declara
@@ -1191,8 +1198,7 @@ release:
   # escrito a mano que no coincide con git pone la suite en rojo. Este sha se TOMO de
   # git: 1a8815913f2e6110365df27fadfa62cdac214a20. La entrada se anade DESPUES de crear la etiqueta, que es el unico
   # momento en que `git rev-list -n1 v0.34.0` responde.
-  semver_bump: MINOR   # DERIVADO con scripts/derive_semver.py desde v0.32.7: «la regla pide MINOR -> v0.34.0». 0 breaking. El bloque cambia el COMPORTAMIENTO de un instrumento en vez de anadirle otro, que es la misma razon por la que v0.33.0 fue MINOR y no PATCH. El campo `sha` de la entrada de `release.releases` lo contrasta test_every_listed_sha_matches_its_tag contra `git rev-list -n1 <tag>`: un sha escrito a mano que no coincide con git pone la suite en rojo. Este sha se TOMO de git: 1a8815913f2e6110365df27fadfa62cdac214a20. La entrada se anade DESPUES de crear la etiqueta, que es el unico momento en que `git rev-list -n1 v0.34.0` responde.
-  # semver-bump revertido: «b/f/x/n/d 0/1/0/4/0  la regla pide MINOR  v0.33.0  ok». El campo `sha` de la entrada de `release.releases` lo contrasta test_every_listed_sha_matches_its_tag, que compara con `git rev-list -n1 <tag>`: un sha escrito a mano que no coincide con git pone la suite en rojo. Esta entrada se anade DESPUES de crear la etiqueta, que es el unico momento en que `git rev-list -n1 v0.33.0` responde.
+  semver_bump: MINOR   # BLOQUE B29. DERIVADO desde v0.38.0 con `scripts/derive_semver.py` sobre `git log v0.38.0..HEAD`: 0 breaking, 2 feat, 1 fix, 5 otros => MINOR -> v0.39.0. El MINOR viene de los dos `feat` del bloque: las ventanas de vigencia con su cadena de supersesion (`platform/schema.py` y `platform/knowledge_claims.py`) y la consulta por revision que llega hasta la CLI (`sg knowledge resolve --at-revision`). El `fix` es el que mas cuenta: la supersesion elegia «la vigente mas reciente de la misma fuente» sin mirar ni el ORDEN ni el VALOR, y con solo dos de las tres condiciones que hacen falta —MEDIDO al ejecutar la suite de B25-B28 sobre el codigo ya implementado: rompio la idempotencia de la ingesta (B26) y la estabilidad del conflict set (B27)—., con `git log v0.36.0..HEAD` y las mismas reglas que `scripts/derive_semver.py`. El MINOR viene del `feat` del conflict set consultable. El sha de la entrada se TOMO de git: fa3e6b51c66d3d0b6e66648faa42d9d072dcf6c8.
   rationale_b22: >-
     BLOQUE B22 — EL ARBOL DE TRABAJO NO PUEDE CAMBIAR BAJO LOS PIES DE UN INSTRUMENTO,
     cerrado y publicado en v0.33.0. NO ES UN OPEN NUEVO: es cero informacion. El gate de
@@ -1524,33 +1530,266 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
-    - tag: v0.34.0
-      sha: 1a8815913f2e6110365df27fadfa62cdac214a20
+    - tag: v0.41.0
+      sha: 2c0ad63606385780132e34d50e4e93512fd32375
       fecha: 2026-10-06
       semver_bump: MINOR
-      package_version: 0.34.0.dev0
-      rationale_b23: >-
-        BLOQUE B23 — EL INSTRUMENTO DE LA VERDAD PODIA EQUIVOCARSE, Y SE LE VE,
-        cerrado y publicado en v0.34.0. El instrumento que responde «¿donde esta el
-        proyecto?» no tenia linea de ordenes: no leia `sys.argv` en ninguna parte y su
-        raiz venia de `Path(__file__)`, luego `--raiz /tmp` salia rc=0 con la verdad
-        del REPO REAL, una raiz inexistente salia rc=0 con `coherente: true`, y
-        ejecutar el script desde otro directorio devolvia tambien la del repo. La
-        ventana del ROADMAP DECIA QUIEN LA ESCRIBIA Y MENTIA: el fichero afirmaba que
-        este script la producia, y no la producia nadie. El release 9961843 no toco
-        ROADMAP.md y la ventana se quedo en v0.32.7 dos versiones atras, con el
-        instrumento publicando `coherente: true` y SEIS CONTRADICCIONES A LA VISTA —
-        dos de ellas porque el fichero se contradecia CONSIGO MISMO—. Y el tercer
-        hueco de la familia B20-2: `bloque` se leia y se publicaba sin cruzarse con
-        nadie. QUE ENTRA: la raiz como parametro en los doce lectores, con las
-        constantes de modulo eliminadas; la ventana contrastada —no regenerada, porque
-        el instrumento conserva sus cero escrituras—; `bloque` cruzado con STATE y
-        CURRENT. R5 CERRADO: `test_b14` deja de deformar el arbol real, MEDIDO con
-        sha256 antes y despues de la corrida: identicos. Y EL HARNESS CAZO UN HUECO
-        REAL: una asercion que miraba la CONTRADICCION y no la PUBLICACION dejaba
-        pasar un recuento parcial que coincidia con el declarado. 3444 -> 3465 tests,
-        +21 de test_b23_instrumento_verdad.py entero. 3462 passed, 0 failed, 96 % de
-        cobertura, arbol limpio tras la suite completa.
+      package_version: '0.41.0'
+      rationale_r0_r1: |-
+        BLOQUES R0+R1 - LAS FRONTERAS ARQUITECTONICAS COMO LEYES EJECUTABLES. MEDIDO ANTES DE ESCRIBIR NADA con scripts/measure_r1_architecture.py: **3/5 preguntas abiertas**. LO QUE LA FILA DE R1 PIDE NO ES MEDIR, ES QUE **UNA PROPIEDAD QUE LLEGO A CERO NO VUELVA A CONVERTIRSE EN ADVERTENCIA**: eso exige un gate que salga distinto de cero, no un audit que informa y sale 0. RESULTADO: instrumento **0/5 ABIERTAS**, gate rc=0 con las cinco a cero, contrasalto **5/5**, certificacion **3709 passed, 3 skipped, 0 failed**. LAS CINCO: god modules > 800 (knowledge_repository.py de 895 a **719**), complejidad publica cc>=20 (0), SQL en el dominio (**8 usos -> 0**), dominio -> implementacion de platform (**1 -> 0**), referencias normativas rotas (**16/16 existen**). **R0, Y LA FUGA QUE EL OBJETIVO NOMBRA TEXTUALMENTE:** `seq_de(cur, revision)` y `_sigiente_revision(cur, revision)` eran funciones libres con cursor en `knowledge/graph.py`, y **platform/ las importaba** - la frontera estaba INVERTIDA, el dominio servia de utilidad de base de datos para el adapter. Ahora hay `RevisionRegistry` (puerto) y `SqliteRevisionRegistry` (implementacion), y `knowledge_controller.py` deja de importar `sqlite3`: el adapter traduce con `traduciendo_integridad()` y el dominio captura un error de DOMINIO. **Y LO QUE NO ES FK SE PROPAGA INTACTO**, porque un UNIQUE y un CHECK llegan como el mismo tipo que una FK y traducirlos todos perderia el motivo. **UN DEFECTO REAL SALIO AL ARREGLAR OTRO:** se arreglo `record_claim` y los tests siguieron rojos, porque `record_evidence` es el otro INSERT con FK. Un `sqlite3.IntegrityError` que atraviesa el dominio sale como Traceback al usuario, que es el defecto que WI-109 cerro por el otro lado de la misma frontera. Un solo camino traducido habria sido medio arreglo con apariencia de entero. **TRES FALSOS POSITIVOS DEL INSTRUMENTO, CORREGIDOS ANTES DE QUE DIERA NUMERO, Y ESO IMPORTA MAS QUE EL RESULTADO:** (1) contaba `platform.ports.*` como fuga, cuando `ports/` contiene Protocol y DTOs y ES EL PUERTO - contar es medir lo contrario de lo que dice el nombre; (2) marcaba `blueprint-v1` como referencia rota porque es un **DIRECTORIO** de 12 documentos y porque vive en `external/`, fuera de git **POR DECISION DEL REPO**: es el source of truth de AGENTS.md §0, y un guard que senale la referencia normativa mas importante del repo entrena a leer su salida sin creerla; (3) contaba el import de `Storage` en `observation.py` como fuga, cuando esta bajo `if TYPE_CHECKING` y en runtime **no existe**. **Y UN TEST QUE IMPIDE EL ARREGLO TRIVIAL:** `test_el_import_de_TYPE_CHECKING_NO_es_una_fuga` EXIGE que ese import siga estando, porque borrarlo dejaria el guard en verde degradando el type-checker: es pagar con el codigo por una medicion. **LA PARTIDA DEL GOD MODULE ES VERBATIM:** un refactor que reescribe el SQL mientras mueve el codigo son dos cambios a la vez, y cuando algo falla no se sabe cual de los dos fue. **LO QUE NO HACE:** no borra el bloque TYPE_CHECKING, no cambia la metrica (el umbral de 800 es el que ya usan la auditoria y los guardas de docs/), no reescribe los tests que no cambiaron de contrato y no fabrica un `merge-receipt`.
+    - tag: v0.40.0
+      sha: f71b47583aecdd3197a1ccf81229a6552224416d
+      fecha: 2026-10-06
+      semver_bump: MINOR
+      package_version: '0.40.0'
+      rationale_b30: |-
+        BLOQUE B30 - UN CONTEXTO TRUNCADO DICE QUE SE TRUNCO. MEDIDO ANTES DE ESCRIBIR NADA con scripts/measure_b30_contexto.py: **5/5 preguntas abiertas**. LA FILA TENIA DOS MITADES Y **LA PRIMERA ES FALSA**: decia que el presupuesto trazaba el contexto sin decir que se caia, y `apply_budget` YA FUNCIONABA Y YA ERA EXACTO - los obligatorios no se truncan y los opcionales entran en orden hasta que uno no cabe -. LA SEGUNDA ES CIERTA, y MAS GRAVE de lo que decia la fila: no solo no se declaraba, es que **no se podia ni CALCULAR**, porque `included` guardaba lo que entro pero no el total de candidatos. **LA MITAD GRAVE QUE LA FILA NO MENCIONABA ESTA EN EL OTRO LADO, Y ES LA QUE DIO VALOR AL BLOQUE:** `should_skip_adapter(*, manifest)` decide NO INVOCAR AL ADAPTER (UAT-EVO-11) y **rebia solo el manifest**; nunca veia el `Handoff` compilado, luego no podia saber que el presupuesto corto. MEDIDO: `omitidos=3 | manifest.is_complete=True | should_skip_adapter=True`. El sistema se quedaba **sin agente por el motivo de que la respuesta era completa, cuando se habia cortado**: declarar completo lo que no lo esta, que es justo lo que la cabecera de `file_handoff.py` prohibe en `HandoffBlockedError`. LO QUE ENTRA: `Omision` y `PresupuestoAplicado`; `apply_budget` deja de devolver la tupla `(incluidos, total_chars)` y devuelve el registro; `HandoffKnowledge.omitidos` al final y como tuplas; y la cuarta regla del skip, con default para no romper a quien ya llamaba. **TRES DECISIONES MEDIDAS:** `chars` es `approx_chars(body)`, la misma medida que el presupuesto uso para decidir; el corte declara **el que no cupo Y todos los que iban detras** (declarar solo el primero subestima la perdida); y `Omision` **no lleva `motivo`**, porque los tres `OverflowStrategy` que producen una omision la producen por lo mismo y el tercero lanza excepcion - seria el `empate_en_la_jerarquia` de B28 -. `cobertura` es PROPIEDAD DERIVADA, no campo, y sin constante `Final` al lado: nadie valida entrada contra ella. **DEFECTO QUE SALIO AL ESCRIBIR LOS TESTS, Y NO ERA DE LOS TESTS:** `omitidos` declaraba en el dataclass y **no estaba en `to_dict`**, luego **no entraba en el `context_hash` firmado** - el Adapter veia unas omisiones que el Core no firmó. Es la distancia que WI-111 midio, reproducida DENTRO del propio handoff. **Y EL INSTRUMENTO TENIA UN VACUOUS PASS:** P5 se formulo como «omitidos y salta y completo», que da False cuando `omitidos` esta vacio, y antes del bloque **siempre** lo estaba: el guard cerraba **porque el defecto estaba presente**. Reformulado a «puede el skip siquiera verlas?». Contrasalto **5/5**, verificado despues de `ruff format`. **M3 abre 1 pregunta y M2 abre 2**, porque M3 borra la FIRMA sin tocar el campo: un arreglo que comprobara «el handoff declara omisiones» pasaria M2 sin ver M3. **LO QUE NO HACE:** no cambia la politica de presupuesto, **no implementa `why`/`impact`** (queda para el siguiente corte), no cambia `ContextRecipe` y no desactiva el skip.
+    - tag: v0.39.0
+      sha: dcd572eb017584380454c16a787a8cd1b8add12f   # TOMADO de `git rev-list -n1 v0.39.0`, que es el unico momento en que responde. `test_every_listed_sha_matches_its_tag` lo contrasta contra ese mismo comando, y un sha escrito a mano pone la suite en rojo. Es la segunda vez en la serie que esto se hace en el instante equivocado - en v0.38.0 dio el commit ANTERIOR a su etiqueta - y lo cazo ese guard: `project_truth.py` no mira los shas, asi que la verdad del proyecto no podia verlo.
+      fecha: 2026-10-06
+      semver_bump: MINOR
+      package_version: 0.39.0
+      rationale_b29: >-
+        BLOQUE B29 - UN CAMBIO EN EL TIEMPO DEJA DE LEERSE COMO UNA CONTRADICCION.
+        MEDIDO ANTES DE ESCRIBIR NADA con scripts/measure_b29_vigencia.py:
+        **5/5 preguntas abiertas**. LA FILA EXAGERABA EN SU PRIMERA MITAD:
+        decia que no se puede preguntar «que se sabia en una revision», y
+        `checked_at_revision` esta en cada claim desde antes de esta serie; lo
+        que no habia era la CONSULTA. LA MITAD GRAVE ES LA OTRA: `conflicts_for`
+        devolvia 1 conflicto entre `c-A "psycopg" @revA` y `c-B "sqlite3" @revB`,
+        y `resolver` contestaba **gana NADIE** - a algo que tiene respuesta
+        definitiva en cada instante - porque compara valores SIN MIRAR EL
+        TIEMPO. LO QUE ENTRA: `valid_from_revision` / `valid_until_revision` /
+        `supersedes_claim_id` (migracion `0004`) y `revision_registro(seq,
+        revision)`, porque **los SHAs de git se comparan lexicograficamente y
+        eso es arbitrario**: `seq` es el ORDEN EN QUE ESTE STORE APRENDIO de las
+        revisiones, declarado como tal - la ascendencia real de commits es
+        `GitHistory`, que es B32 -. LA VENTANA ES `[desde, hasta)`, y no es una
+        eleccion de gusto: lo decide el gate de 06-SPEC §9, `at(B) -> calls C` y
+        no las dos. `valid_from_revision` se escribe TAL CUAL lo declaro el
+        llamante - rellenarlo rompia la ida y vuelta `get_claim(...) ==
+        Claim(...)`, que es un contrato de B25 -, y la asimetria de los `NULL`
+        se interpreta en UN solo sitio. **LO QUE MEDIO LA SUITE DE LOS BLOQUES
+        ANTERIORES Y QUE NADIE HABIA ESCRITO**: la consulta de supersesion
+        elegia «la vigente mas reciente de la misma fuente» sin mirar el ORDEN
+        (reingerir el mismo envelope caduca el propio claim, rompiendo la
+        idempotencia de B26), sin mirar el VALOR (el comentario del bloque decia
+        «y el valor es otro» y el SQL no lo miraba, de modo que reingerir la
+        misma afirmacion cerraba la anterior y la ventana dependia del orden de
+        ingesta, rompiendo la propiedad de B27 de que el conflict set no dependa
+        del orden), y cerraba SOLO la mas reciente, dejando abiertas las
+        anteriores de esa fuente. Ahora se cierran TODAS las abiertas de esa
+        fuente que digan otro valor - una fuente no sostiene dos cosas a la vez
+        -, mientras que `supersedes_claim_id` sigue siendo singular y apunta a
+        la mas reciente: la cadena es una linea y lo que se cierra es una
+        ventana. Instrumento 5/5 -> 0/5. Contrasalto **5/5**, y es el PRIMERO
+        MULTI-FICHERO: las sondas de EXISTENCIA renombran el identificador de
+        punta a punta - campo del ADT, columna, `ALTER TABLE`, mapper, `INSERT`
+        -, porque borrar la columna hace reventar el mapper y eso es una sonda
+        «cazada» por un crash, no por la propiedad. **M3 RESULTO INOCUA la
+        primera vez**, y es el hallazgo mas util del bloque: apuntaba al metodo
+        INTERNO de `knowledge_repository.py`, pero `Storage.claims_at_revision`
+        lo hereda de `KnowledgeDelegations`; renombrar el interno dejo el publico
+        intacto y la pregunta siguio cerrada. MEDIDO, no supuesto:
+        `getattr(Storage, 'claims_at_revision').__module__`. Instrumento con dos
+        preguntas corregidas ANTES de escribir codigo: P3 buscaba el metodo en el
+        MODULO en vez de en la clase `Storage`, y P5 esperaba cifras escritas
+        antes de implementar en vez de los conjuntos de `claim_id`. LO QUE NO
+        HACE, Y ES EL LIMITE: no borra (el claim viejo se queda con su ventana
+        cerrada), no anade `GitHistory` ni inventa el orden entre revisiones de
+        dos almacenes, no reabre B27 (misma fuente, misma revision y otro valor
+        siguen avisando) y no supersede entre fuentes.
+    - tag: v0.38.0
+      sha: 56d0904076d08e184d9e299b5de7292b54ae8e22
+      fecha: 2026-10-06
+      semver_bump: MINOR
+      package_version: 0.38.0
+      rationale_b28: >-
+        BLOQUE B28 - LA AUTORIDAD SE DECIDE POR INTENCION, NO HAY UN RANKING GLOBAL.
+        MEDIDO ANTES DE ESCRIBIR NADA con scripts/measure_b28_autoridad.py: **5/5
+        preguntas abiertas**. LA FILA ACUSA Y EL CODIGO NO: decia que resolver un
+        conflicto «es un ranking global», y MEDIDO no hay ranking -no hay nada-.
+        B27 dejo los conflictos consultables y ordenados; lo unico que faltaba era
+        decidir, y decidir no existia. LO QUE SI ESTABA ARMADO, Y ES LA TENTACION:
+        `AssertionOrigin` ya declara cuatro valores y su docstring dice que NO son
+        un ranking, y nada dice en que orden. Ordenarlos es una linea, y el orden
+        DEPENDE DE LA PREGUNTA. Por eso la propiedad medida no es «se elige
+        alguien» sino «el mismo conflicto, con dos intenciones, elige afirmaciones
+        DISTINTAS»: un ranking fijo pasaria cualquier prueba que comprobara que hay
+        ganador. LO QUE ENTRA: `QueryIntent` (los siete valores del ADT inicial de
+        05-SPEC §3, con smart constructor), `AuthorityProfile`, `MotivoDescarte`,
+        `Descartada`, `Resolution` con `firma`, `resolver()` PURO y
+        `sg knowledge resolve` en la CLI. EL GUARD DEL AGENTE ES UN CAMPO, NO UNA
+        POSICION EN LA LISTA - como ultima posicion se romperia reordenando una
+        tupla -, y esta medido con un perfil que pone al agente el PRIMERO. LO QUE
+        NO HACE, Y ES EL LIMITE: no borra (eso es B29, con ventanas de vigencia),
+        no persiste la resolucion y no carga perfiles de YAML. LA CONTRASALTO
+        ENCONTRO UN FALLO REAL DEL INSTRUMENTO, NO DEL CODIGO: P4 usaba el perfil
+        por defecto, donde el humano ya gana por rango, luego la pregunta
+        contestaba «no» por una razon que no era la que vigilaba y la sonda M2 no
+        fue cazada. De ahi que los siete perfiles nombren los CUATRO origenes - un
+        origen no listado valia por una prohibicion silenciosa - y P4 use un
+        perfil con el agente el primero. Y LA CERTIFICACION ENCONTRO UN VALOR DEL
+        VOCABULARIO QUE NADIE PODIA OBSERVAR: `empate_en_la_jerarquia` era
+        inalcanzable, porque `_motivo_de` solo se llama para lo que NO esta en
+        `elegidas` y eso solo puede tener rango PEOR. `_motivo_de` paso a ser
+        TOTAL, sin rama de empate ni invariante que comprobar.
+    - tag: v0.37.0
+      sha: fa3e6b51c66d3d0b6e66648faa42d9d072dcf6c8
+      fecha: 2026-10-06
+      semver_bump: MINOR
+      package_version: 0.37.0.dev0
+      rationale_b27: >-
+        BLOQUE B27 — LOS CONFLICTOS AVISAN Y SON CONSULTABLES. MEDIDO ANTES DE ESCRIBIR
+        NADA con scripts/measure_b27_conflictos.py: 3/5 preguntas ABIERTAS, y dos de las
+        cerradas lo son A FAVOR DE UN ENUNCIADO QUE EXAGERA. La fila decia «dos claims
+        incompatibles se pisan»; MEDIDO sobre una base real eso solo pasa con la MISMA
+        fuente y la MISMA revision, porque el UNIQUE de claims es (subject_entity_id,
+        predicate, source_id, checked_at_revision) y lleva source_id dentro. Dos
+        herramientas que discrepan YA COEXISTIAN de sobra, y eso no es un defecto que un
+        bloque pueda arreglar: es el comportamiento correcto. El overwrite si era REAL y
+        SILENCIOSO: record_claim devolvia el claim_id de todos modos con INSERT OR IGNORE,
+        como si hubiera escrito, y quien afirma creia haber registrado lo suyo cuando lo
+        que habia era lo que ya estaba. No se pierde una fila: se pierde LA VERDAD DE LO
+        QUE SE AFIRMO. LO QUE ENTRA: ClaimRecorded con el aviso y QUE SE SOLAPA, Conflicto,
+        SqliteConflictRepository, conflicts_for por la fachada de Storage, y el aviso
+        propagado hasta la salida del reconcile — porque un aviso que se recoge y no se
+        imprime es un aviso que no existio, y el sistema lo sabia mientras el operador
+        recibia un PUBLISHED sin mas. LA COMPARACION DE OBJETOS va sobre una tupla
+        (entity, ref) o (literal, json) y no sobre el JSON a secas: dos claims «A usa B» y
+        «A usa C» tienen las dos '' en la columna del literal, luego una comparacion
+        ingenua las daria IGUALES — es el caso que B25 abrio y que un SELECT sin
+        normalizar no ve. LO QUE NO HACE, Y ES EL LIMITE: no RESUELVE el conflicto, que
+        es B28 y por intencion de consulta, y no BORRA, que es B29. Un conflicto no es un
+        error a limpiar: son dos afirmaciones que ambas tienen fuente. TRES FALLOS QUE
+        SALIERON Y NO ERAN DEL CODIGO: (1) WI-61 comparaba por string la firma de la
+        fachada con la del componente, y la anotacion del componente seguia diciendo
+        `-> str` — la anotacion era el contrato, no un comentario; (2) su guard de «sin
+        SQL en la fachada» conto la palabra INSERT de un DOCSTRING, y no puede distinguir
+        prosa de codigo; (3) una sonda del contrasalto se aplicaba a la mitad de un
+        return multilinea y dejaba el fichero sin compilar, que el guard de sintaxis
+        clasifico como ROTA en vez de contarlo como victoria. Un test de B27 tambien
+        mezclaba dos propiedades y fallaba por una razon que no era la del bloque:
+        «coexistir» y «pisar» son cosas distintas, no una. CERTIFICACION: measure_b27
+        0/5, contrasalto 5/5 con `tras restaurar: rc=0 VERDE`, knowledge_conflicts.py al
+        100% de cobertura, y surfaces 68->69 y 78->79 con el motivo al lado.
+        tests.total 3560.
+    - tag: v0.36.0
+      sha: 8ec8add6437b27d68d33c3def49df2d51db495ef
+      fecha: 2026-10-06
+      semver_bump: MINOR
+      package_version: 0.36.0.dev0
+      rationale_b26: >-
+        BLOQUE B26 — UNA HERRAMIENTA EXTERNA APORTA CONOCIMIENTO SIN ESCRIBIR EN EL STORE.
+        MEDIDO ANTES DE ESCRIBIR NADA con scripts/measure_b26_ingesta.py: 5/5 preguntas
+        ABIERTAS. Ahora 0/5. LO QUE ENCONTRO EL BLOQUE NO ERA UN CAMPO SUELTO, Y ESTA
+        AQUI PORQUE ES LO QUE LE DIO NOMBRE: la promocion serializa y deserializa A MANO,
+        y cuando B25 metio una segunda forma de objeto en Claim, esas dos copias se
+        quedaron con la de antes. MEDIDO sobre una base real: payload con object_literal
+        None y sin object_entity; reconstruido, InvalidClaimObjectError. Un claim cuyo
+        objeto es una entidad NO SE PODIA PROMOVER, y el fallo salia en el proyecto
+        DESTINO, que es el que nadie mira — en el origen todo estaba perfecto. Y no era
+        un descuido de un campo: es que cada campo nuevo se rompia a mano, en un sitio
+        distinto del que se escribio. LO QUE ENTRA: ObservationEnvelope versionado
+        (sg.observation/1), normalizar PURO e ingerir idempotente por contenido.
+        observed_at ENTRA en el envelope, y ESO es lo que hace posible la pureza: si el
+        normalizador leyera el reloj, dos normalizaciones darian checked_at_revision
+        distintas, el claim_id saldria distinto —porque make_claim_id lo incluye en la
+        semilla— y la idempotencia se romperia sola, sin que nada lo indicara. EL
+        ARREGLO DE P5 NO FUE ANADIR UN CAMPO AL DICT: _claim_to_payload pasa a derivar
+        el payload de dataclasses.asdict(claim), de modo que un campo nuevo viaja solo.
+        El dividendo real de B26 no es arreglar el bug de hoy, es hacer que esa clase de
+        bug no tenga donde aparecer. kind=external_doc y NO un Literal nuevo: AGENTS.md
+        2.1 dice que anadir un valor a un Literal cerrado es cambio de contrato que
+        necesita ADR, y el valor que ya existe dice exactamente lo que esto es. LA
+        IDEMPOTENCIA NO BORRA HISTORIA: cambiar lo que dice una herramienta sin cambiar
+        de revision deja DOS filas, y las dos son validas; lo que las resolvera son las
+        ventanas de vigencia de B29, y un contrasalto lo mide. LO QUE EL INSTRUMENTO
+        TENIA QUE CAMBIAR, Y ES LO QUE MAS IMPORTA DEL BLOQUE: la primera version de P5
+        preguntaba «¿esta la clave object_entity en el payload?», y con el bug YA
+        ARREGLADO daba ABIERTA, porque el arreglo no pone una clave object_entity: pone
+        object_entity_id. La pregunta media un NOMBRE, no una propiedad — el mismo error
+        que el del harness de WI-114, que media la convencion que el workitem
+        eliminaba. P5 ahora EJECUTA el camino entero, y la sonda M5 deshace esa
+        correccion para que se vea que la version que mide la propiedad se pone roja con
+        el bug real. LA PRIMERA CORRIDA DEL HARNESS DIO 3/5, Y LAS DOS FALLAS ERAN
+        PROPIAS: M1 anclaba en la segunda aparicion de checked_at_revision (la del
+        Claim, no la de la semilla) y M3 anadia una linea muerta sin quitar la
+        escritura. De ahi el contrasalto que ahora COMPILA el arbol antes de juzgar: una
+        sonda que rompe la sintaxis no es una propiedad rota, es una sonda mal escrita
+        que se disfraza de CAZADA. Resultado 5/5 cazadas con `tras restaurar: rc=0
+        VERDE`. CERTIFICACION: 3534 passed, 3 skipped, 0 failed; cobertura de
+        knowledge/observation.py 100%; project_truth coherente con 0 contradicciones; y
+        los 4 rojos de la primera suite completa NO ERAN CODIGO — leian ROADMAP y CURRENT
+        que seguian diciendo B25 y 3514 tests mientras el estado ya decia B26 y 3537, y
+        corregido el estado los mismos cuatro dieron 65 passed. tests.total 3537,
+        escrito CON la certificacion delante y no antes.
+    - tag: v0.35.0
+      sha: 2ac2afd8b35f20b91e67222863411dd75daf5e51
+      fecha: 2026-10-06
+      semver_bump: MINOR
+      package_version: 0.35.0.dev0
+      rationale_b25: >-
+        BLOQUE B25 — UN HECHO ENTRE DOS ENTIDADES NO SE PUEDE EXPRESAR. MEDIDO ANTES de
+        escribir nada con scripts/measure_b25_relaciones.py: 4/4 preguntas ABIERTAS, y la
+        primera decia, con dos claims identicos por el codigo, «ambos objetos son str: el
+        sistema NO puede decir cual de los dos es una entidad». LA TRAMPA DE ESA SONDA:
+        object_literal esta anotado Any y EntityID es un NewType sobre str, luego el
+        constructor ACEPTA cualquier cadena sin quejarse; un falso negativo ahi habria
+        declarado B25 implementado sobre la evidencia de que un Any no se queja. La
+        pregunta de verdad no es «¿lo acepta?» sino «¿lo diferencia?». LO QUE ENTRA:
+        EntityRef como TIPO y no como etiqueta dentro del JSON —que colisionaria con un
+        literal legitimo, porque object_literal es Any—; la invariante «exactamente uno»
+        sostenida por Python Y por el CHECK de la tabla con el MISMO XOR, porque si se
+        apartaran la base rechazaria filas que Python acepta; y
+        list_claims_by_object_entity por la fachada de Storage, sin la cual la referencia
+        se escribiria y no se podria preguntar —un dato que se guarda y no se lee es peor
+        que no tenerlo, porque quien lo escribio creeria que si—. PredicadoDePack con
+        CLAIM_PREDICATES INTACTO en siete: la promesa era «un pack añade un predicado sin
+        tocar el nucleo», y ampliar ese fichero habria sido tocar el nucleo. MEDIDO AL
+        ESCRIBIRLO: la columna nueva NO puede llevar REFERENCES entities(entity_id),
+        porque con foreign_keys=ON el marcador '' rechazaria TODOS los claims literales;
+        y el indice NO puede estar en el DDL, porque ese DDL corre con CREATE TABLE IF NOT
+        EXISTS y un CREATE INDEX sobre una columna ausente revienta executescript al ABRIR
+        una base vieja. LO QUE ESTA ABIERTO Y DICHO: 2/4 preguntas, y las dos son a
+        proposito —el CHECK del predicate exigiria reconstruir la tabla, y la superficie de
+        aportacion del pack es B26—.
+    - tag: v0.34.1
+      sha: 0876cc93ebccd1204424b3c702a9db499ce07a56
+      fecha: 2026-10-06
+      semver_bump: PATCH
+      package_version: 0.34.1.dev0
+      rationale_b24: >-
+        BLOQUE B24 — LA RUTA DE CERTIFICACION NUNCA SE EJECUTABA, Y LA QUE LA
+        VERIFICABA ERA UN TRINQUETE. MEDIDO AL ABRIR: el modulo de la UAT real
+        declara ocho fronteras y sus TRES tests solo tocaban tres —handoff,
+        adapter y AgentResult—. Las otras cinco no se ejecutaban nunca. Y sus
+        instrucciones de ejecucion decian `pytest tests/uat_real_provider.py`,
+        que no existe: rc=4, un error de uso de pytest que no dice nada sobre la
+        UAT. LO QUE ENTRA: el recorrido entero, ejecutable sin credencial y sin
+        dinero, contra el HttpAgentAdapter DE VERDAD —httpx, retry y parseo— y
+        contra un servidor local que habla la FORMA de la respuesta del
+        proveedor. Un servidor local NO es el proveedor: certifica que las ocho
+        fronteras funcionan, y lo unico que queda fuera es que el proveedor real
+        conteste, que lo mide el camino opt-in con credencial, intacto.
+        HALLAZGO DE PRODUCTO, MEDIDO: la idempotencia de reconciliar un run
+        resuelto tiene CINCO capas, y ninguna sola la rompe. Quitar la guarda de
+        terminal rc=0; la de frontier rc=0; las dos rc=0; mas que el run no se
+        cierre rc=0. La quinta es el GUARD DE NODO, que devuelve veredicto si ya
+        hay SUCCEEDED y el plan no declara self-loop; las cuatro anteriores son
+        cortocircuitos que evitan llegar hasta ahi.
+        Y LO QUE ENCONTRO EL PRE-PUSH: la etapa `evidence` verificaba el ultimo
+        run TERMINADO, y como corre dentro del run ese es el ANTERIOR — de modo
+        que un rojo real de codigo condenaba a todos los runs siguientes, y el
+        siguiente se juzgaba con un veredicto `failure` que la exculpacion minima
+        de WI-110 nunca toca. MEDIDO: cuatro runs seguidos con 3473 tests
+        verdes y las ocho etapas de codigo en `success`, todos en `failure`. Un
+        rojo de verdad dejaba el proyecto sin poder publicar, y la unica salida
+        era `--no-verify`. Ademas: `v0.34.0` DUPLICADO en esta lista,
+        `0.34.0` sin seccion en el CHANGELOG, el total 3465 -> 3489, y
+        `test_wi97` midiendo la raiz entera mientras la cobertura parallel deja
+        ~698 ficheros temporales en ella. SemVer derivado: 0 feat, 0 breaking,
+        3 fix, 2 test, 2 chore => PATCH. 3473 passed, 3 skipped, 0 failed, 96 %.
     - tag: v0.34.0
       sha: 1a8815913f2e6110365df27fadfa62cdac214a20
       fecha: 2026-10-06

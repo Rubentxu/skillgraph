@@ -145,7 +145,17 @@ class TestMixinsAreDisjoint:
         # desde `KnowledgeDelegations` como cualquier otro. La
         # disyuncion es la propiedad; la cifra es la consequence, y sube
         # solo cuando un nombre nuevo entra en la red.
-        assert len(seen) == 67, f"esperados 67 metodos, hay {len(seen)}"
+        # B27 lo subio a 69 con `conflicts_for`, el delegate que hace
+        # PREGUNTABLE una contradiccion: sin el, el sistema sabia que dos
+        # afirmaciones se oponen y no habia por donde enterarse.
+        # B29 lo subio a 70 con `claims_at_revision`, por la misma razon y con
+        # la misma forma: sin el, el sistema guardaba una ventana de vigencia
+        # por claim y no habia por donde preguntar «que se sabia en esta
+        # revision». MEDIDO, y no supuesto: la primera sonda del contrasalto
+        # de B29 (`M3`) apunta a `knowledge_repository.py`, renombro el metodo
+        # INTERNO, y P3 siguio cerrada — porque este, el que sale de
+        # `Storage`, lo hereda de `KnowledgeDelegations`.
+        assert len(seen) == 70, f"esperados 70 metodos, hay {len(seen)}"
 
     def test_each_mixin_delegates_to_exactly_one_accessor(self) -> None:
         """AST, no grep: los `return self.x(...)` multilinea no se leen
@@ -211,7 +221,21 @@ class TestPublicSurfacePreserved:
     #: preguntar, que es como se abre a mano la mayoria de las API que no exponen su
     #: estado. Preguntar por el estado de un proyecto es parte de usar un
     #: proyecto, asi que va en la fachada.
-    EXPECTED_PUBLIC = 77
+    #: B25 la subio a 78 con `list_claims_by_object_entity`. No es una API
+    #: más: sin ella una referencia a entidad se puede ESCRIBIR por
+    #: `record_claim` y no se puede PREGUNTAR por ninguna puerta. Un dato que
+    #: se guarda y nunca se lee es peor que no tenerlo, porque quien lo
+    #: escribió cree que sí. Lo que la superficie pública vigila es que se note
+    #: cuando eso pasa, y por eso el número se mueve con el motivo al lado y no
+    #: a dedo.
+    # B27 lo subio a 79 con `conflicts_for`: un conflicto que se guarda y
+    # no se puede preguntar es peor que no tenerlo, porque quien lo
+    # escribio creeria que si.
+    # B29 lo subio a 80 con `claims_at_revision`: una ventana de vigencia
+    # que se escribe y no se puede consultar es la misma trampa con otra
+    # palabra — quien sabe que cada afirmacion caduca y no tiene por donde
+    # preguntar «que se creia en la revision X»-.
+    EXPECTED_PUBLIC = 80
     # Solo los privados no-dunder: `__init__`/`__enter__`/`__exit__`
     # estan cubiertos por LIVE_SQL_METHODS y por `close`/`uow`.
     EXPECTED_PRIVATE = 5

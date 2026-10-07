@@ -36,6 +36,7 @@ prueba de que las invariantes puras describen lo que ocurre.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -46,6 +47,38 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import check_package_build as cpb  # noqa: E402
+
+#: Nombres que la INSTRUMENTACION crea y destruye mientras corre la suite. NO
+#: los escribe el build, y un conjunto de nombres sin filtrar los mide a ellos
+#: en vez de medir al build.
+#:
+#: MEDIDO, y no supuesto: `scripts/coverage.sh` corre pytest con
+#: `parallel = true`, de modo que cada proceso escribe
+#: `<data_file>.<host>.<pid>.<rand>` en la raiz del repo — aqui,
+#: `.coverage.parallel.<host>.<pid>.<rand>`. Esos ficheros aparecen y desaparecen
+#: durante la corrida. Con uno de ellos presente, el assert de
+#: `test_construir_no_escribe_dentro_del_repositorio` falla enseñando
+#: `...ueba.11` contra `...ueba.3`: dos medidas del MISMO productor, no una
+#: escritura del build.
+#:
+#: En la CI esto no es una carrera ocasional: ocurre en cada pasada, porque la
+#: etapa `unit-tests` SI corre con cobertura. Un guard que da rojo por el ruido
+#: de otro productor no mide lo que dice — es el mismo defecto que B23 cerro en
+#: el instrumento, un turno mas abajo.
+TRANSIENTES_DE_INSTRUMENTACION = re.compile(
+    r"^\.coverage(\..*)?$|^\.pytest_cache$|^\.ruff_cache$|^\.mypy_cache$|^\.hypothesis$"
+)
+
+
+def _entradas_estables(raiz: Path) -> set[str]:
+    """Lo que hay en la raiz, excluido lo que crea y borra la instrumentacion.
+
+    Se comparan dos medidas de la MISMA magnitud. Sin este filtro la magnitud
+    medida no es «lo que escribe el build» sino «lo que hay en la raiz», y esa
+    la mueven pytest-cov, ruff y mypy mientras corren.
+    """
+    return {p.name for p in raiz.iterdir() if not TRANSIENTES_DE_INSTRUMENTACION.match(p.name)}
+
 
 # --- Informes sinteticos ---------------------------------------------------
 
@@ -426,10 +459,36 @@ class TestBuildReal:
         trabajo y no sobre el checker. Lo que si es del checker es que no
         anada nada nuevo.
         """
-        antes = {p.name for p in ROOT.iterdir()}
+        antes = _entradas_estables(ROOT)
         cpb.construir_y_medir(ROOT, tmp_path / "salida")
-        despues = {p.name for p in ROOT.iterdir()}
+        despues = _entradas_estables(ROOT)
         assert despues == antes
+
+    def test_el_filtro_no_se_traga_lo_que_si_es_una_escritura(self, tmp_path: Path) -> None:
+        """El filtro tiene que ser estrecho, y se comprueba que lo es.
+
+        Un guard al que se le quitan los falsos positivos puede quedarse sin
+        ningun positivo. Con el fichero `.coverage.parallel.*` presente, la
+        diferencia la metia un nombre que no venia del build; quitarlo sin mas
+        seria assuming que el filtro no se va a ampliar nunca. Por eso se
+        comprueba, en el otro sentido, que un directorio real sigue viniendose.
+        """
+        escribible = tmp_path / "repo"
+        escribible.mkdir()
+        (escribible / ".coverage.parallel.host.1.abc").write_text("x", encoding="utf-8")
+        (escribible / "build").mkdir()
+
+        estable = _entradas_estables(escribible)
+
+        assert ".coverage.parallel.host.1.abc" not in estable, (
+            "el transitorio de cobertura tiene que quedar fuera, o el guard sigue "
+            "midiendo el ruido de otro productor"
+        )
+        assert "build" in estable, (
+            "el filtro se ha tragado un directorio REAL: un guard que deja de "
+            "detectar la escritura que vigila no mide nada, y este es el fallo "
+            "que hace inutil un filtro sin contrasalto"
+        )
 
     def test_el_wheel_no_arrastra_el_egg_info_del_arbol(self, build: cpb.InformeBuild) -> None:
         """`src/skillgraph.egg-info/` es basura de un build antiguo.

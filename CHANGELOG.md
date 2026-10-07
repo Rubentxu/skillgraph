@@ -14,6 +14,848 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.41.0] - 2026-10-06 — Las fronteras arquitectónicas como leyes ejecutables
+
+SemVer **derivado** desde `v0.40.0`: `0 breaking · 1 feat · 1 refactor · 5 otros`
+(`git log v0.40.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.41.0**.
+
+## Un audit detecta deuda. Un ratchet cierra.
+
+Toda la propuesta de R1 es esa diferencia. Un audit informa de que hay módulos
+grandes y sale `0`; el ratchet sale **distinto de cero**, y por eso la
+construcción falla.
+
+```
+god modules > 800                = 0    knowledge_repository.py 895 -> 719
+complejidad publica cc >= 20     = 0
+SQL en el dominio                = 0    8 usos -> 0
+dominio -> platform (no ports)  = 0
+referencias normativas rotas    = 0    16/16
+```
+
+**Lo que hace que las cinco midan** es la mitad que ningún audit tiene: un
+`check_architecture_ratchet.py` que devolviera siempre `rc=0` cumpliría las
+cinco líneas de arriba. Está en `.pipeline.kts` como décima etapa.
+
+## R0 — la frontera estaba invertida
+
+El objetivo nombra textualmente `seq_de(cur, revision)` y
+`_sigiente_revision(cur, revision)`. Existían, en `knowledge/graph.py`, como
+funciones libres que recibían un cursor — y **`platform/` las importaba**. El
+dominio servía de utilidad de base de datos para el adapter.
+
+```
+platform/ports/revisions.py    RevisionRegistry          (el puerto)
+platform/revision_registry.py  SqliteRevisionRegistry    (el SQL)
+platform/translation.py        traduciendo_integridad()  (el borde)
+```
+
+`seq` sigue siendo **el orden en que este store aprendió de las revisiones**,
+no ascendencia de git: comparar SHAs es lexicográfico y arbitrario. La
+ascendencia real es `GitHistory`, que es B32.
+
+## El dominio deja de ver `sqlite3`
+
+`knowledge_controller.py` importaba `sqlite3` para capturar
+`IntegrityError`. Ahora el adapter traduce y el dominio captura un error de
+**dominio**, que cuelga de `SkillGraphError` y por tanto traduce a exit code.
+
+**Y lo que no es FK se propaga intacto.** Un `UNIQUE` violado y un `CHECK`
+llegan como el mismo tipo que una FK, porque SQLite no los distingue en el
+tipo; traducirlos todos perdería el motivo.
+
+**Un defecto real salió al arreglar otro:** se arregló `record_claim` y los
+tests siguieron rojos — `record_evidence` es el otro `INSERT` con FK. Un
+`sqlite3.IntegrityError` que atraviesa el dominio sale como **Traceback al
+usuario**, que es el defecto que WI-109 cerró por el otro lado de la misma
+frontera. Un solo camino traducido habría sido medio arreglo con apariencia de
+entero.
+
+## El god module, partido por responsabilidad
+
+```
+knowledge_repository.py  895 -> 719 LoC
+  SqliteOutcomeTraceRepository   record_trace + link_trace
+  SqliteSourceRepository         register_source … find_entity (8 métodos)
+```
+
+**Por responsabilidad, no por tamaño**: trocear por N líneas produce mitades
+que no son unidades. Y **verbatim** — un refactor que reescribe el SQL
+mientras mueve el código son dos cambios a la vez, y cuando algo falla no se
+sabe cuál de los dos fue.
+
+## TRES FALSOS POSITIVOS DEL INSTRUMENTO, CORREGIDOS ANTES DE QUE DIERA NÚMERO
+
+1. **`platform.ports.*` contado como fuga.** `ports/` contiene `Protocol` y
+   DTOs: es el puerto. Contarlo es medir lo contrario de lo que dice el nombre.
+2. **`blueprint-v1` marcada como rota.** Es un **directorio** de 12
+   documentos, y vive en `external/` fuera de git **por decisión del repo**:
+   es el *source of truth* de `AGENTS.md` §0.
+3. **`if TYPE_CHECKING` contado como fuga.** `observation.py` importa
+   `Storage` ahí, y en runtime ese import no existe.
+
+**Y un test que impide el arreglo trivial:** se **exige** que ese import siga
+estando. Borrarlo dejaría el guard en verde degradando el type-checker, que
+es pagar con el código por una medición.
+
+## La evidencia
+
+```
+measure_r1_architecture.py    rc=0   0/5 ABIERTAS   (venía 3/5)
+check_architecture_ratchet.py rc=0   las cinco a cero
+mutate_r1_architecture.py     rc=0   5/5 cazadas
+pytest                       rc=0   3709 passed, 3 skipped
+```
+
+## Lo que NO hace
+
+- No borra el bloque `if TYPE_CHECKING` (exigido por un test).
+- No cambia la métrica: el umbral de 800 es el que ya usan la auditoría y los
+  guardas de `docs/`.
+- No reescribe los tests que no cambiaron de contrato.
+- No fabrica un `merge-receipt`.
+
+## [0.40.0] - 2026-10-06 — Un contexto truncado dice qué se cayó
+
+SemVer **derivado** desde `v0.39.0`: `0 breaking · 2 feat · 3 fix · 2 otros`
+(`git log v0.39.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.40.0**.
+
+## La fila tenía dos mitades, y la primera es falsa
+
+Decía *«Traer el contexto es traerlo todo, o traerlo truncado sin decir qué se
+cayó»*. Medido antes de escribir nada, con
+`scripts/measure_b30_contexto.py` → **5/5 ABIERTAS**.
+
+`apply_budget` **ya funcionaba y ya era exacto**: los obligatorios no se
+truncan, y los opcionales entran en orden hasta que uno no cabe. Eso no es lo
+que la fila acusaba.
+
+La segunda mitad es cierta, y **más grave de lo que la fila decía**: no solo no
+se declaraba, es que **no se podía ni calcular**. `included` guardaba lo que
+entró, pero no el total de candidatos — el receptor no tenía forma de deducir
+la diferencia.
+
+## La mitad grave que la fila no mencionaba
+
+Está en el otro lado del módulo, y es la que le dio valor al bloque:
+
+```
+should_skip_adapter(*, manifest) -> manifest.is_complete and manifest.all_fresh
+```
+
+Esa función decide **no invocar al Adapter** (UAT-EVO-11: la respuesta
+determinista es completa, no hace falta un LLM), y **recibía solo el manifest**:
+nunca veía el `Handoff` compilado, luego no podía saber que el presupuesto había
+cortado. Medido, antes de arreglar nada:
+
+```
+omitidos=3 | manifest.is_complete=True | should_skip_adapter=True
+```
+
+El sistema se quedaba **sin agente por el motivo de que la respuesta era
+completa, cuando la respuesta se había cortado**. Eso no es «truncar sin decir»:
+es **declarar completo lo que no lo está**, que es justo lo que la cabecera de
+`file_handoff.py` prohíbe en `HandoffBlockedError` — *«NUNCA debe presentarse
+como completado»*.
+
+## Lo que entra
+
+- `Omision` (`kind`, `namespace`, `name`, `chars`) y `PresupuestoAplicado`
+  (`incluidos`, `omitidos`, `chars_usados`, `budget_chars`).
+- `apply_budget` deja de devolver la tupla `(incluidos, total_chars)` y devuelve
+  el registro. El contrato viejo **no puede expresar** la propiedad que B30
+  arregla.
+- `HandoffKnowledge.omitidos`, **al final** y como **tuplas**: un `dict` dentro
+  de un `frozen` deja la estructura mutable por dentro (lo que midió WI-113 en
+  `AgentResult.result`), y aquí el receptor es código externo al repo.
+- `should_skip_adapter(manifest=..., omitidos=())`: cuarta regla, con default
+  para no romper a quien ya llamaba.
+
+## Tres decisiones que se midieron, y no son de gusto
+
+1. **`chars` es `approx_chars(body)`**, la misma medida que el presupuesto usó
+   para decidir. Declarar el largo del texto crudo haría que el receptor
+   recalculara con un número que el Core no usó.
+2. **El corte declara el que no cupo *y todos los que iban detrás***. Declarar
+   solo el primero deja un número que **subestima** lo que se perdió, y un
+   informe que subestima se lee como «se cayó casi nada».
+3. **`Omision` no lleva `motivo`**. Los tres `OverflowStrategy` que producen una
+   omisión la producen por lo mismo (no cabía) y el tercero lanza excepción:
+   sería el `empate_en_la_jerarquia` de B28, un `Literal` que nombra algo que
+   ninguna ejecución puede producir.
+
+`cobertura` es una **propiedad derivada** de si hay omisiones, no un campo —un
+campo lo puede mentir sin que nada lo note— y **no hay constante `Final` al
+lado**, porque nadie valida entrada contra ella: publicarla sería un segundo
+sitio donde la verdad vive.
+
+## Un defecto que salió al escribir los tests, y no era de los tests
+
+`omitidos` declaraba en el dataclass y **no estaba en `to_dict`**, luego **no
+entraba en el `context_hash` firmado**: el Adapter veía unas omisiones que el
+Core no firmó. Es la distancia que WI-111 midió entre el instante en que el Core
+calcula el hash y el que lo consumen los eventos, **reproducida dentro del propio
+handoff**.
+
+Lo cazaron los tests de P3 y no una revisión visual: el campo se veía en el
+dataclass y en el `to_dict` de al lado, y eso no basta.
+
+## Y el instrumento tenía un *vacuous pass*
+
+P5 se formuló como «omitidos **y** salta **y** completo», que da `False` cuando
+`omitidos` está vacío — y antes del bloque **siempre** lo estaba. El guard
+cerraba **precisamente porque el defecto estaba presente**. Reformulado a «¿puede
+el skip siquiera verlas?», vía `inspect.signature`.
+
+Contrasalto **5/5**, verificado **después de `ruff format`**. **M3 abre 1
+pregunta y M2 abre 2**, porque M3 borra la **firma** sin tocar el campo: un
+arreglo que comprobara «el handoff declara omisiones» pasaría M2 sin ver M3.
+
+## Lo que NO hace, y es el límite
+
+- **No cambia la política de presupuesto**: los obligatorios no se truncan.
+- **No implementa `why`/`impact`**. La fila los metía bajo el mismo número, pero
+  son otro corte; queda declarado en `roadmap.current_workitem`.
+- No cambia `ContextRecipe`.
+- **No desactiva el skip**: sin omisiones se salta igual. Desactivarlo sería
+  cambiar un defecto por otro.
+
+## [0.39.0] - 2026-10-06 — Un cambio en el tiempo deja de leerse como una contradicción
+
+SemVer **derivado** desde `v0.38.0`: `0 breaking · 2 feat · 1 fix · 5 otros`
+(`git log v0.38.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.39.0**.
+
+## La fila exagera en su primera mitad, y la segunda se puede medir
+
+Decía *«No se puede preguntar qué se sabía en una revisión, ni cómo fue
+reemplazado»*. Medido antes de escribir nada, con
+`scripts/measure_b29_vigencia.py` → **5/5 ABIERTAS**, y lo primero que hay que
+decir es que **la primera mitad es falsa**:
+
+`checked_at_revision` está en cada claim desde antes de esta serie. Lo que no
+había era la **consulta**, y esa diferencia —«el dato está» frente a «se puede
+preguntar»— es la que separa este bloque de una fila.
+
+La mitad grave es la otra, y se mide:
+
+```
+filas en claims:   c-A "psycopg" @revA    c-B "sqlite3" @revB
+conflicts_for  ->  1 conflicto: [c-A, c-B]
+resolver       ->  gana NADIE
+```
+
+**El sistema responde «nadie gana» a algo que tiene respuesta definitiva en cada
+instante.** En `revA` era `psycopg`; en `revB` es `sqlite3`. Las dos
+afirmaciones están, con su revisión, y no sabe. La causa es precisa:
+`conflicts_for` compara valores **sin mirar el tiempo**, así que un hecho que
+**cambió** se lee igual que uno que se **contradice**.
+
+## El orden de las revisiones: `revision_registro`
+
+Las revisiones reales son SHAs, y compararlos **es lexicográfico y arbitrario**
+(`rev10 < rev9`). Se introduce `revision_registro(seq, revision)`, donde `seq`
+es **el orden en que ESTE store aprendió de esas revisiones**.
+
+No es ascendencia de git — eso es `GitHistory`, que es B32 — y el nombre lo
+declara para que nadie lo lea como más de lo que es.
+
+## La ventana es `[desde, hasta)`, y el gate lo dice
+
+No es una elección de gusto. El gate de `06-SPEC` §9:
+
+```
+commit A: A -> calls B        commit B: A -> calls C
+at(A) -> calls B             at(B)  -> calls C
+```
+
+En `revB` la respuesta es `calls C`, y **no las dos**. Con el extremo superior
+inclusivo, `at(B)` devolvería las dos — media mitad de un conflicto. La primera
+versión del bloque hizo la ventana cerrada por los dos lados, y por eso
+`claims_at_revision(revB)` daba `['c-A', 'c-B']`.
+
+## La asimetría de los `NULL`, interpretada en un solo sitio
+
+| columna | `NULL` significa |
+|---|---|
+| `valid_from_revision` | «desde `checked_at_revision`» |
+| `valid_until_revision` | «todavía vigente» |
+
+`valid_from` en `NULL` es «desde que lo vimos», no «desde el principio de todo»,
+que solo es cierto para el primer hecho de una cadena. Y `valid_until` en
+`NULL` es «todavía vigente», que es lo que hace que un hecho sin reemplazo siga
+compitiendo en HEAD.
+
+`valid_from_revision` se escribe **tal cual lo declara el llamante**. Rellenarlo
+con `checked_at_revision` rompía la ida y vuelta `get_claim(...) == Claim(...)`,
+que es un contrato de B25: el store estaba guardando un campo que nadie había
+declarado.
+
+## Tres condiciones de la supersesión que nadie había escrito, y que aparecieron al ejecutar
+
+Ejecutar la suite de B25–B28 **sobre el bloque ya implementado** dejó dos tests
+rojos que este bloque había roto. Los dos tienen la misma causa, y la causa es
+que la consulta elegía «la vigente más reciente de la misma fuente» **sin mirar
+el orden ni el valor**:
+
+1. **Orden.** Reingerir el mismo envelope **cerraba la ventana del propio
+   claim**, rompiendo la idempotencia de la ingesta de B26.
+2. **Valor.** El comentario del propio bloque decía «y el valor es otro» y el
+   SQL **no lo miraba**. Reingerir la misma afirmación cerraba la anterior, y
+   la ventana dependía del orden de ingesta —rompiendo la propiedad de B27 de
+   que el conflict set no dependa del orden.
+3. **Alcance.** Se cerraba solo la más reciente y las anteriores de esa fuente
+   quedaban abiertas, luego «cuál era la más reciente» dependía de cuál se
+   guardara primero.
+
+Ahora se cierran **todas** las afirmaciones abiertas de esa fuente que digan
+otro valor —una fuente no sostiene dos cosas a la vez—, mientras que
+`supersedes_claim_id` sigue siendo **singular** y apunta a la más reciente: la
+cadena es una línea, y lo que se cierra es una ventana.
+
+## Lo que este bloque NO hace
+
+1. **No borra.** El claim viejo se queda, con su ventana cerrada.
+2. **No añade `GitHistory`** ni inventa el orden entre revisiones de dos
+   almacenes distintos. B32 es quien trae la ascendencia real.
+3. **No reabre B27.** Misma fuente, misma revisión y otro valor **siguen
+   avisando**: eso es una discrepancia de verdad, no un cambio en el tiempo.
+4. **No supersede entre fuentes.** `06-SPEC` §2 habla de *source family*, y dos
+   fuentes son dos familias: no se sabe cuál cambió de opinión.
+
+## El contrasalto, y las dos sondas que Measure mal
+
+**Instrumento:** 5/5 → **0/5**. **Contrasalto:** **5/5 sondas cazadas**,
+`rc=0` al restaurar, y **verificado después de `ruff format`** —que es lo que
+desancló las cinco sondas de B28 en una sola pasada.
+
+Dos cosas del harness que los anteriores no tenían, y las dos salieron de que
+la sonda **no era la sonda**:
+
+- **Las sondas de existencia son multi-fichero.** M1 y M2 preguntan si el ADT
+  declara la ventana y si la tabla tiene la columna de supersesión. La sonda
+  honesta es **renombrar el identificador de punta a punta** —campo del ADT,
+  columna, `ALTER TABLE`, mapper, `INSERT`— para que el árbol siga cargando y
+  las otras cuatro preguntas sigan midiendo. Borrar la columna hace reventar el
+  mapper: una sonda «cazada» por un crash, que no es la propiedad rota sino el
+  árbol roto.
+- **M3 resultó INOCUA, y el motivo es el hallazgo más útil del bloque.** Apuntaba
+  a `knowledge_repository.py`, pero `Storage.claims_at_revision` lo hereda de
+  `KnowledgeDelegations`. Lo que se renombró fue el método **interno**; el
+  público quedó intacto y la pregunta siguió cerrada —la lectura que miente en
+  verde. MEDIDO, no supuesto:
+  `getattr(Storage, 'claims_at_revision').__module__`.
+
+Y M4 y M5 tocan el mismo `if` y **no son intercambiables**: M4 rompe la primera
+mitad del contrasalto y abre P4; M5 deja HEAD **intacto** y abre P5 y **no** P4.
+Un arreglo que comprase «cero conflictos» apagando el detector pasaría P4 en
+verde.
+
+## Un test que falló al escribirlo, con razón
+
+`test_una_revision_ANTERIOR_no_supersede_a_una_posterior` afirmaba que en `rc3`
+las dos afirmaciones de `false` coexistían. En el orden inverso de ingesta **no
+es cierto**: ahí `rc3` ocupa la posición 1 del store y la otra todavía no se ha
+aprendido.
+
+No es un defecto. Es la **consecuencia declarada** de que `seq` sea el orden en
+que el store aprendió, y fingir que `rc3` es siempre la posición 2 sería
+inventarlo. Lo que sí es independiente del orden —y es lo que el test mide ahora—
+es cuántas ventanas siguen abiertas al llegar el cambio.
+
+## [0.38.0] - 2026-10-06 — La autoridad se decide por intención, no hay un ranking global
+
+SemVer **derivado** desde `v0.37.0`: `0 breaking · 2 feat · 2 fix · 3 otros`
+(`git log v0.37.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.38.0**.
+
+## La fila acusa a un ranking global, y medido no hay ranking: no hay nada
+
+La fila decía *«Resolver un conflicto es un ranking global, y la respuesta
+correcta depende de para qué se pregunta»*. Medido antes de escribir nada, con
+`scripts/measure_b28_autoridad.py` → **5/5 ABIERTAS**, y la primera sorpresa
+está en el propio enunciado:
+
+**No existe ningún ranking.** B27 dejó los conflictos consultables y ordenados;
+lo único que faltaba era decidir, y decidir no existía.
+
+Lo que sí estaba **armado** es la tentación, y por eso el bloque existe:
+
+    AssertionOrigin = observed | derived-deterministically
+                    | agent-inferred | human-asserted
+
+Cuatro valores que ya estaban en `core/runtime_types.py`, y cuyo docstring dice
+en sus propias palabras que **no son un ranking** —son «quién afirma». Los
+datos para ordenar están a mano, y el orden depende de la pregunta:
+
+    ¿qué devolvió producción?        observed > derived-deterministically
+    ¿qué dependencia está permitida?  human-asserted > derived-deterministically
+
+Por eso la propiedad medida **no es «se elige alguien»** sino **«el mismo
+conflicto, con dos intenciones, elige afirmaciones DISTINTAS»**. Un resolver con
+ranking fijo pasaría cualquier prueba que comprobara que hay ganador.
+
+## `AuthorityProfile` por `QueryIntent`
+
+- **`QueryIntent`**: los siete valores del «ADT inicial» de `05-SPEC` §3, con
+  smart constructor. Una intención inventada sale como
+  `UnknownQueryIntentError` (`sg_unknown_query_intent`), no como un string libre
+  que nadie lee.
+- **`AuthorityProfile`**: el ranking vive en la **política**, con nombre, y
+  quien pregunta puede traer el suyo. Siete perfiles por defecto, y **no son el
+  mismo** — que es lo que convierte «depende de para qué se pregunta» en una
+  propiedad del sistema y no una costumbre.
+- **`resolver()`**: **puro**, sin disco, sin reloj y sin `Storage`. El store
+  entra ya resuelto, en un `Conflicto`.
+- **`Resolution`**: policy usada, intención, elegidos, descartados **con
+  motivo**, y `firma` — la decisión como tupla comparable.
+- **`sg knowledge resolve <proyecto> <sujeto> --intent <intención> [--json]`**:
+  sin esto la capacidad no se puede preguntar, y una capacidad que no se
+  pregunta es el mismo defecto que B6 midió en `extraction_method`.
+
+## El guard del agente es un campo, no una posición en la lista
+
+La spec (§7) prohíbe que `agent-inferred` cierre un conflicto *por defecto*. La
+lectura tentadora — ponerlo el último de la preferencia — **es un guard roto**:
+se rompe **reordenando una lista**, que es el cambio más barato de quien no
+sabe lo que hace, y solo en el perfil equivocado.
+
+Es `permitir_inferencia_de_agente: bool = False`, y está medido por qué: un
+perfil que pone al agente **el primero** lo sigue dejando perder.
+
+`Resolution.elegidas` **puede estar vacía**, y es la respuesta honesta: si lo
+único que hay son afirmaciones de agente, no hay ganador, y cada descarte
+dice `cerrado_por_agente_no_permitido`. Un resolver que devuelve algo siempre
+está inventando autoridad donde no la hay.
+
+## La contrasalto encontró un fallo del INSTRUMENTO, y por eso cambió el código
+
+La sonda M2 —«el flag del agente puesto a `True`» — salió **INOCUA**. La causa:
+P4 usaba el perfil por defecto de `actual_behavior`, donde `human-asserted`
+está por encima de `agent-inferred`. Ahí el agente perdía **por rango** aunque
+el guard estuviera borrado, y el motivo impreso era `origen_no_preferido`, no
+el del guard.
+
+Es decir: **P4 —el guard del bloque— habría pasado aunque el guard se borrara.**
+Un guard medido en un escenario donde no puede cambiar el resultado no es un
+guard, es una aserción con código de seguridad.
+
+Un origen **no listado** valía por una prohibición silenciosa, porque `rango_de`
+devuelve `None` para él. Los siete perfiles por defecto **nombran ahora los
+cuatro orígenes**, y P4 usa un perfil con el agente el primero, de modo que la
+única razón posible para que no gane sea el flag.
+
+**Instrumento:** 5/5 → **0/5**. **Contrasalto:** **5/5 sondas cazadas**, `rc=0`
+al restaurar, con las anclas en **regex** porque `ruff format` desancló las cinco
+de una pasada y el guard de sintaxis las clasificó `ROTA` en vez de fingir que
+las cazaba.
+
+## Una discrepancia de la spec, resuelta y dicha
+
+`05-SPEC` no es coherente consigo misma: **§3** lista `intended_behavior` y el
+**ejemplo B de §2** usa `queryIntent: intended_architecture`. Se sigue §3 porque
+es normativa y explícitamente cerrada, y porque `AGENTS.md` §2.1 exige ADR para
+crecer un `Literal` y ADR-0028 no lo pide. Queda anotado en el módulo, en el
+PRE-FLIGHT y en el ROADMAP, porque resolverla en silencio sería perderla.
+
+## Lo que este bloque NO hace
+
+1. **No borra.** Resolver para una intención no elimina afirmaciones: las dos
+   siguen consultables. Lo que las borra es **B29**, con ventanas de vigencia.
+2. **No persiste** la resolución, y **no carga perfiles de YAML**. Que quien
+   llama traiga el suyo es el punto de extensión; la carga declarativa es
+   trabajo futuro, y declararla como hecho sería documentar un hueco.
+3. **No elige entre perfiles.** `resolver` recibe una intención; qué política se
+   usa es de quien pregunta.
+
+## Superficie
+
+`core-surface.json` 64 → 67 (los tres errores) y `cli-surface.json`:
+`subcomandos.knowledge` 5 → 6, `runner.__all__` 38 → 39. Los ADTs de B28 **no**
+entran en la superficie del núcleo, y no por olvido: viven en `knowledge/`, y
+declararlos en `skillgraph.core` invertiría la dependencia.
+
+## La certificación encontró un valor del vocabulario que nadie podía observar
+
+`knowledge/authority.py` cerró la certificación al **97 %**, con **dos** líneas
+sin cubrir. Ninguna era un test que faltara: eran **código inalcanzable**.
+
+`MotivoDescarte` declaraba `empate_en_la_jerarquia`, con su rama en
+`_motivo_de`. La rama **no se puede alcanzar**:
+
+- `_motivo_de` solo se llama para afirmaciones que **no** están en `elegidas`.
+- `elegidas` es exactamente «lo admisible en el mejor rango».
+- Una afirmación admisible que no está en `elegidas` solo puede estarlo porque
+  su rango es **peor**. Luego `rango > mejor_rango` siempre.
+
+Un empate no produce un descarte: produce **dos** `elegidas` y
+`sin_resolver=True` — «estas dos son igual de autoritativas y se contradicen»,
+que es la respuesta honesta. Declarar un motivo para eso creaba un valor que
+**nadie puede observar**, y un vocabulario cerrado con un valor imposible es una
+promesa que el código no cumple: quien escriba
+`if motivo == "empate_en_la_jerarquia"` tendrá una rama muerta y no lo sabrá.
+
+El arreglo no fue borrarlo: `_motivo_de` pasa a ser **total**. O no es admisible
+—y el motivo es el guard— o lo es, y el motivo es el rango. Dos casos cubren
+todo el dominio: sin rama de empate, sin `else`, sin invariante.
+
+**Y el instrumento de medición no daba veredicto cuando reventaba**, lo cual es
+un hueco del harness y no del bloque: `preguntas_abiertas()` devolvía `-1` si
+no encontraba su línea `RESULTADO:`, y el harness lo contaba como sonda **no
+cazada**. Es decir: si una sonda rompía el árbol entero, informaba de que «la
+propiedad aguantaba». Un árbol que ni siquiera puede ejecutar el instrumento
+**no satisface las propiedades**, así que ahora una caída cuenta como
+`CAZADA`, con la razón nombrada — la misma lección de B22, aplicada al propio
+instrumento.
+
+## Medición
+
+    scripts/measure_b28_autoridad.py    5/5 ABIERTAS  ->  0/5 ABIERTAS
+    scripts/mutate_b28_autoridad.py     5 sondas       ->  5/5 CAZADAS, rc=0
+    tests/test_b28_autoridad.py          42 passed
+    knowledge/authority.py               100 % (90 stmts, 20 branches, 0 missing)
+
+## [0.37.0] - 2026-10-06 — Los conflictos avisan y son consultables
+
+SemVer **derivado** desde `v0.36.0`: `0 breaking · 1 feat · 2 fix · 3 otros`
+(`git log v0.36.0..HEAD`, con las mismas reglas que `scripts/derive_semver.py`),
+la regla pide **MINOR -> v0.37.0**.
+
+## El enunciado de esta fila exagera, y medirlo cambió el bloque
+
+La fila decía *«Dos claims incompatibles se pisan y no hay forma de saberlo»*.
+Medido antes de escribir nada, con `scripts/measure_b27_conflictos.py`:
+
+    P1  CERRADA  dos fuentes, hechos opuestos  -> 2 filas, COEXISTEN
+    P2  CERRADA  misma fuente, hechos opuestos -> 1 fila, SE PISA
+
+El overwrite **no** depende de que dos herramientas discrepen: depende de la
+**misma** fuente con la **misma** revisión, porque el `UNIQUE` de `claims` es
+`(subject_entity_id, predicate, source_id, checked_at_revision)` y lleva
+`source_id` dentro. Dos herramientas distintas ya coexistían de sobra.
+
+Lo que sí era cierto era la otra mitad, y es la que se arregla.
+
+## El overwrite deja de ser silencioso
+
+`record_claim` usaba `INSERT OR IGNORE` y devolvía el `claim_id` que se le
+había dado. Eso miente: el `UNIQUE` puede rechazar la fila y el método devuelve
+igual, como si hubiera escrito. Medido: dos afirmaciones opuestas con la misma
+fuente y la misma revisión dejan **una** fila —la primera—, y quien escribe
+creía haber registrado la suya.
+
+Ahora devuelve `ClaimRecorded`, que dice si hubo conflicto y **qué se solapa**.
+
+## Los conflictos son consultables y estables
+
+`conflicts_for(subject_entity_id)` por la fachada de `Storage` devuelve los
+conflictos **agrupados por predicado** y en **orden estable**. Tres
+afirmaciones que se contradicen son un conflicto con tres afirmaciones, no tres
+conflictos: sin agrupar, «cuántas contradicciones hay» sería el número de claims
+y no el de contradicciones.
+
+Un conflicto requiere **dos valores distintos**, no varias filas: tres fuentes
+que dicen todas `true` no se contradicen, y llamarlas conflicto haría que
+`conflicts_for` devolviera casi todo.
+
+## Corregido: un aviso que no se imprime es un aviso que no existió
+
+El conflicto del destino se imprimía en ningún sitio. Ahora el reconcile
+anexa una línea:
+
+```
+p1  PUBLISHED
+CONFLICTOS  1 claim(s) ya afirmaban otra cosa en destino: c-nuevo
+```
+
+No se convierte en `FAILED`: el apply se completó y el destino tiene su propia
+versión. Decir «fallido» sería mentir sobre el estado del proyecto.
+
+## Lo que este bloque NO hace
+
+- **No resuelve.** Decidir cuál de las dos afirmaciones vale es B28, y es por
+  intención de consulta.
+- **No borra.** Un conflicto no es un error a limpiar: son dos afirmaciones que
+  ambas tienen fuente. Lo que las resolverá son las ventanas de vigencia.
+
+Verificación: `scripts/measure_b27_conflictos.py` **3/5 → 0/5**,
+`scripts/mutate_b27_conflictos.py` **5/5 sondas cazadas** con
+`tras restaurar: rc=0 VERDE`, y `knowledge_conflicts.py` al **100 %** de
+cobertura.
+
+## [0.36.0] - 2026-10-06 — Una herramienta externa aporta conocimiento sin escribir en el store
+
+SemVer **derivado** desde `v0.35.0`: `0 breaking · 2 feat · 2 fix · 3 otros`
+(`git log v0.35.0..HEAD`, contado con las mismas reglas que
+`scripts/derive_semver.py`), la regla pide **MINOR -> v0.36.0**.
+
+## Una forma declarada para lo que observa una herramienta
+
+`CapabilityResult.payload` es `dict[str, Any]`: cualquier cosa cabe y nada
+comprueba que sea la forma correcta. Ahora existe `ObservationEnvelope`, una
+forma **nominal y versionada** (`sg.observation/1`) que una capability puede
+devolver y que el sistema puede distinguir de un dict.
+
+Un envelope se compone de un `producer` (`CapabilitySpec`, que ya llevaba
+versión), un `adapter`, la `source` de la que sale el dato, el sujeto sobre el
+que se observa, y las observaciones. El objeto de una observación admite **las
+dos formas de B25**: literal o `EntityRef`. No es una unión de dos tipos: es la
+misma pregunta que hace `Claim` y que sostiene el CHECK de la tabla, y se
+valida en el mismo sitio.
+
+## El normalizador es puro, y por eso `observed_at` entra en el envelope
+
+`normalizar` no toca disco, ni reloj, ni la entrada. Eso solo es posible
+porque **el reloj entra en el envelope**: si el normalizador llamara a
+`now_iso()`, dos normalizaciones del mismo envelope darían
+`checked_at_revision` distintas, el `claim_id` saldría distinto —porque
+`make_claim_id` lo incluye en la semilla— y la idempotencia **se rompería sola,
+sin que nada lo indicara**.
+
+El `claim_id` sale de `make_claim_id`, que ya era UUIDv5 sobre
+`(subject, predicate, source, revision)`. Por eso la ingesta es idempotente
+**por contenido**, y no por un contador: `ingerir` dos veces el mismo envelope
+reconstruye los mismos ids y las filas caen con `INSERT OR IGNORE`.
+
+## Un envelope con versión desconocida falla en la frontera
+
+Sin versión no se puede rechazar lo viejo: una herramienta que cambia su forma
+de hablar sigue intentando escribir con el contrato anterior, y el fallo
+aparece en el dato, en vez de en la frontera. `UnknownEnvelopeVersionError`
+sale con su `code` (`sg_unknown_envelope_version`) y el mensaje dice **qué
+versión se esperaba**, porque «versión no soportada» sin la versión buena
+obliga a buscar el número en el código.
+
+## Corregido: un claim cuyo objeto es una entidad no se podía promover
+
+Este bloque empezó por un bug, no por una idea. B25 añadió una segunda forma de
+objeto a `Claim`, y la promoción —que serializa y deserializa **a mano**— se
+quedó con la de antes. MEDIDO sobre una base real:
+
+    payload del claim: {... 'object_literal': None ...}
+    ¿arrastra object_entity? False
+    reconstruido: InvalidClaimObjectError
+
+Un claim cuyo objeto es una entidad **no se podía promover**, y el fallo salía
+en el proyecto **destino**, que es el que nadie mira: en el origen todo estaba
+perfecto.
+
+**El arreglo no fue «añadir el campo al dict».** Eso habría arreglado este caso
+y dejado el defecto intacto: `_claim_to_payload` enumeraba nueve claves a mano,
+luego *cada* campo nuevo se rompe a mano, y se rompe en un sitio distinto del
+que se escribió. Ahora el payload se deriva de `dataclasses.asdict(claim)`, y
+un campo nuevo viaja **solo**. El dividendo real de este bloque no es arreglar
+el bug de hoy: es hacer que esa clase de bug no tenga dónde aparecer.
+
+## Lo que este bloque NO hace
+
+- **No serializa envelopes a disco.** Es una frontera en memoria. Persistir
+  envelopes crudos necesita versión **y** política de reingesta, y eso es otro
+  bloque.
+- **La idempotencia no borra historia.** Una herramienta que cambia lo que dice
+  sin cambiar de versión deja **dos** afirmaciones, y las dos son válidas: lo
+  que las resolverá son las ventanas de vigencia. Borrar la anterior sería
+  destruir historia para parecer consistente.
+
+Verificación: `scripts/measure_b26_ingesta.py` **5/5 → 0/5**,
+`scripts/mutate_b26_ingesta.py` **5/5 sondas cazadas**,
+cobertura de `knowledge/observation.py` **100 %**, y
+`3534 passed, 3 skipped, 0 failed`.
+
+## [0.35.0] - 2026-10-06 — Un hecho entre dos entidades se puede expresar
+
+SemVer **derivado** desde `v0.34.1`: `0 breaking · 1 feat · 1 fix · 3 otros`
+(`git log v0.34.1..HEAD`, contado con las mismas reglas que
+`scripts/derive_semver.py`), la regla pide **MINOR -> v0.35.0**.
+
+## El objeto de un claim puede ser otra entidad
+
+`Claim.object_literal` estaba anotado `Any` y `EntityID` es un `NewType` sobre
+`str`, así que el constructor **aceptaba** cualquier cadena. El defecto nunca
+fue que se negara: era que el sistema guardaba dos cadenas y no sabía cuál
+apuntaba a algo. MEDIDO antes de escribir nada, con
+`scripts/measure_b25_relaciones.py`:
+
+    ambos objetos son str ('str' frente a 'el fichero que todavia no he
+    creado'): el sistema NO puede decir cual de los dos es una entidad
+
+La pregunta de B25 no es «¿lo acepta?» sino **«¿lo diferencia?»**, y por eso
+`EntityRef` es un **tipo**, no una etiqueta dentro del JSON: una etiqueta
+colisionaría con un literal legítimo, porque el campo es `Any`.
+
+## Un literal y una referencia no se pueden confundir
+
+La invariante «exactamente uno» la sostienen **Python y el CHECK de la tabla**,
+con el **mismo XOR**. Si se apartaran, la base rechazaría filas que Python
+acepta y el fallo aparecería en el sitio más caro.
+
+## Un pack añade un predicado sin tocar el núcleo
+
+`PredicadoDePack` es un `NewType` con su smart constructor, y
+**`CLAIM_PREDICATES` sigue teniendo siete valores**. La promesa era «sin tocar
+el núcleo», y ampliar ese fichero habría sido tocarlo. El criterio es un
+**namespace**, no un registro: un registro sería estado global mutable
+(`AGENTS.md` §1.4).
+
+## Dos decisiones que salen de medir
+
+**La columna nueva NO lleva clave foránea.** Con `PRAGMA foreign_keys = ON`,
+declarar `REFERENCES entities(entity_id)` rechaza **todos los claims
+literales**, porque el marcador `''` no es una entidad. La garantía se
+recupera en Python, en `record_claim`.
+
+**El índice NO está en el DDL, está en la migración.** El DDL corre con
+`CREATE TABLE IF NOT EXISTS`, luego no reconstruye una tabla vieja, y un
+`CREATE INDEX` sobre una columna ausente revienta `executescript` entero — con
+lo cual **abrir la base falla**, que es lo que la migración viene a arreglar.
+
+## Lo que NO cambia
+
+El gate de 1.0 sigue en 18 PASS / 1 OPEN / 1 NO_MEASURABLE. Un pack puede
+**usar** un predicado con namespace pero todavía no puede **instalarse**: eso
+es B26. El límite queda dicho en `scripts/measure_b25_relaciones.py`, que
+termina en **2/4** preguntas abiertas y explica por qué cada una lo está.
+
+## [0.34.1] - 2026-10-06 — La ruta de certificación nunca se ejecutaba, y la que la verificaba era un trinquete
+
+SemVer **derivado** desde `v0.34.0`: `0 feat · 0 breaking · 3 fix · 2 test ·
+2 chore`, la regla pide **PATCH -> v0.34.1**.
+
+## Una UAT que declaraba ocho fronteras y ejecutaba tres
+
+`tests/test_uat_real_provider.py` promete `workflow → ContextRecipe → handoff →
+adapter real → AgentResult → transicion → persistencia → recuperacion`, y sus
+tres tests tocaban `handoff`, `adapter` y `AgentResult`. **Las otras cinco no se
+ejecutaban nunca.**
+
+Y las instrucciones de ejecución decían `pytest tests/uat_real_provider.py`,
+sin el prefijo `test_`: quien las siguiera ejecutaba nada y recibía **rc=4**,
+un error de uso de pytest que no dice nada sobre la UAT. Una instrucción que
+apunta a un path inexistente no es una instrucción.
+
+Lo que entra es el recorrido entero, ejecutable **sin credencial y sin dinero**,
+contra el `HttpAgentAdapter` **de verdad** —su `httpx.Client`, su retry y su
+parseo— contra un servidor local que habla la *forma* de la respuesta del
+proveedor. Lo único sustituido es el otro extremo del cable: con un doble del
+adapter se certificaría que el doble funciona, que es lo que B2 vino a cerrar.
+
+**Un servidor local no es un proveedor.** Certifica que las ocho fronteras
+funcionan; que el proveedor real conteste lo sigue midiendo el camino opt-in con
+credencial, intacto.
+
+## El hallazgo que nadie buscaba: la idempotencia tiene CINCO capas
+
+Medido, quitando una a una, con el test de reconciliación como único criterio:
+
+```
+guarda de terminal (runcontroller)              rc=0
+guarda de frontier (run_observability)          rc=0
+las dos anteriores                              rc=0
++ el run no se cierra + frontier no filtra       rc=0
+estado real tras una pasada: state='COMPLETED'  current_node=None
+```
+
+La quinta no es una guarda de reconciliar: es el **guard de nodo**, que devuelve
+veredicto si ya hay `SUCCEEDED` y el plan no declara self-loop. Las cuatro
+anteriores son cortocircuitos que evitan llegar hasta ahí. La propiedad que mide
+el test es el efecto conjunto de las cinco, y no nombra ninguna.
+
+## Y el `pre-push` era un trinquete que no se podía deshacer
+
+MEDIDO, con la suite en verde y las ocho etapas de código en `success`:
+
+```
+5229e03b  unit-tests  3473 passed, 3 skipped, 96 % de cobertura
+5229e03b  RunFinished/failure  — y lo único que falló fue la etapa
+           `evidence`, mirando el run ANTERIOR, que había fallado de verdad
+```
+
+La etapa verificaba el último run **terminado**, y como corre *dentro* del run,
+ese es el **anterior**. Suena sensato y es un trinquete: si el anterior falló,
+este se juzga con ese fallo; y el siguiente se juzga con este, que terminó en
+`failure`. **Cuatro runs seguidos** con la suite en verde y todos en `failure`.
+La exculpación mínima de WI-110 no lo arregla: perdona el `StepFailed` de
+`evidence/sh-0`, nunca el veredicto.
+
+La única salida que ofrecía el hook era `--no-verify`, que es justo lo que no se
+usa. Ahora la etapa verifica el run **en curso** y mide lo que ya existe.
+
+## Tres reds de estado que solo aparecieron al intentar publicar
+
+1. **`v0.34.0` duplicado** en `STATE.yaml release.releases`: 88 entradas, dos
+   veces, y **idénticas** incluido el `rationale`.
+2. **`0.34.0` sin sección** en el changelog: el release se etiquetó sin contar.
+3. **El total se quedó atrás** varias veces: `3465 → 3475 → 3489`.
+
+Y uno que no era de estado sino de medición:
+`test_wi97::test_construir_no_escribe_dentro_del_repositorio` comparaba
+`{p.name for p in ROOT.iterdir()}`, así que medía *la raíz entera*. Con
+`coverage.sh` en modo `parallel`, en una corrida real había **698** ficheros
+`.coverage.parallel.<host>.<pid>.<rand>` en la raíz. En CI no es una carrera: es
+cada pasada.
+
+## Verificación
+
+Suite completa con la receta de cobertura —la misma que corre el `pre-push`—:
+**3473 passed, 3 skipped, 0 failed**, 96 % de cobertura. Harness de B24 **5/5**
+y el contrasalto del trinquete **4/4**, ambos con el árbol byte a byte como
+estaba. `project_truth.py` rc=0, `coherente: true`,
+`bloque = workitem_state = workitem_current`, `3489 == 3489`.
+
+## [0.34.0] - 2026-10-06 — El instrumento que responde «¿dónde está el proyecto?» no lo decía
+
+SemVer **derivado** con `scripts/derive_semver.py` desde `v0.33.0`:
+`b/f/x/n/d 0/2/0/5/0`, la regla pide **MINOR -> v0.34.0**. Segundo `feat`
+seguido: el instrumento de la verdad deja de poder mentir.
+
+**MEDIDO ANTES DE ESCRIBIR NADA**, con `project_truth.py --raiz <distinto>`:
+el script no leía `sys.argv` en ninguna parte y su raíz venía de
+`Path(__file__)`. Consecuencias, una por una: `--raiz /tmp` devolvía **rc=0**
+con la verdad del **repo real**; `--raiz /no/existe` devolvía **rc=0** con
+`"coherente": true`; y ejecutado desde otro directorio devolvía también la del
+repo. Ignorar el flag no era una ergonomía que faltara: era un instrumento que
+**afirmaba haber medido lo que no media**.
+
+**La ventana del ROADMAP mentía sobre quién la escribía.** Decía que su sección
+«Dónde está el proyecto» la producía ese script. No la producía nadie: se
+escribía a mano y nadie la leía. El release anterior (`9961843`) no tocó
+`ROADMAP.md`, la ventana se quedó en `v0.32.7` dos versiones atrás, y mientras
+tanto el instrumento publicaba `coherente: true` con **seis contradicciones a la
+vista** — dos de ellas porque el fichero se contradecía **consigo mismo**
+(`3444 tests` en una línea, `3431` en la siguiente).
+
+**Lo que entra.** La raíz pasa a ser **parámetro** en los doce lectores y las
+constantes de módulo desaparecen: su sola presencia era la invitación a leer de
+la raíz equivocada. La ventana se **contrasta** y no se regenera —el instrumento
+conserva sus cero escrituras, y uno que escribe el fichero de autoridad sería un
+problema nuevo y peor que el que arregla—. Y `bloque`, que se leía y se publicaba
+sin cruzarse con nadie, ahora se cruza con `STATE.yaml` y `CURRENT.md`: era el
+tercer hueco de la familia B20-2.
+
+**Y el guard que sabe dar rojo.** `ROADMAP.md` se deja **en rojo a propósito**
+hasta que las seis contradicciones están corregidas, con un contrasalto que
+comprueba que el guard las detecta: un guard que no puede dar rojo no es un
+guard. 3444 -> 3465 tests, +21 de `test_b23_instrumento_verdad.py` entero.
+Harness de 6 sondas: **6/6 cazadas**.
+
+**LO QUE EL HARNESS CAZÓ Y ERA UN HUECO REAL, no una sonda.** Con la
+comprobación del código de salida de pytest desactivada, el verificador leía el
+número **parcial** de una colecta rota y publicaba `coherente: true` con
+`tests_reales: 2`; como el parcial coincidía con el declarado, no había
+contradicción que emitir. Una aserción que mira la **contradicción** no ve la
+**publicación** — y ese hueco venía de B14.
+
+Cierra además la deuda `bl-bl-01M48JHGJJ000388H523GPE6G0`: `test_b14` deformaba
+el árbol real, y ahora deforma un árbol de verdad. Su comprobación no es una
+declaración sino el sha256 de `__init__.py`, `STATE.yaml`, `CURRENT.md` y
+`ROADMAP.md` antes y después de su corrida: **idéntico**.
+
+Verificación: **3462 passed, 3 skipped, 0 failed**, 96 % de cobertura, árbol
+limpio tras la suite completa. Contratos `check_public_surfaces`,
+`check_ci_recipe_parity` y `check_package_build` en verde.
+
 ## [0.33.0] - 2026-10-06 — El árbol no puede cambiar bajo los pies de un instrumento
 
 SemVer **derivado** con `scripts/derive_semver.py` desde `v0.32.7`:

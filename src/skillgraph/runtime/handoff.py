@@ -93,6 +93,25 @@ class HandoffKnowledge:
     recipe_ref: str
     included: tuple[tuple[str, str, str], ...] = field(default_factory=tuple)
     """(resource_kind, resource_namespace, resource_name) de cada item."""
+    #: B30. **LO QUE EL PRESUPUESTO DEJO FUERA, y va AL FINAL a proposito**: los
+    #: campos anteriores ya tienen default y anadirlo aqui mantiene intacta la
+    #: compatibilidad posicional de `HandoffKnowledge("rc", (...))` —leccion de
+    #: B25, donde un campo nuevo en medio empezo a meter `source_id` en el
+    #: campo equivocado—.
+    #:
+    #: **Y POR QUE UNA TUPLA Y NO UN DICT.** WI-113 midio que un `dict` dentro
+    #: de un `frozen` congela el enlace pero no el valor: el Adapter recibia la
+    #: estructura viva y podia meter claves entre el instante en que el Core
+    #: calcula `context_hash` y el que los eventos lo llevan. La fila acababa
+    #: describiendo un handoff y los eventos otro, para la misma
+    #: `node_execution`. Aqui el receptor es codigo externo al repo, luego el
+    #: argumento aplica entero.
+    #:
+    #: El cuarto elemento es `chars`: lo que se cae **y cuanto era**. Sin el
+    #: tamaño, saber que falta «opt-2» deja al receptor sin poder ni decidir si
+    #: le importa ni pedirlo con otro presupuesto.
+    omitidos: tuple[tuple[str, str, str, int], ...] = field(default_factory=tuple)
+    """(resource_kind, resource_namespace, resource_name, chars) de lo que no cupo."""
 
     def __post_init__(self) -> None:
         from skillgraph.core.errors import ValidationError
@@ -185,6 +204,16 @@ class Handoff:
             "knowledge": {
                 "recipe_ref": self.knowledge.recipe_ref,
                 "included": [_k(list(item)) for item in self.knowledge.included],
+                # **B30, Y ESTO NO ERA OPCIONAL.** Sin esta linea el campo
+                # `omitidos` existe en el handoff pero NO entra en el
+                # `context_hash`: el Adapter veria unas omisiones que el Core
+                # no firmó. Es la distancia que WI-111 midio entre el
+                # instante en que el Core calcula el hash y el instante en que
+                # lo consumen los eventos, reproducida dentro del propio
+                # handoff. Lo cazaron los tests de P3, no una revision visual:
+                # el campo se veia en el dataclass y en el `to_dict` de al
+                # lado, y no por eso estaba.
+                "omitidos": [list(item) for item in self.knowledge.omitidos],
             },
             "execution": {
                 "workspace_ref": self.execution.workspace_ref,

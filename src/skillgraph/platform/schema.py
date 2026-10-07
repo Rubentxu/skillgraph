@@ -57,6 +57,29 @@ CREATE TABLE IF NOT EXISTS schema_version (
 -- identificable estable. `schema_version` responde «que version tiene este
 -- proyecto»; esta tabla responde «que se le hizo a esta base», que es la
 -- pregunta que hace falta cuando algo va mal y la version sola no basta.
+-- B29: EL ORDEN DE LAS REVISIONES.
+--
+-- Una ventana de vigencia es un intervalo, y un intervalo necesita un orden.
+-- Las revisiones de verdad son SHAs de commit, y comparar dos SHAs es
+-- LEXICOGRAFICO: un orden total y ARBITRARIO. Una ventana sobre un orden
+-- inventado no es una ventana.
+--
+-- `seq` es EL ORDEN EN QUE ESTE STORE APRENDIO DE ESAS REVISIONES. No es
+-- ascendencia de git —eso es la capability `GitHistory`, que es B32—, ni es
+-- orden lexicografico, y no pretende serlo. Es el unico orden que este store
+-- puede defender sin conocer la topologia del repositorio.
+--
+-- Y esto es lo que separa los DOS EJES de 06-SPEC §1 de forma real:
+-- `checked_at_revision` es knowledge time, y `seq` es valid time. Confundirlos
+-- no era una falta de estilo: era no tener un eje con el que comparar.
+--
+-- `revision` es UNIQUE porque dos filas con la misma revision y distinto
+-- `seq` harian la ventana arbitraria, y la consulta por revisionaria.
+CREATE TABLE IF NOT EXISTS revision_registro (
+    seq      INTEGER PRIMARY KEY AUTOINCREMENT,
+    revision TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     migration_id TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL
@@ -274,12 +297,78 @@ CREATE TABLE IF NOT EXISTS claims (
     extractor_version     TEXT NOT NULL,
     checked_at_revision   TEXT NOT NULL,
     stale                 INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (subject_entity_id, predicate, source_id, checked_at_revision)
+    -- B25: el objeto de un claim es UN literal o UNA entidad, nunca los dos y
+    -- nunca ninguno. El XOR de abajo es la MISMA pregunta que la de
+    -- `Claim.__post_init__`, a proposito: si las dos capas no dijeran lo
+    -- mismo, la base rechazaria filas que Python acepta.
+    --
+    -- `''` es el marcador de ausencia y no colisiona con nada, porque
+    -- `json.dumps` NUNCA produce `''`: `json.dumps("")` es `'""'` y
+    -- `json.dumps(None)` es `'null'`.
+    --
+    -- SIN clave foránea a proposito, y medido: con `foreign_keys = ON` (como
+    -- abre `storage.py`) declarar `REFERENCES entities(entity_id)` aqui
+    -- rechazaria TODOS los claims literales, porque `''` no es una entidad.
+    object_entity_id      TEXT NOT NULL DEFAULT ''
+        CHECK ((object_literal_json = '') <> (object_entity_id = '')),
+    -- B29: VENTANA DE VIGENCIA. `checked_at_revision` de arriba es
+    -- KNOWLEDGE time (cuando lo vimos); estas dos son VALID time (cuando era
+    -- cierto el hecho), y no son lo mismo. Sin ellas, un hecho que CAMBIO se
+    -- lee igual que un hecho que se CONTRADICE. MEDIDO: con dos filas de la
+    -- MISMA fuente en revisiones consecutivas, `conflicts_for` devolvia un
+    -- conflicto y `resolver` contestaba «gana NADIE» a algo que si tiene
+    -- respuesta en cada instante.
+    --
+    -- Las dos son ANULABLES y sin default a proposito: `NULL` significa
+    -- «esta afirmacion no caduca» —que es lo cierto de todo el grafo que ya
+    -- existia—, y un default inventado fecharia en el pasado lo que se acaba
+    -- de escribir. Un `CHECK` de coherencia vive en `Claim.__post_init__`, no
+    -- aqui: SQLite no revalida CHECK sobre filas ya escritas, y una restriccion
+    -- blanda hacia atras es exactamente lo que B25 eligio y dijo.
+    valid_from_revision  TEXT,
+    valid_until_revision TEXT,
+    -- B29: la cadena de supersesion. NO es un `REFERENCES`: dos claims que se
+    -- superseden pueden provenir de bases migradas antes de que existiera la
+    -- columna, y una FK ahi haria fallar escrituras que antes funcionaban.
+    -- La integridad la sostiene `record_claim`, que es quien la escribe.
+    supersedes_claim_id TEXT,
+    -- R1.F: EL AMBITO ES PARTE DE LA IDENTIDAD. MEDIDO con el UNIQUE viejo
+    -- (sin ambito) sobre el arbol real: A/X escribia c-A, B/Y escribia c-B con
+    -- la MISMA tupla natural, el motor rechazaba la segunda en silencio y
+    -- `record_claim` devolvia `conflicto=False`. B/Y no veia nada.
+    --
+    -- Dos tenants observan los mismos ficheros con los mismos SHA y los
+    -- mismos predicados: su tupla natural es IDENTICA, y sin ambito sus
+    -- afirmaciones se pisan entre si. Y la repeticion DENTRO de un mismo
+    -- ambito sigue siendo deduplicacion, luego el ambito se SUMA a la clave y
+    -- no la sustituye.
+    --
+    -- Este DDL y el de la migracion `0005` son el MISMO texto: si divergieran,
+    -- una base recien creada tendria una identidad distinta de una migrada, y
+    -- el defecto volveria solo en las nuevas. La unica fuente es
+    -- `migrations._DDL_CLAIMS_CON_AMBITO`; aqui se repite porque
+    -- `CREATE TABLE IF NOT EXISTS` corre en cada apertura y no puede
+    -- importar de ahi sin crear un ciclo.
+    UNIQUE (subject_entity_id, tenant_id, project_id,
+            predicate, source_id, checked_at_revision)
 );
 CREATE INDEX IF NOT EXISTS idx_claims_subject
     ON claims(subject_entity_id, predicate);
 CREATE INDEX IF NOT EXISTS idx_claims_stale
     ON claims(stale) WHERE stale = 1;
+-- B25: `idx_claims_object_entity` NO se crea aqui, y el motivo es concreto.
+--
+-- Este DDL se ejecuta con `CREATE TABLE IF NOT EXISTS`, luego sobre una base
+-- cuya tabla `claims` ya existia **no la reconstruye**: la deja como estaba.
+-- Un `CREATE INDEX` sobre una columna que esa tabla vieja no tiene revienta
+-- `executescript` entero, y con el revienta el ABRIR la base — que es
+-- precisamente lo que deberia arreglar una migracion. MEDIDO: una base con la
+-- tabla al esquema anterior no abria, con `no such column: object_entity_id`.
+--
+-- El indice lo crea la migracion `0003`, que si sabe distinguir «la columna no
+-- esta» de «la columna esta y el indice no». Una base nueva lo tiene tambien:
+-- `sincroniza` corre TODAS las migraciones en cada apertura, no solo las que
+-- faltan.
 
 CREATE TABLE IF NOT EXISTS claim_evidence (
     claim_id      TEXT NOT NULL REFERENCES claims(claim_id),

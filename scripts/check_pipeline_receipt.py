@@ -224,8 +224,17 @@ def informes(db: Path) -> tuple[InformeRun, ...]:
         }
     )
     orden: list[str] = []
+    vistos: set[str] = set()
     for run_id, kind, payload in filas:
-        if run_id not in acumulado:
+        # El registro del run_id va ANTES del `continue` de abajo, y en un
+        # conjunto aparte: con un `defaultdict`, `if run_id not in acumulado` no
+        # crea la clave, asi que un run cuyo PRIMER evento trae payload vacio
+        # —`StepStarted` sin datos— no dejaba rastro y aparecia REPETIDO en la
+        # salida. MEDIDO al escribir esto: un journal de 2 runs devolvia 5
+        # informes, y `en_curso()`/`ultimo_terminado()` se Fiatnan sobre una
+        # lista con duplicados, que es la peor forma de tener una eleccion.
+        if run_id not in vistos:
+            vistos.add(run_id)
             orden.append(run_id)
         evento = _evento(payload)
         if not evento:
@@ -269,19 +278,39 @@ def informes(db: Path) -> tuple[InformeRun, ...]:
             paso_fallido=acumulado[run_id]["paso_fallido"],  # type: ignore[arg-type]
         )
         for run_id in orden
+        if run_id in acumulado
     )
 
 
 def ultimo_terminado(todos: tuple[InformeRun, ...]) -> InformeRun | None:
-    """El `InformeRun` más reciente que tiene `RunFinished`.
-
-    Devolver el ÚLTIMO Y NO EL PRIMERO importa: `informe()` acumula en
-    orden de lectura, y el criterio 5 habla «de los eventos de la
-    ejecución actual». Durante un run, este es el run ANTERIOR — que es
-    justo lo que la receta puede verificar.
-    """
+    """El `InformeRun` más reciente que tiene `RunFinished`."""
     terminados = [i for i in todos if i.outcome is not None]
     return terminados[-1] if terminados else None
+
+
+def en_curso(todos: tuple[InformeRun, ...]) -> InformeRun | None:
+    """El `InformeRun` más reciente que empezó y todavía NO tiene `RunFinished`.
+
+    **POR QUÉ ESTA FUNCIÓN EXISTE, Y ES UN TRINQUETE QUE NO SE PODÍA DESHACER.**
+    La etapa `evidence` corre DENTRO del run, así que cuando se ejecuta el run
+    en curso todavía no tiene veredicto. La primera versión elegía entonces el
+    último run TERMINADO —el anterior—, lo que suena sensato y es un
+    deadlock: si el run anterior falló de verdad, este se juzga a sí mismo con
+    ese fallo y falla; y el siguiente se juzga con ESTE, que terminó en
+    `failure` porque su etapa `evidence` falló. MEDIDO en este repo: tras el
+    fallo real de `v0.34.0` (tres reds de estado), cuatro runs seguidos con la
+    suite en verde y todas las etapas de código en `success` terminaron en
+    `failure`, todos en la etapa `evidence`. La exculpación mínima de WI-110 no
+    lo arregla: perdona el `StepFailed` de `evidence/sh-0`, y nunca el
+    VEREDICTO del run.
+
+    El arreglo es medir lo que sí existe mientras el run corre: sus
+    `StepStarted`, sus `EchoOutputCaptured` y sus `StepFailed`. El veredicto
+    final no se verifica aquí porque aún no se ha emitido, y no se finge que
+    sí: eso es lo que hace la certificación puntual con `--run-id`.
+    """
+    sin_terminar = [i for i in todos if i.outcome is None and i.steps_iniciados]
+    return sin_terminar[-1] if sin_terminar else None
 
 
 def _control_incompleto(control: Path) -> tuple[str, ...]:
@@ -364,12 +393,20 @@ def _conteo_salteados(resumen: str | None) -> int:
     return sum(int(m) for m in TESTS_SALTEADOS.findall(resumen))
 
 
-def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
+def evaluar(informe: InformeRun, control: Path, en_curso: bool = False) -> tuple[Problema, ...]:
     """Los criterios que este run incumple. Vacío = cumple.
 
     Función PURA sobre un `InformeRun`: no lee disco ni reloj. El
     `control` entra como argumento justamente para que se pueda probar
     con un árbol que no es el del repo.
+
+    `en_curso=True` dice que el run todavía no ha emitido `RunFinished`, y
+    cambia exactamente UNA cosa: el criterio del veredicto se omite porque
+    no existe todavia. Todo lo demas se aplica igual, y en particular los
+    `StepFailed`: durante un run no hay nada que exculpar, porque la
+    exculpacion de WI-110 existe para que el fallo de la etapa que se
+    verifica a si misma no envenene al run SIGUIENTE — y aqui no hay run
+    siguiente todavia.
     """
     problemas: list[Problema] = []
     rid = informe.run_id[:8]
@@ -404,11 +441,30 @@ def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
     # sin un solo StepFailed se rechaza igual, y eso lo fija
     # `test_un_run_abortado_sigue_sin_pasar`.
     paso = informe.paso_fallido
+    # MEDIDO, y era CODIGO MUERTO: esto llevaba `not en_curso` dentro de la
+    # condicion, y los dos unicos sitios que la consultan ya empiezan por
+    # `not en_curso`. La sonda M2 del contrasalto (quitar ese `not`) daba verde
+    # con el test en rojo de su lado, o sea que no hacia NADA: una condicion
+    # que no puede cambiar el resultado ensena a leer que si.
+    #
+    # La propiedad que de verdad querian expresar —"durante un run en curso no
+    # se exculpa nada"— no vive aqui sino en el bloque de abajo, que es donde
+    # un StepFailed propio se cuenta como fallo real sin mirar esta bandera.
     solo_autoevaluada = (
         informe.step_failed == 1 and paso is not None and paso.startswith(f"{ETAPA_AUTOEVALUADA}/")
     )
 
-    if not solo_autoevaluada and informe.outcome != "success":
+    if en_curso and informe.step_failed:
+        problemas.append(
+            Problema(
+                "sg_pipeline_step_failed",
+                f"el run EN CURSO {rid} ya registra {informe.step_failed} StepFailed"
+                + (f" (ultimo: {paso})" if paso else "")
+                + "; el criterio 5 exige cero, y este run todavia no ha terminado",
+            )
+        )
+
+    if not en_curso and not solo_autoevaluada and informe.outcome != "success":
         problemas.append(
             Problema(
                 "sg_pipeline_run_failure",
@@ -416,7 +472,7 @@ def evaluar(informe: InformeRun, control: Path) -> tuple[Problema, ...]:
             )
         )
 
-    if not solo_autoevaluada and informe.step_failed:
+    if not en_curso and not solo_autoevaluada and informe.step_failed:
         problemas.append(
             Problema(
                 "sg_pipeline_step_failed",
@@ -529,12 +585,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--run-id",
         default=None,
-        help="verificar este run; por defecto, el ultimo terminado",
+        help=(
+            "verificar este run; por defecto el que esta EN CURSO, y si no hay "
+            "ninguno, el ultimo terminado"
+        ),
     )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     todos = informes(args.db)
+    curso = False
     if args.run_id is not None:
         candidatos = tuple(i for i in todos if i.run_id.startswith(args.run_id))
         informe = candidatos[-1] if candidatos else None
@@ -542,15 +602,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"FALLO: el journal no tiene ningun run con id {args.run_id!r}")
             return 1
     else:
-        informe = ultimo_terminado(todos)
+        # El run EN CURSO tiene prioridad: es el que la etapa de la receta esta
+        # midiendo. Caer al ultimo TERMINADO es lo que producia el deadlock, y
+        # se queda solo para cuando no hay nada corriendo —una certificacion
+        # puntual sobre el journal.
+        informe = en_curso(todos)
+        curso = informe is not None
+        if informe is None:
+            informe = ultimo_terminado(todos)
 
-    problemas = () if informe is None else evaluar(informe, args.control_root)
+    problemas = () if informe is None else evaluar(informe, args.control_root, en_curso=curso)
     if args.json:
         print(
             json.dumps(
                 {
                     "ok": not problemas,
                     "run_id": None if informe is None else informe.run_id,
+                    "en_curso": curso,
                     "problemas": [{"codigo": p.codigo, "mensaje": p.mensaje} for p in problemas],
                 },
                 indent=2,

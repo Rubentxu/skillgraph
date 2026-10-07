@@ -13,12 +13,12 @@ Reglas (external/blueprint-v1/plan/ESTRATEGIA-DE-TESTS.md):
 from __future__ import annotations
 
 import dataclasses
-import sqlite3
 from pathlib import Path
 
 import pytest
 
 from skillgraph.core.errors import (
+    IntegrityError as DomainIntegrityError,
     InvalidEntityIDError,
     InvalidSourceError,
     InvalidSourceIDError,
@@ -230,7 +230,16 @@ def test_upsert_entity_different_kind_same_key(tmp_path: Path) -> None:
 
 
 def test_record_claim_returns_claim_id(tmp_path: Path) -> None:
-    """record_claim devuelve el claim_id del ADT."""
+    """record_claim devuelve el claim_id del ADT.
+
+    **B27: EL RETORNO DEJO DE SER UN `str`.** Antes devolvia el `claim_id` a
+    secas, y con `INSERT OR IGNORE` eso miente: el `UNIQUE` de la tupla natural
+    puede rechazar la fila y el metodo devolvia igual, como si hubiera escrito.
+
+    El `claim_id` sigue siendo el primero de los dos: lo que se anade es el
+    aviso. Y se comprueba con `== "clm-1"` y no con `== out.claim_id`, porque un
+    test que compara el campo contra si mismo no verifica nada.
+    """
     s = _make_storage(tmp_path)
     s.register_source(tenant_id="t", project_id="p", source=_src())
     s.upsert_entity(tenant_id="t", project_id="p", entity=_ent())
@@ -243,7 +252,8 @@ def test_record_claim_returns_claim_id(tmp_path: Path) -> None:
         checked_at_revision="rev1",
     )
     out = s.record_claim(tenant_id="t", project_id="p", claim=claim)
-    assert out == "clm-1"
+    assert out.claim_id == "clm-1"
+    assert out.conflicto is False, "una escritura limpia no es un conflicto"
 
 
 def test_record_claim_idempotent_on_revision(tmp_path: Path) -> None:
@@ -359,10 +369,21 @@ def test_attach_evidence_to_claim_roundtrip(tmp_path: Path) -> None:
 
 
 def test_record_evidence_with_invalid_source_raises(tmp_path: Path) -> None:
-    """FK falla: Evidence sin Source registrada -> IntegrityError."""
+    """FK falla: Evidence sin Source registrada -> `IntegrityError` DE DOMINIO.
+
+    **R0: ESTE TEST AFIRMABA QUE EL ERROR CRUDO SALIA, Y ESO CAMBIO A
+    PROPÓSITO.** Decía `pytest.raises(sqlite3.IntegrityError)`, que era la
+    frontera vieja: el storage dejaba pasar el tipo del adapter y el
+    dominio lo traducía. Ahora lo traduce el propio storage y lo que sale
+    es `skillgraph.core.errors.IntegrityError`, que es un `SkillGraphError`
+    y por tanto se traduce a exit code (lo que mide WI-109).
+
+    Un `sqlite3.IntegrityError` que atravesara el dominio saldría como
+    **Traceback** al usuario, que es el defecto que R0 cierra.
+    """
     s = _make_storage(tmp_path)
     # NO registramos source.
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(DomainIntegrityError):
         s.record_evidence(
             tenant_id="t",
             project_id="p",

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import ast
 import sqlite3
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -489,3 +490,122 @@ class TestLaColumnaAdHocDejoDeSerUnCasoEspecial:
         assert not hasattr(Storage, "_anade_column_claims_assertion_origin"), (
             "la migracion ad-hoc sigue en el facade: hay dos caminos para lo mismo"
         )
+
+
+# =====================================================================
+class TestLaCarreraDeLaMigracionPorColumna:
+    """El `except` que distingue «ya la puso otro» de «se rompió algo».
+
+    **POR QUE HACE FALTA, Y NO ES COSMETICO.** Las dos migraciones con
+    `ALTER TABLE` hacen `PRAGMA table_info` y luego `ALTER`, y entre las dos
+    cabe otro proceso —ocho procesos abriendo la MISMA base nueva, que es el
+    caso de `TestDosProcesosQueSubenLaMismaVersionNoSeMateN`. La rama de
+    carrera estaba **sin cubrir en las dos**, y B25 lo notó porque su
+    migración nueva bajó el módulo a 87 %, por debajo del suelo de 90 %.
+
+    Lo que se mide son las DOS mitades del mismo `except`, y la segunda es la
+    que importa: tragarse el error equivocado convertiría «otro proceso ya la
+    puso» en «la base está rota y no me ha dicho por qué». El comentario del
+    código lo dice —capturar `OperationalError` entero se tragaría también un
+    disco lleno— y aquí se demuestra.
+
+    B25 anade `_anade_object_entity_id` con la misma forma, asi que el mismo
+    conjunto mide las dos migraciones: si alguien anade una tercera con otra
+    forma, este conjunto no la cubre y habria que ampliarlo aqui.
+    """
+
+    class _CursorConAlterSabotado:
+        """Delegador que rompe el `ALTER TABLE` y deja pasar todo lo demas.
+
+        **POR QUE UN ENVOLTORIO Y NO UN MONKEYPATCH.** `sqlite3.Cursor.execute`
+        es de SOLO LECTURA: `cur.execute = ...` lanza `AttributeError`. Y no
+        vale la pena forzar la cosa con un doble completo, porque lo que se
+        quiere medir es precisamente que lo que llega a ese `except` es un
+        `sqlite3.OperationalError` DE VERDAD, no uno que el doble fabricó.
+
+        El resto de la base —`PRAGMA table_info` incluido— se ejecuta de
+        verdad, contra una tabla real sin la columna. Si el `PRAGMA` no la
+        encuentra, la migracion entra en la rama que se quiere probar; si
+        mintiera el envoltorio, el `except` no se alcanzaria nunca y el test
+        pasaria sin haber medido nada. Por eso el envoltorio solo rompe el
+        `ALTER`, que es el unico punto donde hace falta.
+        """
+
+        def __init__(self, mensaje: str) -> None:
+            self._real = sqlite3.connect(":memory:").cursor()
+            # La tabla NO es de juguete: el CHECK de `_anade_object_entity_id`
+            # referencia `object_literal_json`, luego una tabla con una sola
+            # columna hace que el ALTER falle por `no such column` — y ese
+            # fallo es de la PRUEBA, no de la migracion. Se declara la forma
+            # que `claims` tenia antes de B25, que es justo el caso que la
+            # migracion viene a resolver.
+            self._real.execute(
+                "CREATE TABLE claims ("
+                " claim_id TEXT PRIMARY KEY,"
+                " subject_entity_id TEXT NOT NULL,"
+                " predicate TEXT NOT NULL,"
+                " object_literal_json TEXT NOT NULL)"
+            )
+            self._mensaje = mensaje
+
+        def execute(self, sql: str, *args: object) -> sqlite3.Cursor:
+            if sql.strip().upper().startswith("ALTER TABLE"):
+                if "duplicate column name" in self._mensaje:
+                    # Esto es lo que hace la CARRERA de verdad: el otro proceso
+                    # YA la anadio, luego la columna existe cuando este recibe
+                    # el error. Sin esto el doble miente, y la migracion se
+                    # comeria un `no such column` al crear el indice — que es
+                    # un fallo del DOBLE, no de la migracion. La primera
+                    # version de esta prueba sufria exactamente eso.
+                    self._real.execute(sql)
+                raise sqlite3.OperationalError(self._mensaje)
+            return self._real.execute(sql)  # type: ignore[arg-type]
+
+    @classmethod
+    def _cursor_que_falla_en_el_alter(
+        cls, mensaje: str
+    ) -> TestLaCarreraDeLaMigracionPorColumna._CursorConAlterSabotado:
+        return cls._CursorConAlterSabotado(mensaje)
+
+    @pytest.mark.parametrize(
+        "migracion",
+        ["_anade_assertion_origin", "_anade_object_entity_id"],
+    )
+    def test_otro_proceso_ya_la_ponia_y_no_pasa_nada(self, migracion: str) -> None:
+        """La columna duplicada es EXITO: los dos procesos dicen lo mismo."""
+        cur = self._cursor_que_falla_en_el_alter("duplicate column name: x")
+        getattr(migrations, migracion)(cur)  # no debe lanzar
+
+    @pytest.mark.parametrize(
+        "migracion",
+        ["_anade_assertion_origin", "_anade_object_entity_id"],
+    )
+    def test_otro_error_sube_y_no_se_traga(self, migracion: str) -> None:
+        """Un disco lleno NO es «otro proceso ya la puso», y tiene que subir.
+
+        **Este es el contrasalto del anterior.** Si el `except` se tragara
+        cualquier `OperationalError`, el primer test pasaria y este no tendria
+        donde existir: la migracion declararia una base migrada que no esta.
+        """
+        cur = self._cursor_que_falla_en_el_alter("database or disk is full")
+        with pytest.raises(sqlite3.OperationalError, match="disk is full"):
+            getattr(migrations, migracion)(cur)
+
+    def test_el_indice_se_crea_aunque_la_columna_ya_estuviera(self) -> None:
+        """El indice va FUERA del `if`, y esto es lo que lo sostiene.
+
+        Una base nueva tiene la columna desde el `CREATE TABLE`, luego se
+        salta el `ALTER` entero. Si el `CREATE INDEX` estuviese dentro, esa
+        base se quedaria sin indice para siempre y no fallaria nada: la
+        consulta de B25 seguiria funcionando, solo que sobre la tabla entera.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = Path(tmp) / "nueva.sqlite"
+            Storage(ruta)._conn.execute("SELECT 1")
+            indices = {
+                f[0]
+                for f in Storage(ruta)._conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='claims'"
+                )
+            }
+            assert "idx_claims_object_entity" in indices

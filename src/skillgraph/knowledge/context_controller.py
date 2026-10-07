@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from skillgraph.core.errors import (
     MissingObligatoryError,
@@ -95,36 +96,145 @@ def enforce_strict_freshness(
         raise StaleKnowledgeError(f"{len(stale)} obligatory Claim(s) stale y policy=strict")
 
 
+@dataclass(frozen=True, slots=True)
+class Omision:
+    """**B30: un recurso que NO cabe en el presupuesto, nombrado.**
+
+    Antes de este bloque el presupuesto truncaba en silencio: `apply_budget
+    hacia un `break` y su llamante descartaba el resto con un `_`. El
+    receptor del handoff recibía una lista más corta y **no tenía ninguna forma
+    de saberlo** —ni de calcularlo, porque `included` guardaba lo que entró
+    pero no el total de candidatos—.
+
+    `chars` es lo que hace la omisión **accionable**: saber que se cayó
+    «opt-2» sin saber cuánto era deja al receptor sin poder ni decidir si le
+    importa ni pedirlo con otro presupuesto.
+
+    **NO LLEVA `motivo` A PROPOSITO, Y ESTA MEDIDO.** Los tres valores de
+    `OverflowStrategy` que producen una omisión (`drop_optional` y
+    `truncate_finding`) la producen **por lo mismo**: no cabía. El tercero,
+    `fail`, lanza `TokenBudgetExceededError` y no deja omisión ninguna. Luego
+    un campo `motivo` con un único valor alcanzable sería el
+    `empate_en_la_jerarquia` de B28: un Literal cerrado que nombra algo que
+    ninguna ejecución puede distinctions. Si algún día hay un segundo motivo
+    real, entonces se declara —y se mide antes.
+    """
+
+    kind: str
+    namespace: str
+    name: str
+    chars: int
+
+    def __post_init__(self) -> None:
+        from skillgraph.core.errors import ValidationError
+
+        if not self.kind:
+            raise ValidationError("Omision.kind vacio")
+        if not self.namespace:
+            raise ValidationError("Omision.namespace vacio")
+        if not self.name:
+            raise ValidationError("Omision.name vacio")
+        if self.chars <= 0:
+            # Un omitido de 0 chars no es un omitido: es ruido, y hace que
+            # quien lo lea dude de los demas.
+            raise ValidationError(f"Omision.chars debe ser > 0, recibio {self.chars}")
+
+    def como_tupla(self) -> tuple[str, str, str, int]:
+        """La forma que viaja en `HandoffKnowledge.omitidos`.
+
+        Una **tupla**, no un `dict`, por la misma razon que WI-113 midio en
+        `AgentResult.result`: un `dict` dentro de un `frozen` deja la
+        estructura mutable por dentro, y aqui el receptor es codigo externo al
+        repo.
+        """
+        return (self.kind, self.namespace, self.name, self.chars)
+
+    @classmethod
+    def desde_recurso(cls, recurso: CompiledResource) -> Omision:
+        """Construye la omision de un recurso que no cupo."""
+        return cls(
+            kind=recurso.resource_kind,
+            namespace=recurso.resource_namespace,
+            name=recurso.resource_name,
+            chars=approx_chars(recurso.body),
+        )
+
+
+#: B30. `07-SPEC` §7 lista `complete`/`partial`/`blocked`, y **solo dos son
+#: alcanzables**: `blocked` no se puede representar en un `Handoff` que EXISTE,
+#: porque cuando falta algo `compile_handoff` LANZA
+#: `TokenBudgetExceededError`, `StaleKnowledgeError` o
+#: `MissingObligatoryError` — una excepcion tipada, no un handoff. Declararlo
+#: seria repetir el valor inalcanzable que B28 elimino de `MotivoDescarte`.
+#: La cobertura de `blocked` no se pierde: cambia de forma, y una excepcion que
+#: lo nombra es mas fuerte que un campo que valdria `blocked`.
+#:
+#: **Y NO HAY CONSTANTE `Final` AL LADO, A PROPOSITO.** `AGENTS.md` §2.4 pide
+#: la constante cuando el `Literal` se usa para VALIDAR entrada. Aqui no se
+#: valida entrada: `PresupuestoAplicado.cobertura` es una PROPIEDAD DERIVADA de
+#: si hay omisiones, y nadie la comprueba contra un conjunto. Publicar el
+#: conjunto seria un segundo sitio donde la verdad vive, y este bloque entero
+#: va de que no haya dos verdades que puedan discrepar.
+Cobertura = Literal["complete", "partial"]
+
+
+@dataclass(frozen=True, slots=True)
+class PresupuestoAplicado:
+    """**B30: el resultado del presupuesto, con lo que quedo FUERA.**
+
+    Sustituye a la tupla `(incluidos, total_chars)`. El contrato viejo no
+    puede expresar la propiedad que B30 arregla, y anadir una segunda funcion
+    que si la exprese dejaria dos responsabilidades donde hace falta una —que
+    es la duplicacion que `AGENTS.md` prohibe—.
+    """
+
+    incluidos: tuple[CompiledResource, ...]
+    omitidos: tuple[Omision, ...]
+    chars_usados: int
+    budget_chars: int
+
+    @property
+    def cobertura(self) -> Cobertura:
+        """**Derivada, no declarada.** `07-SPEC` §7 dice que el slice «declara»
+        la cobertura; declararla seria un campo, y un campo lo puede mentir
+        sin que nada lo note. Aqui es una propiedad derivada de si hay
+        omisiones, luego **no hay dos verdades que puedan discrepar**.
+        """
+        return "partial" if self.omitidos else "complete"
+
+
 def apply_budget(
     obligatory: Sequence[CompiledResource],
     optional: Sequence[CompiledResource],
     *,
     budget_chars: int,
     overflow_strategy: str,
-) -> tuple[tuple[CompiledResource, ...], int]:
+) -> PresupuestoAplicado:
     """Aplica el budget de caracteres a obligatorios + opcionales.
 
     Pasos:
     1. Suma obligatorios. Si exceden budget_chars -> TokenBudgetExceededError
        (los obligatorios NO se truncan).
-    2. Irea opcionales en orden. Cada uno que cabe se incluye. Si no
+    2. Itera opcionales en orden. Cada uno que cabe se incluye. Si no
        cabe: si overflow_strategy=='fail' -> TokenBudgetExceededError;
        en caso contrario ('drop_optional' | 'truncate_finding') -> para.
 
     Returns:
-        (included, total_chars) donde included empieza con los
-        obligatorios y sigue con los opcionales aceptados.
+        `PresupuestoAplicado` con lo que ENTRA **y lo que se queda FUERA**.
     """
-    included: list[CompiledResource] = list(obligatory)
-    total_chars = sum(approx_chars(it.body) for it in included)
+    incluidos: list[CompiledResource] = list(obligatory)
+    total_chars = sum(approx_chars(it.body) for it in incluidos)
     if total_chars > budget_chars:
         raise TokenBudgetExceededError(
             f"obligatorio ({total_chars} chars) excede budget ({budget_chars})"
         )
+    omitidos: list[Omision] = []
+    opcionales_vistos = 0
     for opt in optional:
+        opcionales_vistos += 1
         opt_chars = approx_chars(opt.body)
         if total_chars + opt_chars <= budget_chars:
-            included.append(opt)
+            incluidos.append(opt)
             total_chars += opt_chars
             continue
         if overflow_strategy == "fail":
@@ -132,8 +242,31 @@ def apply_budget(
                 f"obligatory+opcional no caben en budget {budget_chars} (acumulado {total_chars})"
             )
         # drop_optional o truncate_finding: paramos sin incluir el opt.
+        #
+        # **B30: Y DECIMOS QUE SE PARÓ, Y DECIMOS TODO LO QUE SE PERDIÓ.**
+        #
+        # El `break` de antes era un silencio. Lo que se acumula desde aquí es
+        # eso, con **una decisión que merece nombre**: se declara **el que no
+        # cupo Y todos los que iban detrás**, no solo el primero.
+        #
+        # MEDIDO, y lo decidió una propiedad: quien pidió un contexto con
+        # `opt-1, opt-2, opt-3` y no obtuvo ninguno tiene que poder reconstruir
+        # que los tres estaban disponibles. Declarar solo `opt-1` deja un
+        # número que **subestima lo que se perdió**, y un informe que
+        # subestima la pérdida se lee como «se cayó casi nada».
+        #
+        # El corte sigue siendo un corte —lo que entra **no** cambia—; lo que
+        # cambia es lo que se declara. `opcionales_vistos` lleva la cuenta sin
+        # depender de aritmética sobre `incluidos`, que mezcla obligatorios y
+        # opcionales y haría la posición fragile.
+        omitidos.extend(Omision.desde_recurso(r) for r in optional[opcionales_vistos - 1 :])
         break
-    return tuple(included), total_chars
+    return PresupuestoAplicado(
+        incluidos=tuple(incluidos),
+        omitidos=tuple(omitidos),
+        chars_usados=total_chars,
+        budget_chars=budget_chars,
+    )
 
 
 def build_capabilities(
@@ -323,14 +456,19 @@ class ContextController:
         enforce_strict_freshness(obligatory_items, policy=recipe.freshness_policy)
 
         # Paso 3: aplicar budget.
-        included, _total_chars = apply_budget(
+        #
+        # **B30: `presupuesto` SE USA ENTERO, Y ANTES NO SE PODIA.** Antes era
+        # `included, _total_chars = apply_budget(...)`: el `_total_chars` no se
+        # usaba y lo que se caia **no se decia por ninguna parte**. Un handoff
+        # truncado era indistinguible de uno completo, y quien lo recibia no
+        # tenia ni forma de calcular la diferencia.
+        presupuesto = apply_budget(
             obligatory_items,
             optional_items,
             budget_chars=recipe.token_budget,
             overflow_strategy=recipe.overflow_strategy,
         )
-        # _total_chars no se usa directamente; el `recipe.token_budget`
-        # ya queda registrado en `HandoffExecution.budget`.
+        included = presupuesto.incluidos
 
         # Capabilities segun freshness aplicada.
         capabilities = build_capabilities(included, policy=recipe.freshness_policy)
@@ -352,11 +490,23 @@ class ContextController:
         knowledge = HandoffKnowledge(
             recipe_ref=recipe.recipe_ref,
             included=tuple(it.as_tuple() for it in included),
+            # B30: lo que se quedó fuera viaja en el handoff, y por tanto
+            # entra en el `context_hash` firmado. Un campo fuera del hash
+            # repetiría la distancia que WI-111 midió: el Adapter vería unas
+            # omisiones que el Core no firmó.
+            omitidos=tuple(o.como_tupla() for o in presupuesto.omitidos),
         )
         execution = HandoffExecution(
             workspace_ref=workspace_ref,
             source_revision=source_revision,
-            budget={"token_budget_chars": recipe.token_budget},
+            # El límite **y** lo usado: con los dos, el receptor sabe cuánto
+            # margen quedó, que es lo que convierte «se cayó algo» en «se cayó
+            # algo y por mucho».
+            budget={
+                "token_budget_chars": recipe.token_budget,
+                "chars_usados": presupuesto.chars_usados,
+                "omitidos": len(presupuesto.omitidos),
+            },
         )
         if not expected_result:
             expected_result = f"execute {definition_name} (recipe={recipe.recipe_ref})"

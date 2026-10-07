@@ -2,73 +2,148 @@
 
 >
 
-> **Bloque 2026-10-06 (B23) — El instrumento de la verdad puede equivocarse, y se le ve.**
+> **Bloque 2026-10-06 (B32) — No se puede responder cuándo cambió una relación ni por qué.**
+> (R0+R1 cerrados: el ratchet arquitectónico **sale distinto de cero** y las cinco fronteras llegan a cero — sin SQL en el dominio, con `RevisionRegistry` como puerto, y `knowledge_repository.py` de 895 a 719 LoC. B30 cerrado en `v0.40.0`; B31 sigue abierto.)
 >
-> Versión activa `0.34.0.dev0`; último tag `v0.34.0` (MINOR derivado: la regla pide
-> MINOR desde `v0.33.0`, con 0 breaking y feats y fixes por debajo).
+> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **3712 tests**.
 >
-> **EL INSTRUMENTO QUE RESPONDE «¿DÓNDE ESTÁ EL PROYECTO?» NO TENÍA LÍNEA DE
-> ÓRDENES.** `sys.argv` no se leía en ninguna parte de
-> `scripts/project_truth.py:48`, y su raíz venía de `Path(__file__)`. MEDIDO:
+> **LA FILA EXAGERABA EN SU PRIMERA MITAD.** Decía que no se puede preguntar
+> qué se sabía en una revisión, y `checked_at_revision` está en cada claim desde
+> antes de esta serie: lo que no había era la **consulta**.
+>
+> La mitad grave es la otra, y se midió antes de escribir nada:
 >
 > ```
-> $ project_truth.py --raiz /tmp          rc=0, imprime la verdad del REPO REAL
-> $ project_truth.py --raiz /no/existe    rc=0, imprime la verdad del REPO REAL
-> $ cd /otro/arbol && project_truth.py    rc=0, imprime la verdad del REPO REAL
+> filas en claims:   c-A "psycopg" @revA    c-B "sqlite3" @revB
+> conflicts_for  ->  1 conflicto: [c-A, c-B]
+> resolver       ->  gana NADIE
 > ```
 >
-> El tercero es el peor de los tres, y no lo había medido nadie: ignorando
-> `--raiz` **no se puede apuntar a ningún otro sitio**. No era una ergonomía
-> que faltara; era un instrumento que afirmaba haber medido lo que no medía.
+> **El sistema responde «nadie gana» a algo que tiene respuesta definitiva en
+> cada instante**, porque `conflicts_for` compara valores sin mirar el tiempo.
 >
-> **LA VENTANA DEL ROADMAP DECÍA QUIÉN LA ESCRIBÍA, Y MENTÍA.** `ROADMAP.md:37-39`
-> afirmaba que su sección «Dónde está el proyecto» «la produce
-> `scripts/project_truth.py`». No la producía nadie: se escribía a mano y nadie
-> la leía. MEDIDO: el release `9961843` no tocó el fichero
-> (`git show --stat 9961843 -- ROADMAP.md` vacío) y la ventana se quedó en
-> `v0.32.7` dos versiones atrás, con el instrumento publicando
-> `coherente: true` y **seis contradicciones a la vista**. Dos de ellas eran que
-> el fichero se contradecía **consigo mismo**: `3444 tests` en una línea y
-> `3431 tests` en la siguiente.
+> **El orden de las revisiones es una tabla, y no es git.** Los SHAs se
+> comparan lexicográficamente y eso es arbitrario: `revision_registro(seq)`
+> da el **orden en que este store aprendió** de ellas. La ascendencia real de
+> commits es `GitHistory`, que es B32, y el nombre lo declara para que nadie lo
+> lea como más.
 >
-> **EL TERCER HUECO DE LA FAMILIA B20-2.** `bloque` se leía del ROADMAP y se
-> publicaba, y no se cruzaba con nadie. STATE y CURRENT se cruzaban **entre
-> sí**, luego los tres podían estar mal y dar `coherente: true`: el ROADMAP
-> diciendo `B99` mientras los otros dos decían `B22`, y nada que lo notara.
-> El cruce vive en `scripts/project_truth.py:697`, y usa una clave que ya
-> existía.
+> **La ventana es `[desde, hasta)`**, y no es una elección de gusto: el gate de
+> `06-SPEC` §9 dice `at(B) → calls C` y no las dos.
 >
-> **LO QUE SE CORRIGIÓ, Y CÓMO.** La raíz pasa a ser **parámetro** en los doce
-> lectores y las constantes de módulo **desaparecen** —su sola presencia es la
-> invitación a leer de la raíz equivocada—. La ventana se **contrasta**, no se
-> regenera: el instrumento conserva sus cero escrituras, porque uno que escribe
-> el fichero de autoridad sería un problema nuevo y peor que el que arregla.
+> **Tres condiciones de la supersesión que nadie había escrito, y que
+> aparecieron al ejecutar la suite de B25–B28 sobre el código ya
+> implementado**: la consulta elegía «la vigente más reciente» sin mirar el
+> **orden** (reingerir caducía el propio claim — idempotencia de B26), sin
+> mirar el **valor** (el comentario decía «y el valor es otro» y el SQL no lo
+> miraba — rompía el conflict set estable de B27) y cerraba solo la más
+> reciente, dejando abiertas las anteriores de esa fuente.
 >
-> **Y `test_b14` DEJO DE DEFORMAR EL ÁRBOL REAL**, que era la deuda
-> `bl-bl-01M48JHGJJ000388H523GPE6G0` que B22 dejó con nombre y motivo. Estaba
-> bloqueada por el instrumento, no por el test: sin raíz por parámetro, todo
-> sandbox daba `ilegible` por el motivo equivocado. MEDIDO con sha256 de los
-> cuatro ficheros del árbol real antes y después de su corrida: **idénticos**.
+> **La contrasalto fue la primera multi-fichero**, porque las sondas de
+> existencia tienen que renombrar el identificador de punta a punta: borrar la
+> columna hace reventar el mapper, y eso es una sonda cazada por un crash, no
+> por la propiedad.
 >
-> **LO QUE EL HARNESS CAZÓ, Y ERA UN HUECO DE VERDAD.** Seis sondas, seis
-> propiedades. La primera corrida dio 5/6, y la sexta no cayó por una razón que
-> no era del harness: desactivada la comprobación del código de salida de
-> pytest, el verificador leía el **número parcial** de una colecta rota y
-> publicaba `coherente: true` con `tests_reales: 2`. Como el parcial coincidía
-> con el declarado, no había contradicción que emitir, y el guard miraba
-> precisamente eso. **Una aserción que mira la contradicción no ve la
-> publicación** — hueco que venía de B14. Ahora exige que el verificador se
-> niegue a publicar el recuento y lo diga con `ilegible`.
+> **Y M3 salió INOCUA la primera vez**, que es el hallazgo más útil del bloque:
+> apuntaba al método interno de `knowledge_repository.py`, pero
+> `Storage.claims_at_revision` lo hereda de `KnowledgeDelegations`. Renombrar el
+> interno dejó el público intacto y la pregunta siguió cerrada.
 >
-> **LO QUE NO SE CIERRA, CON MOTIVO MEDIDO.** (1) `pipelinek` 0.39.0 no arranca
-> en este entorno (`INFRASTRUCTURE`, nunca escribe `wrapper.sh`); es el
-> binario, no el repo, y los contratos de la receta se ejecutaron directo.
-> (2) El instrumento no lo pide ninguna etapa de la receta; la red en CI es
-> `test_b0_truth_convergence.py`, que con B23 pasa de estar verde por la razón
-> equivocada a estar verde por la correcta. No se añade etapa porque el
-> SHA-256 de `.pipeline.kts` es un invariante desde WI-110. (3) La credencial
-> de runtime real y la persona para el TUI operacional siguen siendo
-> imposibles desde el repositorio.
+> Detalle completo en `ROADMAP.md` §B29 y en la entrada `0.39.0` del
+> `CHANGELOG.md`.
+>
+> **B28 cerrado en `v0.38.0`**. B28 resuelve por intención; B29 le da el tiempo.
+> Un ranking sin eje temporal contesta «quién gana» a algo que tiene respuesta
+> distinta en cada instante.
+>
+> **LA FILA DE B27 DECIA UNA COSA QUE MEDIDA RESULTÓ SER FALSA**, y eso importa
+> más que el resultado. Decía «dos claims incompatibles se pisan»; medido sobre
+> una base real, eso solo pasa con la **misma** fuente y la **misma** revisión,
+> porque el `UNIQUE` de `claims` lleva `source_id` dentro. Dos herramientas que
+> discrepan ya coexistían de sobra.
+>
+> Lo que sí era cierto es la otra mitad —«y no hay forma de saberlo»—, y esa
+> mitad es la que se arregla: `conflicts_for` por la fachada de `Storage`, y
+> `record_claim` que devuelve si hubo conflicto y **qué se solapa** en lugar de
+> devolver siempre el `claim_id` como si hubiera escrito. El aviso llega hasta
+> la salida del reconcile, porque un aviso que se recoge y no se imprime es un
+> aviso que no existió.
+>
+> **B27 avisa, no resuelve.** Decidir cuál de las dos afirmaciones vale es B28,
+> y es por intención de consulta; borrar es B29. Contrasalto **5/5**.
+>
+> **B26 cerrado en `v0.36.0`**: `ObservationEnvelope` versionado, `normalizar`
+> puro e `ingerir` idempotente. `observed_at` **entra** en el envelope, y eso es
+> lo que hace posible la pureza. Arrancó por un bug: la promoción serializaba a
+> mano y se quedó con la forma de anterior de `Claim`. Medido 5/5 → **0/5**.
+>
+> **B25 cerrado en `v0.35.0`** (SemVer derivado: `0 breaking, 1 feat, 1 fix, 3 otros`
+> → MINOR, `scripts/derive_semver.py`). **B24 cerrado en `v0.34.1`**. La ruta de certificación se ejecuta
+> entera sin credencial y sin dinero, y la etapa `evidence` ya no es un trinquete.
+>
+> **MEDIDO AL ABRIR: EL MÓDULO DECLARABA OCHO FRONTERAS Y SUS TRES TESTS
+> TOCABAN TRES.** `tests/test_uat_real_provider.py` promete
+> `workflow → ContextRecipe → handoff → adapter real → AgentResult → transicion
+> → persistencia → recuperacion`, y ejecutaba `handoff`, `adapter` y
+> `AgentResult`. Las otras cinco —`workflow`, `ContextRecipe`, `transicion`,
+> `persistencia` y `recuperacion`— no se ejecutaban nunca.
+>
+> **Y SUS INSTRUCCIONES DE EJECUCIÓN APUNTABAN A UN FICHERO QUE NO EXISTE.**
+> Decían `pytest tests/uat_real_provider.py`, sin el prefijo `test_`. Quien las
+> siguiera ejecutaba nada y recibía `rc=4`: un error de uso de pytest, no un
+> fallo de la UAT. Una instrucción que apunta a un path inexistente no es una
+> instrucción, es una trampa con la forma de una instrucción.
+>
+> **LO QUE ENTRA: EL RECORRIDO, EJECUTABLE SIN DINERO Y SIN CREDENCIAL.**
+> `tests/test_b24_recorrido_certificacion.py:94::TestElRecorridoCompletoSinDinero`
+> cubre las ocho fronteras contra el `HttpAgentAdapter` **de verdad** —su
+> `httpx.Client`, su retry y su parseo— contra el servidor local de
+> `tests/_proveedor_local.py:87::proveedor_local`, que habla la FORMA de la
+> respuesta del proveedor. Lo único que se sustituye es el otro extremo del
+> cable: si el adapter fuera un doble, estaríamos certificando que el doble
+> funciona, que es justo lo que B2 vino a cerrar.
+>
+> **UN SERVIDOR LOCAL NO ES UN PROVEEDOR.** Esto no certifica que Anthropic
+> conteste: certifica que las ocho fronteras del camino funcionan. Lo único que
+> queda fuera es «que el proveedor real conteste», y lo mide
+> `tests/test_uat_real_provider.py` con `SG_UAT_REAL_PROVIDER=1` y credencial,
+> camino que este bloque no toca. Un camino, dos endpoints: si el opt-in está
+> puesto, el servidor local ni se levanta.
+>
+> **LA EVIDENCIA ES QUE HUBO UNA LLAMADA REAL, NO QUE ACABARA BIEN.** La
+> propiedad no es «el nodo acabó SUCCEEDED» sino «el servidor RECIBIÓ una
+> petición construida por el adapter». Eso lo mide
+> `tests/_proveedor_local.py:107::peticiones`; sin ella, un adapter que no se
+> invoca y otro que se invoca con la basura darían el mismo veredicto al resto
+> del recorrido.
+>
+> **LO QUE EL HARNESS HIZO, Y FUE LO MÁS CARO DEL BLOQUE.**
+> `scripts/mutate_b24_ruta_certificacion.py:123::SONDAS` declara cinco sondas, una
+> propiedad por sonda. Dos de ellas, tal como estaban escritas, **no podían
+> caer**: mutar `estado` es un no-op porque el setup de `proveedor_local()` lo
+> repone, y `segunda = primera` deja el assert tautológico. Medidas, no supuestas:
+> rehechas y **5/5 cazadas**.
+>
+> **Y DE AHÍ SALIÓ UN HALLAZGO DE PRODUCTO, NO DEL HARNESS: LA IDEMPOTENCIA DE
+> RECONCILIAR UN RUN RESUELTO TIENE CINCO CAPAS.** Quitarle una —la guarda de
+> `src/skillgraph/runtime/runcontroller.py:315::_reconcile_run_locked`, la de
+> `src/skillgraph/runtime/run_observability_delegations.py:202::_calculate_frontier`,
+> o que el run no se cierre— da `rc=0`. Ni dos juntas. La quinta no es una guarda
+> de reconciliar: es el guard de nodo,
+> `src/skillgraph/runtime/node_execution_delegations.py:182::_node_guard`, que
+> devuelve veredicto si ya hay SUCCEEDED y el plan no declara self-loop. Las
+> cuatro anteriores son cortocircuitos que evitan llegar hasta ahí. La propiedad
+> que mide
+> `tests/test_b24_recorrido_certificacion.py:212::test_6_reconciliar_de_nuevo_no_reejecuta_el_nodo`
+> es el efecto conjunto de las cinco, y no nombra ninguna.
+>
+> **Y TRES DEFECTOS DE ESTADO DE B23 QUE ENCONTRÓ LA RED AL PUBLICAR.** El
+> `pre-push` corre la verificación canónica, y con la suite en rojo no sube.
+> `v0.34.0` estaba **duplicado** en `STATE.yaml release.releases`, la entrada de
+> 0.34.0 **no estaba** en el CHANGELOG, y el total declarado se quedaba en 3465
+> con 3475 en el árbol. Ninguno lo señalaba ningún test hasta que el push los
+> pidió.
+
 
 > **Bloque 2026-10-06 (B22) — La suite no puede cambiar el árbol por debajo de un instrumento.**
 >
