@@ -1233,7 +1233,7 @@ release:
   # `pre-push` de B29): hay TRES declaraciones de version activa —esta,
   # `__init__.__version__` y la ventana del ROADMAP— y basta mover una para que
   # el guard las cruce y se ponga rojo.
-  package_version: "0.42.0"
+  package_version: "0.42.0.dev0"
   fecha: 2026-10-07
   # `semver_bump` NO se repite aqui: vive en la entrada de `release.releases`, y
   # declararlo dos veces es justo lo que el verificador rechaza —`STATE.yaml declara
@@ -1575,6 +1575,19 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.42.0
+      sha: ca5f0570ab5af5698b33acb19161b8e3dfef9ae3
+      fecha: 2026-10-07
+      semver_bump: MINOR
+      package_version: '0.42.0'
+      rationale_b31_b35: |-
+        BLOQUES B31..B35 - LA SERIE EPISTEMOLOGICA LLEGA AL STORE. MEDIDO ANTES DE ESCRIBIR NADA, bloque a bloque, con scripts/measure_b31_*.py y scripts/measure_b35_vertical.py. ESTA RELEASE CIERRA CINCO BLOQUES Y UNA CAMPANA DE GUARDS.
+        **B31 Y SU FILA, QUE ERA FALSA EN SU PRIMERA MITAD:** decia «no hay analisis estructural real: line_count = 137 es todo lo que se sabe del codigo». Falso: knowledge/file_signature.py son 431 lineas puras y deterministas que ya extraen imports, definiciones y cobertura. Lo que faltaba era el ULTIMO PASO - record_evidence_for_file_signature lo persistia como Evidence kind=file_signature, NUNCA como Claim. **MEDIDO DE PUNTA A PUNTA: 7 observaciones -> 7 claims -> 5 filas.** El UNIQUE de claims no llevaba el objeto, luego un fichero que importa dos modulos se comia el segundo SILENCIOSAMENTE. ADR-0035 mete el objeto en la identidad Y hace cambiar make_claim_id EN EL MISMO COMMIT: MEDIDO, con la clave arreglada y el generador sin el objeto seguian perdiendose 2 de 7, porque los dos claims salian con el MISMO claim_id y el segundo chocaba con la PRIMARY KEY - un fallo distinto, con otro mensaje, en otra capa.
+        **B32, B33, B34:** GitHistory (puerto) y DulwichGitHistory dan la ascendencia real en vez de comparar SHAs lexicograficamente; telemetry.query.v1 cierra la contradiccion entre lo que la telemetria dice y lo que la intencion declara; SuperficieConocimiento permite preguntar al sistema por lo que sabe con las seis consultas como Literal cerrado.
+        **B35, Y LA FILA DECIA UN HUECO DONDE HABIA TRES.** MEDIDO: CapabilityRegistry(...) se construye 0 veces en src/ y 26 en tests/; hay 2 definiciones de envelope_a_payload para 1 nombre, con contratos distintos; y 0 deserializadores en src/ - el paso de dict a ObservationEnvelope estaba escrito A MANO en dos ficheros de test, y como eran dos copias YA DIVERGIAN: una leia el producer del payload y la otra cap.spec de la capability. Una de las dos no estaba probando la ida y la vuelta. **UNA CUARTA VEZ QUE UN INSTRUMENTO QUE BUSCA EN EL TEXTO DICE QUE UNA PUERTA EXISTE PORQUE ALGUIEN ESCRIBIO UNA FRASE SOBRE ELLA EN UN DOCSTRING.**
+        **UN DEFECTO DE B31 QUE SU PROPIA CERTIFICACION NO VIO:** record_claim comparaba contra la tupla ANTERIOR a la migracion 0008. MEDIDO por la puerta nueva, sobre un fichero que importa os y sys: imports_module='sys' salia como conflicto con 'os'. **Y LAS 6 FILAS ESTABAN BIEN - EL AVISO MENTIA.** Quinta vez que sale el defecto de fondo del repo: un guard que mide la mitad de una propiedad y da verde porque esa mitad esta bien. La semantica de conflicto se decidio con el usuario: significa EL UNIQUE RECHAZO MI ESCRITURA, con las DOS condiciones, porque con una sola la senal se muere. Siete estados medidos.
+        **Y LO QUE B35 SE ABRIO A SI MISMO AL CERTIFICARSE.** El floors dio knowledge/observation_ingestion.py al 84 %, seis puntos bajo su suelo, y lo HABIA PRODUCIDO ESTE MISMO BLOQUE: al meter el objeto en el UNIQUE, normalizar deriva el claim_id de la misma tupla, luego el UNIQUE no puede rechazar nada y la rama que recogia el aviso quedo INALCANZABLE. Se BORRO la rama en vez de bajar el suelo - fabricar un test exigia monkeypatchear normalizar, que es poner un peine en la cobertura - y el modulo subio a 100 %. Cayo tambien el if ingesta.conflictos: de sg knowledge ingest-code y dos aserciones que se volvieron DECORADAS, sustituidas por guardes AST que miden la mentira y no el sintoma. LA DETECCION NO SE PIERDE: conflicts_for sigue viendo la auto-contradiccion de una misma fuente y B28 la resuelve por intencion.
+        **CIERRE, Y UN HECHO QUE ES NUESTRO:** la corrida que dio observation_ingestion.py al 84 % con rc_floors=1 era CORRECTA. La que dio commands/knowledge.py al 48.11 % NO lo era: cancelamos una certificacion a medias y sus procesos siguieron escribiendo sobre el mismo .coverage.parallel. Unas clases bajaron y otras no, con cero fallos de pytest - esa asimetria no la produce el codigo. Un numero de cobertura NO DELATA ESTAR CONTAMINADO: sale con la misma autoridad que uno bueno. El script de recertificacion lleva ahora una comprobacion que ABORTA si hay otra medicion viva antes de medir. Certificacion del arbol etiquetado: 4104 passed + 3 skipped + 0 failed en 855.42 s, suelos rc=0 con cli/ 93.31 % y global 97.13 %, project_truth rc=0 con 4107 declarados == 4107 colectados, ratchet rc=0 con las CINCO a cero, sondas 8/8 con 0 invalidas. NINGUN SUELO SE BAJO EN ESTA RELEASE: uno subio.
     - tag: v0.41.0
       sha: 2c0ad63606385780132e34d50e4e93512fd32375
       fecha: 2026-10-06

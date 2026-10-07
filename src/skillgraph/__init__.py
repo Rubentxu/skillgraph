@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.42.0"  # v0.42.0: la serie B31..B35 cerrada, con el SemVer derivado con scripts/derive_semver.py sobre v0.41.0..HEAD: b/f/x/n/d 0/6/7/33/1 -> MINOR. La version activa describe el ARBOL: en este commit coincide con la etiqueta, que es el caso 1 de `test_version_matches_git_tag`. El commit que sela el sha llega DESPUES y la devuelve a `0.42.0.dev0`, caso 2.  # R0+R1: 0 breaking, 1 feat, 1 refactor, 5 otros => MINOR, derivado con scripts/derive_semver.py sobre el tramo v0.40.0..HEAD. La version activa describe el ARBOL, no la etiqueta: entre `v0.41.0` y este commit hay uno de gobernanza, que es el caso 2 de `test_version_matches_git_tag`.
+__version__ = "0.42.0.dev0"  # v0.42.0 esta etiquetada y este commit es el que SELLA SU SHA, luego HEAD queda despues de la etiqueta: es el caso 2 de test_version_matches_git_tag, y la version activa describe el ARBOL, no la etiqueta. El sha se escribe ahora y no antes porque test_every_listed_sha_matches_its_tag lo contrasta contra `git rev-list -n1 v0.42.0`, y escrito antes guardaria el commit ANTERIOR - que es lo que paso en v0.39.0.
 
 from skillgraph.core.errors import (
     IdentityConflictError,
