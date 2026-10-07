@@ -172,3 +172,74 @@ harness distingue `SIN_SONDA`, `CAZADA`, `INOCUA` e `INVALIDA` por eso.
 
 `knowledge/telemetry_query.py` entra nuevo y hay que medirlo, no suponerlo:
 `check_coverage_floors.py` decide, y su suelo es el del paquete —90 %.
+## La certificacion, y una causa que NO era del codigo
+
+La primera certificacion de B33 termino en `rc=1` con **13 fallos y 141
+errores**. Los errores de setup eran todos el mismo:
+
+```
+OSError: could not create numbered dir with prefix ... in
+         /tmp/pytest-of-rubentxu/pytest-1985 after 10 tries
+```
+
+La primera hipótesis fue la concurrencia —había corrido diagnósticos durante
+la primera certificación, que es el modo de fallo que este repo ya conoce—,
+así que se paró, se limpió y se relanzó **sin tocar nada**. Falló igual.
+
+Medido entonces:
+
+```
+df -i /tmp
+tmpfs  1048576  1022426   26150  98 %      <- INODOS
+```
+
+`/tmp` tenía **26 150 inodos libres** y 536 directorios de pytest
+acumulados, más 721 `/tmp/tmp.*` huérfanos de las certificaciones
+canceladas. No era el repositorio: pytest no podía ni crear su directorio
+temporal. Liberados (26150 -> 97540), la tercera certificación pasó limpia.
+
+**Lo que se aprende, y no es «hay que limpiar /tmp»:** el `glob('.coverage*')`
+que se usó para limpiar los datos de cobertura **también borra
+`.coverage.rc`**, que es el fichero de CONFIGuración. No rompe nada porque
+`coverage.sh` lo regenera en cada corrida —y por eso las tres
+certificaciones funcionaron— pero una corrida dirigida con `--cov-config`
+falla con `Couldn't read '.coverage.rc'`. El patrón correcto es borrar
+`.coverage` y `.coverage.parallel*`, y **no** `.coverage.rc`.
+
+## Resultado
+
+```
+pytest                 3957 passed, 3 skipped, 0 failed   779,83 s   rc=0
+cobertura total        97 %
+  src/skillgraph/knowledge/telemetry_query.py   100 %  (56 stmts, 0 missing)
+  src/skillgraph/knowledge/observation.py       100 %
+  src/skillgraph/knowledge/graph.py              99 %
+  src/skillgraph/platform/knowledge_sources.py  100 %
+check_coverage_floors   rc=0   «todo modulo gobernado por §6.3 cumple su suelo»
+check_architecture      5/5 a cero
+project_truth           rc=0   coherente, 0 contradicciones,
+                               tests declarados 3965 == 3965 colectados
+```
+
+El módulo nuevo entró en **91 %**, justo sobre el suelo del 90 %. Se subió a
+**100 %** cubriendo las cuatro formas en que una petición puede venir rota
+—`ventana` ausente, `ventana` que no es mapping, mapping sin `desde`, y
+`hasta=""`— porque son caminos reales y alcanzables, no ramas defensivas.
+Subir el módulo es lo que se hace; bajar el suelo no.
+
+## Los siete fallos de la suite que NO eran de B33
+
+Al correr la suite completa aparecieron siete, y ninguno era del bloque:
+
+| fallo | causa | cerrado por |
+|---|---|---|
+| `test_b15`, `test_wi97` | `check_package_build.py rc=1`: el sdist incluía ficheros que **git no versionaba** | commitear antes de certificar |
+| `test_b0`, `test_b14` | las ventanas de verdad declaraban 3920 con 3960 en el árbol | sincronizar a 3965 |
+| `test_wi116` | había trabajo sin commitear entre `scripts/` y `src/` | commit |
+| `test_wi92` | la cita `observation.py:242` **no nombraba símbolo** | `observation.py:250::normalizar` |
+
+El de WI-92 tiene dos caras y las dos son suyas: la cita no decía a qué
+símbolo apuntaba —ese guard existe porque `fichero.py:352` es cierto y no
+dice nada— **y además la línea 242 ya no decía lo que la cita afirmaba**,
+porque B33 movió el código que la cita describía. El formato es
+`fichero.py:LINEA::simbolo` con **dos** puntos.

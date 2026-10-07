@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B33** — La telemetría y la intención/documentación se contradicen y una pisa a la otra · ambos se preservan y la autoridad decide según el intent · (B32 cerrado y certificado: `GitHistory` + `claims_desde_commit`; su gate daba el CUÁNDO y el DESDE QUÉ, no el POR QUÉ. **El gate de B33 ya lo había cerrado B28** — su propio ejemplo de test es `c-runtime` contra `c-adr` — así que lo que falta es la vertical, y la ADR que `normalizar` promete desde B26 y nadie abrió)
-> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 3960 tests · 16/16 UAT
+> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 3965 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 

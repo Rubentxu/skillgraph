@@ -260,6 +260,86 @@ class TestLaObservacionDeRuntimeNoEsUnDocumento:
 # ---------------------------------------------------------------------------
 
 
+class TestLaEntradaMalformadaSeNombra:
+    """Las cuatro formas en que una peticion puede venir rota.
+
+    **POR QUE SON CUATRO Y NO UNA.** La suberficie de `arguments` es un
+    `dict` libre: `ventana` puede faltar, puede no ser un mapping, puede ser
+    un mapping sin `desde`, y `hasta` puede venir con una cadena vacia. Son
+    cuatro Prefectos distintos con cuatro mensajes distintos, y un solo
+    `if` los trataria igual — que es justo el defecto que
+    `KnowledgeQueryCapability._consulta_de` ya evita en el modulo de al lado
+    con el motivo escrito: «no se que preguntar» y «no hay nada» se
+    confunden tres capas mas abajo.
+
+    Se miden los cuatro porque la cobertura los dejo sin mirar al entrar el
+    modulo nuevo (91 %, justo sobre el suelo del 90). Cerrarlos es subir el
+    modulo, que es lo que se hace; bajar el suelo no.
+    """
+
+    def _cap(self) -> TelemetryQueryCapability:
+        return TelemetryQueryCapability(
+            _Lector_que_devuelve((_observacion(),)), source_id="runtime:v1", revision="r1"
+        )
+
+    def _peticion_sin(self, argumentos: dict[str, object]) -> CapabilityRequest:
+        return CapabilityRequest(
+            spec=CapabilitySpec(type_name=TELEMETRY_QUERY, summary="t"),
+            subject=SUJETO,
+            arguments=argumentos,
+        )
+
+    def test_ventana_ausente_lo_dice(self) -> None:
+        with pytest.raises(ValidationError, match=r"arguments\['ventana'\]"):
+            self._cap().invoke(self._peticion_sin({"observed_at": "2026-10-07T12:00:00Z"}))
+
+    def test_ventana_que_no_es_mapping_lo_dice(self) -> None:
+        """Un `str` donde se esperaba un mapping.
+
+        Y el mensaje enseña **lo que recibio**, no solo que no vale: quien lo
+        lea necesita ver el `str` para entender que su cliente serializa mal.
+        """
+        with pytest.raises(ValidationError, match="'una ventana'"):
+            self._cap().invoke(
+                self._peticion_sin(
+                    {"ventana": "una ventana", "observed_at": "2026-10-07T12:00:00Z"}
+                )
+            )
+
+    def test_ventana_sin_desde_lo_dice(self) -> None:
+        """Distinto del mensaje de «no hay ventana», y tiene que serlo: una
+        ventana sin `desde` es media ventana, y tratarla como si faltara
+        entera haria que el que la pide corrigiera el sitio equivocado."""
+        with pytest.raises(ValidationError, match="sin principio"):
+            self._cap().invoke(
+                self._peticion_sin(
+                    {
+                        "ventana": {"hasta": "2026-10-07T12:00:00Z"},
+                        "observed_at": "2026-10-07T12:00:00Z",
+                    }
+                )
+            )
+
+    def test_hasta_vacio_se_rechaza_en_la_ventana(self) -> None:
+        """`hasta=""` es peor que no dar `hasta`.
+
+        `None` significa «la ventana sigue abierta», que es una
+        declaracion; `""` parece lo mismo y significa que no se sabe nada.
+        """
+        with pytest.raises(ValidationError, match="no se cierra"):
+            Ventana(desde="2026-10-07T00:00:00Z", hasta="   ")
+
+    def test_observed_at_vacio_lo_dice(self) -> None:
+        """Y este mensaje explica el POR QUE, no solo el QUE.
+
+        «La capability no lee el reloj» es lo que hace que un `observed_at`
+        vacio sea un fallo y no un detalle: sin el, la idempotencia se
+        romperia sola, y quien lo omite tiene que saber que hay que pasarlo.
+        """
+        with pytest.raises(ValidationError, match="NO lee el reloj"):
+            self._cap().invoke(self._peticion_sin({"ventana": {"desde": "2026-10-07T00:00:00Z"}}))
+
+
 class TestLaVentanaAguantaElIdaYVuelta:
     def test_la_ventana_se_relee_de_disco(self, tmp_path: Path) -> None:
         """El guarda mira lo que sale de la BASE, no el objeto.
