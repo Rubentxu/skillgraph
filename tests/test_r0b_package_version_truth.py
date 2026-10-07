@@ -40,6 +40,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -49,6 +50,10 @@ RAIZ = Path(__file__).resolve().parent.parent
 STATE = RAIZ / "STATE.yaml"
 SCRIPT = RAIZ / "scripts" / "project_truth.py"
 PY = RAIZ / ".venv" / "bin" / "python"
+
+sys.path.insert(0, str(RAIZ / "scripts"))
+
+import project_truth  # noqa: E402
 
 
 def _corre() -> tuple[int, dict]:
@@ -133,63 +138,151 @@ class TestElCampoEsParteDeLaVerdad:
         )
 
 
+def _verdades_del_arbol() -> dict[str, object]:
+    """Las verdades REALES, leidas del arbol, sin la colecta de pytest.
+
+     **POR QUE SE ARMAN A MANO Y NO SE LLAMA A `estado(raiz)`.** `estado()`
+     devuelve el veredicto entero, contradicciones incluidas —que es justo lo
+     que hay que deformar—, asi que no sirve de punto de partida. Aqui se
+    toman las verdades una por una con los MISMOS lectores que usa `estado()`,
+     que es lo que evita que este contrasalto mida un cruce paralelo al real.
+
+     `tests_reales` se iguala a `tests_declarados` **a proposito**. El
+     contrasalto tiene que ponerse rojo por `package_version`; si ademas lo
+     estuviera por la cifra, un fallo de la cifra taparia el hallazgo — que es
+     la clase de fallo que WI-115 midio una vez.
+    """
+    declarado = project_truth.total_declarado(RAIZ)
+    return {
+        "bloque": project_truth.bloque_del_roadmap(RAIZ),
+        "version": project_truth.version_activa(RAIZ),
+        "package_version": project_truth.package_version_declarada(RAIZ),
+        "release": project_truth.release_declarada(RAIZ),
+        "tag_vcs": project_truth.tag_real(RAIZ),
+        "tests_declarados": declarado,
+        "tests_reales": declarado,
+        "workitem_state": project_truth.workitem_de_state(RAIZ),
+        "workitem_current": project_truth.workitem_de_current(RAIZ),
+    }
+
+
 class TestLaMutacionSePoneEnRojo:
     """**EL CONTRA SALTO DEL BLOQUE.** Sin este test, la mitad de arriba pasa
-    con un campo leído y no comparado."""
+    con un campo leido y no comparado.
 
-    def test_package_version_VIEJO_pone_el_guard_en_ROJO(self) -> None:
+    # POR QUE DEFORMA EL DICT Y NO EL FICHERO
+
+    La primera version escribia `STATE.yaml` del arbol real y lo restauraba en
+    un `finally`. **MEDIDO AL CERTIFICAR, y salio caro:** cuatro guards en
+    rojo, y no por la propiedad que este bloque mide.
+
+    - `test_b22_arbol_real::test_ninguna_escritura_al_arbol_real_queda_sin_explicar`
+      la cazaba directamente: una escritura sin explicar a un fichero que git
+      versiona.
+    - Peor, e invisible en local: **otros tres guards leen ese mismo fichero**
+      —`project_truth` desde `test_b0`, `test_wi115`, `test_b23`— y leen el
+      arbol *mientras esta deformado*. En la suite completa se pusieron rojos;
+      corriendo este fichero solo, en verde. Un guard que solo se rompe en un
+      orden concreto no se puede depurar.
+
+    El propio guard lo decia en su mensaje: «el arreglo es mover la deformacion
+    a un sandbox, no anadir la excepcion».
+
+    **Y EL SANDBOX TAMPOCO, MEDIDO.** Copiar el arbol versionado con
+    `git archive`, `git init`, y deformar ahi da `rc=2` **igual mutado que sin
+    mutar** —el verificador no arranca en una copia—, o sea un contrasalto que
+    daria verde con la deformacion puesta. Es PEOR que deformar el arbol real,
+    porque aquel al menos distinguia los dos casos.
+
+    Lo que queda es lo unico que mide la regla sin escribir nada:
+    `_contradicciones()` es una funcion **pura** que recibe el dict de verdades
+    —B23 ya la ejercita asi, y `test_b0_truth_convergence.py:369` es el
+    molde— y la deformacion es una linea de ese dict.
+    """
+
+    def test_el_arbol_REAL_no_tiene_ninguna_de_estas_contradicciones(self) -> None:
+        """La linea base, y no es decorativa.
+
+        Sin ella, «la mutacion dio rojo» no distingue *la regla dispara* de
+        *la regla se ejecuto y ya estaba roja por otra cosa*: el contrasalto
+        pasaria con la regla rota de siempre.
+        """
+        limpio = project_truth._contradicciones(_verdades_del_arbol(), raiz=RAIZ, ventanas=())
+        assert limpio == (), (
+            f"el arbol real ya es incoherente en estos campos, y entonces el "
+            f"contrasalto de abajo no puede decir nada: {limpio}"
+        )
+
+    def test_package_version_VIEJO_pone_la_regla_en_ROJO(self) -> None:
         """La propiedad exacta que el bloque arregla, escrita como test.
 
-        Y el mutante se construye **con YAML**, no con texto sobre el
-        fichero, porque hay dos campos con el mismo nombre y cuatro versiones
-        de este contrasalto apuntaron al equivocado antes de que se
-        comprobara. Un contrasalto tiene que **demostrar a qué campo apunta**.
+        Y el mutante toca **EL** campo, por construccion: es una clave del dict
+        que se le pasa a la regla. Cuatro versiones de este contrasalto
+        apuntaron antes al `package_version` equivocado —el de `tests:`—, y
+        por eso se exige que el mensaje nombre el valor.
         """
-        original = STATE.read_bytes()
-        datos = yaml.safe_load(original.decode("utf-8"))
-        valor_original = datos["release"]["package_version"]
+        verdad = _verdades_del_arbol()
+        valor_real = verdad["package_version"]
 
-        datos["release"]["package_version"] = "0.99.0.dev0"
-        mutado = yaml.safe_dump(datos, sort_keys=False, allow_unicode=True)
+        mutado = dict(verdad)
+        mutado["package_version"] = "0.99.0.dev0"
 
-        # La verificacion que hacia falta: que el mutante toco EL campo.
-        verificado = yaml.safe_load(mutado)
-        assert verificado["release"]["package_version"] == "0.99.0.dev0"
-        assert verificado["tests"]["package_version"] != "0.99.0.dev0", (
-            "el mutante toco tests.package_version por error: hay dos campos "
-            "con el mismo nombre y la sonda apunta al equivocado"
+        problemas = project_truth._contradicciones(mutado, raiz=RAIZ, ventanas=())
+        assert any("package_version" in p for p in problemas), (
+            f"la regla dejo pasar un package_version de 0.99.0.dev0 mientras "
+            f"__init__.py declara {verdad['version']!r} y STATE declara "
+            f"{valor_real!r}. EL AGUJERO SIGUE ABIERTO. Contradicciones: {problemas}"
+        )
+        assert any("0.99.0.dev0" in p for p in problemas), (
+            "la contradiccion no nombra el valor que la dispara: quien lee "
+            f"tiene que buscar el numero a mano. Contradicciones: {problemas}"
         )
 
-        try:
-            STATE.write_text(mutado, encoding="utf-8")
-            rc, carga = _corre()
-        finally:
-            STATE.write_bytes(original)
 
-        assert rc != 0, (
-            f"project_truth dio rc=0 con release.package_version en "
-            f"0.99.0.dev0 (el valor real es {valor_original}). "
-            "EL AGUJERO SIGUE ABIERTO."
-        )
-        assert carga["coherente"] is False
-        assert any("package_version" in c for c in carga.get("contradicciones") or []), (
-            f"el guard se puso rojo pero no nombro el campo: {carga.get('contradicciones')}"
-        )
+class TestElContrasaltoNoTocaElArbol:
+    """La mitad del harness que la version anterior daba por hecha.
 
-    def test_el_arbol_queda_BYTE_IDENTICO_despues_del_contrasalto(self) -> None:
-        """La mitad del harness: una sonda que deja el árbol sucio no es una
-        sonda, es un incidente. Se mide en el propio test, no se da por hecha
-        porque el `finally` lo pone."""
-        original = STATE.read_bytes()
-        datos = yaml.safe_load(original.decode("utf-8"))
-        datos["release"]["package_version"] = "0.99.0.dev0"
-        try:
-            STATE.write_text(
-                yaml.safe_dump(datos, sort_keys=False, allow_unicode=True), encoding="utf-8"
-            )
-        finally:
-            STATE.write_bytes(original)
-        assert STATE.read_bytes() == original
+    «El `finally` lo pone» es una razon para no mirar, no una prueba. Y aqui
+    no hay `finally` que lo ponga: **este fichero no escribe nada**, y este
+    test es lo que lo dice.
+    """
+
+    def test_este_fichero_no_abre_ningun_fichero_para_escribir(self) -> None:
+        """Por AST, como el guard de B22.
+
+        La propiedad es «este codigo *escribe*», y un docstring que mencione
+        `write_text` no es una escritura: buscarla por cadena contaria la
+        documentacion de este test. La primera version de ese guard busco con
+        regex y se puso roja por su propia prosa.
+        """
+        import ast
+
+        arbol = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+        escrituras: list[tuple[int, str]] = []
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Call):
+                continue
+            func = nodo.func
+            nombre = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if nombre in {"write_text", "write_bytes", "writelines"}:
+                escrituras.append((nodo.lineno, nombre))
+            elif nombre == "open":
+                for arg in (*nodo.args[1:], *[kw.value for kw in nodo.keywords]):
+                    if (
+                        isinstance(arg, ast.Constant)
+                        and isinstance(arg.value, str)
+                        and arg.value[:1] in {"w", "a", "x", "+"}
+                    ):
+                        escrituras.append((nodo.lineno, f"open({arg.value!r})"))
+        assert not escrituras, (
+            "test_r0b_package_version_truth.py vuelve a ESCRIBIR un fichero del "
+            "arbol de trabajo real:\n  "
+            + "\n  ".join(f"linea {lin}: {que}" for lin, que in escrituras)
+            + "\n\nLa deformacion va en el DICT que se le pasa a "
+            "_contradicciones(), no en STATE.yaml. Escribirlo aqui pone en rojo "
+            "a todo guard que lea STATE.yaml mientras dura la ventana — "
+            "test_b0, test_b23 y test_wi115 lo hicieron — y eso se Midio."
+        )
 
 
 class TestElGuardDeReleaseNoEsUnGrep:
