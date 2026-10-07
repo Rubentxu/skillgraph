@@ -351,7 +351,7 @@ class SuperficieConocimiento:
                     self._knowledge.claims_desde_commit(
                         tenant_id=self._tenant_id,
                         project_id=self._project_id,
-                        git_commit_sha=c.commit,
+                        commit_sha=c.commit,
                     )
                 ),
             )

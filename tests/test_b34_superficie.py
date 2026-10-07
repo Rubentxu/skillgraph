@@ -163,6 +163,22 @@ class TestLasSeisSonVocabularioCerrado:
         verdad que se desincroniza en cuanto el `Literal` crece."""
         assert frozenset(typing.get_args(PREGUNTA)) == CONSULTAS
 
+    def test_una_pregunta_valida_devuelve_el_tipo(self) -> None:
+        """**El camino que faltaba, y no es trivial que falte.**
+
+        MEDIDO: la medicion inicial daba 98 % con la linea del `return` de
+        `pregunta()` sin cubrir, porque el unico test que llamaba a la
+        funcion la llamaba con un valor INVALIDO. El rechazo se mido y el
+        camino de acierto no.
+
+        Se mide porque es donde vive el `cast`: un `cast` sin ejecucion
+        es un `cast` que el type-checker no verifica en runtime, y un
+        smart constructor que solo se ha probado fallando no sabe
+        devolver.
+        """
+        assert pregunta("what") == "what"
+        assert pregunta("why") == "why"
+
     def test_una_pregunta_fuera_del_vocabulario_se_rechaza(self) -> None:
         """En la FRONTERA, no al responder.
 
@@ -733,3 +749,82 @@ class TestElSolapeConResolveDeB28:
         texto = (REPO / "src/skillgraph/cli/commands/knowledge.py").read_text()
         assert "cmd_knowledge_conflicts" in texto
         assert "B34" in texto
+
+
+class TestLasRamasQueQuedaban:
+    """Las cuatro salidas de `responder` que la medicion inicial dejo sin mirar.
+
+    El modulo entro en 92 % —por encima del suelo del 90 %, pero por poco— y
+    las cinco lineas que faltaban eran las salidas: sujeto vacio, `why` de un
+    claim que no existe, `changed` por commit, y `conflicts` de un sujeto que
+    no se contradice. Son caminos ALCANZABLES, no ramas defensivas: se llega
+    a ellos con entradas normales, y son justo los que dicen «no hay nada»
+    —que es la respuesta que mas se confunde con un fallo—.
+    """
+
+    def test_un_subject_vacio_no_se_construye(self) -> None:
+        with pytest.raises(ValidationError, match="subject"):
+            Consulta(pregunta="what", subject="   ")
+
+    def test_why_de_un_claim_inexistente_es_vacio(self, tmp_path: Path) -> None:
+        """No es un error: es «no hay nada que explicar».
+
+        Y la distincion importa porque se confunden tres capas mas abajo:
+        un `claim_id` equivocado y un grafo vacio darian el mismo error, y
+        son dos fallos que se arreglan de dos maneras.
+        """
+        s = _storage(tmp_path)
+        try:
+            _poblar(s)
+            r = _superficie(s).responder(
+                Consulta(pregunta="why", subject=SUJETO, claim_id="c-no-existe")
+            )
+            assert r.claims == ()
+            assert r.procedencia == ()
+            assert r.vacia is True
+        finally:
+            s.close()
+
+    def test_changed_por_commit_es_el_otro_reloj(self, tmp_path: Path) -> None:
+        """Con `--commit` la respuesta viene del camino de B32.
+
+        Y no del de B29 aunque los dos llenen `Respuesta.claims`: son dos
+        consultas distintas y mezclarlas seria volver a confundir los dos
+        relojes. Se mide que el camino de `--commit` existe y devuelve algo.
+        """
+        s = _storage(tmp_path)
+        try:
+            _poblar(s)
+            sup = _superficie(s)
+            por_commit = sup.responder(
+                Consulta(pregunta="changed", subject=SUJETO, commit="a" * 40)
+            )
+            por_revision = sup.responder(
+                Consulta(pregunta="changed", subject=SUJETO, revision="r1")
+            )
+            assert isinstance(por_commit, Respuesta)
+            assert isinstance(por_revision, Respuesta)
+            # HEAD (`revision` ausente) tambien tiene que funcionar: es el
+            # caso por defecto y no es el mismo camino que una revision dada.
+            head = sup.responder(Consulta(pregunta="changed", subject=SUJETO))
+            assert isinstance(head, Respuesta)
+        finally:
+            s.close()
+
+    def test_conflicts_de_un_sujeto_que_no_se_contradice(self, tmp_path: Path) -> None:
+        """Sin conflictos tampoco hay resolucion.
+
+        Y no es lo mismo que un conflicto sin resolver: una respuesta sin
+        conflicto tiene `resolucion is None` PORQUE NO HAY, y la de un
+        conflicto abierto tiene `conflicto` con contenido. El test de
+        `vacia` los separa.
+        """
+        s = _storage(tmp_path)
+        try:
+            _poblar(s)
+            r = _superficie(s).responder(Consulta(pregunta="conflicts", subject=OBJETO))
+            assert r.conflicto is None
+            assert r.resolucion is None
+            assert r.vacia is True
+        finally:
+            s.close()
