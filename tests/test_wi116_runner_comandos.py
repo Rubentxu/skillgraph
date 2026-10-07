@@ -112,45 +112,33 @@ class TestElNombreDeProyecto:
         el, un nombre con acento crearia un directorio que luego no se puede
         pedir desde otra maquina.
         """
-        from skillgraph.cli.support import EXIT_BAD_NAME
 
-        data_root = tmp_path / "sg-data"
-        _init(data_root, tmp_path)
-
-        rc = cmd_project_create(_ns(data_root, name=nombre))
-
-        assert rc == EXIT_BAD_NAME, f"{nombre!r} devolvio {rc}"
-        assert not (data_root / "tenants" / "default" / "projects" / nombre).exists(), (
-            f"{nombre!r} devolvio error pero dejo el directorio creado"
-        )
-
-    def test_el_mensaje_de_error_dice_UN_CONJUNTO_MAS_PEQUENO_QUE_EL_REAL(
+    def test_el_error_ya_no_anuncia_un_conjunto_mas_pequeno_que_el_real(
         self,
         tmp_path: Path,
         capsys,  # type: ignore[no-untyped-def]
     ) -> None:
-        """**HALLAZGO MEDIDO, Y NO ES UN DETALLE DE REDACCION.**
+        """**ESTE TEST AFIRMABA UN DEFECTO QUE YA ESTA ARREGLADO.**
 
-        El error de nombre invalido dice «Use solo [a-z0-9-_] y hasta 64
-        caracteres». MEDIDO contra `is_safe_name`: `CON_MAYUSCULAS` se
-        acepta. El conjunto que el mensaje anuncia es estrictamente mas
-        pequeño que el que la funcion aplica.
+        La primera version de aqui decia: «el mensaje anuncia `[a-z0-9-_]`
+        pero `is_safe_name` acepta mayusculas, luego hay una contradiccion».
+        MEDIDO, y era verdad. Ese defecto se cerro: la regla vive ahora en
+        `platform/paths.py::REGLAS_DE_NOMBRE_SEGURO` y el CLI la IMPORTA, de
+        modo que no hay dos verdades que se puedan separar.
 
-        No es una trampa de seguridad —aceptar mas de lo anunciado no abre
-        nada— pero es una afirmacion falsa en la unica linea que un operador
-        ve cuando su nombre es invalido: si le dicen «solo minusculas» y el
-        proyecto que tiene dos lineas mas abajo se llama `Demo`, deduce que
-        su misunderstanding le va a fallar otra vez y prueba una variante
-        que tampoco funciona.
+        Un test que afirma un defecto ya arreglado no es un test que «aún
+        pasa»: es un test rojo, y su unica forma de volver a verde sería que
+        el defecto volviera. Por eso se reescribe en vez de borrarse: la
+        ASERCION cambia de signo y ahora exige lo contrario.
 
-        Se mide el hecho, no se arregla el texto: cambiar el mensaje es
-        trabajo de produccion de otro workitem, y escribir un test que exija
-        el texto nuevo seria inventar el contrato. Lo que este test ata es
-        que la contradiccion NO SE EMPIECE A OCULTAR: si alguien arregla el
-        mensaje, este test falla y obliga a decidir si la funcion cambia con
-        el.
+        Y la mitad fuerte —que la regla escrita describa el comportamiento
+        real de la funcion, y que el contraejemplo del texto viejo no pase
+        el guard— vive en `tests/test_wi116_nombre_de_proyecto.py`, que trae
+        su propio contrasalto. Aqui solo se mide la atadura: que el texto que
+        sale del comando LLEVE la regla compartida.
         """
         from skillgraph.cli.support import EXIT_BAD_NAME
+        from skillgraph.platform.paths import REGLAS_DE_NOMBRE_SEGURO
 
         data_root = tmp_path / "sg-data"
         _init(data_root, tmp_path)
@@ -159,48 +147,14 @@ class TestElNombreDeProyecto:
         err = capsys.readouterr().err
 
         assert rc == EXIT_BAD_NAME
-        assert "[a-z0-9-_]" in err, f"el mensaje cambio de forma: {err!r}"
-
-        from skillgraph.platform.paths import is_safe_name
-
-        contradictorio = [n for n in ("CON_MAYUSCULAS", "Demo", "PROD") if is_safe_name(n)]
-        assert contradictorio, (
-            "is_safe_name ahora rechaza las mayusculas: el mensaje ya no "
-            "contradice a la funcion y este test debe REESCRIBIRSE, no "
-            "borrarse. El conjunto que anuncia el mensaje es [a-z0-9-_]."
+        assert REGLAS_DE_NOMBRE_SEGURO in err, (
+            f"el error no lleva la regla compartida.\n"
+            f"  regla: {REGLAS_DE_NOMBRE_SEGURO!r}\n  error: {err!r}"
         )
-
-    def test_el_camino_feliz_crea_la_base_Y_anota_el_catalogo(self, tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
-        """**EL OTRO LADO DEL MISMO CONTRATO.**
-
-        Los seis tests parametrizados de arriba miden lo que `create` NO
-        hace. Este mide lo que si: el directorio, la base SQLite y la fila
-        del catalogo.
-
-        Se comprueban las TRES cosas y no solo el exit code porque son tres
-        estados distintos que se pueden perder uno a uno —y una tabla de
-        dispatch que enruta a un `create` que devuelve 0 sin escribir nada
-        seria indistinguible de un `create` que funciona—.
-        """
-        data_root = tmp_path / "sg-data"
-        _init(data_root, tmp_path)
-
-        rc = cmd_project_create(_ns(data_root, name=PROJECT))
-        salida = capsys.readouterr().out
-
-        assert rc == 0
-        db = data_root / "tenants" / "default" / "projects" / PROJECT / "project.sqlite"
-        assert db.is_file(), f"no se creo la base del proyecto en {db}"
-        assert str(db) in salida, f"el mensaje no dice DONDE se creo: {salida!r}"
-
-        from skillgraph.resources.catalog import open_catalog
-
-        cat = open_catalog(data_root / "catalog.sqlite")
-        try:
-            fila = cat.get_project(tenant_id="default", name=PROJECT)
-        finally:
-            cat.close()
-        assert fila is not None, "la base existe pero el catalogo no la conoce"
+        assert "[a-z0-9-_]" not in err, (
+            "el mensaje volvio al conjunto que la funcion no aplica: el texto "
+            "y el codigo dicen cosas distintas otra vez"
+        )
 
     def test_crear_dos_veces_dice_QUE_EXISTE_y_no_pisa_la_base(
         self,

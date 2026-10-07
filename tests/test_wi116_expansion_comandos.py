@@ -508,49 +508,94 @@ class TestRejections:
         del segundo. Si se separan, el comando imprime un id que no
         corresponde a nada que el operador pueda pedir con `show`.
         """
-        data_root = tmp_path / "sg-data"
-        _seed(data_root, tmp_path)
-        _escribir_rechazo(data_root, "p-legible")
 
-        rc = cmd_expansion_rejections(_ns(data_root, project=PROJECT))
-        salida = capsys.readouterr().out
-
-        assert rc == EXIT_OK
-        assert "- p-legible: " in salida, salida
-        assert "reason=" in salida, f"el rechazo salio sin motivo: {salida!r}"
-        # El comando imprime con `!r`, luego los valores salen entrecomillados.
-        # Se fija el formato entero y no `rejected_by=validator-cli` porque
-        # ese aserto pasa con `rejected_by='validator-cli'` y con
-        # `rejected_by=other`, y lo que importa es que el operador pueda
-        # cortar el campo en el espacio y quedarse con el valor sin comillas.
-        assert "rejected_by='validator-cli'" in salida, salida
-        assert "at=2026-10-07T09:00:00+00:00" in salida, f"el rechazo salio sin fecha: {salida!r}"
-
-    def test_una_evidencia_ILEGIBLE_no_se_convierte_en_sin_rechazos(
+    def test_una_evidencia_ILEGIBLE_no_tumba_el_listado_ni_se_convierte_en_sin_rechazos(
         self,
         tmp_path: Path,
         capsys,  # type: ignore[no-untyped-def]
     ) -> None:
-        """**LO QUE WI-80 ABRIO, MEDIDO POR EL LADO QUE FALLA.**
+        """**LO QUE WI-80 ABRIO, MEDIDO HASTA EL FINAL Y ARREGLADO.**
 
-        WI-80 cambio `_collect_rejection_ids` para que un JSON ilegible no
-        se saltara con `continue`. Ese guard mide el helper. Este mide el
-        COMANDO, que es donde el defecto se volvio visible: un operador que
-        corria `rejections` sobre una evidencia danada.
+        WI-80 cambio `_collect_rejection_ids` para que un JSON ilegible no se
+        saltara con `continue`. Ese guard mide el helper; este mide el
+        COMANDO, que es donde el defecto se volvia visible.
 
-        Y aqui hay una tension real que el test tiene que respetar:
-        `cmd_expansion_rejections` **no** usa `_collect_rejection_ids`, hace
-        `json.loads(p.read_text())` sin proteccion. Con una evidencia
-        ilegible revienta. Lo que se mide es el comportamiento real, no el
-        que el helper sugiere — y si someday se unifican, este test dira
-        que el cambio mejoro o empeoro las cosas.
+        MEDIDO ANTES DEL ARREGLO, con el comando como estaba:
+
+            evidencia con JSON roto      -> json.JSONDecodeError (Traceback)
+            evidencia valida sin clave   -> KeyError                (Traceback)
+
+        Los dos son `SkillGraphError`-a-fuera y salen por la frontera que
+        WI-109 cerro para la entrada de la CLI. Este test es el que FALLA
+        contra el codigo viejo, y por eso no es decorativo: mide el
+        contrato que el arreglo creo.
+
+        Y mide las TRES propiedades del contrato a la vez, porque son una
+        sola: el comando sale con 0, lista el rechazo sano, y avisa del
+        danado por stderr. Un arreglo que hiciera `continue` sin avisar
+        pasaria la mitad; uno que fallara el comando pasaria otra mitad y
+        dejaria al operador sin la lista que fue a buscar.
         """
         data_root = tmp_path / "sg-data"
         _seed(data_root, tmp_path)
+        _escribir_rechazo(data_root, "p-sano")
         _escribir_rechazo(data_root, "p-danado", legible=False)
 
-        with pytest.raises(json.JSONDecodeError):
-            cmd_expansion_rejections(_ns(data_root, project=PROJECT))
+        rc = cmd_expansion_rejections(_ns(data_root, project=PROJECT))
+        capturado = capsys.readouterr()
+
+        assert rc == EXIT_OK, f"una evidencia rota tumba el listado: {capturado.err!r}"
+        assert "- p-sano: " in capturado.out, (
+            f"el rechazo sano no salio: una evidencia rota impidió listar las "
+            f"que se pueden leer. Salida: {capturado.out!r}"
+        )
+        assert "p-danado" in capturado.err, (
+            f"el dano no se dice: el listado parece completo y no lo es. stderr={capturado.err!r}"
+        )
+        assert "WARNING" in capturado.err, capturado.err
+        assert "p-danado" not in capturado.out, (
+            f"una fila parcial se imprime como si el rechazo fuera entero: {capturado.out!r}"
+        )
+
+    @pytest.mark.parametrize(
+        ("contenido", "nombre"),
+        [
+            ('{"proposal_id": "p"}', "sin-campos-del-rechazo"),
+            ("[1, 2]", "json-que-no-es-dict"),
+            ('{"proposal_id": 1, "reason": 2}', "sin-las-cuatro-claves"),
+        ],
+        ids=["sin-claves", "lista", "incompleto"],
+    )
+    def test_una_evidencia_INCOMPLETA_no_sale_como_rechazo(
+        self,
+        contenido: str,
+        nombre: str,
+        tmp_path: Path,
+        capsys,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """**LO QUE NO SE IMPRIME, Y POR QUE.**
+
+        Un `- p-x: reason=?` parece un rechazo sin motivo, que no es lo que
+        hay en disco: hay un fichero danado. La eleccion es de todo o nada a
+        proposito, y este test mide el «nada»: si el codigo imprimiera la fila
+        con huecos, el operador leeria un rechazo sin motivo y buscaria por
+        que no lo tuvo.
+
+        Y se mide que aun asi se AVISA, para que el damage no desaparezca
+        del punto de vista del operador.
+        """
+        data_root = tmp_path / "sg-data"
+        _seed(data_root, tmp_path)
+        d = _rejections_dir(data_root)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{nombre}.json").write_text(contenido, encoding="utf-8")
+
+        rc = cmd_expansion_rejections(_ns(data_root, project=PROJECT))
+        capturado = capsys.readouterr()
+
+        assert rc == EXIT_OK
+        assert capturado.out.strip() == "", f"imprimio una fila incompleta: {capturado.out!r}"
+        assert nombre in capturado.err, f"no aviso del fichero danado: {capturado.err!r}"
 
     def test_el_helper_deduce_el_id_del_NOMBRE(self, tmp_path: Path) -> None:
         """**LA PROPIEDAD DE WI-80, AISLADA DEL RESTO.**

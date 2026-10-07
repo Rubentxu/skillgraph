@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Final
 
 ENV_DATA_ROOT = "SKILLGRAPH_DATA_ROOT"
 DEFAULT_TENANT = "default"
@@ -67,10 +68,33 @@ def project_db_path(data_root: Path, project: str, tenant: str = DEFAULT_TENANT)
     return project_dir(data_root, project, tenant) / "project.sqlite"
 
 
-def is_safe_name(name: str) -> bool:
-    """Slug de proyecto: solo [a-z0-9-_], longitud razonable.
+#: La regla que `is_safe_name` aplica, escrita UNA vez.
+#:
+#: MEDIDO por que hace falta: el mensaje de `sg project create` decía
+#: «Use solo [a-z0-9-_]», y `is_safe_name` ACEPTA mayusculas. El conjunto que
+#: el mensaje anunciaba era estrictamente mas pequeño que el que la funcion
+#: aplicaba, y la contradiccion vivia en la unica linea que ve un operador
+#: con un nombre invalido.
+#:
+#: No basta con corregir el texto: un texto corregido a mano vuelve a
+#: separarse de la funcion en cuanto cualquiera de las dos cambia. La regla
+#: vive aqui y el CLI la imprime, de modo que hay UNA verdad y el guard
+#: mide que las dos digan lo mismo.
+REGLAS_DE_NOMBRE_SEGURO: Final[str] = (
+    "caracteres alfanumericos ASCII ([A-Za-z0-9-_]), de 1 a 64 caracteres"
+)
 
-    Defensa contra inyecciones via nombres maliciosos (RF-11).
+
+def is_safe_name(name: str) -> bool:
+    """Slug de proyecto: alfanumericos ASCII y `-`/`_`, de 1 a 64.
+
+    Defensa contra inyecciones via nombres maliciosos (RF-11). El nombre
+    va a una RUTA (`tenants/<t>/projects/<nombre>/`), luego no es un dato
+    con formato sino una porcion de camino.
+
+    El conjunto de lo permitido esta escrito en `REGLAS_DE_NOMBRE_SEGURO`,
+    que es lo que el CLI imprime al rechazar un nombre. Si cambias una de
+    las dos, el guard `test_wi116_nombre_de_proyecto.py` se pone rojo.
     """
     if not name or len(name) > 64:
         return False

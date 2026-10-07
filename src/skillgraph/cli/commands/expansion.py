@@ -14,6 +14,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
+from typing import Final
 
 from skillgraph.cli.support import (
     EXIT_DOMAIN,
@@ -454,7 +455,38 @@ def cmd_expansion_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_expansion_rejections(args: argparse.Namespace) -> int:
-    """``sg expansion rejections <project>``: lista rechazos persistidos."""
+    """``sg expansion rejections <project>``: lista rechazos persistidos.
+
+    **LA FRONTERA, Y POR QUE ESTE COMANDO NO ESTABA EN ELLA.** Este cuerpo
+    hacia `json.loads(p.read_text())` a pelo y luego `data['proposal_id']`
+    sin proteccion. MEDIDO, los dos casos:
+
+    1. Evidencia con JSON malformado -> `json.JSONDecodeError` escapa como
+       **Traceback**, por la misma frontera que WI-109 cerro para la entrada
+       de la CLI (la receta de `knowledge compile`). `JSONDecodeError` no es
+       `SkillGraphError`, luego el runner no lo traduce a exit code.
+    2. Evidencia con JSON VALIDO pero sin `proposal_id` -> `KeyError`, igual
+       de fuera de la frontera y por el mismo motivo.
+
+    Los dos son el mismo defecto con dos sintomas: **el codigo asumia que lo
+    que hay en disco es lo que el codigo espera.** Y la asuncion no la
+    sostiene nadie: `expansion_rejections/` es evidencia, y la evidencia se
+    dana —un corte a mitad de escritura, un fichero editado a mano, una
+    version vieja con otro formato—.
+
+    **POR QUE AVISAR Y SEGUIR, Y NO FALLAR.** El patron ya lo fijo WI-80
+    para `list`: un dato plausible y falso es peor que un error, y un
+    fichero ilegible se omite **con un aviso por stderr**. Aqui se elige lo
+    mismo, y la razon es que `rejections` es un comando de LECTURA: un
+    operador consultando el historial de rechazos quiere la lista de los que
+    puede leer, y el dano se dice. Tumbar el listado entero porque uno de
+    siete ficheros esta roto le quita justo la informacion que necesita para
+    saber cual esta roto.
+
+    Y lo que NO se hace, deliberadamente: no se imprime una fila parcial con
+    lo que falte. Un `- p-x: reason=?` parece un rechazo sin motivo, que no
+    es lo que hay. O se imprime la fila entera o se avisa de que no hay fila.
+    """
     project, rc = _open_project_or_error(args, args.project)
     if rc != EXIT_OK:
         return rc
@@ -469,12 +501,52 @@ def cmd_expansion_rejections(args: argparse.Namespace) -> int:
         print("(sin rechazos)")
         return EXIT_OK
     for p in files:
-        data = json.loads(p.read_text())
-        print(
-            f"- {data['proposal_id']}: reason={data['reason']!r} "
-            f"rejected_by={data['rejected_by']!r} at={data['rejected_at']}"
-        )
+        fila = _linea_de_rechazo(p)
+        if fila is None:
+            print(
+                f"WARNING: evidencia de rechazo ilegible en {p}; se omite del "
+                "listado (el nombre del fichero sigue siendo su proposal_id)",
+                file=sys.stderr,
+            )
+            continue
+        print(fila)
     return EXIT_OK
+
+
+#: Las cuatro claves que `record_rejection` escribe siempre. Sin las cuatro,
+#: lo que hay en disco no es una evidencia de rechazo de este formato.
+_CLAVES_DE_RECHAZO: Final[tuple[str, ...]] = (
+    "proposal_id",
+    "reason",
+    "rejected_by",
+    "rejected_at",
+)
+
+
+def _linea_de_rechazo(path: Path) -> str | None:
+    """La linea de listado de una evidencia, o `None` si no se puede leer.
+
+    `None` NO significa «sin rechazo»: significa «no se puede decir nada sin
+    mentir». El que avisa es el comando, porque el aviso lleva el nombre del
+    fichero y aqui solo hay una `Path`.
+
+    Se separa del comando para que la frontera tenga UN sitio: cualquier
+    otro comando que lea `expansion_rejections/` pasa por aqui y no
+    reimplementa el `try`. Y el contrato es de todo o nada a proposito —ver
+    el docstring del comando—: las cuatro claves o ninguna.
+    """
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if any(clave not in data for clave in _CLAVES_DE_RECHAZO):
+        return None
+    return (
+        f"- {data['proposal_id']}: reason={data['reason']!r} "
+        f"rejected_by={data['rejected_by']!r} at={data['rejected_at']}"
+    )
 
 
 # ---------------------------------------------------------------------------

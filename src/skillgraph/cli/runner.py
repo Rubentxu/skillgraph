@@ -103,6 +103,7 @@ from skillgraph.governance.backups import (
 )
 from skillgraph.platform.paths import (
     DEFAULT_TENANT,
+    REGLAS_DE_NOMBRE_SEGURO,
     catalog_path,
     is_safe_name,
     project_db_path,
@@ -129,9 +130,15 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 def cmd_project_create(args: argparse.Namespace) -> int:
     if not is_safe_name(args.name):
+        # La regla se IMPORTA, no se reescribe aqui. MEDIDO: este mensaje decia
+        # «Use solo [a-z0-9-_]» y `is_safe_name` acepta mayusculas, luego lo
+        # que el mensaje anunciaba era mas pequeño que lo que se aplicaba. Un
+        # texto corregido a mano vuelve a separarse en cuanto una de las dos
+        # cambia; importando la regla hay una sola verdad. El guard que mide
+        # que las dos digan lo mismo es `test_wi116_nombre_de_proyecto.py`.
         print(
             f"ERROR: nombre de proyecto inválido {args.name!r}. "
-            "Use solo [a-z0-9-_] y hasta 64 caracteres.",
+            f"Use solo {REGLAS_DE_NOMBRE_SEGURO}.",
             file=sys.stderr,
         )
         return EXIT_BAD_NAME
