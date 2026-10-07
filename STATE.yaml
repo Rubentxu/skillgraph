@@ -1243,7 +1243,17 @@ release:
   # escrito a mano que no coincide con git pone la suite en rojo. Este sha se TOMO de
   # git: 1a8815913f2e6110365df27fadfa62cdac214a20. La entrada se anade DESPUES de crear la etiqueta, que es el unico
   # momento en que `git rev-list -n1 v0.34.0` responde.
-  semver_bump: MINOR   # BLOQUE B29. DERIVADO desde v0.38.0 con `scripts/derive_semver.py` sobre `git log v0.38.0..HEAD`: 0 breaking, 2 feat, 1 fix, 5 otros => MINOR -> v0.39.0. El MINOR viene de los dos `feat` del bloque: las ventanas de vigencia con su cadena de supersesion (`platform/schema.py` y `platform/knowledge_claims.py`) y la consulta por revision que llega hasta la CLI (`sg knowledge resolve --at-revision`). El `fix` es el que mas cuenta: la supersesion elegia «la vigente mas reciente de la misma fuente» sin mirar ni el ORDEN ni el VALOR, y con solo dos de las tres condiciones que hacen falta —MEDIDO al ejecutar la suite de B25-B28 sobre el codigo ya implementado: rompio la idempotencia de la ingesta (B26) y la estabilidad del conflict set (B27)—., con `git log v0.36.0..HEAD` y las mismas reglas que `scripts/derive_semver.py`. El MINOR viene del `feat` del conflict set consultable. El sha de la entrada se TOMO de git: fa3e6b51c66d3d0b6e66648faa42d9d072dcf6c8.
+  semver_bump: PATCH   # **B36, Y ESTE CAMPO LLEVABA DESDE B29 SIN QUE NADIE LO MIRARA.**
+    # Declaraba `MINOR` de v0.39.0 mientras `release.tag` decia v0.41.0 y luego
+    # v0.42.0: `test_wi96_semver_rule.py::test_el_bump_declarado_es_el_que_calcula_la_regla`
+    # lo cruza, y no lo cruzo porque mi certificacion de B36 corrio ANTES de los commits
+    # de release — o sea, la corrio sobre un arbol que todavia no era el que se iba a
+    # publicar. Lo que lo cazó fue el gate de pre-push, que corre la receta canonica sobre
+    # el HEAD de main. DERIVADO desde v0.42.0 con `scripts/derive_semver.py` sobre
+    # `git log v0.42.0..HEAD`: 0 breaking, 0 feat, 2 fix, 5 otros => PATCH -> v0.42.1.
+    # **CERO FEAT es lo que hace correcto el PATCH**: B36 no anade superficie, cambia la
+    # instrumentacion. Un MINOR aqui seria una eleccion, y el derivador es el dueno de la
+    # regla.
   rationale_b22: >-
     BLOQUE B22 — EL ARBOL DE TRABAJO NO PUEDE CAMBIAR BAJO LOS PIES DE UN INSTRUMENTO,
     cerrado y publicado en v0.33.0. NO ES UN OPEN NUEVO: es cero informacion. El gate de
