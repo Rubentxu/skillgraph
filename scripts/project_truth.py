@@ -300,8 +300,7 @@ def package_version_declarada(raiz: Path) -> str | None:
         return None
     if not isinstance(valor, str):
         raise VerdadNoLegible(
-            f"STATE.yaml.release.package_version deberia ser un string, y es "
-            f"{type(valor).__name__}"
+            f"STATE.yaml.release.package_version deberia ser un string, y es {type(valor).__name__}"
         )
     return valor
 
