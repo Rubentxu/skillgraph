@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B38** — El gate mas cercano al push dice `SUCCESS` cuando no ha corrido nada · (B37 cerrado y certificado en `evidence/b37-smoke-subset-2026-10-07.md`: `4118 passed, 3 skipped, 0 failed, 904,48 s`, y `4118 + 3 = 4121` = `tests.total`; suelos rc=0, `project_truth` rc=0, ratchet 5/5 a cero, sondas B37 6/6, B36 5/5 y B35 8/8. B37 cerro el silencio del pre-commit: el `OK` final era el MISMO en los tres caminos y **803 de 1163 commits — el 69 % — pasaron por ahi sin ejecutar un test**; el bloque 4 declara ahora siempre que ha pasado, pegado al `OK`, y cinco tests EJECUTAN el hook y miran lo que imprime, porque un guard por busqueda de cadena aprueba el defecto entero. **B38 abre con lo que B37 dejo escrito sin medir**: su subtitulo era «lo que el hook de pre-push no llega a medir». MEDIDO con `scripts/measure_b38_pre_push.py`: con `HOOK_SKIP_PUSH_TESTS=1` la ultima linea del pre-push es `OK: la receta canonica dio SUCCESS sobre <sha>`, con la receta sin ejecutar, y el guard que ya existe sobre ese bypass solo exige `returncode == 0` y que el stub no saliera en la salida.)
-> Versión activa `0.42.3` · último tag `v0.42.3` · 4128 tests · 16/16 UAT
+> Versión activa `0.42.3.dev0` · último tag `v0.42.3` · 4128 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 

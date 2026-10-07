@@ -1233,7 +1233,7 @@ release:
   # `pre-push` de B29): hay TRES declaraciones de version activa —esta,
   # `__init__.__version__` y la ventana del ROADMAP— y basta mover una para que
   # el guard las cruce y se ponga rojo.
-  package_version: "0.42.3"
+  package_version: "0.42.3.dev0"
   fecha: 2026-10-08
   # `semver_bump` NO se repite aqui: vive en la entrada de `release.releases`, y
   # declararlo dos veces es justo lo que el verificador rechaza —`STATE.yaml declara
@@ -1585,6 +1585,21 @@ release:
   # resolvia, queda en `superseded_sha` con la razon. La red que lo
   # mantiene: tests/test_state_release_integrity.py
   releases:
+    - tag: v0.42.3
+      sha: 53787ff2b21d622e74683a65a24d8b1113d84d49
+      fecha: 2026-10-08
+      semver_bump: PATCH
+      package_version: '0.42.3'
+      rationale_b38: |-
+        BLOQUE B38 - EL GATE MAS CERCANO AL PUSH DECIA SUCCESS SIN HABER COMPROBADO NADA. SemVer derivado con scripts/derive_semver.py sobre v0.42.2..HEAD: b/f/x/n/d 0/0/1/5/0 -> PATCH. CERO FEAT: el bloque no anade superficie, cambia lo que el pre-push EXIGE antes de anunciar que la receta dio SUCCESS.
+        **MEDIDO ANTES DE ESCRIBIR NADA, con scripts/measure_b38_pre_push.py, nueve rondas.** R6: un scripts/ci.sh que hace `exit 0` y NADA MAS imprime `[pre-push] OK: la receta canonica dio SUCCESS sobre <sha>`. R7: uno que imprime el veredicto de la receta y sale 0 imprime la MISMA linea. R8: la salida del hook es IDENTICA en los dos casos. **R8 es la ronda que decide el alcance:** el bypass (HOOK_SKIP_PUSH_TESTS=1, que imprime exactamente lo mismo sin ejecutar nada) era UN caso de un defecto estructural, no el defecto. El hook DELEGA y solo sabe que el delegado devolvio 0; un exit code de 0 dice que el proceso termino, no que la receta corriera ni que hiciera nada. Es el defecto de B37 en el pre-commit con una palabra mas fuerte: alli el OK era neutro y se podia leer como «el hook ok», aqui el SUCCESS afirma una ejecucion que no ocurrio, en el gate que esta a un comando de salir del repo.
+        **LO QUE SE ARREGLA, Y NO ES INVENTADO.** `.pipeline.kts` imprime `Pipeline finished with SUCCESS` -- MEDIDO en los artefactos del repo: 20 lineas byte a byte iguales, en linea propia -- y es la MISMA cadena que el hook ya nominaba en su mensaje de error. El hook ya capturaba esa salida en `$_log` y despues la BORRABA sin haberla mirado. Ahora la exige con `grep -qxF` y su OK deja de ser una copia del exit code para ser una afirmacion verificada contra el propio delegado.
+        **LAS SONDAS ENCONTRARON UN AGUJERO EN EL ARREGLO QUE ACABABA DE ESCRIBIR.** La primera version uso `grep -qF`: exigir que la frase ESTE en la salida no es exigir que SEA el veredicto, y un delegado que imprimiera «Pipeline finished with SUCCESS (rehecho)» contiene la frase entera sin haber ejecutado la receta. Con `-x` se cierra, y no afloja nada porque esta medido que la receta emite esa frase sola en su linea.
+        **Y DOS SONDAS NO MATABAN A NADA, POR DOS RAZONES DISTINTAS.** M1 apuntaba al test del camino MALO: con la frase cambiada el grep tampoco la encuentra cuando el delegado no emite nada, luego `rc != 0` se cumple igual y el test pasa -- la frase equivocada rompe el camino BUENO, que es el que exige `rc == 0`. M9 se apoyaba en «Successful» como contraejemplo, y `Successful` NO es `SUCCESS` con otra capitalizacion sino otra palabra mas larga, luego el grep la rechazaba con y sin `-i`: la sonda no media nada y se reportaba como si midiera. De ahi salio el septimo test, una variante de capitalizacion.
+        **EL HARNESS SE ROMPIO TRES VECES ANTES DE CONTAR**, y la tercera es el mismo `replace(..., 1)` sobre un anclaje no unico que ya salio en B13 y B36: el anclaje aparecia dos veces --en un comentario y en el codigo-- luego la sonda muto la PROSA, dejo el codigo intacto, el hook siguio vigilado y el harness la reporto INOCUA. El arreglo no fue apuntar al texto correcto sino que el harness NO PUEDA contarse una sonda como ejecutada si su anclaje no aparece exactamente una vez, diciendo el recuento cuando no.
+        **CUATRO VERIFICADORES DEBILES EN EL INSTRUMENTO, TODOS CON LA MISMA CAUSA:** decidir por la ultima linea cuando el repo de pruebas no es git; comparar la salida entera de dos corridas sin normalizar el sha; normalizar el sha y seguir comparando entero con una linea de mavis-trash de diferencia; y buscar la cadena SUCCESS en toda la salida cuando el mensaje de error del hook la CONTIENE. Comparar dos corridas exige normalizar TODO lo que varia por construccion, y esa lista no se adivina a ojo.
+        **MEDIDO TAMBIEN Y YA CORREGIDO:** el hook anunciaba ~4min y el push de v0.42.2 tardo 13 min 49 s; y el hook instalado en .git/hooks/ estaba en 111ef242 mientras el versionado iba en 77a79a94, o sea que el gate que gobierna cada push era el que estaba en el disco.
+        CIERRE: suite 4125 passed + 3 skipped + 0 failed en 842,69 s sobre `a6cd712` con el arbol limpio y sin escribir durante la corrida, 4125+3 = 4128 = tests.total; suelos rc=0 con cli/ 93.31 %, runtime/ 98.41 % y global 97.13 %; ratchet rc=0 con las CINCO a cero; sondas de B38 9/9 y las de B37 6/6, B36 5/5 y B35 8/8 -- las tres ultimas se vuelven a correr porque B38 toca el mismo fichero de hook que B37.
     - tag: v0.42.2
       sha: c3af1fbdc9bdd34d3e0cee326ce161b3420a2c2b
       fecha: 2026-10-07
