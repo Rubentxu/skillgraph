@@ -23,12 +23,12 @@ Lo que NO hace este slice:
 
 from __future__ import annotations
 
-import sqlite3
 import uuid
 import warnings
 from dataclasses import dataclass
 
 from skillgraph.core.errors import (
+    IntegrityError,
     NotFoundError,
     StaleKnowledgeWarning,
     UnknownClaimError,
@@ -208,14 +208,22 @@ class KnowledgeController:
                 project_id=self.project_id,
                 evidence=evidence,
             )
-        except sqlite3.IntegrityError as exc:
-            # Se discrimina por TIPO primero y por mensaje despues: con
-            # `except Exception` + `"FOREIGN KEY" in str(exc)`, cualquier
+        except IntegrityError as exc:
+            # **R0: LA TRADUCCION LA HACE EL ADAPTER, AQUI SOLO SE DECIDE QUE
+            # SIGNIFICA.** `traduciendo_integridad` ya garantiza que lo que
+            # llega aqui es una FK y no otra cosa: lo que no es FK se propago
+            # intacto alli. Por eso este `if` ya no discrimina tipos — es la
+            # segunda mitad de la comprobacion, la que NO se puede mover al
+            # adapter porque depende de lookups que el repositorio tiene y el
+            # error no.
+            #
+            # Y sigue discriminando por TEXTO, a proposito: SQLite emite
+            # "FOREIGN KEY constraint failed" sin nombrar la tabla, y un
+            # `IntegrityError` de dominio ya no trae el tipo que permita distinguir
+            # por el. Con `except Exception` + busqueda de texto, cualquier
             # error no relacionado que incluyera ese texto (un CHECK, un
-            # trigger, un error de dominio que lo mencione) se reportaba
-            # como UnknownSourceError, senalando al usuario a una causa
-            # que no era la real. Un IntegrityError que no sea FK se
-            # propaga intacto.
+            # trigger) se reportaba como UnknownSourceError, senalando al
+            # usuario a una causa que no era la real.
             if "FOREIGN KEY" not in str(exc):
                 raise
             raise UnknownSourceError("Source no existe") from exc  # NO expone source_id (S2/I)
@@ -476,7 +484,7 @@ class KnowledgeController:
                 project_id=self.project_id,
                 claim=claim_to_record,
             )
-        except sqlite3.IntegrityError as exc:
+        except IntegrityError as exc:
             # SQLite emite "FOREIGN KEY constraint failed" sin nombrar la tabla.
             # Distinguimos por el orden de chequeo: SQLite evalua FKs por orden
             # de insercion, asi que si subject_entity_id no existe, falla antes

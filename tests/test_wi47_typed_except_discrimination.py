@@ -20,12 +20,12 @@ TDD: los tests de abajo fallan contra el codigo anterior.
 
 from __future__ import annotations
 
-import sqlite3
 from typing import Any
 
 import pytest
 
 from skillgraph.core.errors import (
+    IntegrityError,
     UnknownEntityError,
     UnknownSourceError,
     ValidationError,
@@ -35,9 +35,17 @@ from skillgraph.core.errors import (
 class _FakeKnowledge:
     """Storage que acepta todo y devuelve None en los lookups.
 
-    Reproduce el caso patologico: la escritura es un no-op, pero el
-    storage lanza un IntegrityError cuyo mensaje contiene
-    "FOREIGN KEY" sin que exista realmente una FK implicada.
+    **R0: EL FAKE LANZA EL ERROR DE DOMINIO, NO EL DE SQLITE.**
+
+    Antes este fake lanzaba `sqlite3.IntegrityError` porque eso era lo que
+    hacia el storage real. **R0 quito esa frontera**: `knowledge_controller`
+    ya no importa `sqlite3`, y el que traduce es el adapter, via
+    `traduciendo_integridad`. Un fake que siga lanzando el error de SQLite
+    estaria probando un contrato que el codigo ya no tiene — y pasaria en
+    verde mientras el camino realfalls.
+
+    La traduccion se prueba en su sitio: `TestTraduciendoIntegridad` en
+    `tests/test_r1_architecture.py`, contra SQLite de verdad.
     """
 
     def __init__(self, exc: Exception) -> None:
@@ -91,14 +99,14 @@ class TestRecordEvidenceDiscriminatesByType:
     """Una violacion de FK real se sigue reportando como Source ausente."""
 
     def test_real_fk_violation_becomes_unknown_source(self) -> None:
-        ctrl = _controller(sqlite3.IntegrityError("FOREIGN KEY constraint failed"))
+        ctrl = _controller(IntegrityError("FOREIGN KEY constraint failed"))
         with pytest.raises(UnknownSourceError):
             ctrl.record_evidence(evidence=_evidence())
 
     def test_non_fk_integrity_error_propagates_untouched(self) -> None:
         """CHECK violation: mismo tipo, mensaje distinto. Debe propagar."""
-        ctrl = _controller(sqlite3.IntegrityError("CHECK constraint failed: kind"))
-        with pytest.raises(sqlite3.IntegrityError) as ei:
+        ctrl = _controller(IntegrityError("CHECK constraint failed: kind"))
+        with pytest.raises(IntegrityError) as ei:
             ctrl.record_evidence(evidence=_evidence())
 
         assert "CHECK" in str(ei.value)
@@ -126,13 +134,13 @@ class TestRecordEvidenceDiscriminatesByType:
 
 class TestRecordClaimDiscriminatesByType:
     def test_real_fk_violation_becomes_unknown_entity(self) -> None:
-        ctrl = _controller(sqlite3.IntegrityError("FOREIGN KEY constraint failed"))
+        ctrl = _controller(IntegrityError("FOREIGN KEY constraint failed"))
         with pytest.raises(UnknownEntityError):
             ctrl.record_claim(claim=_claim())
 
     def test_non_fk_integrity_error_propagates_untouched(self) -> None:
-        ctrl = _controller(sqlite3.IntegrityError("UNIQUE constraint failed: claim_id"))
-        with pytest.raises(sqlite3.IntegrityError) as ei:
+        ctrl = _controller(IntegrityError("UNIQUE constraint failed: claim_id"))
+        with pytest.raises(IntegrityError) as ei:
             ctrl.record_claim(claim=_claim())
         assert "UNIQUE" in str(ei.value)
         assert "no existe" not in str(ei.value).lower()

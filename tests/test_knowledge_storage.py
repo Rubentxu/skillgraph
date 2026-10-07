@@ -13,12 +13,12 @@ Reglas (external/blueprint-v1/plan/ESTRATEGIA-DE-TESTS.md):
 from __future__ import annotations
 
 import dataclasses
-import sqlite3
 from pathlib import Path
 
 import pytest
 
 from skillgraph.core.errors import (
+    IntegrityError as DomainIntegrityError,
     InvalidEntityIDError,
     InvalidSourceError,
     InvalidSourceIDError,
@@ -369,10 +369,21 @@ def test_attach_evidence_to_claim_roundtrip(tmp_path: Path) -> None:
 
 
 def test_record_evidence_with_invalid_source_raises(tmp_path: Path) -> None:
-    """FK falla: Evidence sin Source registrada -> IntegrityError."""
+    """FK falla: Evidence sin Source registrada -> `IntegrityError` DE DOMINIO.
+
+    **R0: ESTE TEST AFIRMABA QUE EL ERROR CRUDO SALIA, Y ESO CAMBIO A
+    PROPÓSITO.** Decía `pytest.raises(sqlite3.IntegrityError)`, que era la
+    frontera vieja: el storage dejaba pasar el tipo del adapter y el
+    dominio lo traducía. Ahora lo traduce el propio storage y lo que sale
+    es `skillgraph.core.errors.IntegrityError`, que es un `SkillGraphError`
+    y por tanto se traduce a exit code (lo que mide WI-109).
+
+    Un `sqlite3.IntegrityError` que atravesara el dominio saldría como
+    **Traceback** al usuario, que es el defecto que R0 cierra.
+    """
     s = _make_storage(tmp_path)
     # NO registramos source.
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(DomainIntegrityError):
         s.record_evidence(
             tenant_id="t",
             project_id="p",
