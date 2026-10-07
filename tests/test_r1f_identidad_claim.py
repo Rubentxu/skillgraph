@@ -244,7 +244,23 @@ class TestLaConstraintRealLoDice:
     """
 
     @staticmethod
-    def _insert_crudo(s: Storage, *, cid: str, tenant: str, project: str) -> None:
+    def _insert_crudo(
+        s: Storage, *, cid: str, tenant: str, project: str, objeto: str = "psycopg"
+    ) -> None:
+        """El INSERT crudo, para saltarse `record_claim` y ver al motor.
+
+        **B31: `objeto` ES UN PARAMETRO, y no estaba.** La primera version
+        escribia SIEMPRE `"otro"`, mientras `_claim` escribe `"psycopg"`, y
+        el test que usa este helper para medir la DEDUPLICACION fallaba al
+        cambiar el `UNIQUE` —no porque la deduplicacion se hubiera roto,
+        sino porque los dos claims ya no tenian el mismo objeto y pasaron a
+        ser dos hechos distintos.
+
+        MEDIDO: con `"otro"` fijo, `DID NOT RAISE IntegrityError`; con el
+        objeto parametrico e igual al de `_claim`, vuelve a rechazar. Un
+        test que se pone rojo por el cambio correcto hay que corregirlo por
+        su motivo, no silenciarlo.
+        """
         s._conn.execute(
             """
             INSERT INTO claims (
@@ -259,7 +275,7 @@ class TestLaConstraintRealLoDice:
                 project,
                 SUJETO,
                 "imports_module",
-                '"otro"',
+                f'"{objeto}"',
                 source_id(ORIGEN),
                 "m",
                 "v",
@@ -289,6 +305,37 @@ class TestLaConstraintRealLoDice:
             s.record_claim(tenant_id="A", project_id="X", claim=_claim("c-A"))
             with pytest.raises(sqlite3.IntegrityError):
                 self._insert_crudo(s, cid="c-repetida", tenant="A", project="X")
+
+    def test_B31_mismo_ambito_distinto_objeto_SI_se_puede_escribir(self) -> None:
+        """**B31 / `ADR-0035`.** El objeto entra en la identidad, y esta es su mitad.
+
+        Es el test hermano del de arriba y se opone a el en una sola cosa:
+        aqui el objeto **difiere**, y el motor tiene que ACCEPTAR la segunda
+        fila. Antes la rechazaba, y con razon segun la identidad de entonces
+        —«mismo sujeto, mismo predicado, misma fuente» era una ranura—,
+        pero esa regla refundia dos hechos que pueden ser ciertos a la vez.
+
+        MEDIDO sobre el arbol real antes del cambio: un fichero que importa
+        `os` y `typing` producia 1 fila, no 2, y la segunda desaparecia
+        **sin error**. Eso no es deduplicacion; es perdida de evidencia, que
+        es lo que este repo ha rechazado dos veces (WI-R1F y B26).
+
+        Y por que el par de tests es inseparable: si el de deduplicacion no
+        existiera, este pasaria tambien con la identidad vieja, y arreglaria
+        el defecto rompiendo la idempotencia de B26 sin que nada lo notara.
+        """
+        with _ambos_ambitos() as s:
+            s.record_claim(tenant_id="A", project_id="X", claim=_claim("c-A"))
+            # No debe lanzar: son dos hechos distintos y ambos caben.
+            self._insert_crudo(s, cid="c-otro-objeto", tenant="A", project="X", objeto="typing")
+            filas = s._conn.execute(
+                "SELECT object_literal_json FROM claims "
+                "WHERE tenant_id = 'A' AND project_id = 'X' ORDER BY claim_id"
+            ).fetchall()
+            assert [f[0] for f in filas] == ['"psycopg"', '"typing"'], (
+                "los dos hechos deberian cohabitar; el segundo se ha perdido: "
+                "el UNIQUE no lleva el objeto y las dos filas siguen colisionando"
+            )
 
     def test_la_migracion_que_lo_arrecla_esta_declarada(self) -> None:
         """La constraint se crea en una migracion; sin declararla no viaja."""

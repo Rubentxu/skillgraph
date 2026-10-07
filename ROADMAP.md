@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B34** — No hay forma de preguntar al sistema por lo que sabe · `what`/`why`/`impact`/`changed`/`conflicts`/`evidence` sobre un único modelo, con CLI y capability agent · (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 y la ventana de runtime. **B34 no era un bloque de consultas sino de superficie**: cinco de las seis ya existían y `impact` no era alcanzable desde el Protocol. Al certificar salió que **el puente de la capability nunca se ejecutaba** — 86,21 % en `knowledge_query.py` y las líneas sin cubrir eran la entrega del bloque; ver más abajo)
-> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 4024 tests · 16/16 UAT
+> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 4053 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 

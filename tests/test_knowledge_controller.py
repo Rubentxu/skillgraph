@@ -111,14 +111,35 @@ def test_record_claim_returns_generated_id(tmp_path: Path) -> None:
         ),
     )
     assert cid.startswith("claim-")
-    # El id generado debe ser determinista.
+    # El id generado debe ser determinista. **B31**: se calcula sobre la
+    # MISMA tupla que el `UNIQUE` de `claims`, y esa tupla lleva el objeto.
+    # Sin el `object_literal` aqui, este test compararia el id contra una
+    # tupla distinta y pasaria por casualidad o por—The assertion mas
+    # fuerte de abajo lo deja claro—.
     expected = make_claim_id(
         subject_entity_id="file:src/foo.py",
         predicate="line_count",
         source_id="local:src/foo.py",
         checked_at_revision="rev1",
+        object_literal=42,
     )
     assert cid == expected
+
+    # Y la contraparte que hace que lo de arriba no sea decorativo: la
+    # MISMA llamada sin el objeto da OTRO id. Si `make_claim_id` y el
+    # `UNIQUE` de la tabla dejaran de llevar el objeto a la vez, estas dos
+    # aserciones no pueden cumplirse juntas — y ese es el fallo que `0008`
+    # evita por construccion.
+    sin_objeto = make_claim_id(
+        subject_entity_id="file:src/foo.py",
+        predicate="line_count",
+        source_id="local:src/foo.py",
+        checked_at_revision="rev1",
+    )
+    assert cid != sin_objeto, (
+        "el id no depende del objeto: la identidad de la tabla y la semilla "
+        "de make_claim_id han divergido, y eso pierde evidencia en silencio"
+    )
 
 
 def test_find_entity_by_kind_and_key(tmp_path: Path) -> None:
@@ -239,7 +260,48 @@ def test_register_source_idempotent(tmp_path: Path) -> None:
 
 
 def test_record_claim_idempotent_on_full_tuple(tmp_path: Path) -> None:
-    """Mismo (subject, predicate, source, revision) -> mismo ClaimID."""
+    """**B31**: mismo (sujeto, predicado, objeto, fuente, revision) -> mismo id.
+
+    El objeto entro en la tupla natural con `ADR-0035`, asi que la
+    idempotencia se mide con el MISMO objeto dos veces. Antes este test
+    escribia `42` y luego `99` —objetos DISTINTOS— y por eso solo podia
+    afirmar una cosa: que dos hechos distintos comparten id. Que era
+    justamente lo que `ADR-0035` deja de ser cierto, y lo que hacia que un
+    fichero con dos imports perdiera el segundo en silencio.
+    """
+    ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
+    ctl.register_source(source=_src())
+    ctl.upsert_entity(entity=_ent())
+    base = dict(
+        subject_entity_id="file:src/foo.py",
+        predicate="line_count",
+        source_id="local:src/foo.py",
+        checked_at_revision="rev1",
+    )
+    id1 = ctl.record_claim(
+        claim=Claim(claim_id="", object_literal=42, **base),  # type: ignore[arg-type]
+    )
+    id2 = ctl.record_claim(
+        claim=Claim(claim_id="", object_literal=42, **base),  # type: ignore[arg-type]
+    )
+    # Misma tupla natural, objeto incluido -> mismo ClaimID determinista.
+    assert id1 == id2
+    n = ctl.knowledge._conn.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
+    assert n == 1  # solo 1 row (INSERT OR IGNORE)
+
+
+def test_record_claim_distinto_objeto_es_otro_claim(tmp_path: Path) -> None:
+    """**B31 / `ADR-0035`**: distinto objeto -> distinto `ClaimID` y DOS filas.
+
+    El hermano inseparable del de arriba, y la razon por la que el de arriba
+    no basta. Si este no existiera, cambiar la identidad pasaria todos los
+    tests arreglando una perdida de evidencia a costa de la idempotencia, y
+    nadie lo veria: `INSERT OR IGNORE` seguiria devolviendo una fila y el
+    `claim_id` seguiria siendo determinista.
+
+    MEDIDO antes del cambio, sobre el arbol real: estos dos claims salian
+    con el MISMO id y la segunda escritura no dejaba fila.
+    """
     ctl = KnowledgeController(knowledge=_storage(tmp_path), tenant_id="t", project_id="p")
     ctl.register_source(source=_src())
     ctl.upsert_entity(entity=_ent())
@@ -255,10 +317,9 @@ def test_record_claim_idempotent_on_full_tuple(tmp_path: Path) -> None:
     id2 = ctl.record_claim(
         claim=Claim(claim_id="", object_literal=99, **base),  # type: ignore[arg-type]
     )
-    # Misma tupla natural -> mismo ClaimID determinista.
-    assert id1 == id2
+    assert id1 != id2, "dos hechos distintos comparten id: el segundo se perderia"
     n = ctl.knowledge._conn.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
-    assert n == 1  # solo 1 row (INSERT OR IGNORE)
+    assert n == 2, f"esperaba 2 filas y hay {n}: el segundo hecho se ha perdido"
 
 
 # ---------------------------------------------------------------------------

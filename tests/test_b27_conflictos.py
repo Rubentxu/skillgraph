@@ -161,8 +161,32 @@ class TestElOverwriteAvisa:
         s.record_claim(tenant_id="t", project_id="p", claim=_claim("c1", True))
         s.record_claim(tenant_id="t", project_id="p", claim=_claim("c2", False))
 
-        (guardado,) = s._conn.execute("SELECT object_literal_json FROM claims").fetchone()
-        assert guardado == "true", "el segundo claim ha SUSTITUIDO al primero: B27 avisa, no decide"
+        # **B31: la asercion es MAS FUERTE, no mas debil.** Antes se miraba
+        # una fila y se comprobaba que no la hubieran cambiado. Ahora se
+        # mira que esten LAS DOS, porque con el objeto dentro de la
+        # identidad (`ADR-0035`) son dos hechos distintos y cada uno tiene su
+        # fila.
+        #
+        # Lo que este test protege NO cambia: que la fila anterior siga
+        # intacta. Lo que cambia es que ahora hay una segunda fila que
+        # antes no existia, y por eso `fetchone()` devolvia la otra y parecia
+        # que la habian sustituido.
+        #
+        # Y por que esto NO debilita a B27: el par sigue haciendo falta, y el
+        # hermano de R1F (`test_B31_mismo_ambito_distinto_objeto_SI_se_puede_escribir`)
+        # declara la otra mitad. Sin las dos, cambiar la identidad se
+        # arreglaria rompiendo la deduplicacion sin que nada lo notara.
+        guardados = [
+            fila[0]
+            for fila in s._conn.execute(
+                "SELECT object_literal_json FROM claims ORDER BY claim_id"
+            ).fetchall()
+        ]
+        assert guardados == ["true", "false"], (
+            f"esperaba las DOS afirmaciones intactas y hay {guardados}: "
+            "el segundo claim ha SUSTITUIDO al primero (B27 avisa, no decide) "
+            "o se ha perdido (B31)"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -451,8 +475,20 @@ class TestLoQueB27NoDecide:
         r = s.record_claim(tenant_id="t", project_id="p", claim=_claim("c2", False, ORIGEN_A))
 
         assert r.conflicto is True
-        (guardado,) = s._conn.execute("SELECT object_literal_json FROM claims").fetchone()
-        assert guardado == "true", "el aviso decidio cual de las dos tiene razon"
+        # B31: las dos filas conviven, y `ORDER BY` las pone en orden de
+        # `claim_id` (`c1` antes que `c2`), no de escritura. Antes la segunda
+        # pisaba a la primera y `fetchone()` devolvia exactamente la que
+        # habia que comprobar; ahora hay dos y hay que mirar las dos. Ver
+        # `TestElOverwriteAvisa::test_la_fila_anterior_no_se_toca`.
+        guardados = [
+            fila[0]
+            for fila in s._conn.execute(
+                "SELECT object_literal_json FROM claims ORDER BY claim_id"
+            ).fetchall()
+        ]
+        assert guardados == ["true", "false"], (
+            f"el aviso decidio cual de las dos tiene razon: hay {guardados}"
+        )
 
     def test_el_conflicto_sobre_entidades_no_solo_sobre_literals(self, tmp_path: Path) -> None:
         """«A usa B» frente a «A usa C» tambien es un conflicto.

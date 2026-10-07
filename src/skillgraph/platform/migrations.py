@@ -452,6 +452,162 @@ def _ventana_de_runtime(cur: sqlite3.Cursor) -> None:
     )
 
 
+def _ddl_de_claims_con_objeto(ddl_previo: str) -> str:
+    """El `UNIQUE` de `claims` con el objeto dentro de la identidad.
+
+    Se deriva del DDL que ya tiene la base y se toca **una** clausula, por
+    el mismo motivo que escribio `_ddl_de_claims_con_ambito`: una
+    migracion no puede endurecer una base vieja. Un `CREATE TABLE` fijo
+    arrastraria las FK de la epoca actual sobre una tabla que quizas no las
+    tenia, y convertiria filas huerfanas en un error que no existia.
+
+    Y se hace con el mismo regex que `0005`, por una razon que ya se pago:
+    la clausula `UNIQUE` es la UNICA que cambia, y un reemplazo literal del
+    texto entero fallaria en cuanto una base tuviera un `UNIQUE` escrito con
+    otra partida de espacios —que es justo lo que paso con la primera
+    version de `0005`.
+    """
+    _UNIQUE = re.compile(r"UNIQUE\s*\([^)]*\)", re.IGNORECASE)
+    sustituto = (
+        "UNIQUE (subject_entity_id, tenant_id, project_id, predicate,\n"
+        "            object_literal_json, object_entity_id, source_id,\n"
+        "            checked_at_revision)"
+    )
+    if _UNIQUE.search(ddl_previo):
+        return _UNIQUE.sub(sustituto, ddl_previo, count=1)
+    # Una base sin NINGUN `UNIQUE` —de antes de B25— no tiene la clausula que
+    # sustituir, y hay que colgarle una. El DDL viejo termina en la ultima
+    # columna, luego hace falta la coma que `0005` aprendio a mirar.
+    cuerpo = ddl_previo.rstrip().rstrip(";")
+    cierre = cuerpo.rfind(")")
+    if cierre == -1:
+        raise sqlite3.IntegrityError(
+            f"0008: el DDL de `claims` no tiene el cierre esperable: {cuerpo!r}"
+        )
+    cabeza, cola = cuerpo[:cierre], cuerpo[cierre:]
+    separador = "" if cabeza.rstrip().endswith(",") else ","
+    return (
+        cabeza.rstrip()
+        + separador
+        + "\n    -- B31: el objeto entra en la identidad.\n    "
+        + sustituto
+        + "\n"
+        + cola
+    )
+
+
+def _claims_identidad_con_objeto(cur: sqlite3.Cursor) -> None:
+    """`0008` / `ADR-0035`: **el objeto entra en la identidad de un claim.**
+
+    **LO QUE SE MEDIO ANTES DE ESCRIBIR ESTA FUNCION**, sobre el arbol real
+    con la identidad de `0005` (`scripts/measure_b31_identidad.py`):
+
+        dos hechos CIERTOS distintos, misma fuente     SE PISA  -> 1 fila
+        la misma afirmacion escrita dos veces          se deduplica
+        dos fuentes que se oponen                     1 conflicto (B27)
+
+    La primera fila es el defecto. Un fichero que importa `os` y `typing`
+    produce dos `Claim` con la misma tupla natural, y el segundo **no
+    falla: desaparece**. Se loses 2 de 7 observaciones al ingerir, y
+    `impact` responde 0 sin decir por que.
+
+    **POR QUE ESO NO ES UN CONFLICTO QUE HAYA QUE RESOLVER.** B27 cerro
+    «mismo sujeto, mismo predicado, distinta fuente» y esa parte sigue
+    intacta porque `source_id` **sigue en la clave**. Lo que se separa son
+    dos hechos que pueden ser ciertos a la vez, que es justo lo que un
+    `Claim` es: una afirmacion, no una ranura.
+
+    **POR QUE REBUILD Y NO UN INDICE NUEVO.** Lo que escribio `0005` y sigue
+    valiendo: SQLite no tiene `ALTER TABLE ... DROP CONSTRAINT`, luego
+    cambiar un `UNIQUE` de tabla exige recrearla. Un indice UNIQUE nuevo no
+    serviria —el viejo seguiria rechazando— y crearlo antes de soltar la
+    tabla deja las dos constraints vivas y la copia falla.
+
+    **Y LA MIGRACION NO PIERDE NADA, Y SE COMPRUEBA.** El `INSERT ... SELECT`
+    copia **todas** las columnas por nombre. Puede fallar por una sola
+    razon: si la base vieja tuviera filas que violaran el `UNIQUE` nuevo.
+    Pasa exactamente cuando la base ya tenia, para un mismo sujeto y
+    predicado, dos objetos distintos —que es el defecto que esta migracion
+    viene a arreglar—. Se avisa de ese caso concreto en vez de dejar que
+    SQLite responda `UNIQUE constraint failed` sin decir de que fila.
+    """
+    if _el_unique_ya_lleva_objeto(cur):
+        return
+
+    columnas_antes = [fila[1] for fila in cur.execute("PRAGMA table_info(claims)")]
+    fila_ddl = cur.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'claims'"
+    ).fetchone()
+    if fila_ddl is None or not fila_ddl[0]:
+        raise sqlite3.IntegrityError(
+            "0008: no hay DDL de `claims` que derivar. Sin el no se puede "
+            "cambiar su UNIQUE sin inventar el resto de la tabla."
+        )
+
+    # Las columnas del objeto tienen que existir ANTES de construir el
+    # `UNIQUE` nuevo, y no las crea esta migracion: las puso `0003`. Se
+    # comprueba igual, porque una base de la epoca de B6 puede no tenerlas y
+    # el error de SQLite seria `no such column`, que no dice que la
+    # migracion va atras.
+    faltan = {"object_literal_json", "object_entity_id"} - set(columnas_antes)
+    if faltan:
+        raise sqlite3.IntegrityError(
+            f"0008: `claims` no tiene las columnas del objeto {sorted(faltan)}. "
+            "La migracion 0003 deberia haberlas puesto; sin ellas el UNIQUE "
+            "nuevo no se puede escribir. Se revierte en vez de inventarlas."
+        )
+
+    # Se cuenta ANTES de reconstruir. Es el numero que tiene que conservarse.
+    cuantos_antes = cur.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
+
+    cur.execute("ALTER TABLE claims RENAME TO claims_pre_0008")
+    cur.execute(_ddl_de_claims_con_objeto(fila_ddl[0]))
+
+    columnas = ", ".join(f'"{c}"' for c in columnas_antes)
+    cur.execute(f"INSERT INTO claims ({columnas}) SELECT {columnas} FROM claims_pre_0008")
+
+    cuantos_despues = cur.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
+    if cuantos_antes != cuantos_despues:
+        cur.execute("DROP TABLE IF EXISTS claims_pre_0008")
+        raise sqlite3.IntegrityError(
+            f"0008: la copia de claims cambio el numero de filas "
+            f"({cuantos_antes} -> {cuantos_despues}). Se revierte en vez de "
+            "seguir: perder evidencia en silencio es peor que no migrar."
+        )
+
+    cur.execute("DROP TABLE claims_pre_0008")
+
+
+def _el_unique_ya_lleva_objeto(cur: sqlite3.Cursor) -> bool:
+    """¿La constraint UNIQUE de `claims` incluye ya el objeto?
+
+    Se pregunta AL MOTOR por el motivo que escribe
+    `_el_unique_ya_lleva_ambito`, y que aqui es todavia mas importante: las
+    dos funciones se differentiate solo en DOS columnas, y leer el DDL de
+    `schema.py` mediria el texto que se quiere, no la constraint que una base
+    ya migrada tiene de verdad.
+
+    Y el caso que de verdad importa: una base creada HOY por `schema.py`
+    **ya** trae el `UNIQUE` con el objeto, luego esta funcion es lo que hace
+    que abrirla dos veces no reconstruya la tabla. Sin el, la segunda
+    apertura fallaria con `UNIQUE constraint failed` sobre datos que ya
+    eran validos.
+    """
+    filas = cur.execute(
+        "SELECT name FROM pragma_index_list('claims') WHERE origin = 'u' AND \"unique\" = 1"
+    ).fetchall()
+    for (nombre,) in filas:
+        if not isinstance(nombre, str) or not nombre.replace("_", "").isalnum():
+            continue
+        columnas = {fila[2] for fila in cur.execute(f"PRAGMA index_info('{nombre}')").fetchall()}
+        if {"tenant_id", "project_id"} <= columnas and {
+            "object_literal_json",
+            "object_entity_id",
+        } <= columnas:
+            return True
+    return False
+
+
 MIGRACIONES: Final[tuple[Migracion, ...]] = (
     Migracion("0001_claims_assertion_origin", _anade_assertion_origin),
     Migracion("0002_installed_packs", _anota_installed_packs),
@@ -460,6 +616,7 @@ MIGRACIONES: Final[tuple[Migracion, ...]] = (
     Migracion("0005_claims_identidad_con_ambito", _claims_identidad_con_ambito),
     Migracion("0006_sources_indice_de_commit", _indice_de_commit),
     Migracion("0007_sources_ventana_de_runtime", _ventana_de_runtime),
+    Migracion("0008_claims_identidad_con_objeto", _claims_identidad_con_objeto),
 )
 
 

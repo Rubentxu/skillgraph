@@ -26,6 +26,7 @@ from __future__ import annotations
 import uuid
 import warnings
 from dataclasses import dataclass
+from typing import Any
 
 from skillgraph.core.errors import (
     IntegrityError,
@@ -41,6 +42,7 @@ from skillgraph.knowledge.graph import (
     ClaimID,
     Entity,
     EntityID,
+    EntityRef,
     Evidence,
     EvidenceID,
     Finding,
@@ -65,10 +67,78 @@ def make_claim_id(
     predicate: str,
     source_id: SourceID,
     checked_at_revision: str,
+    object_literal: Any = None,
+    object_entity: EntityRef | None = None,
 ) -> ClaimID:
-    """Genera un ClaimID determinista via UUIDv5 sobre la tupla natural."""
-    seed = f"{subject_entity_id}|{predicate}|{source_id}|{checked_at_revision}"
-    return ClaimID(f"claim-{uuid.uuid5(NAMESPACE_KNOWLEDGE, seed)}")
+    """Genera un ClaimID determinista via UUIDv5 sobre la tupla natural.
+
+    **B31: EL OBJETO ENTRA EN LA SEMILLA.** Antes era
+    `(sujeto, predicado, fuente, revision)`, que es exactamente el `UNIQUE`
+    de la tabla, y por eso los dos tenian que cambiar JUNTOS.
+
+    MEDIDO sobre el arbol real, con la identidad de antes: un fichero que
+    importa dos modulos produce dos `Claim` con la MISMA semilla, y el
+    segundo se pierde —no falla, desaparece—:
+
+        escribe 'os'     -> 1 fila
+        escribe 'typing' -> sigue habiendo 1 fila
+
+    Que son dos hechos ciertos, no una contradiccion. Y «se pierde en
+    silencio» es la forma que este repo ya rechazo dos veces: por el
+    `UNIQUE` sin ambito (WI-R1F) y por el `claim_id` que no derivaba del
+    contenido (B26).
+
+    **POR QUE EL LITERAL Y LA ENTIDAD SE ETIQUETAN DISTINTOS.** La semilla
+    lleva un prefijo de forma —`l:` o `e:`— para que un literal `"5"` y una
+    entidad `module:5` no produzcan el mismo id. `B25` garantiza que el
+    objeto es **uno de los dos**, no ninguno, luego el prefijo es total: no
+    hay tercer caso que dejar sin nombre.
+
+    **POR QUE NO ES UN CAMBIO DE IDENTITY QUE ROMPA NADA.** MEDIDO con los
+    tres casos que importan:
+
+        dos hechos CIERTOS distintos, misma fuente   SE PISA -> 2 claims
+        la misma afirmacion escrita dos veces        se deduplica (igual)
+        dos fuentes que se oponen                   conflicto (B27, igual)
+
+    El segundo es el que no puede romperse: es la idempotencia de B26, y no
+    depende de que la clave sea corta sino de que la tupla natural no
+    cambie al reingerir. Anadir el objeto no la cambia cuando el objeto es
+    el mismo, que es justo el caso de reingesta.
+
+    Y el tercero tampoco se toca: los conflictos de B27 son de FUENTES
+    distintas, y la fuente sigue estando en la clave.
+
+    Los dos parametros del objeto tienen default para no romper a quien ya
+    llama, pero **un llamador que no los pase obtiene el id viejo**, que es
+    la mitad del peligro: por eso los dos-productores de claims
+    (`observation._claim_de` y `record_claim`) los pasan.
+    """
+    semilla = (
+        f"{subject_entity_id}|{predicate}|{_forma_del_objeto(object_literal, object_entity)}"
+        f"|{source_id}|{checked_at_revision}"
+    )
+    return ClaimID(f"claim-{uuid.uuid5(NAMESPACE_KNOWLEDGE, semilla)}")
+
+
+def _forma_del_objeto(object_literal: Any, object_entity: EntityRef | None) -> str:
+    """El objeto, como se escribe en la semilla del `claim_id`.
+
+    `l:` para un literal, `e:` para una entidad. El prefijo no es decorativo:
+    sin el, el literal `"module:os"` y la entidad `module:os` darian el
+    mismo id y dos afirmaciones distintas ocuparian la misma fila.
+
+    El literal se escribe con `repr` y no con `str` porque `str(True)` y
+    `str(1)` dan `"True"` y `"1"`, pero `str` de un dict depende del orden de
+    insercion y dos dicts con las mismas claves en orden distinto tienen
+    distinta identidad para SQLite y la misma para Python. `repr` no
+    resuelve eso —eso lo resuelve `object_literal_json`, que es donde
+    SQLite guarda el valor de verdad—; se usa porque para los tres tipos
+    del modelo (`int | str | bool`) es estable y sin ambiguedad.
+    """
+    if object_entity is not None:
+        return f"e:{object_entity}"
+    return f"l:{object_literal!r}"
 
 
 def make_evidence_id(*, source_id: SourceID, content_repr: str) -> EvidenceID:
@@ -455,7 +525,8 @@ class KnowledgeController:
         """Registra un Claim. Convierte FK violation en UnknownEntityError.
 
         Si el ADT tiene `claim_id=""` (vacio), genera uno determinista
-        via UUIDv5 sobre (subject, predicate, source, revision).
+        via UUIDv5 sobre (sujeto, predicado, objeto, fuente, revision) —
+        la MISMA tupla que el `UNIQUE` de `claims` (B31).
         """
         # Si el caller paso claim_id vacio, generamos uno.
         claim_to_record = claim
@@ -465,16 +536,20 @@ class KnowledgeController:
                 predicate=claim.predicate,
                 source_id=claim.source_id,
                 checked_at_revision=claim.checked_at_revision,
+                object_literal=claim.object_literal,
+                object_entity=claim.object_entity,
             )
             claim_to_record = Claim(
                 claim_id=generated,
                 subject_entity_id=claim.subject_entity_id,
                 predicate=claim.predicate,
                 object_literal=claim.object_literal,
+                object_entity=claim.object_entity,
                 source_id=claim.source_id,
                 evidence_ids=claim.evidence_ids,
                 extraction_method=claim.extraction_method,
                 extractor_version=claim.extractor_version,
+                assertion_origin=claim.assertion_origin,
                 checked_at_revision=claim.checked_at_revision,
                 stale=claim.stale,
             )

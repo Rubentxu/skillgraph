@@ -153,6 +153,12 @@ def sujeto_de(path: str) -> str:
     try:
         return entity_id(f"{_NAMESPACE}:{limpio}")
     except Exception as exc:
+        # El ancho es deliberado y se re-lanza tipado: `entity_id` puede
+        # reventar por mas de una razon —formato, prefijo, tipo— y la unica
+        # accion posible para todas es la misma. Estrecharlo dejaria fuera
+        # alguna, y el operador recibiria un `InvalidEntityIDError` sobre el
+        # nombre de una funcion interna en vez de un `ValidationError` que
+        # dice que espera `file:<ruta>`.
         raise ValidationError(
             f"{CODE_ANALYSIS}: {path!r} no es un sujeto valido para un fichero. "
             f"Se espera `file:<ruta>`, y la regla que lo rechaza es "

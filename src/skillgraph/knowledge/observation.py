@@ -390,6 +390,17 @@ def _claim_de(obs: Observation, env: ObservationEnvelope) -> Claim:
             predicate=obs.predicate,
             source_id=env.source_id,
             checked_at_revision=env.revision,
+            # **B31.** Sin estos dos, dos observaciones del MISMO predicado
+            # en el MISMO envelope salen con el mismo `claim_id` y la segunda
+            # choca con la PRIMARY KEY.
+            #
+            # MEDIDO: es exactamente lo que pasa si se omiten, y no se ve
+            # mirando el codigo —se ve mirando el UNIQUE de la tabla, que si
+            # lleva el objeto, y las filas, que no—. El `UNIQUE` estaba
+            # arreglado y seguian perdiendose 2 de 7: el motor rechazaba la
+            # segunda por `claim_id`, no por la tupla natural.
+            object_literal=obs.object_literal,
+            object_entity=obs.object_entity,
         ),
         subject_entity_id=entity_id(env.subject),
         predicate=obs.predicate,

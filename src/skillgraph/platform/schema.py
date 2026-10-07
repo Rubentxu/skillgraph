@@ -395,8 +395,20 @@ CREATE TABLE IF NOT EXISTS claims (
     -- `migrations._DDL_CLAIMS_CON_AMBITO`; aqui se repite porque
     -- `CREATE TABLE IF NOT EXISTS` corre en cada apertura y no puede
     -- importar de ahi sin crear un ciclo.
-    UNIQUE (subject_entity_id, tenant_id, project_id,
-            predicate, source_id, checked_at_revision)
+    --
+    -- **B31: EL OBJETO ENTRA EN LA IDENTIDAD, y no solo el ambito.** MEDIDO
+    -- sobre el arbol real con la clave de antes: un fichero que importa dos
+    -- modulos producia dos `Claim` con la MISMA tupla natural y el segundo
+    -- se perdia en silencio —no fallaba, desaparecia—, dejando una fila.
+    -- Dos hechos ciertos no son una contradiccion, luego la clave estaba
+    -- fundiendo dos cosas que el resto del sistema mantiene separadas.
+    --
+    -- Lo que NO se anade es el `source_id` por hecho: la fuente sigue siendo
+    -- parte de la identidad, y por eso los conflictos de B27 —que son de
+    -- fuentes DISTINTAS— siguen siendo conflictos.
+    UNIQUE (subject_entity_id, tenant_id, project_id, predicate,
+            object_literal_json, object_entity_id, source_id,
+            checked_at_revision)
 );
 CREATE INDEX IF NOT EXISTS idx_claims_subject
     ON claims(subject_entity_id, predicate);
