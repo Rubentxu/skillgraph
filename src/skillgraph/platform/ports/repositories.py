@@ -339,6 +339,42 @@ class KnowledgeRepository(Protocol):
     def list_claims_for_source(
         self, *, tenant_id: str, project_id: str, source_id: str
     ) -> list[Any]: ...
+    def list_claims_by_object_entity(
+        self, *, tenant_id: str, project_id: str, object_entity_id: str
+    ) -> tuple[Any, ...]:
+        """**B34.** La arista INVERSA: las afirmaciones que **mencionan** a
+        esta entidad como objeto.
+
+        **POR QUE ESTA EN EL PUERTO Y NO SOLO EN LA FACHADA.** B25 la
+        implemento y la coloco en `Storage`, pero no la declaro en este
+        `Protocol`, y eso hacia que la superficie no pudiera responder
+        `impact` por el puerto sin depender de `Storage` —que es
+        justo lo que `AGENTS.md` 4.3 prohibe y lo que rompe AC-5.
+
+        MEDIDO antes de anadirla: `grep -c 'def list_claims_by_object_entity'`
+        -> 0 en el puerto, 1 en `knowledge_claims.py`, y la capacidad de
+        B30 depende de ESTE puerto. O sea: la consulta existia y era
+        inalcanzable desde la capa que la necesita.
+
+        **Y EL NOMBRE DEL PARAMETRO ES EL DE LA IMPLEMENTACION.**
+        `object_entity_id`, no `entity_id`. Declararlo de otra forma habria
+        creado un Protocol que `Storage` cumple «a ojo» y que nadie puede
+        comprobar: `isinstance` por `Protocol` no mira las firmas, asi que
+        el error habria salido en runtime, en la primera llamada, con un
+        `TypeError` que no senala el puerto.
+
+        ---
+
+        Y una correccion a una profecia que B25 escribio en su docstring y
+        que resulto equivocada, pero por un motivo util: decia que esta
+        consulta era «la primera mitad de `changed` en B34». No lo es. Esta
+        consulta es la ARISTA INVERSA, y es `impact`. `changed` es temporal
+        —una REVISION o un COMMIT— y no tiene nada que ver con la direccion
+        de la arista. Confundir las dos cosas es el error que B29 cometio
+        con los dos relojes y que B32 cobro caro; conviene que quede escrito
+        que aqui se confundieron al escribir el codigo, no despues.
+        """
+
     def list_claims_by_predicate(
         self, *, tenant_id: str, project_id: str, predicate: str
     ) -> tuple[StoredClaim, ...]: ...

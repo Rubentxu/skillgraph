@@ -52,6 +52,13 @@ from __future__ import annotations
 from typing import Any, Final, Literal
 
 from skillgraph.core.errors import ValidationError
+from skillgraph.knowledge.superficie import (
+    CONSULTAS as CONSULTAS_SUPERFICIE,
+    Consulta,
+    SuperficieConocimiento,
+    pregunta,
+    respuesta_a_payload,
+)
 from skillgraph.platform.ports.capabilities import (
     CapabilityRequest,
     CapabilityResult,
@@ -74,7 +81,7 @@ KNOWLEDGE_QUERY: Final[str] = "sg.knowledge.query"
 #: una pregunta mal formada y una que no encuentra nada son dos fallos que
 #: el operador arregla de dos maneras, y si se comprobaran juntas «no
 #: salio nada» dejaria de significar una sola cosa.
-CONSULTAS: Final[frozenset[str]] = frozenset({"claims", "resource"})
+CONSULTAS: Final[frozenset[str]] = frozenset({"claims", "resource"}) | CONSULTAS_SUPERFICIE
 
 _CLAIMS: Final[Literal["claims"]] = "claims"
 _RESOURCE: Final[Literal["resource"]] = "resource"
@@ -103,6 +110,18 @@ class KnowledgeQueryCapability:
         self._knowledge = knowledge
         self._tenant_id = tenant_id
         self._project_id = project_id
+        # **B34.** La superficie se CONSTRUYE aqui y no se recibe inyectada.
+        #
+        # Podria inyectarla, y esa es la tentacion. Se construye porque es
+        # **la misma instancia con el mismo `knowledge`**, y si se
+        # recibiera por constructor quien la usara podria pasar una que
+        # apuntara a otro tenant — y entonces la capability responderia por
+        # un proyecto distinto del que dice en `subject`. Una inyeccion que
+        # puede desincronizarse del dato que ya tiene la clase no es
+        # inyeccion, es una segunda fuente de verdad.
+        self._superficie = SuperficieConocimiento(
+            knowledge, tenant_id=tenant_id, project_id=project_id
+        )
 
     @property
     def spec(self) -> CapabilitySpec:
@@ -128,9 +147,52 @@ class KnowledgeQueryCapability:
         """
         consulta = self._consulta_de(request)
         if consulta == _CLAIMS:
-            elementos = self._claims(request.subject)
-        else:
-            elementos = self._recurso(request.subject)
+            return self._resultado(request, consulta, self._claims(request.subject))
+        if consulta == _RESOURCE:
+            return self._resultado(request, consulta, self._recurso(request.subject))
+        # **B34.** Las seis preguntas de la superficie. La capability NO
+        # implementa ninguna: construye la `Consulta`, se la pasa a
+        # `SuperficieConocimiento` y devuelve lo que conteste.
+        #
+        # Y esto es el gate del bloque —«las mismas query models alimentan
+        # CLI y agent handoff; ninguna superficie reconstruye autoridad o
+        # retrieval por su cuenta»— hecho codigo y no frase: si esta
+        # capacidad tuviera sus propias consultas habria dos modelos, y
+        # dos modelos es exactamente lo que el gate prohibe.
+        respuesta = self._superficie.responder(self._consulta_b34(request, consulta))
+        return CapabilityResult(
+            spec=self.spec,
+            adapter=type(self).__name__,
+            payload={
+                "subject": request.subject,
+                "consulta": consulta,
+                "superficie": respuesta_a_payload(respuesta),
+            },
+        )
+
+    def _consulta_b34(self, request: CapabilityRequest, consulta: str) -> Consulta:
+        """La `Consulta` de la superficie, construida desde `arguments`.
+
+        El `kind` es el NOMBRE de la pregunta y se revalida con
+        `pregunta()` del modulo de la superficie, no con el `CONSULTAS` de
+        aqui. Son dos vocabularios que hoy viven en el mismo conjunto y que
+        no tienen por que seguir juntos: `claims` y `resource` son
+        consultas de esta capacidad, `what`..`evidence` son de la
+        superficie. Revalidar contra el equivocado daria verde a una
+        pregunta que la superficie no conoce.
+        """
+        return Consulta(
+            pregunta=pregunta(consulta),
+            subject=request.subject,
+            claim_id=request.arguments.get("claim_id"),
+            revision=request.arguments.get("revision"),
+            commit=request.arguments.get("commit"),
+        )
+
+    def _resultado(
+        self, request: CapabilityRequest, consulta: str, elementos: tuple[Any, ...]
+    ) -> CapabilityResult:
+        """El `CapabilityResult` de las dos consultas de B30, sin cambios."""
         return CapabilityResult(
             spec=self.spec,
             adapter=type(self).__name__,

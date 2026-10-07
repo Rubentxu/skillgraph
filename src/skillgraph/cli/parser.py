@@ -27,7 +27,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import NoReturn
+from typing import Final, NoReturn
 
 from skillgraph.cli.exit_codes import EXIT_USAGE
 
@@ -51,6 +51,32 @@ class _UsageParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
         self.exit(EXIT_USAGE, f"{self.prog}: error: {message}\n")
+
+
+_PREGUNTAS_SUPERFICIE: Final[dict[str, str]] = {
+    "what": "Lo que se afirma del sujeto, sin jerarquizar.",
+    "why": "Por que se AFIRMO esa afirmacion (procedencia, no causa).",
+    "impact": "A que afecta: quien menciona esta entidad como objeto.",
+    "changed": "Que se sabia, en una revision o desde un commit.",
+    "conflicts": "Que se contradice; con --at-revision, quien gana.",
+    "evidence": "De donde sale cada afirmacion del sujeto.",
+}
+"""**B34.** El catalogo de las seis preguntas, y vive aqui y no repartido en
+seis `add_parser`.
+
+Un `help` escrito seis veces son seis textos que se desincronizan, y el
+nombre de la pregunta vive en tres sitios —este mapa, el `Literal` de
+`knowledge/superficie.py` y la tabla de despacho del runner—. Con el mapa,
+un bucle genera los seis y el nombre sale de un sitio.
+
+**Y POR QUE ES UN `dict` Y NO UNA LISTA.** El orden de las claves es el
+orden en que `--help` los lista, y el orden de un `--help` es lo primero
+que lee una persona. Un `set` de seis cadenas no tiene orden y lo deja al
+azar de la tabla hash.
+
+Se declara aqui y no en `superficie.py` porque es informacion de la
+SUPERFICIE, no del dominio: el dominio no sabe que existe una CLI.
+"""
 
 
 def _add_format(parser: argparse.ArgumentParser, help_text: str) -> None:
@@ -548,5 +574,40 @@ def build_parser() -> argparse.ArgumentParser:
             "distinta de la que hace un mes."
         ),
     )
+
+    # ----- B34: las seis preguntas de la superficie -----
+    # Todas comparten los mismos TRES flags opcionales y ninguno es
+    # obligatorio salvo donde la pregunta lo necesita: `--claim-id` solo lo
+    # usa `why`, y `Consulta.__post_init__` dice el QUE si falta. Declarar
+    # aqui los tres para las seis, en vez de uno por pregunta, es lo que
+    # hace que anadir una septima pregunta sea un `Literal` y no seis
+    # bloques de argparse.
+    for _nombre, _ayuda in _PREGUNTAS_SUPERFICIE.items():
+        _k = kn_sub.add_parser(_nombre, help=_ayuda)
+        _k.add_argument("project", help="Proyecto destino.")
+        _k.add_argument("subject", help="Sujeto (entity_id) sobre el que se pregunta.")
+        _k.add_argument(
+            "--claim-id",
+            default=None,
+            help="La afirmacion concreta. Solo `why` la exige.",
+        )
+        _k.add_argument(
+            "--at-revision",
+            default=None,
+            help=(
+                "Pregunta POR UNA REVISION (B29, orden de observacion local). "
+                "En `conflicts` es la INTENCION por la que se resuelve (B28)."
+            ),
+        )
+        _k.add_argument(
+            "--commit",
+            default=None,
+            help="Pregunta por la ascendencia de un commit (B32). Solo `changed`.",
+        )
+        _k.add_argument(
+            "--json",
+            action="store_true",
+            help="Salida en JSON en vez de la lectura humana.",
+        )
 
     return p

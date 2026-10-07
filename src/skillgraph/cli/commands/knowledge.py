@@ -305,3 +305,181 @@ def _render(r: Resolution) -> list[str]:
             f"  descartada: {d.afirmacion.claim_id} = {d.afirmacion.object_literal!r}  [{d.motivo}]"
         )
     return out
+
+
+# ---------------------------------------------------------------------------
+# B34 — LAS SEIS PREGUNTAS, Y UN SOLO MODELO DETRAS
+# ---------------------------------------------------------------------------
+
+
+def _superficie(storage: object, tenant_id: str, project_id: str) -> object:
+    """La superficie, sobre el `Storage` abierto.
+
+    **POR QUE ESTA EN UN SITIO Y NO EN CADA HANDLER.** Los seis handlers
+    de abajo son casi iguales: abren el proyecto, construyen una `Consulta`,
+    llaman a `responder` y renderizan. Si cada uno construyera su propia
+    superficie, habria seis caminos por los que podrian divergir —y en el
+    momento en que divergieran, el gate del bloque («las mismas query
+    models alimentan CLI y agent handoff») seria verdad en el papel y falso
+    en el codigo.
+
+    La anotacion es `object` y no el ADT concreto a proposito: este modulo
+    es la CAPA DE I/O y habla con el puerto, no con el ADT. Es la misma
+    linea que `KnowledgeQueryCapability` con `KnowledgeRepository`.
+    """
+    from skillgraph.knowledge.superficie import SuperficieConocimiento
+
+    return SuperficieConocimiento(storage, tenant_id=tenant_id, project_id=project_id)
+
+
+def _pregunta(args: argparse.Namespace, nombre: str) -> object:
+    """La `Consulta` de la superficie, desde los flags de la CLI.
+
+    **POR QUE UN CONSTRUCTOR Y NO SEIS CALLS DISTINTAS.** Los tres campos
+    opcionales (`claim_id`, `revision`, `commit`) son los mismos para todas
+    las preguntas y solo algunos tienen sentido en cada una. Dejarlos en
+    `getattr(args, ..., None)` significa que quien anada un flag no tiene
+    que acordarse de anadirlo en los seis sitios, y el que se acuerde
+    desaparece en cuanto anade el septimo.
+    """
+    from skillgraph.knowledge.superficie import Consulta
+
+    return Consulta(
+        pregunta=nombre,
+        subject=args.subject,
+        claim_id=getattr(args, "claim_id", None),
+        revision=getattr(args, "at_revision", None),
+        commit=getattr(args, "commit", None),
+    )
+
+
+def _responder_y_salir(args: argparse.Namespace, nombre: str) -> int:
+    """Abre, pregunta, renderiza. El cuerpo comun de los seis.
+
+    Se escribe UNA vez y se llama seis veces, y esa es la forma de que «las
+    mismas query models alimentan la CLI» sea una propiedad del codigo: si
+    un subcomando tuviera su propio camino, este helper dejaria de ser el
+    camino y el guard que lo mide dejaria de ver nada.
+    """
+    from skillgraph.knowledge.superficie import respuesta_a_payload
+
+    with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
+        respuesta = _superficie(storage, tenant_id, project_id).responder(_pregunta(args, nombre))
+        if args.json:
+            salida = json.dumps(respuesta_a_payload(respuesta), indent=2, ensure_ascii=False)
+        else:
+            salida = "\n".join(_render_respuesta(respuesta))
+
+    print(salida)
+    return EXIT_OK
+
+
+def cmd_knowledge_what(args: argparse.Namespace) -> int:
+    """Lo que se afirma del sujeto. Todas las afirmaciones, sin jerarquizar.
+
+    No resuelve: `what` pregunta por lo que se AFIRMA, no por lo que es
+    cierto. Quien quiera lo segundo lo pregunta con `conflicts` y un
+    `--intent`, que es donde el sistema sabe cual es lo segundo.
+    """
+    return _responder_y_salir(args, "what")
+
+
+def cmd_knowledge_why(args: argparse.Namespace) -> int:
+    """Por que se AFIRMO esa afirmacion. Procedencia, no causa.
+
+    **LO QUE ESTE SUBCOMANDO NO PROMETE.** No responde «por que el mundo es
+    como es»: responde de donde salio ESTA afirmacion, con su evidencia, su
+    fuente, quien la extrajo y a que claim reemplaza. El sistema tiene
+    procedencia, no causalidad, y el nombre corto no puede prometer mas de
+    lo que el modelo entrega.
+    """
+    return _responder_y_salir(args, "why")
+
+
+def cmd_knowledge_impact(args: argparse.Namespace) -> int:
+    """A que afecta: la arista inversa. Quien MENCIONA esta entidad."""
+    return _responder_y_salir(args, "impact")
+
+
+def cmd_knowledge_changed(args: argparse.Namespace) -> int:
+    """Que se sabia, en una revision o desde un commit.
+
+    Los dos relojes siguen siendo dos y no se traducen: `--at-revision` es
+    el orden de observacion local (B29) y `--commit` es la ascendencia real
+    (B32).
+    """
+    return _responder_y_salir(args, "changed")
+
+
+def cmd_knowledge_conflicts(args: argparse.Namespace) -> int:
+    """Que se contradice, y —con `--intent`— quien gana para que pregunta.
+
+    Sin `--intent` devuelve los conflictos SIN resolver, que es la
+    respuesta honesta a «¿qué se contradice?». Un `--intent` con valor por
+    defecto seria el ranking global que B28 cerro.
+    """
+    return _responder_y_salir(args, "conflicts")
+
+
+def cmd_knowledge_evidence(args: argparse.Namespace) -> int:
+    """De donde sale cada afirmacion del sujeto."""
+    return _responder_y_salir(args, "evidence")
+
+
+def _render_respuesta(respuesta: object) -> list[str]:
+    """La `Respuesta` en texto para una persona.
+
+    **POR QUE UNA LINEA POR AFIRMACION Y NADA MAS.** Un handoff es un
+    contrato firmado y Budget, y un texto de relleno convierte una respuesta
+    en algo que hay que volver a parsear. Lo que se imprime es lo que la
+    `Respuesta` trae; si un campo no aplica va vacio y no inventing informacion
+    para que la linea no quede corta.
+    """
+    lineas = [f"{respuesta.consulta.pregunta} de {respuesta.consulta.subject}"]
+    for claim in respuesta.claims:
+        lineas.append(
+            f"  {claim.claim_id}: {claim.predicate} = {_objeto_de(claim)}  "
+            f"[{claim.assertion_origin} @ {claim.checked_at_revision}]"
+        )
+    for proc in respuesta.procedencia:
+        origen = proc.source_id if proc.source_id is not None else "sin fuente"
+        lineas.append(
+            f"  procedencia {proc.claim_id}: {proc.extraction_method} "
+            f"({proc.extractor_version}), origen {origen}"
+        )
+    if respuesta.resolucion is not None and respuesta.resolucion.ganadora is not None:
+        g = respuesta.resolucion.ganadora
+        lineas.append(
+            f"  resuelve {respuesta.consulta.pregunta} -> {g.claim_id}: "
+            f"{g.predicate} = {g.object_literal!r}"
+        )
+    if respuesta.vacia:
+        lineas.append("  (sin resultados)")
+    return lineas
+
+
+def _objeto_de(claim: object) -> str:
+    """El objeto de una afirmacion, sea literal o referencia.
+
+    **POR QUE HACE FALTA Y NO ES COSMÉTICA.** MEDIDO ejecutando
+    `sg knowledge impact`: imprimia `imports_module = ''` para la
+    afirmacion cuyo objeto es una ENTIDAD, porque se imprimia
+    `object_literal` y en ese caso vale `None`. Un `''` no es «no tiene
+    objeto»: es «tiene un objeto que este render no sabe pintar», que es
+    justo la clase de linea que hace que una persona deje de fiarse de la
+    salida.
+
+    B25 declaro que el objeto es **exactamente uno**: literal o entidad.
+    El render tiene que honourar las dos mitades.
+    """
+    # MEDIDO dos veces. La primera uso `object_entity`, que es lo que lleva
+    # el ADT `Claim`, y seguio imprimiendo `''`: lo que devuelve el puerto
+    # es `StoredClaim`, y ese campo se llama `object_entity_id` con el
+    # criterio de XOR del repo —`""` significa LITERAL, un id significa
+    # ENTIDAD—. Un `''` no era un fallo de formato: era un campo leido del
+    # objeto equivocado, y el codigo no decia nada porque `getattr` con
+    # default devuelve `None` en vez de fallar.
+    entidad = getattr(claim, "object_entity_id", "")
+    if entidad:
+        return f"-> {entidad}"
+    return repr(getattr(claim, "object_literal", None))
