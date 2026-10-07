@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B31** — El código no tiene análisis estructural real: `line_count = 137` es todo lo que se sabe · CogniCode → CodeAnalysis → Knowledge, sin imports en el núcleo · (B30 cerrado en `v0.40.0`: un contexto truncado dice qué se cayó)
-> Versión activa `0.40.0.dev0` · último tag `v0.40.0` · 3683 tests · 16/16 UAT
+> Bloque vivo: **B32** — No se puede responder cuándo cambió una relación ni por qué · cadena de commits trazable por entidad, con el SHA como identidad · (R0+R1 cerrados: el ratchet arquitectónico sale distinto de cero y las cinco fronteras llegan a cero · B30 en `v0.40.0`, B31 queda como el corte siguiente)
+> Versión activa `0.40.0.dev0` · último tag `v0.40.0` · 3712 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
@@ -95,7 +95,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B28** | Resolver un conflicto es un ranking global, y la respuesta correcta depende de para qué se pregunta | `AuthorityProfile` por `QueryIntent`, no un ranking único |
 | **B29** | No se puede preguntar qué se sabía en una revisión, ni cómo fue reemplazado | ventanas de vigencia, supersession y query por revisión |
 | **B30** | Traer el contexto es traerlo todo, o traerlo truncado sin decir qué se cayó | **cerrado en v0.40.0** — `PresupuestoAplicado` declara lo omitido con su tamaño, `HandoffKnowledge.omitidos` lo carga y lo firma, y `should_skip_adapter` ya no declara completo un slice truncado. La mitad `why`/`impact` queda para el siguiente corte |
-| **B31** | No hay análisis estructural real: `line_count = 137` es todo lo que se sabe del código | CogniCode → CodeAnalysis → Knowledge, **sin imports en el núcleo** |
+| **B31** | No hay análisis estructural real: `line_count = 137` es todo lo que se sabe del código | CogniCode → CodeAnalysis → Knowledge, **sin imports en el núcleo** · (sigue abierto: es el corte después de B32, o el que se tome antes) |
 | **B32** | No se puede responder cuándo cambió una relación ni por qué | cadena de commits trazable por entidad, con el SHA como identidad |
 | **B33** | La telemetría y la intención/documentación se contradicen y una pisa a la otra | ambos se preservan, y la autoridad decide según el intent |
 | **B34** | No hay forma de preguntar al sistema por lo que sabe | `what`/`why`/`impact`/`changed`/`conflicts`/`evidence`, con CLI y transporte agent sobre el mismo modelo de query |

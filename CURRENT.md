@@ -2,10 +2,10 @@
 
 >
 
-> **Bloque 2026-10-06 (B31) — El código no tiene análisis estructural real: `line_count = 137` es todo lo que se sabe del código.**
-> (B30 cerrado en `v0.40.0`: un contexto truncado dice qué se cayó —`PresupuestoAplicado.omitidos`, firmado en el `context_hash`, y `should_skip_adapter` ya no declara completo un slice recortado.)
+> **Bloque 2026-10-06 (B32) — No se puede responder cuándo cambió una relación ni por qué.**
+> (R0+R1 cerrados: el ratchet arquitectónico **sale distinto de cero** y las cinco fronteras llegan a cero — sin SQL en el dominio, con `RevisionRegistry` como puerto, y `knowledge_repository.py` de 895 a 719 LoC. B30 cerrado en `v0.40.0`; B31 sigue abierto.)
 >
-> Versión activa `0.40.0.dev0`; último tag `v0.39.0`; **3683 tests**.
+> Versión activa `0.40.0.dev0`; último tag `v0.40.0`; **3712 tests**.
 >
 > **LA FILA EXAGERABA EN SU PRIMERA MITAD.** Decía que no se puede preguntar
 > qué se sabía en una revisión, y `checked_at_revision` está en cada claim desde
