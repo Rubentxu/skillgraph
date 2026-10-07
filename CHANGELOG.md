@@ -14,6 +14,111 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.42.3] - 2026-10-08 — El gate más cercano al push decía `SUCCESS` sin haber comprobado nada
+
+SemVer **derivado** desde `v0.42.2` con `scripts/derive_semver.py`
+(`git log v0.42.2..HEAD`, 6 commits): `0 breaking · 0 feat · 1 fix · 5 neutros`
+y la regla pide **PATCH -> v0.42.3**.
+
+### El bypass no era el defecto
+
+Medido antes de escribir una línea, con `scripts/measure_b38_pre_push.py` (nueve
+rondas), contra un `scripts/ci.sh` de doble y el hook real:
+
+| ronda | doble | salida del hook |
+|---|---|---|
+| **R6** | `exit 0` y **nada más** | `OK: la receta canonica dio SUCCESS sobre 718b683` |
+| **R7** | imprime el veredicto y sale 0 | `OK: la receta canonica dio SUCCESS sobre 718b683` |
+| **R8** | — | salida **idéntica** en los dos casos: `True` |
+
+Con `HOOK_SKIP_PUSH_TESTS=1` la última línea era la misma, con la receta sin
+ejecutar. **R8 es la ronda que decide el alcance**: el bypass era **un caso** de
+un defecto estructural. El hook **delega** y solo sabe una cosa —que el
+delegado devolvió 0—, y un exit code de 0 dice que el proceso terminó, no que
+la receta corriera ni que hiciera nada.
+
+Es el defecto de B37 en el pre-commit con una palabra más fuerte: allí el `OK`
+era neutro y se podía leer como «el hook ok»; aquí el `SUCCESS` afirma una
+ejecución que no ocurrió, en el gate que está a un comando de salir del repo.
+
+### El hook ya tenía la prueba y la borraba sin mirarla
+
+`.pipeline.kts` imprime `Pipeline finished with SUCCESS`, y no es una cadena
+elegida para el arreglo: **20 apariciones byte a byte iguales** en los
+artefactos del repo, en línea propia, y es la **misma** que el propio hook ya
+nominaba en su mensaje de error.
+
+O sea que el hook ya capturaba esa salida en `$_log` y después la borraba sin
+haberla mirado. Ahora la **exige**:
+
+```sh
+if ! grep -qxF "$VEREDICTO_RECETA" "$_log"; then ... exit 1; fi
+```
+
+El `OK` deja de ser una copia del exit code y pasa a ser una afirmación
+verificada contra el propio delegado.
+
+### Las sondas encontraron un agujero en el arreglo
+
+La primera versión usó `grep -qF`. Dos sondas lo cazaron: exigir que la frase
+**esté** en la salida no es exigir que **sea** el veredicto — un delegado que
+imprimiera `Pipeline finished with SUCCESS (rehecho)` contiene la frase entera
+y no ha ejecutado la receta. Con `-x` se cierra, y no afloja nada porque está
+**medido**: la receta emite esa frase sola en su línea.
+
+Dos sondas más no mataban a nada, y las dos por razones distintas:
+
+- **M1** apuntaba al test del camino **malo**. Con la frase cambiada el grep
+  tampoco la encuentra cuando el delegado no emite nada, luego `rc != 0` se
+  cumple igual y el test pasa. La frase equivocada rompe el camino **bueno**.
+- **M9** se apoyaba en `Successful`, que **no es** `SUCCESS` con otra
+  capitalización sino **otra palabra más larga**: el grep la rechazaba con y sin
+  `-i`, luego la sonda no medía nada y se reportaba como si midiera. De ahí
+  salió el séptimo test, una **variante de capitalización**.
+
+**9/9 sondas**, y el harness se rompió **tres veces antes de contar** — la
+tercera vez con el mismo `replace(..., 1)` sobre un anclaje no único de B13 y
+B36: la sonda mutó un **comentario**, dejó el código intacto y se reportó
+inocua. El arreglo fue que el harness **no pueda** contarse como ejecutada si su
+anclaje no aparece exactamente una vez.
+
+### Cuatro verificadores débiles, todos con la misma causa
+
+El instrumento dio cuatro lecturas equivocadas en lugar de ninguna: decidir por
+la última línea cuando el repo de pruebas no es git; comparar la salida entera
+de dos corridas sin normalizar el sha; normalizar el sha y seguir comparando
+entero, con la línea de `mavis-trash` de diferencia; y buscar la cadena
+`SUCCESS` en toda la salida cuando el mensaje de error del hook **contiene**
+esa cadena.
+
+**Comparar dos corridas exige normalizar todo lo que varía por construcción, y
+esa lista no se adivina a ojo.** Se ve cuando el comparador dice `False` y el
+diff son dos líneas de ruido.
+
+### Y dos cosas más que estaban medidas y no medidas
+
+El hook anunciaba `~4min`; el push de `v0.42.2` tardó **13 min 49 s**. Y el
+hook instalado en `.git/hooks/` estaba en `111ef242…` mientras el versionado iba
+en `77a79a94…`: el gate que gobierna cada push era el que estaba en el disco.
+
+### Cierre
+
+```
+4125 passed, 3 skipped, 0 failed, 842,69 s, rc=0
+4125 + 3 = 4128  ==  STATE.yaml tests.total
+
+suelos   rc=0   cli/ 93,31 % · runtime/ 98,41 % · global 97,13 %
+ratchet  rc=0   las cinco propiedades llegan a cero
+sondas   B38 9/9 · B37 6/6 · B36 5/5 · B35 8/8
+```
+
+---
+
+**SemVer derivado**: `git log v0.42.2..HEAD` (6 commits) da `0 breaking ·
+0 feat · 1 fix · 5 neutros` → **PATCH**. Cero `feat` es lo que lo hace
+correcto: este bloque no añade superficie, cambia lo que el pre-push exige.
+
+Evidencia: [`evidence/b38-pre-push-veracity-2026-10-08.md`](https://github.com/Rubentxu/skillgraph/blob/v0.42.3/evidence/b38-pre-push-veracity-2026-10-08.md)
 ## [0.42.2] - 2026-10-07 — El hook se callaba en dos de los tres caminos
 
 SemVer **derivado** desde `v0.42.1` con `scripts/derive_semver.py`
