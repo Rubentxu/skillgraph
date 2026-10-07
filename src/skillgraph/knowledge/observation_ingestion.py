@@ -34,10 +34,8 @@ comportamiento, y por eso se hizo con el arbol en verde antes y despues.
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, Final
 
-from skillgraph.knowledge.graph import ClaimID
 from skillgraph.knowledge.observation import (
     ObservationEnvelope,
     ObservationIngesta,
@@ -76,6 +74,26 @@ def ingerir(
     historia para parecer consistente; lo que las resolvera son las ventanas de
     vigencia de B29. Una «idempotencia» que limpiara seria peor que ninguna.
 
+    **LO QUE ESTA FUNCION NO PUEDE HACER, Y POR QUE NO PUEDE, DICHO.**
+    Este modulo tuvo una rama que recogia el aviso de `record_claim.conflicto`
+    y lo devolvia en `ObservationIngesta.conflictos`. MEDIDO al certify B35:
+    **esa rama no la ejecutaba nadie**, y por eso el modulo mide 84 %, seis
+    puntos por debajo del suelo que su ubicacion declara.
+
+    No es que no se midiera: es que **no puede ejecutarse**. `ingerir` es la
+    unica funcion publica del modulo y su unico camino es `normalizar(env)`,
+    que deriva el `claim_id` de (sujeto, predicado, objeto, fuente, revision).
+    Dos claims distintos tienen `claim_id` distinto, luego el `UNIQUE` de clave
+    primaria no puede rechazar, y el de la tupla natural —que desde `ADR-0035`
+    lleva el objeto dentro— tampoco. En los siete estados medidos de B35, por
+    esta via `conflicto` es **siempre** `False`.
+
+    Por eso la rama se borro en vez de bajar el suelo: un suelo que hay que
+    bajar para que pase un modulo con codigo muerto es un suelo que ya no dice
+    nada. Lo que **no** se pierde es la deteccion —`conflicts_for` ve la
+    auto-contradiccion de una misma fuente y B28 la resuelve por intencion—;
+    lo que se deja de recoger es el aviso puntual en el instante de escribir.
+
     Returns:
         La ingesta que se ha escrito, igual que `normalizar` la devuelve: el
         mismo valor, ya persistido.
@@ -91,18 +109,8 @@ def ingerir(
         project_id=project_id,
         entity=ingesta.entity,
     )
-    conflictos: tuple[ClaimID, ...] = ()
     for claim in ingesta.claims:
-        # B27: el aviso se RECOGE, no se tira. Descartarlo seria volver a
-        # perderlo una capa mas arriba, y el `conflicts_for` de B27 daria lo
-        # mismo con una consulta: lo que se pierde es el aviso en el MOMENTO
-        # en que ocurre, que es el unico momento en que el que escribe sabe
-        # que ha dicho otra cosa.
-        registro = storage.record_claim(tenant_id=tenant_id, project_id=project_id, claim=claim)
-        if registro.conflicto:
-            conflictos = (*conflictos, registro.claim_id)
-    if conflictos:
-        return replace(ingesta, conflictos=conflictos)
+        storage.record_claim(tenant_id=tenant_id, project_id=project_id, claim=claim)
     return ingesta
 
 

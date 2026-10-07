@@ -221,26 +221,43 @@ class TestElHarnessNoBorraTrabajo:
 
 
 # ---------------------------------------------------------------------------
-# observation_ingestion.py — la rama de CONFLICTO, que es la de B27
+# observation_ingestion.py — la rama de CONFLICTO, que B35 dejo MUERTA
 # ---------------------------------------------------------------------------
 
 
-class TestLaIngestaRecogeElConflicto:
-    """**LO QUE EL MODULO DE R1.C NO MEDIA, Y QUE ES SU BRAZO DERECHO.**
+class TestLaIngestaNoPuedeRecogerElConflicto:
+    """**EL CONTRASALTO, Y EL MOTIVO POR EL QUE HAY UN CONTRASALTO.**
 
-    MEDIDO al crear `observation_ingestion.py`: el modulo nacio en **84 %**,
-    por debajo del 90 % que AGENTS 6.3 declara para `knowledge/`. Las dos
-    lineas sin cubrir eran justo la rama de `if registro.conflicto:`.
+    Este fichero nacio con una clase al lado que afirmaba lo contrario —«la
+    ingesta recoge el conflicto»— porque el modulo `observation_ingestion.py`
+    tenia esta rama:
 
-    **Y LA RAMA NO ES UN DETALLE: es la propiedad de B27.** El aviso de que
-    se ha dicho otra cosa **se recoge y se devuelve** en
-    `ObservationIngesta.conflictos`; descartarlo seria perderlo una capa mas
-    arriba, donde el `conflicts_for` de B27 daria lo mismo con una consulta
-    —y lo que se pierde es el aviso en el MOMENTO en que ocurre, que es el
-    unico momento en que el que escribe sabe que ha dicho otra cosa.
+        registro = storage.record_claim(...)
+        if registro.conflicto:
+            conflitos = (*conflictos, registro.claim_id)
 
-    Un modulo recien mudado con la rama del conflicto sin ejecutar es un
-    modulo cuya mitad derecha nadie sabe si funciona.
+    MEDIDO al certify B35: **esa rama no la ejecuta nadie**, y por eso el
+    modulo mide 84 %, seis puntos por debajo del suelo de AGENTS 6.3.
+
+    **Y NO ES QUE NO SE HAYA MEDIDO: es que no se puede.** `ingerir` es la
+    UNICA funcion publica del modulo (`__all__ = ["ingerir"]`) y su unico
+    camino es `normalizar(env)`, que deriva el `claim_id` de (sujeto,
+    predicado, objeto, fuente, revision). Dos claims distintos tienen
+    `claim_id` distinto, luego el `UNIQUE` de clave primaria no puede
+    rechazar, y el de la tupla natural —que desde `ADR-0035` lleva el
+    objeto— tampoco. MEDIDO en los siete estados de B35: por esta via
+    `conflicto` es SIEMPRE `False`.
+
+    **LO QUE NO SE PIERDE, MEDIDO EN LA OTRA DIRECCION:** detectar sigue
+    pudiendo. `conflicts_for` ve la auto-contradiccion de una fuente —su
+    docstring cita el caso de «2 filas de la MISMA fuente en revisiones
+    consecutivas»— y B28 la resuelve por intencion. Lo que se deja de
+    recoger es el aviso PUNTUAL en el instante de escribir, que es lo unico
+    que la rama Hacia.
+
+    Por eso el suelo no se baja: se borra la rama. Un suelo que hay que
+    bajar para que un modulo con codigo muerto pase es un suelo que ya no
+    dice nada.
     """
 
     @staticmethod
@@ -296,25 +313,15 @@ class TestLaIngestaRecogeElConflicto:
             observations=(Observation(predicate="line_count", object_literal=valor),),
         )
 
-    def test_sin_conflicto_la_ingesta_viene_LIMPIA(self, tmp_path: Path) -> None:
-        """El caso de siempre: lo que no se contradice no se reporta."""
-        from skillgraph.knowledge.observation_ingestion import ingerir
-        from skillgraph.platform.storage import Storage
+    def test_dos_hechos_ciertos_conviven_Y_NO_se_reportan_como_conflicto(
+        self, tmp_path: Path
+    ) -> None:
+        """La ingestion no inventa un aviso entre dos afirmaciones ciertas.
 
-        s = Storage(tmp_path / "x.sqlite")
-        self._preparar(s)
-
-        ingesta = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(137))
-
-        assert ingesta.conflictos == (), ingesta.conflictos
-        assert len(ingesta.claims) == 1
-
-    def test_un_conflicto_LLEGA_AL_QUE_ESCRIBIO(self, tmp_path: Path) -> None:
-        """**Y el otro lado: el aviso NO se tira.**
-
-        Se escribe la misma afirmacion con otro valor; la segunda tiene que
-        volver con el conflicto recogido. Este es el unico motivo por el que
-        la rama existe, asi que es el unico que hay que probar.
+        `line_count=137` y `line_count=250` sobre el mismo fichero son dos
+        hechos ciertos: el segundo es la MISMA afirmacion con el valor
+        actualizado, y `ADR-0035` vino precisamente a que las dos filas
+        convivan.
         """
         from skillgraph.knowledge.observation_ingestion import ingerir
         from skillgraph.platform.storage import Storage
@@ -322,42 +329,81 @@ class TestLaIngestaRecogeElConflicto:
         s = Storage(tmp_path / "x.sqlite")
         self._preparar(s)
 
-        # La primera afirmacion, escrita por el camino normal.
-        ingested = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(137))
-        assert ingested.conflictos == ()
+        primera = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(137))
+        segunda = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(250))
 
-        # La misma afirmacion, otro valor, misma revision y misma fuente.
-        ingerible = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(250))
-
-        # **B35: ESTE TEST CAMBIO DE SIGNIFICADO, Y NO SE DISFRAZA.**
-        #
-        # Decia «la misma afirmacion con otro valor tiene que volver con el
-        # conflicto recogido». MEDIDO: desde `ADR-0035` y su migracion `0008`,
-        # esa forma **no pisa nada**: `line_count=137` y `line_count=250`
-        # sobre el mismo fichero son dos hechos ciertos y las dos filas caben.
-        # `0008` existe precisamente para eso.
-        #
-        # Y por la via de la ingesta un conflicto es ahora **INALCANZABLE**,
-        # y el motivo es estructural, no una coincidencia: `normalizar` deriva
-        # el `claim_id` de (sujeto, predicado, objeto, fuente, revision), luego
-        # dos claims distintos tienen `claim_id` distinto, luego el `UNIQUE`
-        # de la clave primaria no puede rechazar, y el de la tupla natural
-        # —que ahora incluye el objeto— tampoco.
-        #
-        # Que `conflictos` salga vacio **no es que el aviso se haya tragado**:
-        # es que no hay nada que avisar. Y quien aun puede necesitar el aviso
-        # es quien construye `Claim` A MANO, donde el `claim_id` no lo deriva
-        # nadie — la promocion, que es lo que mide
-        # `test_b27_conflictos.py::TestElAvisoLlega`.
-        #
-        # La fila 250 tiene que ESTAR, que es la mitad que si se puede mirar.
-        assert not ingerible.conflictos, (
-            "la ingesta ha reportado un conflicto entre dos hechos ciertos: "
-            "es el aviso falso que ADR-0035 vino a cerrar"
-        )
+        assert not primera.conflictos, primera.conflictos
+        assert not segunda.conflictos, segunda.conflictos
         filas = s._conn.execute(
             "SELECT object_literal_json FROM claims ORDER BY object_literal_json"
         ).fetchall()
         assert [f[0] for f in filas] == ["137", "250"], (
             f"los dos valores deberían convivir: hay {[f[0] for f in filas]}"
+        )
+
+    def test_los_claim_id_derivados_son_distintos_LA_RAZON_por_la_que_no_puede(
+        self, tmp_path: Path
+    ) -> None:
+        """**La causa, medida y no narrada.**
+
+        Si los dos `claim_id` fueran iguales, el `UNIQUE` de clave primaria
+        podria rechazar y habria conflicto. Lo que afirma este bloque es que
+        **no lo son**, y por eso la rama no tiene por que existir.
+
+        Un guard que solo comprobara «`conflictos` sale vacio» pasaria igual
+        con los ids iguales: el `UNIQUE` rechazaria, `insertado` seria falso
+        y el valor coincidiria, luego `conflicto` seguiria siendo `False`.
+        Este mide la razon.
+        """
+        from skillgraph.knowledge.observation_ingestion import ingerir
+        from skillgraph.platform.storage import Storage
+
+        s = Storage(tmp_path / "x.sqlite")
+        self._preparar(s)
+        primera = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(137))
+        segunda = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(250))
+
+        assert len(primera.claim_ids) == len(segunda.claim_ids) == 1
+        assert primera.claim_ids[0] != segunda.claim_ids[0], (
+            "si los dos ids coincidieran, el UNIQUE de clave primaria podria "
+            "rechazar y habria conflicto: es lo que haria alcanzable la rama"
+        )
+
+    def test_la_deteccion_sigue_viviendo_en_conflicts_for(self, tmp_path: Path) -> None:
+        """**EL OTRO LADO, Y ES EL QUE IMPORTA.**
+
+        Borrar la rama no puede costar una deteccion. Aqui se afirma que la
+        auto-contradiccion de una MISMA fuente sigue siendo consultable, que
+        es lo que hacia el aviso puntual que se ha dejado de recoger.
+        """
+        from skillgraph.knowledge.observation_ingestion import ingerir
+        from skillgraph.platform.storage import Storage
+
+        s = Storage(tmp_path / "x.sqlite")
+        self._preparar(s)
+        ingerir(s, tenant_id="t", project_id="p", env=self._envelope(137))
+        ingerir(s, tenant_id="t", project_id="p", env=self._envelope(250))
+
+        conflictos = s.conflicts_for(tenant_id="t", project_id="p", subject_entity_id="file:a.py")
+        assert conflictos, "las dos filas tienen que seguir siendo visibles como conflicto"
+        assert len(conflictos) == 1, [c.claim_ids for c in conflictos]
+
+    def test_el_modulo_no_declara_una_capacidad_que_no_tiene(self) -> None:
+        """**Y QUE NO VUELVA A DECIR QUE LA RECOGE.**
+
+        Un modulo que vuelve a escribir `if registro.conflicto:` reintroduce
+        la rama muerta y con ella los seis puntos de suelo. Se mide sobre el
+        AST del modulo real, no sobre una copia de su texto.
+        """
+        import ast
+
+        from skillgraph.knowledge import observation_ingestion
+
+        arbol = ast.parse(Path(observation_ingestion.__file__).read_text(encoding="utf-8"))
+        mira_conflicto = any(
+            isinstance(nodo, ast.Attribute) and nodo.attr == "conflicto" for nodo in ast.walk(arbol)
+        )
+        assert not mira_conflicto, (
+            "observation_ingestion.py vuelve a mirar registro.conflicto: la rama "
+            "es inalcanzable desde normalizar y deja el modulo bajo su suelo"
         )

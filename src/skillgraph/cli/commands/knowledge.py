@@ -578,7 +578,5 @@ def cmd_knowledge_ingest_code(args: argparse.Namespace) -> int:
         print(f"analizado {ruta}  revision={revision}")
         for claim in ingesta.claims:
             print(f"  - {claim.predicate} = {claim.object_literal!r}")
-        if ingesta.conflictos:
-            print(f"  {len(ingesta.conflictos)} conflicto(s): ya habia otra afirmacion")
         print(f"{len(ingesta.claims)} afirmacion(es) escritas")
         return EXIT_OK

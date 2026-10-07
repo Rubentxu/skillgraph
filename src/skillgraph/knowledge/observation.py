@@ -278,6 +278,22 @@ class ObservationIngesta:
     #: tupla natural, en orden de aparicion. **VACIO cuando la ingesta fue
     #: limpia**, y eso incluye reingerir lo mismo, que es idempotencia y no
     #: conflicto —por eso es una tupla y no un contador-.
+    #:
+    #: **B35: POR QUE ESTE CAMPO NO TIENE PRODUCTOR, MEDIDO.** Aqui vivia la
+    #: advertencia de que una ingesta habia encontrado un conflicto. MEDIDO al
+    #: certify B35: `normalizar` —la unica via que construye este valor— deriva
+    #: el `claim_id` de (sujeto, predicado, objeto, fuente, revision), luego dos
+    #: claims distintos tienen id distinto y **ningun `UNIQUE` puede rechazarlos**.
+    #: El aviso solo puede aparecer cuando quien construye el `Claim` a mano
+    #: reutiliza un `claim_id` con otro valor, y esa via es la **promocion**,
+    #: que no pasa por aqui: recoge su propio aviso en
+    #: `cli/commands/promotion.py`.
+    #:
+    #: El campo **se queda** por dos razones, y no por pereza: `normalizar` es
+    #: puro y no puede saber nada de la base, luego un campo de resultado de
+    #: escritura en un valor de modelo ya era una categoria equivocada; y
+    #: quitarlo seria romper un contrato publico sin ganar nada measurable. Lo
+    #: que se quito fue el PRODUCTOR, que era codigo muerto.
     conflictos: tuple[ClaimID, ...] = ()
 
     @property
