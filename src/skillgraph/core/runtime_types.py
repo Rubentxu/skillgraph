@@ -57,6 +57,7 @@ SourceKind = Literal[
     "local_file",
     "external_doc",
     "skill_pack",
+    "runtime_observation",
 ]
 """Tipo de fuente de la que se extrae evidencia.
 
@@ -67,6 +68,29 @@ SourceKind = Literal[
 - `skill_pack`: paquete de skill externa asimilada (H5). Conserva
   el material original como referencia (path + content_hash) sin
   ejecutar el codigo del paquete. Ver `skill_importer.py`.
+- `runtime_observation`: **lo que se vio funcionando**, y es lo unico
+  cuyo contenido es un **PERIODO** y no un instante. Es el unico kind que
+  admite `observed_from`/`observed_to` (`ADR-0034`).
+
+    El valor se decidio MEDIDO, no por simetria. Antes de B33 toda
+    observacion externa —incluida la de runtime— se registraba como
+    `external_doc`, que es la decision que B26 escribio en
+    `knowledge/observation.py:242` y que prometo abrir una ADR porque
+    `SourceKind` es un Literal cerrado (`AGENTS.md` 2.1). Esa ADR no se
+    abrio hasta B33. Lo que se midio:
+
+    ```
+    adr:0001           kind=external_doc
+    runtime:ventana-1  kind=external_doc     <- indistinguibles
+    json_extract(locator_json, '$.producer')  FUNCIONA, pero sin indice
+    columnas de sources: ni producer, ni adapter, ni type_name
+    ```
+
+    El discriminante existia dentro del `locator` y se podia consultar
+    abriendo el JSON y recorriendo la tabla. No habia kind que lo
+    nombrara, y la pregunta que este kind viene a responder —la que
+    responde `actual_behavior`, «que devolvio produccion de verdad?»—
+    es la que mas lo necesitaba.
 """
 
 FreshnessState = Literal["fresh", "stale", "archived"]

@@ -254,10 +254,41 @@ CREATE TABLE IF NOT EXISTS sources (
     git_tree_sha     TEXT,
     working_tree_status_json TEXT,
     checked_at       TEXT NOT NULL,
-    freshness        TEXT NOT NULL DEFAULT 'fresh'
+    freshness        TEXT NOT NULL DEFAULT 'fresh',
+    -- B33 / ADR-0034: la VENTANA que la fuente observa. `checked_at` dice
+    -- cuando se miro; estas dos dicen QUE PERIODO se vio. Son dos relojes.
+    -- NULL en las dos = la fuente no declara periodo, que es lo que dicen
+    -- todas menos las `runtime_observation`.
+    observed_from    TEXT,
+    observed_to      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_sources_project
     ON sources(tenant_id, project_id);
+
+-- B33 / ADR-0034. MEDIDO antes de añadirlo: la pregunta «qué se vio entre
+-- t0 y t1» no tenía dónde Responderse.
+--
+-- **Y ESTE INDICE NO ESTA AQUI, Y ESO ES LO IMPORTANTE.** Las columnas
+-- `observed_from`/`observed_to` si van en el `CREATE TABLE` de arriba, pero
+-- el indice que las consulta SOLO existe en la migracion `0007`. Se midio,
+-- y no fue una teoria: una base VIEJA —que ya tiene `sources` sin esas
+-- columnas— ejecuta este `CREATE TABLE IF NOT EXISTS` como un no-op, y el
+-- `CREATE INDEX` siguiente revienta con `no such column: observed_from`,
+-- ANTES de que corra ninguna migracion. Lo caza
+-- `test_una_base_vieja_se_abre_y_sigue_funcionando`.
+--
+-- La leccion es la misma que dio `0006`, y va al reves: un indice sobre una
+-- columna NUEVA no puede vivir en el DDL, porque el DDL solo corre al crear
+-- la base. Si viviera aqui, una base nueva lo tendria y una vieja no, y
+-- esas dos bases se comportarian distinto — que es la mitad de lo que las
+-- migraciones existen para evitar.
+--
+-- El indice es PARCIAL (`observed_from IS NOT NULL`) porque `observed_from`
+-- es NULL en toda fuente que no es de runtime, y esas se consultan por
+-- otras columnas. Es `(tenant_id, project_id, observed_from)` por la misma
+-- frontera que declara el de B32: el alcance del proyecto va primero,
+-- porque una ventana de runtime de otro proyecto no es una respuesta que
+-- este sistema pueda dar con honestidad.
 
 -- B32. MEDIDO antes de añadirlo: la pregunta «qué se afirmó desde este
 -- commit» no tenía índice y —peor— no tenía consulta. `git_commit_sha` es

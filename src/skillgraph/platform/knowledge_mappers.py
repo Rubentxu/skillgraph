@@ -28,6 +28,8 @@ def row_to_source(row: sqlite3.Row, json: Any) -> Source:
         working_tree_status=json.loads(wts) if wts else None,
         checked_at=row["checked_at"],
         freshness=row["freshness"],
+        observed_from=row["observed_from"],
+        observed_to=row["observed_to"],
     )
 
 

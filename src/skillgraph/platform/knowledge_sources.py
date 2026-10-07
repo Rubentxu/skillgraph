@@ -66,8 +66,9 @@ class SqliteSourceRepository:
                 INSERT OR REPLACE INTO sources
                     (source_id, tenant_id, project_id, kind, content_hash,
                      locator_json, git_commit_sha, git_tree_sha,
-                     working_tree_status_json, checked_at, freshness)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     working_tree_status_json, checked_at, freshness,
+                     observed_from, observed_to)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     source.source_id,
@@ -81,6 +82,8 @@ class SqliteSourceRepository:
                     wts_json,
                     source.checked_at,
                     source.freshness,
+                    source.observed_from,
+                    source.observed_to,
                 ),
             )
 

@@ -129,6 +129,9 @@ class Source:
     Invariantes (validados en `__post_init__`):
     - `content_hash` no vacio.
     - Si `kind` empieza por `git_`, entonces `git_commit_sha` obligatorio.
+    - **B33 / `ADR-0034`:** la ventana `[observed_from, observed_to)` solo
+      existe para `runtime_observation`, y `observed_to` sin `observed_from`
+      se rechaza.
     """
 
     source_id: SourceID
@@ -140,6 +143,21 @@ class Source:
     working_tree_status: dict[str, Any] | None
     checked_at: str  # ISO-8601 UTC
     freshness: FreshnessState
+    #: **B33 / `ADR-0034`.** Cuando empieza la ventana que esta fuente
+    #: observa. `None` = «esta fuente no declara periodo», que es lo que
+    #: dicen todas las fuentes que no son de runtime.
+    #:
+    #: No se confunde con `checked_at`, que es **otro reloj**: `checked_at`
+    #: dice CUANDO SE MIRÓ, y la ventana dice QUE PERIODO se vio. Ponerlos
+    #: en el mismo campo seria la misma falta que B29 cerro para
+    #: `revision_registro.seq` y `GitHistory`: un solo reloj contestando dos
+    #: preguntas, y contestando bien la primera y mal la segunda.
+    observed_from: str | None = None
+    #: **B33.** Cuando termina la ventana. `None` = **la ventana sigue
+    #: abierta**, que es la misma lectura que da `valid_until_revision` en
+    #: B29 y por la misma razon: un final abierto es una declaracion, y un
+    #: `NULL` sin nombre es una ambiguedad.
+    observed_to: str | None = None
 
     def __post_init__(self) -> None:
         if not self.content_hash:
@@ -157,6 +175,47 @@ class Source:
         if self.kind.startswith("git_") and not self.git_commit_sha:
             raise InvalidSourceError(
                 f"Source {self.source_id!r} kind={self.kind} requiere git_commit_sha"
+            )
+        self._valida_ventana(valid_kinds)
+
+    def _valida_ventana(self, valid_kinds: tuple[str, ...]) -> None:
+        """La ventana, y las DOS reglas que la gobiernan.
+
+        **POR QUE LA VENTANA ES EXCLUSIVA DE UN KIND.** Un periodo describes
+        algo que **ocurrio a lo largo del tiempo**, y lo unico de este
+        vocabulario que ocurre a lo largo del tiempo es lo que se vio
+        funcionando. Poner `[desde, hasta)` sobre un `git_commit` dice
+        «el commit existio entre estas dos fechas», que no es una
+        afirmacion sobre el commit sino una **categoria equivocada**: el
+        commit es un instante, y un instante no tiene duracion.
+
+        **POR QUE `observed_to` SIN `observed_from` ES INCOHERENTE.** No es
+        un dato incompleto, es un dato imposible: no se puede terminar un
+        periodo que no empezo. La diferencia importa porque «incompleto» y
+        «imposible» piden arreglos distintos —rellenar el hueco contra
+        lo que hay, frente a quitar el final— y un solo `if` las trataria
+        igual.
+
+        El `None` en los dos NO significa «toda la historia»: el
+        `None` de `observed_from` significa «esta fuente no observa un
+        periodo», y solo es cierto para las fuentes que no son de runtime.
+        Es el mismo trato que B29 dio a los `NULL` de vigencia, y se
+        escribe porque un `NULL` sin nombre se lee como lo que uno quiera.
+        """
+        if self.observed_to is not None and self.observed_from is None:
+            raise InvalidSourceError(
+                f"Source {self.source_id!r} declara observed_to={self.observed_to!r} sin "
+                "observed_from: no se puede cerrar un periodo que no empezo"
+            )
+        if self.observed_from is None:
+            return
+        if self.kind != "runtime_observation":
+            raise InvalidSourceError(
+                f"Source {self.source_id!r} kind={self.kind!r} declara ventana "
+                f"[{self.observed_from!r}, ...), y un periodo solo lo declara "
+                f"'runtime_observation' (valores: {sorted(valid_kinds)}). "
+                "Sobre un kind de contenido, la ventana seria una categoria "
+                "equivocada: un commit es un instante, y un instante no tiene duracion"
             )
 
 

@@ -63,9 +63,10 @@ es B27/B29. Se dice ahora para que no se lea despues como un olvido.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, get_args
 
 from skillgraph.core.errors import EnvelopeInvalido, UnknownEnvelopeVersionError
+from skillgraph.core.runtime_types import SourceKind
 from skillgraph.knowledge.graph import (
     Claim,
     ClaimID,
@@ -158,6 +159,18 @@ class ObservationEnvelope:
     revision: str
     observations: tuple[Observation, ...]
     version: str = VERSION_ENVELOPE
+    #: **B33 / `ADR-0034`.** Que clase de contenido trae este envelope.
+    #: `None` significa **exactamente** lo que significaba antes de B33:
+    #: `external_doc`. No se deduce de que traiga ventana, porque una
+    #: medicion de test tambien cubre un periodo, y deducir el kind de la
+    #: FORMA haria que `normalizar` publicara un kind distinto para el
+    #: mismo tipo de observacion segun quien la mire.
+    kind: SourceKind | None = None
+    #: **B33.** Cuando empieza el periodo observado. Junto con
+    #: `observed_to` forma la ventana; los dos a `None` = sin periodo.
+    observed_from: str | None = None
+    #: **B33.** Cuando termina. `None` = la ventana sigue abierta.
+    observed_to: str | None = None
 
     def __post_init__(self) -> None:
         if not self.adapter or not self.adapter.strip():
@@ -177,6 +190,36 @@ class ObservationEnvelope:
             raise EnvelopeInvalido(
                 f"ObservationEnvelope de {self.subject!r} no trae observaciones: "
                 "un envelope vacio se ingeria como no-op y parece que funciono"
+            )
+        self._valida_ventana()
+
+    def _valida_ventana(self) -> None:
+        """La ventana se valida AQUI y no solo en `normalizar`.
+
+        **POR QUE EN LA FRONTERA Y NO EN EL NORMALIZADOR.** La version del
+        envelope se comprueba en `normalizar` a proposito, porque un
+        envelope con una version desconocida todavia se puede CONSTRUIR y
+        guardar para poder mirarlo. Una ventana incoherente es otra cosa: es
+        un dato que no significa nada, y construirlo solo para deshacerlo
+        deja que un adaptor lo registre y se le avise con un envelope
+        imposible en la mano. Se valida en el sitio donde se decide, que es
+        donde el error se puede nombrar.
+
+        El `kind` se valida contra el `Literal` aqui tambien por el mismo
+        motivo: un kind inventado llegaria hasta la base, donde `Source` lo
+        rechazaria con un mensaje que habla de `Source` cuando el que lo
+        escribio estaba construyendo un envelope.
+        """
+        if self.observed_to is not None and self.observed_from is None:
+            raise EnvelopeInvalido(
+                f"ObservationEnvelope de {self.subject!r} declara observed_to="
+                f"{self.observed_to!r} sin observed_from: no se puede cerrar un "
+                "periodo que no empezo"
+            )
+        if self.kind is not None and self.kind not in get_args(SourceKind):
+            raise EnvelopeInvalido(
+                f"ObservationEnvelope de {self.subject!r} declara kind={self.kind!r}, "
+                f"que no es del vocabulario SourceKind {sorted(get_args(SourceKind))}"
             )
 
 
@@ -241,13 +284,22 @@ def normalizar(env: ObservationEnvelope) -> ObservationIngesta:
 
     source = Source(
         source_id=env.source_id,
-        # `external_doc`, y NO un kind nuevo. `SourceKind` es un Literal cerrado
-        # y AGENTS.md 2.1 dice que anadir un valor es un cambio de contrato que
-        # necesita ADR. Ademas el valor que ya existe dice exactamente lo que
-        # esto es: contenido que viene de fuera y no de este repo. Un kind
-        # inventado habria creado una categoria que solo B26 usa, y habria
-        # obligado a cada consulta que filtre por kind a acordarse de ella.
-        kind="external_doc",
+        # B26 fijaba aqui `external_doc` para toda observacion externa, y lo
+        # justificaba en el propio codigo: `SourceKind` es un Literal cerrado
+        # y AGENTS.md 2.1 pedia una ADR antes de anadir un valor. ESA ADR NO
+        # SE ABRIO HASTA B33 (ADR-0034), y mientras tanto toda observacion
+        # de runtime se guardaba como documento externo, que no es lo que es.
+        #
+        # MEDIDO antes de decidir, no supuesto:
+        #   adr:0001           kind=external_doc
+        #   runtime:ventana-1  kind=external_doc    <- indistinguibles
+        #   json_extract(locator_json, '$.producer') funciona, pero sin indice
+        #   y `sources` no tiene columna producer, ni adapter, ni type_name
+        #
+        # Ahora el kind lo DECLARA el envelope. `None` es `external_doc`, que
+        # es lo que significaba antes: los adaptadores que ya escribian
+        # envelopes siguen produciendo exactamente lo mismo.
+        kind=env.kind if env.kind is not None else "external_doc",
         content_hash=env.revision,
         locator={
             "adapter": env.adapter,
@@ -259,6 +311,8 @@ def normalizar(env: ObservationEnvelope) -> ObservationIngesta:
         working_tree_status=None,
         checked_at=env.observed_at,
         freshness="current",
+        observed_from=env.observed_from,
+        observed_to=env.observed_to,
     )
     entity = Entity(
         entity_id=entity_id(env.subject),

@@ -413,6 +413,45 @@ def _indice_de_commit(cur: sqlite3.Cursor) -> None:
     )
 
 
+def _ventana_de_runtime(cur: sqlite3.Cursor) -> None:
+    """B33 / `ADR-0034`: la ventana que una fuente de runtime observa.
+
+    **POR QUE UNA MIGRACION Y NO SOLO `schema.py`.** El mismo motivo que
+    escribio `0006`, y es el que hace que esto no sea opcional: `CREATE TABLE
+    IF NOT EXISTS` en `schema.py` solo corre al CREAR la base, luego toda
+    base de un proyecto en uso —que es toda base— se queda sin las columnas
+    para siempre. Anadirlo solo al esquema deja-arregladas las bases nuevas
+    y rotas las viejas, que es el modo de fallo mas caro porque parece que
+    funciono.
+
+    **POR QUE `ALTER TABLE ADD COLUMN` Y NO RECONSTRUIR COMO HIZO `0005`.**
+    `0005` reconstruyo `claims` porque cambiar su `UNIQUE` exige recrear la
+    tabla. Aqui las columnas son nuevas y no participant de ninguna
+    constraint, luego `ADD COLUMN` alcanza: es mas barato, no pierde filas, y
+    las que ya estan se quedan con `NULL` en las dos — que es exactamente lo
+    que deben decir, porque toda fuente anterior a B33 no observa ningun
+    periodo.
+
+    **POR QUE EL INDICE ES PARCIAL.** Igual que en `0006`: `observed_from` es
+    NULL en toda fuente que no es de runtime, y esas se consultan por otras
+    columnas. Un indice completo guardaria many NULLs que no se buscan nunca.
+
+    Idempotente: las columnas se comprueban antes de anadirlas y el indice
+    lleva su `IF NOT EXISTS`, luego abrir la base dos veces no hace nada la
+    segunda vez. Eso no es elegancia —es lo que permite que aplicar la
+    migracion no sea una operacion que haya que auditar—.
+    """
+    existentes = {fila[1] for fila in cur.execute("PRAGMA table_info(sources)").fetchall()}
+    for columna in ("observed_from", "observed_to"):
+        if columna not in existentes:
+            cur.execute(f"ALTER TABLE sources ADD COLUMN {columna} TEXT")
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sources_ventana "
+        "ON sources(tenant_id, project_id, observed_from) "
+        "WHERE observed_from IS NOT NULL"
+    )
+
+
 MIGRACIONES: Final[tuple[Migracion, ...]] = (
     Migracion("0001_claims_assertion_origin", _anade_assertion_origin),
     Migracion("0002_installed_packs", _anota_installed_packs),
@@ -420,6 +459,7 @@ MIGRACIONES: Final[tuple[Migracion, ...]] = (
     Migracion("0004_claims_ventanas_de_vigencia", _anade_ventanas_de_vigencia),
     Migracion("0005_claims_identidad_con_ambito", _claims_identidad_con_ambito),
     Migracion("0006_sources_indice_de_commit", _indice_de_commit),
+    Migracion("0007_sources_ventana_de_runtime", _ventana_de_runtime),
 )
 
 
