@@ -5,7 +5,7 @@
 > **Bloque 2026-10-07 (B37) — El bypass que queda, y lo que el hook no llega a medir.**
 > (B36 cerrado y certificado en `evidence/b36-commit-gate-2026-10-07.md`: `4113 passed, 3 skipped, 0 failed, 858,89 s`, suelos rc=0, ratchet 5/5 a cero, sondas 5/5 y las de B35 siguen 8/8. El guard de estado ahora mira la columna Y de `git status --porcelain` —lo único que un `git checkout --` puede perder—, nace una guarda de capacidad derivada de `scripts/`, y los **siete** instrumentos que restauraban con `git checkout --` restauran escribiendo. B37 abre con lo que queda: el bypass todavía necesario, y lo que el hook de pre-push no llega a medir.)
 >
-> Versión activa `0.42.1.dev0`; último tag `v0.42.1`; **4116 tests**.
+> Versión activa `0.42.1.dev0`; último tag `v0.42.1`; **4121 tests**.
 >
 > **LA PREMISA DE B31 ERA FALSA, Y ESO FUE LO PRIMERO QUE SE MIDIÓ.**
 > La fila decía «no hay análisis estructural real: `line_count = 137` es todo
@@ -136,7 +136,7 @@
 > **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.** (cerrado y certificado)
 > (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 con `runtime_observation`, `Source` +2 columnas, migración `0007` e índice parcial `idx_sources_ventana` — **solo en la migración**, porque en el DDL una base vieja reventa antes de migrar. El kind lo declara el envelope, no se deduce de que tenga ventana: una medición de test también cubre un periodo.)
 >
-> Versión activa `0.42.1.dev0`; último tag `v0.42.1`; **4116 tests**.
+> Versión activa `0.42.1.dev0`; último tag `v0.42.1`; **4121 tests**.
 >
 > **LA FILA DECÍA «HAY QUE AÑADIR SEIS CONSULTAS», Y CINCO YA EXISTÍAN.**
 > Medido antes de escribir una línea (`/tmp/b34_preflight.py`):
