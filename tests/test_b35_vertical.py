@@ -123,11 +123,31 @@ class TestElContratoTieneLasDosDirecciones:
         `CapabilitySpec` tiene tres campos y el `UNIQUE` de `CapabilityRegistry`
         es `(type_name, version)`. Un payload sin `version` permite registrar
         dos adapters que se solapan sin que nada lo diga.
+
+        **Y EL SPEC DE ESTE TEST ES DELIBERADAMENTE DISTINTO DEL DE POR
+        DEFECTO.** MEDIDO: con el `CapabilitySpec` de siempre, cuya `version` ya
+        es `"v1"`, la sonda de mutacion que la fija a mano a `"v1"` daba
+        **INOCUA** —el arbol seguia en verde— porque `"v1"` ES el valor por
+        defecto. Se estaba midiendo un cambio que no es un cambio, que es la
+        peor forma de sonda: parece que vigila y no vigila.
+
+        Con un `version` que NO es la de por defecto, la ida y la vuelta
+        tienen que conservarla, y cualquier cambio se ve.
         """
-        env = _env((Observation(predicate="line_count", object_literal=1),))
+        env = ObservationEnvelope(
+            producer=CapabilitySpec(type_name="sg.prueba", version="7.3", summary="prueba"),
+            adapter="Prueba",
+            source_id="s:1",
+            subject="file:a.py",
+            observed_at="2026-10-07T00:00:00Z",
+            revision="r1",
+            observations=(Observation(predicate="line_count", object_literal=1),),
+            kind="local_file",
+        )
         payload = envelope_a_payload(env)
-        assert payload["producer"]["version"] == env.producer.version
+        assert payload["producer"]["version"] == "7.3"
         assert envelope_de_payload(payload).producer == env.producer
+        assert envelope_de_payload(payload).producer.version == "7.3"
 
     def test_un_payload_mal_formado_es_error_de_dominio(self) -> None:
         """El error sale de aqui, con su `code`, y no de un `TypeError`."""
@@ -151,6 +171,74 @@ class TestElContratoTieneLasDosDirecciones:
 # ---------------------------------------------------------------------------
 # P2 — un solo contrato
 # ---------------------------------------------------------------------------
+
+
+class TestElAvisoHablaDelClaimQueSeReEscribe:
+    def test_el_valor_previo_es_el_suyo_y_no_el_de_otro(self, tmp_path: Path) -> None:
+        """MEDIDO: la consulta previa era AMBIGUA, y su valor se colaba.
+
+        Un fichero que importa dos modulos tiene DOS filas que encajan en la
+        tupla (sujeto, predicado, fuente, revision). Con la consulta anterior
+        a `0008` —que no llevaba el objeto— `fetchone()` devolvía una
+        cualquiera, luego el aviso podia decir «habia 'os'» cuando lo que se
+        reescribia era `'sys'`.
+
+        Y esto **no lo media el booleano**: con `insertado` en la formula,
+        `conflicto` ya era `False` igual. Lo que la consulta rota estropeaba
+        es el CONTENIDO del aviso, que es justo lo que B27 pidio al principio
+        y lo que `TestElOverwriteAvisa::test_el_aviso_dice_que_se_afirmo`
+        ata para un caso. MEDIDO, y por eso esta sonda apuntaba al sitio
+        equivocado dos veces: la primera a la comparacion y la segunda a la
+        consulta, y las dos daba INOCUA.
+        """
+        from skillgraph.knowledge.graph import Claim, Entity, Source, source_id
+        from skillgraph.platform.storage import Storage
+
+        s = Storage(tmp_path / "x.sqlite")
+        s.upsert_entity(
+            tenant_id="t",
+            project_id="p",
+            entity=Entity(entity_id="file:a.py", kind="file", stable_key="a.py"),
+        )
+        s.register_source(
+            tenant_id="t",
+            project_id="p",
+            source=Source(
+                source_id=source_id("local:a.py"),
+                kind="local_file",
+                content_hash="h",
+                locator={},
+                git_commit_sha=None,
+                git_tree_sha=None,
+                working_tree_status=None,
+                checked_at="2026-10-07T00:00:00Z",
+                freshness="current",
+            ),
+        )
+
+        def _import(claim_id: str, modulo: str) -> Claim:
+            return Claim(
+                claim_id=claim_id,
+                subject_entity_id="file:a.py",
+                predicate="imports_module",
+                object_literal=modulo,
+                source_id=source_id("local:a.py"),
+                checked_at_revision="r1",
+            )
+
+        for cid, modulo in (("c-os", "os"), ("c-sys", "sys")):
+            s.record_claim(tenant_id="t", project_id="p", claim=_import(cid, modulo))
+
+        # Se reescribe 'sys'. El aviso, si hay algo que decir, tiene que decir
+        # lo que tenia 'sys' — y no 'os', que esta ahi al lado.
+        r = s.record_claim(tenant_id="t", project_id="p", claim=_import("c-sys", "sys"))
+        s.close()
+
+        assert r.conflicto is False, "reingerir lo mismo no es conflicto"
+        assert r.valor_previo == "sys", (
+            f"el aviso habla de otro claim: valor_previo={r.valor_previo!r}, "
+            "y quien lo recibe no puede saber si lo que se solapa es el suyo"
+        )
 
 
 class TestElContratoEsUno:
