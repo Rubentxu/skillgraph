@@ -5,7 +5,7 @@
 > **Bloque 2026-10-07 (B33) — La telemetría y la intención/documentación se contradicen y una pisa a la otra.**
 > (B32 cerrado y certificado: `GitHistory` con `es_ancestro` —nunca `ordena`—, `claims_desde_commit`, migración `0006` y el índice parcial `idx_sources_commit`. B32 cerraba el **CUÁNDO** y el **DESDE QUÉ**, y explícitamente no el **POR QUÉ**.)
 >
-> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **3920 tests**.
+> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **3960 tests**.
 >
 > **EL GATE DE B33 YA ESTABA CERRADO, Y MEDIRLO FUE LO PRIMERO.** El gate
 > del roadmap dice «un claim runtime que contradice un ADR abre conflicto;
@@ -62,7 +62,7 @@
 > fuentes debería tener que responder.
 >
 > **LA DECISIÓN ESTÁ PENDIENTE DESDE B26, Y ESTÁ ESCRITA EN EL CÓDIGO.**
-> `src/skillgraph/knowledge/observation.py:242-250` dice, sobre el kind que
+> `src/skillgraph/knowledge/observation.py:250::normalizar` dice, sobre el kind que
 > usa:
 >
 > > `external_doc`, y NO un kind nuevo. `SourceKind` es un Literal cerrado y
