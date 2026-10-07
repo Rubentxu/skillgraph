@@ -5,7 +5,7 @@
 > **Bloque 2026-10-07 (B35) — De la capability al store hay tres pasos que no existen.**
 > (B31 cerrado y certificado: `sg.code.analysis` con `ADR-0035` y la migración `0008`. La serie B0..B34 queda cerrada; B35 es el corte siguiente, y también se abre medido.)
 >
-> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4068 tests**.
+> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4100 tests**.
 >
 > **LA PREMISA DE B31 ERA FALSA, Y ESO FUE LO PRIMERO QUE SE MIDIÓ.**
 > La fila decía «no hay análisis estructural real: `line_count = 137` es todo
@@ -64,7 +64,7 @@
 > Certificación: **4065 passed + 3 skipped + 0 failed**, 855,69 s, rc=0,
 > cobertura global 97,14 %, floors rc=0 (`cli/` 93,18 %, `runtime/` 98,41 %,
 > `code_analysis.py` 100 %), arquitectura 5/5 a cero, `project_truth` rc=0
-> con 4068 declarados == 4068 colectados, sondas 7/7.
+> con 4100 declarados == 4100 colectados, sondas 7/7.
 >
 > **B35 SE ABRE MEDIDO, porque no se abre sin medir**
 > (`scripts/measure_b35_vertical.py`), y el alcance resultó **mayor que el
@@ -136,7 +136,7 @@
 > **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.** (cerrado y certificado)
 > (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 con `runtime_observation`, `Source` +2 columnas, migración `0007` e índice parcial `idx_sources_ventana` — **solo en la migración**, porque en el DDL una base vieja reventa antes de migrar. El kind lo declara el envelope, no se deduce de que tenga ventana: una medición de test también cubre un periodo.)
 >
-> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4068 tests**.
+> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4100 tests**.
 >
 > **LA FILA DECÍA «HAY QUE AÑADIR SEIS CONSULTAS», Y CINCO YA EXISTÍAN.**
 > Medido antes de escribir una línea (`/tmp/b34_preflight.py`):
