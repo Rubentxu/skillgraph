@@ -657,3 +657,87 @@ class SqliteClaimRepository:
             (tenant_id, project_id, object_entity_id),
         ).fetchall()
         return tuple(_row_to_stored_claim(row, json) for row in rows)
+
+    def claims_desde_commit(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        commit_sha: str,
+    ) -> tuple[Claim, ...]:
+        """B32: ¿qué afirmaciones se hicieron DESDE este commit?
+
+        **LA CONSULTA QUE NO EXISTIA, Y QUE ES LA MITAD DE B32.** MEDIDO
+        antes de escribirla: `grep git_commit_sha src/` no encuentra NINGUN
+        llamador fuera de quien escribe la columna. Nadie ha hecho nunca esta
+        pregunta desde el producto. La fila de B32 dice «no se puede
+        responder cuándo cambió una relación»; la mitad de verdad es que la
+        pregunta no tenía forma.
+
+        El camino es `claims.source_id -> sources.git_commit_sha`, y es el
+        único que hay: no se añade una columna con el SHA al claim, porque
+        sería una segunda fuente de verdad para algo que la fuente YA sabe.
+
+        **DEVUELVE `Claim`, COMO `claims_at_revision` Y NO COMO
+        `claims_by_object_entity`.** Hay dos formas de fila en este fichero
+        y la eleccion importa: `Claim` es el dominio, `StoredClaim` es el
+        almacen. Una consulta de esta clase que viene de una fuente con SHA
+        y se cruza con `claims` es la misma clase de pregunta que
+        `claims_at_revision` —qué se afirmo en ESTE punto— y esa devuelve
+        `Claim`. Abrir una tercera forma para lo mas nuevo es exactamente
+        como aparecen dos representaciones del mismo dato.
+
+        **POR QUÉ NO FILTRA POR VIGENCIA.** Porque la pregunta es «qué se
+        afirmó DESDE este commit», no «qué es cierto ahora». Una afirmación
+        cuya ventana se cerró SIGUIó afirmándose desde ese commit, y filtrarla
+        por vigencia haría que un rebase de tres meses no mostrara nada de lo
+        que pasó entonces. Es la misma distinción que B29 fijo entre «qué se
+        sabía en la revisión» y «qué se afirmó entonces».
+
+        Usa `idx_sources_commit`, que es PARCIAL: las fuentes sin SHA no se
+        indexan porque no se buscan.
+
+        Returns:
+            Ordenado de forma estable por `claim_id`, igual que
+            `claims_at_revision`: una consulta de histórico cuya lista
+            depende del plan de ejecución no es una consulta de histórico.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT c.*, GROUP_CONCAT(ce.evidence_id) AS evidence_ids_csv
+            FROM claims c
+            JOIN sources s ON s.source_id = c.source_id
+            LEFT JOIN claim_evidence ce ON ce.claim_id = c.claim_id
+            WHERE c.tenant_id = ? AND c.project_id = ?
+              AND s.tenant_id = ? AND s.project_id = ?
+              AND s.git_commit_sha = ?
+            GROUP BY c.claim_id
+            ORDER BY c.claim_id
+            """,
+            (tenant_id, project_id, tenant_id, project_id, commit_sha),
+        ).fetchall()
+        out: list[Claim] = []
+        for row in rows:
+            ev_csv = row["evidence_ids_csv"] or ""
+            ev_ids = tuple(ev_csv.split(",")) if ev_csv else ()
+            object_literal, object_entity = objeto_del_claim(row, json)
+            out.append(
+                Claim(
+                    claim_id=row["claim_id"],
+                    subject_entity_id=row["subject_entity_id"],
+                    predicate=row["predicate"],
+                    object_literal=object_literal,
+                    source_id=row["source_id"],
+                    evidence_ids=ev_ids,
+                    extraction_method=row["extraction_method"],
+                    extractor_version=row["extractor_version"],
+                    assertion_origin=row["assertion_origin"],
+                    checked_at_revision=row["checked_at_revision"],
+                    stale=bool(row["stale"]),
+                    object_entity=object_entity,
+                    valid_from_revision=row["valid_from_revision"],
+                    valid_until_revision=row["valid_until_revision"],
+                    supersedes_claim_id=row["supersedes_claim_id"],
+                )
+            )
+        return tuple(out)

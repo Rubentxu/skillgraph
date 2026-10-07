@@ -468,6 +468,28 @@ class SqliteKnowledgeRepository:
             revision=revision,
         )
 
+    def claims_desde_commit(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        commit_sha: str,
+    ) -> tuple[Claim, ...]:
+        """B32: ¿qué afirmaciones se hicieron desde este commit?
+
+        Va en la fachada por el mismo motivo que en B25, B27 y B29: **la
+        consulta que se guarda tiene que poder PREGUNTARSE por la API
+        pública.** Con la capacidad solo en `SqliteClaimRepository`,
+        alcanzarla exigiría bajar a la conexión —que es justo lo que AC-5
+        prohíbe al controller— y la consulta existiría para quien escribiera
+        el repositorio, no para quien la necesita.
+        """
+        return self._claims.claims_desde_commit(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            commit_sha=commit_sha,
+        )
+
     def get_claim(
         self,
         *,

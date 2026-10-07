@@ -305,6 +305,29 @@ class KnowledgeDelegations:
             revision=revision,
         )
 
+    def claims_desde_commit(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        commit_sha: str,
+    ) -> tuple[Claim, ...]:
+        """B32: ¿qué afirmaciones se hicieron desde este commit?
+
+        Va en la fachada por el mismo motivo que en B25, B27 y B29, y el
+        motivo tiene una segunda mitad que conviene decir: sin este
+        delegado, el `KnowledgeController` —que habla el Protocol, no
+        SQLite— no tendria forma de llegar a la consulta sin bajar a
+        `_conn`, que es lo que AC-5 prohibe. La capacidad existia y no era
+        alcanzable, que es peor que no existir: el que la escribio creeria
+        que si.
+        """
+        return self.knowledge_repository().claims_desde_commit(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            commit_sha=commit_sha,
+        )
+
     def list_claims_by_object_entity(
         self,
         *,

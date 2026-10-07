@@ -387,12 +387,39 @@ def _el_unique_ya_lleva_ambito(cur: sqlite3.Cursor) -> bool:
     return False
 
 
+def _indice_de_commit(cur: sqlite3.Cursor) -> None:
+    """B32: el indice que hace posible «qué se afirmó desde este commit».
+
+    **POR QUE UNA MIGRACION Y NO SOLO `schema.py`.** `CREATE INDEX IF NOT
+    EXISTS` en `schema.py` solo corre al crear la base. Una base que ya
+    existe —que es toda base de un proyecto en uso— no lo recibe nunca,
+    luego añadirlo solo al esquema arregla las bases nuevas y deja rotas las
+    viejas. Es el mismo motivo por el que `0005` reconstruye `claims`: el
+    esquema nuevo no alcanza a lo que ya existe.
+
+    **Y POR QUE ES PARCIAL.** `git_commit_sha` es NULL en toda fuente que no
+    viene de git —`improvement.py`, `receipts.py` y `skill_importer.py` la
+    ponen a None—, luego un indice completo guardaria many NULLs que no se
+    buscan nunca. El `WHERE ... IS NOT NULL` los deja fuera: el indice sale
+    mas pequeno y la consulta sigue siendo la misma.
+
+    Idempotente por el `IF NOT EXISTS`, que es lo que permite abrir la base
+    dos veces sin que la segunda toque nada.
+    """
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sources_commit "
+        "ON sources(tenant_id, project_id, git_commit_sha) "
+        "WHERE git_commit_sha IS NOT NULL"
+    )
+
+
 MIGRACIONES: Final[tuple[Migracion, ...]] = (
     Migracion("0001_claims_assertion_origin", _anade_assertion_origin),
     Migracion("0002_installed_packs", _anota_installed_packs),
     Migracion("0003_claims_object_entity_id", _anade_object_entity_id),
     Migracion("0004_claims_ventanas_de_vigencia", _anade_ventanas_de_vigencia),
     Migracion("0005_claims_identidad_con_ambito", _claims_identidad_con_ambito),
+    Migracion("0006_sources_indice_de_commit", _indice_de_commit),
 )
 
 

@@ -635,6 +635,36 @@ class KnowledgeController:
 
         return list(_ls(self))
 
+    def claims_desde_commit(self, commit_sha: str) -> list[Claim]:
+        """B32: ¿qué afirmaciones se hicieron desde este commit?
+
+        **LA PREGUNTA QUE LA FILA DEL ROADMAP DICE QUE NO SE PUEDE
+        CONTESTAR, CONTESTADA POR UNA MITAD.** La otra mitad —el CUÁNDO, que
+        necesita ascendencia— es `platform.ports.git_history.GitHistory`, con
+        su adaptador `DulwichGitHistory`. Aquí está el DESDE QUÉ: qué
+        afirmaciones salieron de este commit concreto.
+
+        Se expone en el controller y no solo en el repositorio porque quien
+        pregunta es la capa de conocimiento, y el controller es el sitio donde
+        el `tenant_id`/`project_id` del proyecto actual ya están resueltos: un
+        llamante que tuviera que pasarlos sería quien decide el alcance, y el
+        alcance no se decide al preguntar.
+
+        **UN COMMIT QUE NO ESTA EN ESTE PROYECTO DEVUELVE VACIO, Y NO ES UN
+        ERROR.** Es la misma respuesta que da `claims_at_revision` con una
+        revisión desconocida, y por el mismo motivo: una afirmación es algo
+        que ESTE proyecto afirmó, y de un commit del que este proyecto no
+        tiene ninguna fuente no tiene nada que decir. Lo que no se hace es
+        devolver todas «porque sí», que es lo que haría un filtro ausente.
+        """
+        return list(
+            self.knowledge.claims_desde_commit(
+                tenant_id=self.tenant_id,
+                project_id=self.project_id,
+                commit_sha=commit_sha,
+            )
+        )
+
 
 __all__ = [
     "NAMESPACE_KNOWLEDGE",

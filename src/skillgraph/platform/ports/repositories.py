@@ -432,6 +432,33 @@ class KnowledgeRepository(Protocol):
         Sin N+1: una sola query con LEFT JOIN a ``claim_evidence``.
         """
 
+    def claims_desde_commit(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        commit_sha: str,
+    ) -> tuple[Any, ...]:
+        """B32: ¿qué afirmaciones se hicieron DESDE este commit?
+
+        En el puerto por el mismo motivo que `claims_at_revision`: es la
+        mitad «consultable» de una fila de roadmap que decia que no se
+        podia preguntar. MEDIDO antes de escribirla: no existia ninguna
+        consulta en `src/` que cruzara `claims.source_id` con
+        `sources.git_commit_sha`, luego no era que faltara el indice —no
+        habia ni la pregunta—.
+
+        El SHA es la identidad porque es el contenido: no se puede reasignar
+        ni mover debajo de otro commit. Y el alcance lleva `tenant_id` y
+        `project_id` porque una ascendencia que cruza de proyecto responderia
+        «qué dijo otro proyecto sobre este commit», que no es una pregunta
+        que este sistema pueda contestar honestamente.
+
+        Un commit del que este proyecto no tiene ninguna fuente devuelve
+        vacio, y no es un error: una afirmacion es algo que ESTE proyecto
+        afirmo.
+        """
+
     def record_event(
         self,
         *,

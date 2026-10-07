@@ -259,6 +259,21 @@ CREATE TABLE IF NOT EXISTS sources (
 CREATE INDEX IF NOT EXISTS idx_sources_project
     ON sources(tenant_id, project_id);
 
+-- B32. MEDIDO antes de añadirlo: la pregunta «qué se afirmó desde este
+-- commit» no tenía índice y —peor— no tenía consulta. `git_commit_sha` es
+-- NULL en toda fuente que no viene de git (improvement, receipts,
+-- skill_importer la ponen a None), así que el índice es PARCIAL: los NULL
+-- no se indexan y la tabla no crece con ellos.
+--
+-- El índice es sobre `(tenant_id, project_id, git_commit_sha)` y no solo
+-- sobre el SHA porque el alcance de un `project` es la primera frontera que
+-- hay que respetar: una consulta de ascendencia que cruzara de proyecto
+-- respondería «qué dijo otro proyecto sobre este commit», que no es una
+-- pregunta que este sistema pueda contestar honestamente.
+CREATE INDEX IF NOT EXISTS idx_sources_commit
+    ON sources(tenant_id, project_id, git_commit_sha)
+    WHERE git_commit_sha IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS entities (
     entity_id        TEXT PRIMARY KEY,
     tenant_id        TEXT NOT NULL,
