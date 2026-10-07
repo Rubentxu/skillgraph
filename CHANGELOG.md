@@ -14,6 +14,100 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.42.0] - 2026-10-07 — La serie epistemológica llega al store, y un guard se suicide
+
+SemVer **derivado** desde `v0.41.0` con `scripts/derive_semver.py`
+(`git log v0.41.0..HEAD`, 46 commits): `0 breaking · 6 feat · 7 fix · 32 neutros`
+y la regla pide **MINOR -> v0.42.0**.
+
+### B31..B35 — del grafo a lo que se puede preguntar
+
+Cinco bloques que convierten `sg.code.analysis` en una puerta de verdad:
+el análisis estructural persiste como `Claim` (`ADR-0035`, migración `0008`),
+`GitHistory` da ascendencia real, `telemetry.query.v1` cierra la contradicción
+entre telemetría e intención, `SuperficieConocimiento` permite preguntar al
+sistema por lo que sabe, y B35 cierra **los tres pasos que faltaban** entre la
+capability y el store.
+
+**B35 no era un hueco: eran tres.** MEDIDO con `scripts/measure_b35_vertical.py`:
+
+```
+RONDA 1 — EL REGISTRO     CapabilityRegistry(...) en src/: 0   (26 en tests/)
+RONDA 2 — EL SERIALIZADOR 2 definiciones de envelope_a_payload para 1 nombre
+RONDA 3 — EL INVERSO      0 deserializadores en src/; 2 en tests/, y DIVERGIAN
+RONDA 4 — LA PUERTA       AST sobre los imports de cli/: ninguno llega
+```
+
+El inverso estaba escrito a mano en dos ficheros de test, y como eran dos
+copias **ya no significaban lo mismo**: una leía el `producer` del payload y
+la otra `cap.spec` de la capability. Una de las dos no estaba probando la ida
+y la vuelta.
+
+### Un defecto de B31 que su propia certificación no vio
+
+`record_claim` comparaba contra la tupla **anterior** a la migración `0008`, sin
+el objeto. MEDIDO por la puerta nueva, sobre un fichero que importa `os` y `sys`:
+
+```
+imports_module = 'os'    conflicto=False
+imports_module = 'sys'   conflicto=True   <-- FALSO
+```
+
+`sys` no contradice a `os`: son dos hechos ciertos, que es justo lo que `0008`
+ vino a permitir. **Y las 6 filas estaban bien — el aviso mentía.** Es la
+quinta vez que sale el defecto de fondo del repo: un guard que mide la mitad de
+una propiedad y da verde porque esa mitad está bien.
+
+La semántica de `conflicto` se decidió con el usuario: significa **el `UNIQUE`
+rechazó mi escritura**, con **las dos** condiciones, porque con una sola la
+señal se muere. Siete estados medidos y correctos. **CONSECUENCIA DECLARADA:**
+por la vía de `normalizar` un conflicto es inalcanzable —`claim_id` deriva del
+contenido—, y quien aún lo necesita construye el `Claim` a mano: la promoción.
+
+### Lo que B35 abrió al certificarse
+
+El floors dio `observation_ingestion.py` en **84 %**, seis puntos bajo su suelo.
+No era deuda heredada: **lo produjo B35**. La rama que recogía el aviso es
+inalcanzable, y no hay forma honesta de ejecutarla sin monkeypatchear
+`normalizar`. Se borró la rama en vez de bajar el suelo, y el módulo subió a
+**100 %**. Cayeron también el print de `sg knowledge ingest-code` y dos
+aserciones que se volvieron **decoradas** —imposibles de fallar— sustituidas por
+guardes AST que miden la mentira y no el síntoma.
+
+### Un guard que obliga a apagar el gate que lo contiene
+
+`TestElHarnessNoBorraTrabajo` exige `git status --porcelain -- src scripts`
+vacío. Un cambio **stageado** sale ahí igual que uno sin stagear, luego **todo
+commit que toca `src/` o `scripts/` se pone rojo**. MEDIDO en repos aislados:
+
+```
+cambio STAGEADO  ->  'M  src/a.py'    el guard falla
+cambio SIN stagear->  ' M src/a.py'    el guard falla
+SIN stagear + `git checkout --`  -> DESTRUIDO
+STAGEADO     + `git checkout --`  -> sobrevive
+```
+
+El aviso suena por igual en el estado peligroso y en el seguro, y la salida
+—`HOOK_SKIP_TESTS=1`— apaga justo la única comprobación de que lo stageado
+sigue pasando.
+
+### Los guards dejan de declarar cosas que no miden
+
+WI-108..WI-116 y la unificación del harness de mutación. Cada propiedad que
+llegaba a cero se queda en cero, con **sonda de mutación** que demuestra que el
+guard se pone rojo cuando hay que ponerse rojo. B35 añadió ocho sondas, **tres
+de ellas INOCUAS la primera vez**, y los motivos quedan escritos: una sonda que
+mide un cambio que no es un cambio es peor que no tener sonda.
+
+### Una lección de integridad que era nuestra
+
+Al cancelar una certificación a medias, sus procesos siguieron escribiendo sobre
+el mismo `.coverage.parallel` que la siguiente. El dato salio **contaminado**:
+`cli/commands/knowledge.py` bajó de 93,98 % a 48,11 % **sin un solo fallo de
+pytest**. Un número de cobertura no delata estar contaminado — sale con toda
+la autoridad. La recertificación limpia lleva ahora una comprobación que aborta
+si hay otra medición viva antes de medir.
+
 ## [0.41.0] - 2026-10-06 — Las fronteras arquitectónicas como leyes ejecutables
 
 SemVer **derivado** desde `v0.40.0`: `0 breaking · 1 feat · 1 refactor · 5 otros`
