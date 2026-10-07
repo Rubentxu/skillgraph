@@ -241,6 +241,37 @@ def _lineas_del_hook(salida: str) -> list[str]:
     ]
 
 
+def _afirma_ok(salida: str) -> bool:
+    """¿El hook AFIRMA que la receta dio SUCCESS, o solo menciona la cadena?
+
+     MEDIDO, y es el cuarto verificador debil de este bloque —este si moria en
+     el lado que no toca. Buscaba la cadena `SUCCESS` en toda la salida, y tras
+     el arreglo el mensaje de error de R6 la CONTIENE («no imprimio 'Pipeline
+     finished with SUCCESS'»), luego la ronda reportaba que el hook seguia
+     diciendo SUCCESS con un hook que ya no lo hace.
+
+     Lo que se mide es la AFIRMACION: una linea que abre el veredicto del
+     hook. Las dos formas son `[pre-push] OK: ...` y `ERROR: ...`, y solo la
+     primera afirma. Un guard que busque una cadena por todas partes no
+     distingue «el hook dice que la receta dio SUCCESS» de «el hook explica que
+     la receta NO dio SUCCESS», que es justo la confusion que este bloque
+    otra vez en B37 con el `OK` del pre-commit.
+    """
+    return any(linea.startswith("[pre-push] OK") for linea in salida.splitlines())
+
+
+def _afirma_exito_sobre_la_receta(salida: str) -> bool:
+    """Más fuerte: ¿la línea de OK afirma algo de la RECETA, no del hook?
+
+    Un hook podría decir `OK: el fichero existe` y pasar el guard anterior sin
+    haber mirado nada. Lo que importa es que la afirmación hable del delegado.
+    """
+    for linea in salida.splitlines():
+        if linea.startswith("[pre-push] OK"):
+            return "receta" in linea or "delegado" in linea
+    return False
+
+
 def r6_r7_r8_el_success_es_estructural() -> None:
     print("=" * 74)
     print("R6/R7/R8 — un exit 0 sin hacer nada tambien dice SUCCESS?")
@@ -250,14 +281,14 @@ def r6_r7_r8_el_success_es_estructural() -> None:
     print("R6 — `ci.sh` = `exit 0`, NO HACE NADA:")
     for linea in r6.splitlines():
         print(f"   {linea}")
-    print(f"   el hook dice SUCCESS: {'SUCCESS' in r6}")
+    print(f"   el hook AFIRMA que la receta dio SUCCESS: {_afirma_exito_sobre_la_receta(r6)}")
     print()
 
     r7 = _corrida_con_ci(f"#!/bin/sh\necho '{VEREDICTO_RECETA}'\nexit 0\n")
     print("R7 — `ci.sh` = imprime el veredicto de la receta y sale 0:")
     for linea in r7.splitlines():
         print(f"   {linea}")
-    print(f"   el hook dice SUCCESS: {'SUCCESS' in r7}")
+    print(f"   el hook AFIRMA que la receta dio SUCCESS: {_afirma_exito_sobre_la_receta(r7)}")
     print()
 
     l6, l7 = _lineas_del_hook(r6), _lineas_del_hook(r7)
@@ -268,7 +299,9 @@ def r6_r7_r8_el_success_es_estructural() -> None:
             if a != b:
                 print(f"      R6: {a}\n      R7: {b}")
     print(f"R8 — salida del hook con R6 IGUAL a la de R7: {iguales}")
-    print("   R6 no ejecuto nada. R7 si. El hook dice lo mismo en las dos.")
+    print("   `True` es el DEFECTO: con un `ci.sh` que no hace nada y con")
+    print("   uno que ejecuta, el hook dice lo mismo. `False` es lo correcto:")
+    print("   los distingue.")
     print()
     print("   MEDIDO: la primera version de esta ronda comparaba las dos salidas")
     print("   enteras y decia `False`. Era el sha del repo temporal, que cambia")
