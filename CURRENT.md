@@ -2,8 +2,8 @@
 
 >
 
-> **Bloque 2026-10-07 (B36) — Un guard que obliga a apagar el gate que lo contiene.**
-> (B35 cerrado y certificado en `evidence/b35-vertical-2026-10-07.md`: `4104 passed, 3 skipped, 0 failed, 855,42 s`, suelos rc=0 con `observation_ingestion.py` de 84 % a 100 %, ratchet 5/5 a cero, sondas 8/8. B36 abre medido con `scripts/measure_b36_commit_gate.py`, y lo que midió es un guard que **no puede pasar por la puerta que vigila**.)
+> **Bloque 2026-10-07 (B37) — El bypass que queda, y lo que el hook no llega a medir.**
+> (B36 cerrado y certificado en `evidence/b36-commit-gate-2026-10-07.md`: `4113 passed, 3 skipped, 0 failed, 858,89 s`, suelos rc=0, ratchet 5/5 a cero, sondas 5/5 y las de B35 siguen 8/8. El guard de estado ahora mira la columna Y de `git status --porcelain` —lo único que un `git checkout --` puede perder—, nace una guarda de capacidad derivada de `scripts/`, y los **siete** instrumentos que restauraban con `git checkout --` restauran escribiendo. B37 abre con lo que queda: el bypass todavía necesario, y lo que el hook de pre-push no llega a medir.)
 >
 > Versión activa `0.42.0.dev0`; último tag `v0.42.0`; **4116 tests**.
 >
