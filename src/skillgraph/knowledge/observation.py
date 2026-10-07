@@ -84,6 +84,7 @@ if TYPE_CHECKING:  # pragma: no cover - solo para el type-checker
     pass
 
 __all__ = [
+    "METODO_EXTERNO",
     "VERSION_ENVELOPE",
     "EnvelopeInvalido",
     "Observation",
@@ -102,6 +103,20 @@ __all__ = [
 #: adapter, cada adapter podria inventar la suya y no habria nada que comparar.
 VERSION_ENVELOPE: Final[str] = "sg.observation/1"
 
+#: **B31.** El metodo que se le pone a una observacion que NO declara el suyo.
+#:
+#: Vive aqui y no escrito en `_claim_de` a pelo por el mismo motivo que
+#: `VERSION_ENVELOPE`: si cada normalizador escribiera el suyo, dos copias de
+#: la misma regla divergirian sin que nada las comparara — que es el
+#: error que `REGLAS_DE_NOMBRE_SEGURO` ya sufrio una vez en este repo.
+#:
+#: Y no es un valor arbitrario: es lo que `normalizar` ha puesto SIEMPRE, y
+#: por eso un envelope de B26 o de B33 sigue produciendo claims
+#: identicos. Cambiarlo seria reescribir la procedencia de todo lo ya
+#: ingerido, y `why` de B34 imprimiria otra historia para datos que no han
+#: cambiado.
+METODO_EXTERNO: Final[str] = "external_capability"
+
 
 @dataclass(frozen=True, slots=True)
 class Observation:
@@ -119,6 +134,26 @@ class Observation:
     predicate: str
     object_literal: Any = None
     object_entity: EntityRef | None = None
+    #: **B31.** Como se extrajo ESTA observacion, cuando no coincide con el
+    #: resto del envelope.
+    #:
+    #: El metodo vive aqui y no en el envelope a proposito, y es la unica
+    #: forma de que la respuesta sea verdad. MEDIDO sobre
+    #: `extract_file_signatures` de un fichero real: el analizador produce
+    #: **tres** metodos distintos —`line_count`, `regex_import`, `regex_def`—
+    #: y los tres son ciertos para observaciones distintas del MISMO
+    #: analisis. Un envelope con un unico metodo solo podria ser verdad para
+    #: una de las tres, y las otras dos harian una afirmacion falsa.
+    #:
+    #: Y no es cosmetico, porque B34 construyo `why` para responder «¿de
+    #: donde sale esto?». Sin este campo, preguntar por que se afirma
+    #: `line_count = 502` responderia «vino de una capacidad externa», que
+    #: es el rotulo que el nucleo pone a todo lo que cruza la frontera.
+    #:
+    #: `None` significa **exactamente** lo que significaba antes de B31: el
+    #: envelope es de otro mundo y no se sabe de donde salio cada cosa. Los
+    #: envelopes de B26 y B33 siguen produciendo los mismos claims.
+    extraction_method: str | None = None
 
     def __post_init__(self) -> None:
         es_literal = self.object_literal is not None
@@ -338,6 +373,13 @@ def _claim_de(obs: Observation, env: ObservationEnvelope) -> Claim:
     externa. Dejar el default seria decir «lo dijo el nucleo» de algo que dijo
     fuera, que es la perdida de provenance que el gate B6 prohibe.
 
+    **B31.** Y aqui hay una salvedad que el default resuelve solo: el metodo
+    se escribe a pelo unicamente cuando la observacion NO lo trae. Una
+    observacion de este repo que se extrajo con un regex declara su metodo en
+    `Observation.extraction_method`, y entonces el claim lo dice. Lo que no
+    se puede es al reves: no hay forma de que una observacion afirme como se
+    extrajo y el envelope lo sustituya por su categoria.
+
     `extractor_version` lleva la identidad del productor porque es lo que
     permite despues responder «¿quien afirmo esto?» — la pregunta que el
     `producer` del envelope trae justamente para eso.
@@ -354,7 +396,7 @@ def _claim_de(obs: Observation, env: ObservationEnvelope) -> Claim:
         object_literal=obs.object_literal,
         source_id=env.source_id,
         object_entity=obs.object_entity,
-        extraction_method="external_capability",
+        extraction_method=obs.extraction_method or METODO_EXTERNO,
         extractor_version=f"{env.producer.type_name}@{env.producer.version}",
         assertion_origin="observed",
         checked_at_revision=env.revision,
