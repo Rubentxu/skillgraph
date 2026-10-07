@@ -606,7 +606,10 @@ deliverables:
   - "uv.lock reproducible"
 
 tests:
-  total: 3831  # BLOQUE WI-116, tranche `expansion.py`: 3807 -> 3831, +24 de `tests/test_wi116_expansion_comandos.py`.
+  total: 3840  # BLOQUE WI-116, tranche `context_controller.py`: 3831 -> 3840, +9 de `tests/test_wi116_context_controller.py`.
+  # `knowledge/context_controller.py` mide 89,35 % sobre el suelo del 90 % que AGENTS 6.3 declara para todo paquete. El gap es de 0,65 puntos, y ese numero es justo el que hace que este trabajo sea DISTINTO de los otros tres del bloque: casi todo estaba ejecutado y lo que faltaba eran las cuatro validaciones de `Omision.__post_init__`. Un modulo al 89 % parece casi cerrado y bajando el suelo un punto se cerraria; estos tests miden las lineas que faltaban, no la estabilidad del suelo.
+  # **LA RAMA QUE NADIE ALCANZA, Y POR QUE NO SE CUBRE.** El dispatcher `_resolve_one_selector` acaba en `return []` para un `kind` que no es `entity`/`predicate`/`source`. No se cubre esa linea, y el motivo esta medido en `core/recipe.py`: `ObligatorySelector.__post_init__` rechaza cualquier otro `kind`, luego es defensa pura —el mismo caso que la rama `(sin eventos)` de `cmd_runs_logs`—. Lo que se mide es la PROPIEDAD que la vuelve tal, mas el caso feliz de los tres kinds validos para que el test de rechazo no lo cumpla una tabla que lo rechazara todo.
+  # BLOQUE WI-116, tranche `expansion.py`: 3807 -> 3831, +24 de `tests/test_wi116_expansion_comandos.py`.
   # `cli/commands/expansion.py` mide 51,71 % sobre el suelo del 70 % que declara AGENTS 6.3. El hueco no era uniforme: los siete handlers estaban enchufados y sus tests pasaban, pero lo cubierto era sobre todo `_proposal_payload` y la tabla de dispatch.
   # **TRES HALLAZGOS QUE SON MEDICIONES, NO TESTS.**
   # (1) La PRECEDENCIA de `_infer_proposal_stage` (ARCHIVED > APPLIED > REJECTED > PROPOSED) no la mide ningun test rama por rama, y por eso se mide con los CUATRO estados presentes a la vez exigiendo el de mayor rango: cuatro tests de rama pueden estar bien con el orden mal.
