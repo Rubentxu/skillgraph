@@ -243,3 +243,23 @@ símbolo apuntaba —ese guard existe porque `fichero.py:352` es cierto y no
 dice nada— **y además la línea 242 ya no decía lo que la cita afirmaba**,
 porque B33 movió el código que la cita describía. El formato es
 `fichero.py:LINEA::simbolo` con **dos** puntos.
+
+## La certificacion FINAL, sobre el arbol definitivo
+
+Despues de anadir los cinco tests de entrada malformada (`047e29b`), la
+corrida completa sobre el commit definitivo:
+
+```
+pytest                 3962 passed, 3 skipped, 0 failed   813,62 s   rc=0
+cobertura total        97 %   (7639 stmts, 171 missing)
+  src/skillgraph/knowledge/telemetry_query.py   100 %  (56 stmts, 0 missing)
+check_coverage_floors   rc=0   suelo global 97,06 %
+check_architecture      5/5 a cero
+project_truth           rc=0   coherente, 0 contradicciones,
+                               3965 declarados == 3965 colectados,
+                               workitem_current == workitem_state == B33
+```
+
+3962 + 3 skips = **3965**, que es la cifra declarada. Los 3 skips son los
+de plataforma de `SKIPS_PLATAFORMA`, contados en las dos direcciones por el
+guard de WI-108.
