@@ -79,10 +79,14 @@ SONDAS: tuple[tuple[str, str, object, str], ...] = (
         "I1_se_planta_un_git_destructivo_en_un_instrumento",
         INSTRUMENTO,
         (
-            "import subprocess",
-            "import subprocess\n\n\ndef _sonda_b36() -> None:\n"
-            '    subprocess.run(["git", "checkout", "--", "x"], cwd=RAIZ, check=False)',
+            (
+                "import subprocess",
+                "import subprocess\n\n\ndef _sonda_b36() -> None:\n"
+                '    """MEDIDO: esto es lo que el guard tiene que cazar."""\n'
+                '    subprocess.run(["git", "checkout", "--", "x"], cwd=RAIZ, check=False)',
+            ),
         ),
+        None,
         f"{TEST}::TestNingunInstrumentoPuedeBorrarTrabajo::test_ningun_instrumento_llama_a_un_git_DESTRUCTIVO",
     ),
     # --- I2: el derivado se vacia ----------------------------------------
