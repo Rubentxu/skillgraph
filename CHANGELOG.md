@@ -14,6 +14,91 @@ de trabajo después, la regla se mudó allí, se añadió la salvedad **0.x** qu
 el proyecto viene aplicando desde `v0.7.0`, y ahora se calcula con
 `scripts/derive_semver.py`.
 
+## [0.42.1] - 2026-10-07 — Un guard que obliga a apagar el gate que lo contiene
+
+SemVer **derivado** desde `v0.42.0` con `scripts/derive_semver.py`
+(`git log v0.42.0..HEAD`, 7 commits): `0 breaking · 0 feat · 2 fix · 5 neutros`
+y la regla pide **PATCH -> v0.42.1**. Cero `feat` es lo que hace que un PATCH
+sea correcto y no una elección: este bloque no añade superficie.
+
+### El guard rechazaba el commit correcto
+
+`TestElHarnessNoBorraTrabajo` exige `git status --porcelain -- src scripts`
+**vacío**. Pero el hook de pre-commit corre `pytest` **sobre los ficheros
+stageados**, y un cambio stageado sale en ese `status` igual que uno sin
+stagear:
+
+```
+cambio STAGEADO    -> 'M  src/a.py'    el guard falla
+cambio SIN stagear -> ' M src/a.py'    el guard falla
+```
+
+Capturado **en vivo**, no en un repo de pruebas: el hook real rechazó
+`5f3a739`, que era un commit correcto. La salida era `HOOK_SKIP_TESTS=1`.
+
+### Y la alarma estaba invertida
+
+`git checkout --` restaura **del índice**. MEDIDO en las dos direcciones:
+
+```
+SIN stagear + `git checkout --`  -> DESTRUIDO
+STAGEADO     + `git checkout --`  -> sobrevive
+```
+
+El estado peligroso es el único que el hook nunca produce, y el seguro es el
+único que se puede encontrar. El guard avisa por igual de los dos.
+
+### Lo que se apaga de verdad
+
+`scripts/hooks/pre-commit` tiene **3** etapas. La condición de
+`HOOK_SKIP_TESTS` se deriva por sangría:
+
+```
+   47  ruff check        -> corre SIEMPRE
+   58  ruff format       -> corre SIEMPRE
+  113  pytest -q $STAGED -> SE APAGA
+```
+
+**El bypass no apaga tres gates: apaga el único que comprueba que lo stageado
+sigue pasando.**
+
+### El guard no veía su propio trabajo
+
+Siete `scripts/mutate_*.py` tenían `_restaura()` → `git checkout --` con
+`cwd=RAIZ` — el antipatrón exacto que el guard nació para impedir. No podía
+verlo porque mira el **estado** del árbol, no el **código** que lo rompe. Ahora
+`_congela()` lee antes de mutar y se escribe lo leído, que no puede perder nada
+con el árbol sucio. Verificado ejecutando uno: **6/6 sondas cazadas y el árbol
+queda limpio**.
+
+El guard de estado ahora mira la columna Y, y nace
+`TestNingunInstrumentoPuedeBorrarTrabajo`, que deriva de `scripts/` y exige
+por AST que ninguna llamada sea `git checkout/restore/reset/clean/stash` **en
+posición de argumento**, con contrasalto de que el derivado no salga vacío.
+
+### El instrumento mintió tres veces, y las tres antes de escribir un guard
+
+1. Contaba **prosa** como llamada: `print("... `git checkout --`")`. Quinta vez
+   que sale este defecto en el repo.
+2. Peor: exigía que el primer argumento fuera cadena, así que
+   `subprocess.run(["git", "checkout", ...])` — una **lista** — nunca se miraba.
+   Los «0 instrumentos» del primer borrador eran **ceros falsos**.
+3. La ronda del hook excluía las etapas que redirigen su salida, o sea **justo
+   la que se apaga**: decía «se apagan 0, siguen corriendo 2».
+
+Las tres están corregidas y escritas con el número que las cazó.
+
+### Certificación
+
+```
+suite        4113 passed, 3 skipped, 0 failed, 858.89 s   rc=0
+suelos       rc=0 — todo módulo gobernado por AGENTS 6.3 cumple su suelo
+verdad       project_truth rc=0 — 4116 declarados == 4116 colectados
+arquitectura ratchet rc=0 — las CINCO a cero
+sondas B36   cazadas 5/5, invalidas 0, sin sonda 0
+sondas B35   cazadas 8/8 — no se rompieron al cambiar un guard que comparten
+```
+
 ## [0.42.0] - 2026-10-07 — La serie epistemológica llega al store, y un guard se suicide
 
 SemVer **derivado** desde `v0.41.0` con `scripts/derive_semver.py`

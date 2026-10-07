@@ -1225,7 +1225,7 @@ stewardship_backlog:
 
 
 release:
-  tag: v0.42.0
+  tag: v0.42.1
   # La VERSION ACTIVA del arbol, que no es el semver puro de la etiqueta: entre
   # la etiqueta y este commit hay uno de gobernanza, asi que lo que describe el
   # arbol es `0.40.0.dev0`. Es el caso 2 de `test_version_matches_git_tag`, y es
@@ -1233,7 +1233,7 @@ release:
   # `pre-push` de B29): hay TRES declaraciones de version activa —esta,
   # `__init__.__version__` y la ventana del ROADMAP— y basta mover una para que
   # el guard las cruce y se ponga rojo.
-  package_version: "0.42.0.dev0"
+  package_version: "0.42.1"
   fecha: 2026-10-07
   # `semver_bump` NO se repite aqui: vive en la entrada de `release.releases`, y
   # declararlo dos veces es justo lo que el verificador rechaza —`STATE.yaml declara
