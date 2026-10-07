@@ -85,16 +85,53 @@ comprobarlas después no deja volver atrás si salen mal.
 El merge se integró en `db8a8c3` y el cierre de R0.R1.F y R0.4 quedó encima,
 así que el HEAD certificate es `1854f52`:
 
+**HEAD certificate: `4673dfa`.** MEDIDO, con la salida de cada comando.
+
 | Etapa | Resultado |
 |---|---|
-| `pytest tests/` (suite completa) | ver el gate reproducible más abajo |
+| `pytest tests/` | **3747 passed, 3 skipped, 0 failed** (598,10 s) |
+| cobertura global | **92,61 %** (suelo declarado 80 %) |
 | `ruff check src tests` | `All checks passed!` |
 | `ruff format --check src tests` | 339 ficheros ya formateados |
 | `check_architecture_ratchet.py` | **0/5** — god modules 0, complejidad 0, SQL en el dominio 0, dominio→platform 0, referencias normativas rotas 0 |
 | `check_public_surfaces.py` | `OK` |
 | `check_ci_recipe_parity.py` | `OK` |
-| `check_coverage_floors.py` | ver gate reproducible |
-| `project_truth.py` | `coherente: true`, `rc=0`, 0 contradicciones |
+| `project_truth.py` | `coherente: true`, `rc=0`, 0 contradicciones, `tests_declarados == tests_reales == 3750` |
+| `platform/migrations.py` | **93,88 %** — el suelo de §6.3 es 90 % |
+
+Los 3 `skipped` son los de plataforma y de entorno declarados en
+`SKIPS_PLATAFORMA` (`test_locks`, `test_evidence_lock`, `test_uat_real_provider`),
+cada uno con su razón escrita y vigilado en las dos direcciones por
+`test_wi108_zero_skips.py`. Cero `xfailed`.
+
+### `check_coverage_floors.py`: 6 incumplimientos, Y SON PREEXISTENTES
+
+```
+src/skillgraph/cli/commands/expansion.py  51.71 %  (suelo 70)
+src/skillgraph/cli/commands/knowledge.py   65.08 %  (suelo 70)
+src/skillgraph/cli/commands/runs.py        44.95 %  (suelo 70)
+src/skillgraph/cli/runner.py               55.08 %  (suelo 70)
+src/skillgraph/cli/support.py              66.96 %  (suelo 70)
+src/skillgraph/knowledge/context_controller.py  89.35 %  (suelo 90)
+```
+
+**PROBADO QUE NO SON DE ESTE TRABAJO**, no supuesto:
+
+```
+$ git log --oneline 2c0ad63..HEAD -- <los seis>
+(vacio)
+```
+
+Ninguno de los cuatro commits de R0/R1 toca esos seis ficheros: son deuda
+de la campaña B22–B30 ya publicada en `v0.40.0` y `v0.41.0`. **Se declara
+en vez de relajarse**: no se añade nada a `SUELOS_ESPECIALES` ni a
+`EXCEPCIONES`, porque bajar un suelo para que un gate pase es exactamente
+la forma de guarda que este repo lleva cinco bloques cerrando.
+
+**LO QUE R1.F SI ARREGLO DE ESTA MISMA LISTA:** `migrations.py` estaba al
+**23,81 %** y debia al 90 %. Los tests de efecto pasaban en verde con un
+modulo de 530 LoC sin apenas ejecutar. Ahora mide **93,88 %**, con 9 tests
+nuevos que cubren cada rama que la migracion anadio.
 
 ### El gate completo, y un bypass que hay que declarar
 
