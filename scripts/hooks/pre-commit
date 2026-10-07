@@ -131,4 +131,38 @@ if [ -n "$STAGED_PY" ] && [ "${HOOK_SKIP_TESTS:-0}" != "1" ]; then
     rm -f "$PYTEST_LOG"
 fi
 
+# -------------------------------------------------------------------
+# 4. Lo que este hook HA MEDIDO — SIEMPRE, en los tres caminos
+# -------------------------------------------------------------------
+#
+# MEDIDO AL ABRIR B37, con `scripts/measure_b37_smoke_subset.py` sobre los 1163
+# commits del repo:
+#
+#     551  no stagean `.py`       -> el smoke no lanza pytest
+#     252  stagean solo codigo   -> `pytest -q src/...` colecta cero, rc=5, y el
+#                                    hook sigue como si hubiera medido
+#     264  stagean un solo test  -> corre ese y nada mas, sin decirlo
+#
+#     803 de 1163 commits — el 69 % — pasaron por aqui sin ejecutar un test.
+#
+# **LO QUE NO SE ARREGLA AQUI, Y SE DICE:** este hook es un FILTRO, y el
+# veredicto sobre el repo entero lo dan el pre-push y la receta canonica. Que
+# 252 commits puedan parecer verdes sin que nada se haya medido es lo que hace
+# un filtro.
+#
+# **LO QUE SI SE ARREGLA: el silencio.** El bloque de arriba solo anuncia
+# cuando el smoke corre, y su `OK` final es el MISMO en los tres caminos. Un
+# hook que se calla es un hook que parece verde donde no ha mirado, y quien
+# lee el scroll no puede saber cual de los dos fue. Por eso aqui se declara
+# SIEMPRE que ha pasado, y el `OK` ya no puede confundirse con "he medido".
+# Es la misma regla que WI-108 establecio para los skips, aplicada al hook.
+# -------------------------------------------------------------------
+if [ "${HOOK_SKIP_TESTS:-0}" = "1" ]; then
+    echo "[pre-commit] tests: OMITIDOS por HOOK_SKIP_TESTS=1 — este commit no ha ejecutado ninguno"
+elif [ -z "$STAGED_PY" ]; then
+    echo "[pre-commit] tests: NINGUNO stageado — este commit no ha medido nada"
+else
+    echo "[pre-commit] tests: el smoke de arriba es lo UNICO que ha corrido; el resto no se ha medido"
+fi
+
 echo "[pre-commit] OK"
