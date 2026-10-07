@@ -38,6 +38,7 @@ sido tambien un cambio de contrato que nadie habia pedido.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -201,11 +202,197 @@ def _anade_ventanas_de_vigencia(cur: sqlite3.Cursor) -> None:
     )
 
 
+def _ddl_de_claims_con_ambito(ddl_previo: str) -> str:
+    """El DDL de la tabla `claims` previa, con el ambito en su `UNIQUE`.
+
+    **Y POR QUE SE DERIVA DE LA TABLA VIEJA Y NO ES UN DDL FIJO. ESTO SE
+    MEDIO, Y FUE UN DEFECTO REAL DE LA PRIMERA VERSION.**
+
+    La primera version traia un `CREATE TABLE claims` fijo, copiado del de
+    `schema.py`. Con una base creada por el codigo actual daba igual, y con
+    una base VIEJA reventaba:
+
+        tests/test_b6_provenance.py::test_una_base_previa_se_migra_...
+        -> sqlite3.IntegrityError: FOREIGN KEY constraint failed
+
+    Porque ese DDL fijo lleva `REFERENCES entities(entity_id)` y
+    `REFERENCES sources(source_id)`, y una base de la epoca de B6 tiene
+    `claims` **sin** esas FK y con filas (`e:1`, `s:1`) que no existen en
+    ninguna tabla. Reconstruir con FKs las convierte, de golpe, en filas
+    huerfanas y el motor las rechaza.
+
+    **UNA MIGRACION NO PUEDE ENDURECER UNA BASE VIEJA.** Anadir integridad
+    que la base no tenia no es un arreglo: es un cambio de contrato aplicado
+    sin avisar, y lo paga quien abria su proyecto un martes. Lo que la
+    migracion declara es UN cambio —el ambito entra en la identidad— y por
+    eso toca UN pedazo del DDL y deja el resto igual de como estaba.
+
+    Se regex-reemplaza la clausula `UNIQUE` porque es la UNICA que cambia. Si
+    la tabla previa no tuviera ninguna (una base de antes de B25), se anade
+    al final; si la tiene, se sustituye en su sitio, conservando el orden de
+    columnas que ya servia a los indices existentes.
+
+    **Y EL CASO DE «NO HAY `UNIQUE`» TUVO SU PROPIO DEFECTO, MEDIDO.** La
+    primera version hacia `ddl.rstrip() + ",\\n UNIQUE(...)"`, y el DDL de B6
+    termina en `stale INTEGER NOT NULL DEFAULT 0\n            )`: la coma ya
+    estaba puesta por el autor. Anadir otra deja `... DEFAULT 0\n ),` y
+    SQLite responde `near "UNIQUE": syntax error`. Se decide mirando si el
+    cuerpo ya termina en coma, porque el `UNIQUE` de tabla es una restriccion
+    MAS de la lista de columnas: si no hay ninguna mas, no puede haber coma
+    justo despues de la anterior.
+    """
+    _UNIQUE = r"UNIQUE\s*\([^)]*\)"
+    if re.search(_UNIQUE, ddl_previo, flags=re.IGNORECASE):
+        return re.sub(
+            _UNIQUE,
+            "UNIQUE (subject_entity_id, tenant_id, project_id,\n"
+            "            predicate, source_id, checked_at_revision)",
+            ddl_previo,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    cuerpo = ddl_previo.rstrip().rstrip(";")
+    cierre = cuerpo.rfind(")")
+    if cierre == -1:
+        raise sqlite3.IntegrityError(
+            f"0005: el DDL de `claims` no tiene el cierre esperable: {cuerpo!r}"
+        )
+    cabeza, cola = cuerpo[:cierre], cuerpo[cierre:]
+    # La coma la pone el DDL previo si venia con ella. Un `CREATE TABLE`
+    # cierra sus columnas con coma cuando le sigue OTRA restriccion de tabla,
+    # y sin coma cuando la ultima columna es la ultima cosa — y ahi es
+    # exactamente donde hay que ponerla para colgarle un `UNIQUE` debajo.
+    separador = "" if cabeza.rstrip().endswith(",") else ","
+    return (
+        cabeza.rstrip()
+        + separador
+        + (
+            "\n    -- R1.F: el ambito entra en la identidad.\n"
+            "    UNIQUE (subject_entity_id, tenant_id, project_id,\n"
+            "            predicate, source_id, checked_at_revision)\n"
+        )
+        + cola
+    )
+
+
+def _claims_identidad_con_ambito(cur: sqlite3.Cursor) -> None:
+    """`0005` — R1.F: la identidad de un `claim` LLEVA el ambito.
+
+    **LO QUE SE MEDIO ANTES DE ESCRIBIR ESTA FUNCION**
+    (`.pipelinek/wi_r1f_measure.py`, sobre el arbol real):
+
+        A/X escribe c-A -> OK;  B/Y escribe c-B -> OK (dice coexiste)
+        A/X ve ['c-A'];          B/Y ve []            <-- no ve lo suyo
+        FILAS EN LA TABLA claims: [('c-A', 'A', 'X')]
+
+    La escritura de B/Y **no existia**, y `record_claim` habia devuelto
+    `ClaimRecorded(conflicto=False)`. Dos propiedades rotas con un solo
+    cambio de codigo:
+
+      1. AISLAMIENTO — el `UNIQUE` era
+         `(subject_entity_id, predicate, source_id, checked_at_revision)`,
+         sin ambito. Dos tenants que observan el mismo fichero en la misma
+         revision desde la misma fuente **tienen la misma tupla natural**, y
+         con `INSERT OR IGNORE` la segunda se descarta en silencio.
+      2. VERDAD DEL RETORNO — `conflicto=False` afirma «no habia nada ahi».
+
+    **POR QUE RECONSTRUIR LA TABLA Y NO ANADIR UN INDICE.** SQLite no tiene
+    `ALTER TABLE ... DROP CONSTRAINT`, luego la unica via para cambiar un
+    `UNIQUE` de tabla es reconstruirla. Un indice UNIQUE nuevo **no** serviria:
+    el viejo seguiria ahi y seguiria rechazando. Y el orden importa: crear el
+    indice antes de soltar la tabla deja las dos constraints vivas y el
+    `INSERT` durante la copia falla; por eso el `DROP` va primero y el
+    `CREATE TABLE ... nuevo` + copia van dentro de la misma transaccion que
+    el `sincroniza` de la migracion.
+
+    **POR QUE NO SE PIERDE NADA, Y COMO SE COMPRUEBA.** El `INSERT ... SELECT`
+    copia **todas** las columnas por nombre, y las de B25/B29 existen desde
+    `0003`/`0004`, luego no hay columnas que seinventen. Lo que si se
+    comprueba es el `COUNT`: si la copia deja filas, la migracion **falla**
+    en vez de seguir. Una migracion que pierde evidencia en silencio es peor
+    que una que se niega a correr, porque la segunda deja el fallo a la vista
+    y la primera lo esconde hasta que alguien pregunta por un dato que no
+    aparece.
+
+    **EL DDL NUEVO SE DERIVA DEL VIEJO, NO SE ESCRIBE.** Ver
+    `_ddl_de_claims_con_ambito`: la primera version traia un `CREATE TABLE`
+    fijo y reventaba con las bases de la epoca de B6, que no tienen las FK
+    que ese DDL declara. Una migracion no puede endurecer una base vieja.
+
+    **LA REPETICION DENTRO DE UN MISMO AMBITO SIGUE SIENDO UN ERROR.** Con el
+    ambito en la clave, `A/X` sigue sin poder escribir dos veces la misma tupla
+    natural: eso es deduplicacion, no fuga. Por eso el `UNIQUE` nuevo lleva
+    AMBAS caras y no sustituye una por otra.
+    """
+    # Si el UNIQUE ya lleva el ambito, no hay nada que reconstruir. Se pregunta
+    # al motor y no al texto: lo que decide es lo que SQLite tiene abierto.
+    if _el_unique_ya_lleva_ambito(cur):
+        return
+
+    columnas_antes = [fila[1] for fila in cur.execute("PRAGMA table_info(claims)")]
+    fila_ddl = cur.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'claims'"
+    ).fetchone()
+    if fila_ddl is None or not fila_ddl[0]:
+        raise sqlite3.IntegrityError(
+            "0005: no hay DDL de `claims` que derivar. Sin el no se puede "
+            "cambiar su UNIQUE sin inventar el resto de la tabla."
+        )
+
+    cur.execute("ALTER TABLE claims RENAME TO claims_pre_0005")
+    cur.execute(_ddl_de_claims_con_ambito(fila_ddl[0]))
+
+    columnas = ", ".join(f'"{c}"' for c in columnas_antes)
+    cur.execute(f"INSERT INTO claims ({columnas}) SELECT {columnas} FROM claims_pre_0005")
+
+    cuantos_antes = cur.execute("SELECT COUNT(*) FROM claims_pre_0005").fetchone()[0]
+    cuantos_despues = cur.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
+    if cuantos_antes != cuantos_despues:
+        raise sqlite3.IntegrityError(
+            "0005: la copia de claims cambio el numero de filas "
+            f"({cuantos_antes} -> {cuantos_despues}). Se revierte en vez de "
+            "seguir: perder evidencia en silencio es peor que no migrar."
+        )
+
+    cur.execute("DROP TABLE claims_pre_0005")
+
+
+def _el_unique_ya_lleva_ambito(cur: sqlite3.Cursor) -> bool:
+    """¿La constraint UNIQUE de `claims` incluye ya tenant y project?
+
+    **SE PREGUNTA AL MOTOR, POR DOS MOTIVOS QUE IMPORTAN JUNTOS.** Por
+    idempotencia —sin esto, abrir dos veces la misma base reconstruiria la
+    tabla cada vez— y por honestidad: leer el DDL de `schema.py` mediria el
+    texto que *queremos*, no la constraint que una base ya migrada tiene de
+    verdad. Un guard que compara su codigo consigo mismo dice «todo bien»
+    sobre una base que no se ha arreglado nunca.
+
+    `pragma_index_list` con `origin='u'` son los indices que nacen de una
+    constraint de tabla, y `pragma_index_info` dice que columnas la forman.
+    Un indice UNIQUE creado a mano tiene `origin='c'`, y ese no cuenta: aqui
+    lo que decide es la constraint de la declaracion de la tabla.
+    """
+    filas = cur.execute(
+        "SELECT name FROM pragma_index_list('claims') WHERE origin = 'u' AND \"unique\" = 1"
+    ).fetchall()
+    for (nombre,) in filas:
+        # `PRAGMA` no acepta un identificador parametrizado y el nombre sale
+        # de la propia base. Se filtra igual: solo pasa un identificador
+        # simple, y cualquier otra cosa cae por el `continue`.
+        if not isinstance(nombre, str) or not nombre.replace("_", "").isalnum():
+            continue
+        columnas = {fila[2] for fila in cur.execute(f"PRAGMA index_info('{nombre}')").fetchall()}
+        if {"tenant_id", "project_id"} <= columnas:
+            return True
+    return False
+
+
 MIGRACIONES: Final[tuple[Migracion, ...]] = (
     Migracion("0001_claims_assertion_origin", _anade_assertion_origin),
     Migracion("0002_installed_packs", _anota_installed_packs),
     Migracion("0003_claims_object_entity_id", _anade_object_entity_id),
     Migracion("0004_claims_ventanas_de_vigencia", _anade_ventanas_de_vigencia),
+    Migracion("0005_claims_identidad_con_ambito", _claims_identidad_con_ambito),
 )
 
 

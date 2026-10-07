@@ -332,7 +332,25 @@ CREATE TABLE IF NOT EXISTS claims (
     -- columna, y una FK ahi haria fallar escrituras que antes funcionaban.
     -- La integridad la sostiene `record_claim`, que es quien la escribe.
     supersedes_claim_id TEXT,
-    UNIQUE (subject_entity_id, predicate, source_id, checked_at_revision)
+    -- R1.F: EL AMBITO ES PARTE DE LA IDENTIDAD. MEDIDO con el UNIQUE viejo
+    -- (sin ambito) sobre el arbol real: A/X escribia c-A, B/Y escribia c-B con
+    -- la MISMA tupla natural, el motor rechazaba la segunda en silencio y
+    -- `record_claim` devolvia `conflicto=False`. B/Y no veia nada.
+    --
+    -- Dos tenants observan los mismos ficheros con los mismos SHA y los
+    -- mismos predicados: su tupla natural es IDENTICA, y sin ambito sus
+    -- afirmaciones se pisan entre si. Y la repeticion DENTRO de un mismo
+    -- ambito sigue siendo deduplicacion, luego el ambito se SUMA a la clave y
+    -- no la sustituye.
+    --
+    -- Este DDL y el de la migracion `0005` son el MISMO texto: si divergieran,
+    -- una base recien creada tendria una identidad distinta de una migrada, y
+    -- el defecto volveria solo en las nuevas. La unica fuente es
+    -- `migrations._DDL_CLAIMS_CON_AMBITO`; aqui se repite porque
+    -- `CREATE TABLE IF NOT EXISTS` corre en cada apertura y no puede
+    -- importar de ahi sin crear un ciclo.
+    UNIQUE (subject_entity_id, tenant_id, project_id,
+            predicate, source_id, checked_at_revision)
 );
 CREATE INDEX IF NOT EXISTS idx_claims_subject
     ON claims(subject_entity_id, predicate);
