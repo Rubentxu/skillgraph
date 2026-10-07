@@ -31,7 +31,7 @@ bloque se cerrara.
 ## Dónde está el proyecto
 
 > Bloque vivo: **B32** — No se puede responder cuándo cambió una relación ni por qué · cadena de commits trazable por entidad, con el SHA como identidad · (R0+R1 cerrados: el ratchet arquitectónico sale distinto de cero y las cinco fronteras llegan a cero · B30 en `v0.40.0`, B31 queda como el corte siguiente)
-> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 3712 tests · 16/16 UAT
+> Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 3720 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
