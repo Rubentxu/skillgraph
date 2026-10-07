@@ -2,8 +2,8 @@
 
 >
 
-> **Bloque 2026-10-07 (B35) — De la capability al store hay tres pasos que no existen.**
-> (B31 cerrado y certificado: `sg.code.analysis` con `ADR-0035` y la migración `0008`. La serie B0..B34 queda cerrada; B35 es el corte siguiente, y también se abre medido.)
+> **Bloque 2026-10-07 (B36) — Un guard que obliga a apagar el gate que lo contiene.**
+> (B35 cerrado y certificado en `evidence/b35-vertical-2026-10-07.md`: `4104 passed, 3 skipped, 0 failed, 855,42 s`, suelos rc=0 con `observation_ingestion.py` de 84 % a 100 %, ratchet 5/5 a cero, sondas 8/8. B36 abre medido con `scripts/measure_b36_commit_gate.py`, y lo que midió es un guard que **no puede pasar por la puerta que vigila**.)
 >
 > Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4107 tests**.
 >
