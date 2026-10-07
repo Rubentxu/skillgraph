@@ -2,9 +2,10 @@
 
 >
 
-> **Bloque 2026-10-06 (B29) — Un cambio en el tiempo deja de leerse como una contradicción.**
+> **Bloque 2026-10-06 (B31) — El código no tiene análisis estructural real: `line_count = 137` es todo lo que se sabe del código.**
+> (B30 cerrado en `v0.40.0`: un contexto truncado dice qué se cayó —`PresupuestoAplicado.omitidos`, firmado en el `context_hash`, y `should_skip_adapter` ya no declara completo un slice recortado.)
 >
-> Versión activa `0.39.0.dev0`; último tag `v0.39.0`; **3645 tests**.
+> Versión activa `0.40.0.dev0`; último tag `v0.39.0`; **3683 tests**.
 >
 > **LA FILA EXAGERABA EN SU PRIMERA MITAD.** Decía que no se puede preguntar
 > qué se sabía en una revisión, y `checked_at_revision` está en cada claim desde

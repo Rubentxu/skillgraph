@@ -30,8 +30,8 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B29** — No se puede preguntar qué se sabía en una revisión, ni cómo fue reemplazado · ventanas de vigencia, supersession y query por revisión
-> Versión activa `0.39.0.dev0` · último tag `v0.39.0` · 3645 tests · 16/16 UAT
+> Bloque vivo: **B31** — El código no tiene análisis estructural real: `line_count = 137` es todo lo que se sabe · CogniCode → CodeAnalysis → Knowledge, sin imports en el núcleo · (B30 cerrado en `v0.40.0`: un contexto truncado dice qué se cayó)
+> Versión activa `0.40.0.dev0` · último tag `v0.39.0` · 3683 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
 
@@ -94,7 +94,7 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B27** | Dos claims incompatibles se pisan y no hay forma de saberlo | conflict sets consultables y estables, sin overwrite |
 | **B28** | Resolver un conflicto es un ranking global, y la respuesta correcta depende de para qué se pregunta | `AuthorityProfile` por `QueryIntent`, no un ranking único |
 | **B29** | No se puede preguntar qué se sabía en una revisión, ni cómo fue reemplazado | ventanas de vigencia, supersession y query por revisión |
-| **B30** | Traer el contexto es traerlo todo, o traerlo truncado sin decir qué se cayó | `ContextSlice` mínimo dentro de presupuesto, con `why`/`impact` deterministic-first |
+| **B30** | Traer el contexto es traerlo todo, o traerlo truncado sin decir qué se cayó | **cerrado en v0.40.0** — `PresupuestoAplicado` declara lo omitido con su tamaño, `HandoffKnowledge.omitidos` lo carga y lo firma, y `should_skip_adapter` ya no declara completo un slice truncado. La mitad `why`/`impact` queda para el siguiente corte |
 | **B31** | No hay análisis estructural real: `line_count = 137` es todo lo que se sabe del código | CogniCode → CodeAnalysis → Knowledge, **sin imports en el núcleo** |
 | **B32** | No se puede responder cuándo cambió una relación ni por qué | cadena de commits trazable por entidad, con el SHA como identidad |
 | **B33** | La telemetría y la intención/documentación se contradicen y una pisa a la otra | ambos se preservan, y la autoridad decide según el intent |
