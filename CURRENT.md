@@ -2,7 +2,104 @@
 
 >
 
-> **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.**
+> **Bloque 2026-10-07 (B35) — Hay capabilities que nadie puede resolver.**
+> (B31 cerrado y certificado: `sg.code.analysis` con `ADR-0035` y la migración `0008`. La serie B0..B34 queda cerrada; B35 es el corte siguiente, y también se abre medido.)
+>
+> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4068 tests**.
+>
+> **LA PREMISA DE B31 ERA FALSA, Y ESO FUE LO PRIMERO QUE SE MIDIÓ.**
+> La fila decía «no hay análisis estructural real: `line_count = 137` es todo
+> lo que se sabe del código». Falso: `knowledge/file_signature.py` son 431
+> líneas puras y deterministas que ya extraen imports, definiciones y
+> cobertura. Lo que faltaba era el **último paso** —
+> `record_evidence_for_file_signature` lo persistía como `Evidence`
+> kind=`file_signature`, **nunca** como `Claim`. Es evidencia que nadie podía
+> preguntar: `evidence` de B34 la devolvía mientras `what` no la veía.
+>
+> **EL HALLAZGO QUE ABRIÓ EL BLOQUE, MEDIDO DE PUNTA A PUNTA:**
+>
+> ```
+> 7 observaciones  ->  7 claims  ->  5 filas
+> ```
+>
+> El `UNIQUE` de `claims` era `(subject_entity_id, tenant_id, project_id,
+> predicate, source_id, checked_at_revision)` y **el objeto no formaba parte
+> de la identidad**. Un fichero que importa dos módulos no se contradice —
+> son dos hechos ciertos — y la clave decía que solo cabía uno. El segundo se
+> comía al primero **sin error, sin evento y sin log**. `ADR-0035` mete el
+> objeto en la identidad y deja escrito **por qué la clave sigue llevando
+> `source_id`**: si el objeto lo sustituyera, un conflicto real de B27 se
+> convertiría en dos hechos que conviven.
+>
+> **Y `make_claim_id` tenía que cambiar JUNTO.** MEDIDO: con el `UNIQUE`
+> arreglado y el generador sin el objeto seguían perdiéndose **2 de 7**, con
+> el MISMO `claim_id` y un choque con la PRIMARY KEY — un fallo distinto, con
+> otro mensaje, en otra capa. **El fallo no se ve leyendo el `UNIQUE`: se ve
+> contando filas.**
+>
+> **LO QUE SALIÓ AL CERTIFICAR.**
+>
+> 1. **Dos floors en rojo** —`code_analysis.py` 88,76 % y `migrations.py`
+>    87,16 %—. El del primer módulo existía porque la primera versión de
+>    `sujeto_de` llevaba un `except Exception` que resultó **inalcanzable**:
+>    MEDIDO sobre `src/skillgraph/knowledge/graph.py:96::entity_id`, que
+>    rechaza *solo* vacío o sin `:`,
+>    y aquí siempre se antepone `file:`. Una rama inalcanzable con un `except
+>    Exception` dentro no mide nada y obliga a fabricar una entrada falsa para
+>    probarla. **Se quitó** en vez de fabricar un test de cartón.
+> 2. **Un bug latente que apareció al arreglar el otro**: la reconstrucción
+>    del `Claim` al leerlo de la base seguía perdiendo `object_entity` y
+>    `assertion_origin`. Como `Observation` exige exactamente un objeto (XOR,
+>    B25), un claim con entidad se escribía bien y se releía sin ella. Nadie
+>    lo buscaba porque antes de B31 nada producía un `object_entity` desde
+>    análisis.
+> 3. **Sondas 7/7, y dos fueron INOCUA la primera vez.** N2 apuntaba al
+>    `UNIQUE` de `schema.py`, donde no se puede romper nada —`0008`
+>    reconstruye la tabla siempre, luego se vigila una verdad imposible de
+>    violar—; se rehizo contra el DDL de la **migración**. N4 apagaba el `if`
+>    del `COUNT` con `if False:`, que nunca se enciende en el camino feliz y por
+>    tanto **no estaba midiendo: estaba decorado**; se rehizo **rompiendo la
+>    copia** con `LIMIT 1`, que es lo que haría una migración mal escrita.
+>
+> Certificación: **4065 passed + 3 skipped + 0 failed**, 855,69 s, rc=0,
+> cobertura global 97,14 %, floors rc=0 (`cli/` 93,18 %, `runtime/` 98,41 %,
+> `code_analysis.py` 100 %), arquitectura 5/5 a cero, `project_truth` rc=0
+> con 4068 declarados == 4068 colectados, sondas 7/7.
+>
+> **B35 SE ABRE MEDIDO, porque no se abre sin medir**
+> (`scripts/measure_b35_ensamblado.py`):
+>
+> ```
+> CapabilityRegistry(...) en src/     : 0
+> CapabilityRegistry(...) en tests/   : 26
+> CodeAnalysisCapability     src/=0   tests/=3
+> TelemetryQueryCapability   src/=0   tests/=10
+> KnowledgeQueryCapability   src/=0   tests/=3
+> --adapter (Protocol AgentAdapter)  : fake, http, anthropic, openai
+> capabilities sg.* alcanzables desde la CLI : 0
+> ```
+>
+> **EL CONTRASTE ES EL HALLAZGO.** Para el Protocol `AgentAdapter` **sí** hay
+> ensamblado: el operador elige el adaptador por nombre y el proceso lo
+> construye. Para el Protocol `Capability` no hay nada equivalente, porque una
+> `sg.*` **no se elige, se registra** — y el registro no tiene quién lo
+> construya. De las tres capabilities de conocimiento, **cero se instancian en
+> `src/`**: se lanzan solo desde los tests.
+>
+> O sea que `sg.code.analysis` **no se puede ni invocar mal**, porque no hay
+> quién la meta en un registro y luego no hay forma de que llegue a existir el
+> error. B31 entregó una capability impecable, al 100 %, que ningún despliegue
+> puede resolver.
+>
+> **Y NO ES UN DESCUIDO DE B31.** Es el estado que
+> `src/skillgraph/runtime/runcontroller.py:148::__init__` DECLARA
+> y que B3-cierre aceptó a propósito: la costura existe (`capabilities=` con
+> default `None`), el ensamblado no, porque la exigencia la PIDE quien
+> despliega. Y aquí está la pinja: **no hay quien despliegue**. El repo tiene
+> un ejecutable (`sg`) y ninguna forma de que `sg` monte un registro. Eso no es
+> una decisión de arquitectura; es una decisión que nadie ha tomado.
+>
+> **Bloque 2026-10-07 (B34) — No hay forma de preguntar al sistema por lo que sabe.** (cerrado y certificado)
 > (B33 cerrado y certificado: `telemetry.query.v1` con `ADR-0034`, `SourceKind` 5→6 con `runtime_observation`, `Source` +2 columnas, migración `0007` e índice parcial `idx_sources_ventana` — **solo en la migración**, porque en el DDL una base vieja reventa antes de migrar. El kind lo declara el envelope, no se deduce de que tenga ventana: una medición de test también cubre un periodo.)
 >
 > Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **4068 tests**.
@@ -85,8 +182,15 @@
 > **comportamiento** (M9, M10) que antes no podían existir: las ocho anteriores
 > miden la forma. **10/10 cazadas.** `knowledge_query.py`: 86,21 % → **100 %**.
 >
-> **LO QUE QUEDA ABIERTO EN LA SERIE: B31.** Y medido ya, porque no se abre
-> sin medir (`/tmp/b31_preflight.py`):
+> **LO QUE QUEDABA ABIERTO EN LA SERIE ERA B31. Ya no.** Se cerró y
+> certificó después de que esta sección se escribiera; lo que midió fue que la
+> premisa de su propia fila era falsa (el análisis existía; faltaba el
+> último paso) y que el hueco de verdad estaba en el `UNIQUE` del claim, que
+> se comía hechos ciertos en silencio. **B35 sustituye a B31 como bloque
+> vivo**, y también se abrió medido. Ver el bloque de arriba.
+>
+> **LA MEDICIÓN QUE ABRIÓ B31, SE QUEDA PORQUE ES LA QUE DICE QUE LA FILA
+> MENTÍA.** Lo que sigue es lo que se midió *antes* de escribir nada:
 >
 > ```
 > E1  capabilities de análisis de código en src/          CERO
@@ -102,7 +206,7 @@
 >     dependencia declarada, igual que `chronos` en B33
 > ```
 >
-> **LA LECTURA QUE DEFINE B31: el enunciado del roadmap es FALSO.** Dice «no
+> **LA LECTURA QUE DEFINIÓ B31: el enunciado del roadmap es FALSO.** Dice «no
 > hay análisis estructural real» y el análisis es real, puro y determinista.
 > Lo que falta es el **último paso**: el análisis nunca se convierte en
 > conocimiento. Es evidencia que nadie puede preguntar — `evidence` de B34 la
