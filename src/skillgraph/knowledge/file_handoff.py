@@ -206,23 +206,54 @@ def build_coverage_manifest(
     )
 
 
-def should_skip_adapter(*, manifest: CoverageManifest) -> bool:
+def should_skip_adapter(
+    *,
+    manifest: CoverageManifest,
+    omitidos: tuple[tuple[str, str, str, int], ...] = (),
+) -> bool:
     """Decide si la consulta determinista puede saltarse el adapter (UAT-EVO-11).
 
     Reglas:
     - Cobertura completa (manifest.is_complete).
     - TODAS las firmas tienen vigencia fresh (manifest.all_fresh).
     - Al menos una firma presente.
+    - **B30: y NADA se quedó fuera del presupuesto.**
 
     Returns:
         True si NO se necesita invocar al Adapter LLM.
 
+    **Y LA CUARTA REGLA ES LA QUE FALTABA, Y MEDIDO POR QUÉ.**
+
+    Antes esta función era `manifest.is_complete and manifest.all_fresh`, y
+    **`manifest` no dice nada de lo que el presupuesto dejó fuera**:
+    `CoverageManifest.limites` registra el `token_budget` —el LÍMITE—, no la
+    diferencia entre los candidatos y los que entraron.
+
+    Con eso, un contexto truncado producía un manifest `is_complete=True` y el
+    sistema **se quedaba sin agente por el motivo de que la respuesta era
+    completa**, cuando la respuesta se había cortado. Eso no es «truncar sin
+    decir»: es **declarar completo lo que no lo está**, que es justo lo que
+    `HandoffBlockedError` prohíbe en la cabecera de este módulo —*«NUNCA debe
+    presentarse como completado»*—.
+
+    **POR QUÉ EL PARÁMETRO NO ES EL HANDOFF ENTERO.** `manifest` es lo que
+    decide sobre cobertura; las omisiones son lo que decide sobre el contenido
+    del slice. Mezclarlos haría que el skip dependiera de una estructura que no
+    es suya. Y **por qué tiene default**: quien ya llamaba
+    `should_skip_adapter(manifest=...)` sigue funcionando, y un slice sin
+    omisiones se salta igual —B30 no desactiva el skip, que sería cambiar un
+    defecto por otro.
+
     Notes:
-        Funcion pura: solo lee el manifest. El caller decide si
-        invoca o no segun el resultado. Esto permite que el caller
-        mantenga la responsabilidad de orquestar adapter/invoke.
+        Funcion pura: solo lee sus argumentos. El caller decide si
+        invoca o no segun el resultado.
     """
     if not manifest.signatures:
+        return False
+    if omitidos:
+        # B30: hay contexto que no cupo. La cobertura de firmas puede estar
+        # completa y aun asi faltar contexto, y saltarse al Adapter dejaria
+        # al sistema sin agente sin que nadie lo dijera.
         return False
     return manifest.is_complete and manifest.all_fresh
 
