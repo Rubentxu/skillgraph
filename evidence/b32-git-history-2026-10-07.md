@@ -80,3 +80,54 @@ El grafo de commits es PARCIAL: dos commits de ramas distintas no tienen orden
 entre ellos. Por eso el contrato ofrece `es_ancestro(a, b) -> bool` y **no**
 `ordena(a, b) -> int`, que prometería un número para algo que no tiene
 dirección. Y `False` significa «no se puede demostrar», no «es posterior».
+
+---
+
+## La certificacion, y el guard que laredo
+
+La primera certificacion termino en **rc=1** con 3 fallos, y ninguno era un
+defecto de B32: eran los tres guards de superficie publica de `Storage`, que
+exigen una decision explicita cuando la fachada crece.
+
+```
+tests/test_wi65_storage_facade_delegations.py::TestMixinsAreDisjoint::test_no_method_in_two_mixins
+    esperados 70 metodos, hay 71
+tests/test_wi65_storage_facade_delegations.py::TestPublicSurfacePreserved
+    superficie publica cambio: 81 metodos (esperados 80)
+tests/test_wi68_storage_delegations_split.py::TestStorageStillInherits
+    esperados 70 metodos de delegacion, hay 71
+```
+
+Es exactamente para lo que existen: 70 -> 71 delegados, 80 -> 81 publicos, y
+el motivo al lado de cada cifra. `claims_at_revision` y
+`claims_desde_commit` **no** se fusionan en un metodo con un parametro,
+porque responden a relojes distintos —orden de observacion local contra
+ascendencia de commits—, y un solo nombre diria que se pueden preguntas
+intercambiables cuando no lo son.
+
+## Resultado
+
+```
+pytest                 3917 passed, 3 skipped, 0 failed   841,14 s   rc=0
+cobertura total        97 %   (7557 stmts, 171 missing)
+  src/skillgraph/cli/     93,20 %   (suelo 70)  OK
+  src/skillgraph/runtime/ 98,41 %   (suelo 90)  OK
+  suelo global            97,02 %   (fail_under 80)  OK
+check_coverage_floors   rc=0   «todo modulo gobernado por §6.3 cumple su suelo»
+check_architecture      5/5 a cero   (god >800: 0 · cc>=20: 0 · SQL: 0 ·
+                                       dominio->platform: 0 · citas: 0)
+project_truth           rc=0   coherente, 0 contradicciones,
+                               tests declarados 3920 == 3920 colectados
+```
+
+Los 3 skips son los de plataforma declarados en `SKIPS_PLATAFORMA`, y el
+guard de WI-108 los cuenta en las dos direcciones.
+
+## Una nota de entorno, porque cambiara el tiempo de la proxima certificacion
+
+Esta corrida tardo 841 s —el mismo orden que la anterior— pero solo porque
+la maquina estaba libre. Con un `load` de 14 a 26 por un proceso Gradle de
+otro proyecto, la misma corrida tardo **2 h 20 min**. No es un defecto del
+repo ni una prueba que se degrade: es contencion, y conviene saber que el
+tiempo de `coverage.sh` no es una medida de nada cuando el `loadavg` esta
+alto.

@@ -30,7 +30,7 @@ bloque se cerrara.
 
 ## Dónde está el proyecto
 
-> Bloque vivo: **B32** — No se puede responder cuándo cambió una relación ni por qué · cadena de commits trazable por entidad, con el SHA como identidad · (R0+R1 cerrados: el ratchet arquitectónico sale distinto de cero y las cinco fronteras llegan a cero · B30 en `v0.40.0`, B31 queda como el corte siguiente)
+> Bloque vivo: **B33** — La telemetría y la intención/documentación se contradicen y una pisa a la otra · ambos se preservan y la autoridad decide según el intent · (B32 cerrado y certificado: `GitHistory` + `claims_desde_commit`; su gate daba el CUÁNDO y el DESDE QUÉ, no el POR QUÉ. **El gate de B33 ya lo había cerrado B28** — su propio ejemplo de test es `c-runtime` contra `c-adr` — así que lo que falta es la vertical, y la ADR que `observation.py:242` promete desde B26 y nadie abrió)
 > Versión activa `0.41.0.dev0` · último tag `v0.41.0` · 3920 tests · 16/16 UAT
 
 Esa línea es la respuesta a *«¿dónde está el proyecto y qué toca después?»*.
@@ -96,8 +96,8 @@ B0 y resumido en `docs/history/truth-drift-2026-10-03.md`.
 | **B29** | No se puede preguntar qué se sabía en una revisión, ni cómo fue reemplazado | ventanas de vigencia, supersession y query por revisión |
 | **B30** | Traer el contexto es traerlo todo, o traerlo truncado sin decir qué se cayó | **cerrado en v0.40.0** — `PresupuestoAplicado` declara lo omitido con su tamaño, `HandoffKnowledge.omitidos` lo carga y lo firma, y `should_skip_adapter` ya no declara completo un slice truncado. La mitad `why`/`impact` queda para el siguiente corte |
 | **B31** | No hay análisis estructural real: `line_count = 137` es todo lo que se sabe del código | CogniCode → CodeAnalysis → Knowledge, **sin imports en el núcleo** · (sigue abierto: es el corte después de B32, o el que se tome antes) |
-| **B32** | No se puede responder cuándo cambió una relación ni por qué | cadena de commits trazable por entidad, con el SHA como identidad |
-| **B33** | La telemetría y la intención/documentación se contradicen y una pisa a la otra | ambos se preservan, y la autoridad decide según el intent |
+| **B32** | No se puede responder cuándo cambió una relación ni por qué | **cerrado** — `GitHistory` (puerto) y `DulwichGitHistory` dan la ascendencia real con `es_ancestro(a,b) -> bool` y **no** `ordena()`, porque el grafo de commits es parcial y un número mentiría la mitad de las veces; `claims_desde_commit` responde el DESDE QUÉ, con migración `0006` y el índice parcial `idx_sources_commit`. **NO cierra el POR QUÉ**, que es de B33/B34 y tiene un guard que ata que no exista |
+| **B33** | La telemetría y la intención/documentación se contradicen y una pisa a la otra | ambos se preservan, y la autoridad decide según el intent · **BLOQUE VIVO: el gate ya lo cerró B28** (su propio ejemplo es `c-runtime` contra `c-adr`), así que lo que falta es la vertical y la ADR que `observation.py:242` promete desde B26 y nadie abrió |
 | **B34** | No hay forma de preguntar al sistema por lo que sabe | `what`/`why`/`impact`/`changed`/`conflicts`/`evidence`, con CLI y transporte agent sobre el mismo modelo de query |
 
 El orden es **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9**. B0 y B1

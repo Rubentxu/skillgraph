@@ -2,6 +2,89 @@
 
 >
 
+> **Bloque 2026-10-07 (B33) — La telemetría y la intención/documentación se contradicen y una pisa a la otra.**
+> (B32 cerrado y certificado: `GitHistory` con `es_ancestro` —nunca `ordena`—, `claims_desde_commit`, migración `0006` y el índice parcial `idx_sources_commit`. B32 cerraba el **CUÁNDO** y el **DESDE QUÉ**, y explícitamente no el **POR QUÉ**.)
+>
+> Versión activa `0.41.0.dev0`; último tag `v0.41.0`; **3920 tests**.
+>
+> **EL GATE DE B33 YA ESTABA CERRADO, Y MEDIRLO FUE LO PRIMERO.** El gate
+> del roadmap dice «un claim runtime que contradice un ADR abre conflicto;
+> `actual_behavior` prefiere runtime e `intended_architecture` prefiere la
+> decisión aceptada». Montado sobre un store de verdad:
+>
+> ```
+> fuentes:  adr:0001  kind=external_doc        c-adr       "psycopg"  human-asserted
+>           runtime:ventana-1  kind=external_doc  c-runtime  "sqlite3"  observed
+> conflicts_for       -> 1 conflicto: [c-adr, c-runtime]
+> resolver actual_behavior    -> c-runtime
+> resolver intended_behavior  -> c-adr
+> ```
+>
+> Funciona. **Y es exactamente el ejemplo con el que B28 certificó su propio
+> bloque** — su `_el_conflicto_del_bloque` se llama `c-runtime` contra
+> `c-adr`. Un gate que otro bloque ya certified se puede «cerrar» sin
+> escribir una línea de B33, y eso no es un gate: es una segunda lectura
+> del mismo resolver.
+>
+> **EL HUECO REAL NO ESTÁ EN LA AUTORIDAD, ESTÁ EN LA VERTICAL QUE LA
+> ALIMENTA.** Medido sobre las cinco entregas de B33:
+>
+> ```
+> E1 telemetry.query.v1        NO existe. CERO en src/, fuera de prosa.
+> E2 adapter Chronos/OTel      NO existe. No hay adapters/ en ninguna parte.
+> E3 temporal window sources   NO existe. Source.checked_at es un INSTANTE;
+>                             ObservationEnvelope.observed_at tambien; y la
+>                             ventana de Claim es por REVISION (B29), no
+>                             por tiempo.
+> E4 runtime claims            la MECANICA existe (normalizar ya pone
+>                             assertion_origin="observed"), pero la fuente
+>                             sale como external_doc
+> E5 perfil actual_behavior    YA EXISTE (B28)
+> ```
+>
+> **Y PARA METER UNA OBSERVACIÓN DE RUNTIME HAY QUE MENTIR.** Lo medido:
+>
+> ```
+> [1] las dos filas se ven IGUALES por kind
+>     adr:0001           kind=external_doc
+>     runtime:ventana-1  kind=external_doc        -> 1 valor distinto
+> [2] json_extract(locator_json, '$.producer')  FUNCIONA
+> [3] indices sobre sources: idx_sources_project, idx_sources_commit
+>     NINGUNO sobre locator_json, NINGUNO sobre kind
+> [4] columnas de sources: NO hay columna producer, ni adapter, ni type_name
+> ```
+>
+> El discriminante existe y se puede consultar, pero cuesta abrir el JSON y
+> recorrer la tabla. Y sobre todo: la pregunta que B33 quiere responder es
+> **precisamente** la que responde `actual_behavior` —«¿qué devolvió
+> producción de verdad?»—, y una pregunta que obliga a un `json_extract`
+> sobre una columna sin índice no es una pregunta que la arquitectura de
+> fuentes debería tener que responder.
+>
+> **LA DECISIÓN ESTÁ PENDIENTE DESDE B26, Y ESTÁ ESCRITA EN EL CÓDIGO.**
+> `src/skillgraph/knowledge/observation.py:242-250` dice, sobre el kind que
+> usa:
+>
+> > `external_doc`, y NO un kind nuevo. `SourceKind` es un Literal cerrado y
+> > AGENTS.md 2.1 dice que anadir un valor es un cambio de contrato que
+> > necesita ADR.
+>
+> **Esa ADR nunca se abrió.** Sigue sin abrirse en B32, y B33 es el bloque
+> que la necesita. Abrirla es lo primero del bloque, y su radio de impacto
+> está medido: `Source.__post_init__` valida contra
+> `typing.get_args(SourceKind)` (acepta el valor nuevo sin tocar nada), la
+> regla `kind.startswith("git_")` no aplica a un kind de runtime, y **no hay
+> `CHECK` de SQL sobre `sources.kind`**, luego no hay migración que forzar
+> sobre filas que ya existen.
+>
+> **LO QUE B33 NO VA A HACER.** No va a abrir el `por_que` de B32/B34: es
+> la pregunta siguiente y tiene su propio bloque. No va a decidir el kind
+> por la FORMA del envelope («trae ventana → es de runtime»), porque una
+> medición de test también cubre un periodo y esa regla publicaría un kind
+> distinto para el mismo tipo de observación según quién la mire. Y no va a
+> declarar cerrado el gate que escribe el roadmap, porque ese gate mide el
+> resolver de B28.
+
 > **Bloque 2026-10-06 (B32) — No se puede responder cuándo cambió una relación ni por qué.**
 > (R0+R1 cerrados: el ratchet arquitectónico **sale distinto de cero** y las cinco fronteras llegan a cero — sin SQL en el dominio, con `RevisionRegistry` como puerto, y `knowledge_repository.py` de 895 a 719 LoC. B30 cerrado en `v0.40.0`; B31 sigue abierto.)
 >
