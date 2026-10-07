@@ -1531,7 +1531,7 @@ release:
   # mantiene: tests/test_state_release_integrity.py
   releases:
     - tag: v0.41.0
-      sha: PENDIENTE_SHA
+      sha: 2c0ad63606385780132e34d50e4e93512fd32375
       fecha: 2026-10-06
       semver_bump: MINOR
       package_version: '0.41.0'

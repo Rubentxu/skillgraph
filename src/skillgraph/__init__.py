@@ -24,7 +24,7 @@ compat con tests/external code, pero iran desapareciendo en futuras
 versiones.
 """
 
-__version__ = "0.40.0.dev0"  # B30: 0 breaking, 2 feat, 3 fix, 2 otros => MINOR, derivado con scripts/derive_semver.py sobre el tramo v0.39.0..HEAD. **POR QUE `.dev0` Y NO EL SEMVER PUERO:** el commit de gobernanza del release esta UN COMMIT POR ENCIMA de la etiqueta `v0.40.0`, porque se hace DESPUES de crearla. Es el caso 2 de `test_version_matches_git_tag`, y es la SETIMA vez que esto se descuadra en la serie. La version activa describe el ARBOL, no la etiqueta: el release queda, el arbol sigue.
+__version__ = "0.41.0.dev0"  # R0+R1: 0 breaking, 1 feat, 1 refactor, 5 otros => MINOR, derivado con scripts/derive_semver.py sobre el tramo v0.40.0..HEAD. La version activa describe el ARBOL, no la etiqueta: entre `v0.41.0` y este commit hay uno de gobernanza, que es el caso 2 de `test_version_matches_git_tag`.
 
 from skillgraph.core.errors import (
     IdentityConflictError,
