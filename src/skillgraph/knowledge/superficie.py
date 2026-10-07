@@ -160,7 +160,7 @@ class Procedencia:
     Los cuatro campos son declarativos: no se deduce ninguno del otro. Una
     afirmacion puede tener evidencia y ningun commit (`local_file`), o
     commit y ninguna evidencia si se registro a mano. Un constructor que
-    exigiera los cuatro habria encouraging a rellenarlos de mentira.
+    exigiera los cuatro estaria invitando a rellenarlos de mentira.
     """
 
     claim_id: str

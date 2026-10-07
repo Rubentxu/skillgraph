@@ -36,6 +36,12 @@ Las propiedades, y donde estan:
     P7  los dos relojes siguen siendo dos  -> TestLosDosRelojesNoSeTraducen
     P8  las seis devuelven la MISMA forma  -> TestLasSeisDevuelvenLaMismaForma
     P9  vacio y ausente son cosas distintas-> TestVacioYAusenteNoSonLoMismo
+    P10 la capability EJECUTA la delegacion-> TestLaCapabilityEjecutaLaDelegacion
+
+**P10 NO ESTABA, Y LO DISO LA CERTIFICACION.** Las 55 primeras atacaban
+`responder` y la CLI. El puente —`invoke` con una de las seis— no se
+ejecutaba nunca, y eso hacia que la mitad «agent handoff» del gate fuera
+prosa. Se cuenta abajo, en la clase.
 """
 
 from __future__ import annotations
@@ -52,6 +58,7 @@ import pytest
 from skillgraph.core.errors import ValidationError
 from skillgraph.knowledge.authority import resolver
 from skillgraph.knowledge.graph import Claim, Entity, EntityRef, Source, source_id
+from skillgraph.knowledge.knowledge_query import KnowledgeQueryCapability
 from skillgraph.knowledge.superficie import (
     CONSULTAS,
     PREGUNTA,
@@ -62,6 +69,7 @@ from skillgraph.knowledge.superficie import (
     pregunta,
     respuesta_a_payload,
 )
+from skillgraph.platform.ports.capabilities import CapabilityRequest
 from skillgraph.platform.storage import Storage
 
 REPO = Path(__file__).resolve().parents[1]
@@ -826,5 +834,145 @@ class TestLasRamasQueQuedaban:
             assert r.conflicto is None
             assert r.resolucion is None
             assert r.vacia is True
+        finally:
+            s.close()
+
+
+# ---------------------------------------------------------------------------
+# P10 — la capability DELEGA de verdad
+# ---------------------------------------------------------------------------
+
+
+class TestLaCapabilityEjecutaLaDelegacion:
+    """Lo que la certificacion de B34 encontro, y no era un detalle.
+
+    Las 55 pruebas de este fichero pasaban y el bloque se daba por cerrado,
+    y al medir el suelo del modulo la verdad era otra: **`invoke` no se
+    llamaba nunca con una de las seis preguntas**. Las 55 atacaban
+    `responder` directamente y la CLI, y las dos cosas son B34 — la
+    superficie y sus subcomandos—, pero el **puente entre las dos** no lo
+    eran:
+
+    ```
+    conocimiento.py   162-163, 184   SIN CUBRIR   <- la delegacion misma
+    ```
+
+    Las lineas 162-163 son literalmente «construye la `Consulta`, se la pasa
+    a la superficie y devuelve lo que conteste». Ese es el entregable de B34
+    escrito en el roadmap: «las mismas query models alimentan CLI y
+    agent handoff». **La mitad del agent handoff no se habia ejecutado
+    nunca**, y solo se ve al mirar el suelo del modulo: los guards de
+    `TestUnaSolaSuperficieParaTodas` miran el AST de la ENVOLTURA, que es
+    correcta, y por eso estan verdes con un puente sin cruzar.
+
+    Es la tercera vez que sale el mismo defecto —el guard mide la
+    envoltoria y no el camino—, y por eso esta clase no es «mas cobertura»:
+    es la que ejecuta lo que el bloque afirma hacer.
+    """
+
+    def _invoke(self, s: Storage, kind: str, subject: str = SUJETO, **argumentos: object):
+        """Invoca la capability de verdad, sobre un Storage de verdad.
+
+        El `spec` se toma de la propia capability y no se escribe a mano:
+        una peticion con un `spec` inventado seria otro contrato, y el que
+        se mide aqui es el de verdad.
+        """
+        cap = KnowledgeQueryCapability(s, tenant_id="t", project_id="p")
+        return cap.invoke(
+            CapabilityRequest(
+                spec=cap.spec,
+                subject=subject,
+                arguments={"kind": kind, **argumentos},
+            )
+        )
+
+    def test_las_seis_se_preguntan_por_la_capability(self, tmp_path: Path) -> None:
+        """Las seis, por la capability, una por una. El bucle ES la prueba.
+
+        No es una lista cerrada escrita aqui: sale de `CONSULTAS`, que es el
+        `Literal`. Anadir una septima sin cablear el puente no pondria este
+        test en rojo —porque no esta en el conjunto—, y por eso el conjunto
+        es la unica fuente que declara que hay seis.
+        """
+        s = _storage(tmp_path)
+        try:
+            _poblar(s)
+            extras: dict[str, dict[str, object]] = {
+                "why": {"claim_id": "c-adr"},
+                "changed": {"revision": "r1"},
+                "what": {},
+                "conflicts": {},
+                "evidence": {"claim_id": "c-adr"},
+                "impact": {},
+            }
+            assert set(extras) == set(CONSULTAS), (
+                f"las seis del bucle son {sorted(extras)} y el Literal declara {sorted(CONSULTAS)}"
+            )
+            for kind in sorted(CONSULTAS):
+                resultado = self._invoke(s, kind, subject=SUJETO, **extras.get(kind, {}))
+                assert resultado.adapter == "KnowledgeQueryCapability"
+                assert resultado.payload["consulta"] == kind
+                # Y la respuesta es la MISMA que la de la superficie, no una
+                # traduccion: el puente no reescribe el vocabulario. La
+                # pregunta viaja DENTRO de la respuesta, y no al lado, porque
+                # la forma unica de las seis no ramifica por cual es.
+                assert resultado.payload["superficie"]["consulta"]["pregunta"] == kind
+                assert resultado.payload["superficie"]["vocabulario"] == sorted(CONSULTAS)
+        finally:
+            s.close()
+
+    def test_lo_que_responde_es_lo_que_responde_la_superficie(self, tmp_path: Path) -> None:
+        """El puente es TRANSPARENTE: no duplica, no reordena, no recorta.
+
+        Y esto es lo que separa «una capability que delega» de «una segunda
+        superficie que parece la primera». Se mide comparando el payload
+        con el de `responder` sobre la MISMA consulta, no contra una copia
+        esperada escrita aqui —que seria el guard que compara contra su
+        propia copia—.
+        """
+        s = _storage(tmp_path)
+        try:
+            _poblar(s)
+            directa = _superficie(s).responder(Consulta(pregunta="what", subject=SUJETO))
+            por_capability = self._invoke(s, "what", subject=SUJETO)
+            assert por_capability.payload["superficie"] == respuesta_a_payload(directa)
+        finally:
+            s.close()
+
+    def test_una_consulta_fuera_del_vocabulario_no_se_construye(self, tmp_path: Path) -> None:
+        """Lo que `_consulta_de` ya rechazaba, y que ahora se mide.
+
+        Y el caso sin `kind` tambien: sin el se lanza en vez de devolver una
+        lista vacia, porque «no se que preguntar» y «no hay nada» son dos
+        fallos que se arreglan de dos maneras.
+        """
+        s = _storage(tmp_path)
+        try:
+            with pytest.raises(ValidationError, match="no soportada"):
+                self._invoke(s, "esta_no_existe")
+            cap = KnowledgeQueryCapability(s, tenant_id="t", project_id="p")
+            with pytest.raises(ValidationError, match="necesita 'kind'"):
+                cap.invoke(CapabilityRequest(spec=cap.spec, subject=SUJETO, arguments={}))
+        finally:
+            s.close()
+
+    def test_las_dos_de_b30_siguen_por_su_camino(self, tmp_path: Path) -> None:
+        """`claims` y `resource` NO pasan por la superficie.
+
+        Y `resource` de un uid que no existe sale VACIO, no error: preguntar
+        por algo que no esta es una pregunta legitima. Es el unico motivo por
+        el que `_recurso` devuelve `()` en vez de lanzar.
+        """
+        s = _storage(tmp_path)
+        try:
+            _poblar(s)
+            claims = self._invoke(s, "claims", subject=SUJETO)
+            assert claims.payload["elementos"], "los claims del sujeto deberian estar"
+            assert "superficie" not in claims.payload, (
+                "las consultas de B30 no pueden pasar por la superficie: su payload "
+                "tiene una forma distinta y mezclarlas daria dos modelos"
+            )
+            ausente = self._invoke(s, "resource", subject="no:existe")
+            assert ausente.payload["elementos"] == ()
         finally:
             s.close()
