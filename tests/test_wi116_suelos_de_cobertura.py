@@ -201,21 +201,88 @@ class TestLaBaseAusente:
         )
 
 
+#: Los valores que `git status --porcelain` puede dar en cada columna.
+#: Sacados de la especificacion del comando, no de los ejemplos que Writerra.
+COLUMNAS_INDICE = frozenset(" MADRCU?!")
+COLUMNAS_ARBOL = frozenset(" MDARCUT?")
+
+
+def _sucio_por_columna(salida: str) -> tuple[str, ...]:
+    """Las lineas de `git status --porcelain` que un harness PODRIA destruir.
+
+    **POR QUE ESTA FUNCION EXISTE, Y POR QUE NO ESTA DENTRO DEL TEST.**
+
+    `git status --porcelain` imprime `XY` donde X es el indice y Y el arbol de
+    trabajo, y `git checkout -- <ruta>` restaura **del indice**. Luego lo unico
+    que ese comando puede perder es lo que NO esta en el indice, que es
+    exactamente la columna Y.
+
+    MEDIDO en repos aislados, con `scripts/measure_b36_commit_gate.py`:
+
+        cambio STAGEADO    -> 'M  src/a.py'    sobrevive al checkout
+        cambio SIN stagear -> ' M src/a.py'    DESTRUIDO
+        fichero nuevo      -> '?? src/x.py'    no lo toca checkout, pero si clean
+
+    **LO QUE ESTO CORRIGE, MEDIDO EN VIVO.** La version anterior exigia la
+    salida VACIA, luego un cambio stageado la hacia fallar. El hook de
+    pre-commit corre pytest sobre lo STAGEADO, luego todo commit que toca
+    `src/` o `scripts/` se ponia rojo. Capturado de verdad: el hook rechazo
+    `5f3a739`, que era un commit correcto, con tres `M ` en la columna del
+    indice, y la salida fue `HOOK_SKIP_TESTS=1`.
+
+    Y el bypass apaga, MEDIDO en `scripts/hooks/pre-commit`, la UNICA
+    comprobacion de que lo stageado sigue pasando: `ruff check` y `ruff format
+    --check` corren siempre.
+
+    La funcion es pura a proposito: la decision se prueba con las cuatro
+    formas reales de `porcelain`, y no depender del estado del arbol en el
+    momento del run. Un guard que solo se puede probar cuando el arbol esta
+    sucio es un guard que casi nunca se prueba.
+    """
+    sucio: list[str] = []
+    for linea in salida.splitlines():
+        if not linea.strip():
+            continue
+        # `XY` y luego un espacio y la ruta. Con nombres raros git entrecomilla,
+        # y lo que decide es la segunda columna, no el camino.
+        estado = linea[:2]
+        if len(estado) < 2:
+            continue
+        # **MEDIDO AL ESCRIBIRLO, Y MI PRIMERA VERSION ACUSABA DE MAS.** Sin
+        # esta comprobacion, la linea `ruta sin estado` —que no es porcelain—
+        # entra por `estado[1] == 'u'`, que no es ni espacio ni interrogante,
+        # y el guard la cuenta como trabajo sin stagear. Un guard que acusa a
+        # una linea que no sabe leer es un guard que miente, y miente en la
+        # direccion que hace ruido. Los dos conjuntos salen de la
+        # especificacion de `git status --porcelain`, no de una lista de
+        # ejemplos que yo haya querido.
+        if estado[0] not in COLUMNAS_INDICE or estado[1] not in COLUMNAS_ARBOL:
+            continue
+        if estado[1] != " ":
+            sucio.append(linea)
+    return tuple(sucio)
+
+
 class TestElHarnessNoBorraTrabajo:
-    """**UN RECORDATORIO QUE SE PAGA CON UN TEST.**
+    """**UN RECORDATORIO QUE SE PAGA CON UN TEST, Y QUE MEDIA LO QUE DICE.**
 
     Quince de los veintisiete `scripts/mutate_*.py` restauraban con
     `git checkout --`, que devuelve el arbol DEL INDICE. Eso borro la
     migracion `0005` de R1.F con sus trece tests a mitad de certificacion, y
     se recupero de un volcado accidental.
 
-    Este test no mide el harness: comprueba que el arbol de trabajo sigue
-    teniendo lo que el ultimo commit dice, y que ninguna suite se ha
-    quedado sin commitear por debajo. Un guard que se pone verde en un
-    arbol vacio es peor que no tener guard.
+    **Y MEDIDO AL ABRIR B36: el antipatron SIGUE VIVO.** Siete harnesses siguen
+    con `_restaura()` -> `git checkout --` y `cwd=RAIZ`, y este test no lo
+    hubiera visto nunca, porque solo miraba el estado del arbol y no el arbol
+    del codigo. De ahi la clase de al lado.
+
+    Un guard que se pone verde en un arbol vacio es peor que no tener guard;
+    uno que se pone rojo en un commit correcto es peor todavia, porque su
+    salida es desactivar el gate que lo contiene.
     """
 
-    def test_el_arbol_no_tiene_nada_sin_commitear_entre_scripts_y_src(self) -> None:
+    def test_el_arbol_no_tiene_nada_SIN_STAGEAR_entre_scripts_y_src(self) -> None:
+        """Lo que NO esta en el indice, que es lo unico que un checkout pierde."""
         import subprocess
 
         raiz = Path(__file__).resolve().parent.parent
@@ -227,12 +294,176 @@ class TestElHarnessNoBorraTrabajo:
             check=False,
         )
         assert proc.returncode == 0, proc.stderr
-        sucio = [linea for linea in proc.stdout.splitlines() if linea.strip()]
+        sucio = _sucio_por_columna(proc.stdout)
         assert not sucio, (
-            "hay cambios sin commitear en src/ o scripts/:\n  "
+            "hay cambios SIN STAGEAR en src/ o scripts/:\n  "
             + "\n  ".join(sucio)
             + "\n\nUn harness con `git checkout --` debajo se los llevaria en "
-            "cuanto corra. Commitea antes de certificar."
+            "cuanto corra: restaura del indice. Commitea o stagea antes de "
+            "certificar.\n\nLo que YA esta stageado NO se lista, y es a "
+            "proposito: es lo que sobrevive, y es justo lo que hace un commit."
+        )
+
+
+class TestLaDecisionDelGuardEsMedible:
+    """**POR QUE LA DECISION ESTA FUERA DEL TEST Y SE PROBEA A SEPARTE.**
+
+    El guard mira el arbol de trabajo real, y en una certificacion el arbol esta
+    limpio: luego la condicion que decide nunca se ejecuta. Un guard que solo
+    puede fallar cuando el arbol esta sucio no se ha probado nunca, y este es
+    el sitio donde se prueba.
+
+    Las cuatro formas de abajo son MEDIDAS, no inventadas: salen de crear un
+    repo, tocarlo y ejecutar `git status --porcelain` en cada estado.
+    """
+
+    def test_un_cambio_STAGEADO_no_culpa_al_operador(self) -> None:
+        """Es la forma de un commit correcto, y el hook la rechazaba."""
+        assert _sucio_por_columna("M  src/skillgraph/cli/parser.py") == ()
+
+    def test_un_cambio_SIN_STAGEAR_si_culpa(self) -> None:
+        """Es la unica forma que un `git checkout --` puede perder."""
+        assert _sucio_por_columna(" M src/skillgraph/cli/parser.py") != ()
+
+    def test_un_fichero_NUEVO_tambien_culpa(self) -> None:
+        """`??` no lo destruye `checkout --`, pero si `git clean -fd`."""
+        assert _sucio_por_columna("?? scripts/nuevo.py") != ()
+
+    def test_stageado_Y_sin_stagear_a_la_vez_culpa(self) -> None:
+        """`MM`: la parte del worktree sigue sin estar a salvo."""
+        assert _sucio_por_columna("MM src/skillgraph/cli/parser.py") != ()
+
+    def test_el_arbol_LIMPIO_no_culpa(self) -> None:
+        assert _sucio_por_columna("") == ()
+
+    def test_una_linea_QUE_NO_entiende_no_inventa_cargos(self) -> None:
+        """Un guard que acusa a una linea que no sabe leer es un guard que miente.
+
+        No es un caso teorico: `git status --porcelain` imprime una linea por
+        entrada, y un nombre de fichero con salto de linea produce una forma
+        que no es `XY`. Acusar de lo que no se ha leido es peor que callar.
+        """
+        assert _sucio_por_columna("?\n") == ()
+        assert _sucio_por_columna("   \n") == ()
+        assert _sucio_por_columna("ruta sin estado\n") == ()
+
+
+class TestNingunInstrumentoPuedeBorrarTrabajo:
+    """**EL GUARD QUE FALTA, Y QUE SE DERIVA DEL ARBOL.**
+
+    El test de al lado vigila el ESTADO. Este vigila la CAPACIDAD: que ningun
+    instrumento pueda ejecutar un comando que devuelve ficheros a otro estado.
+
+    **POR QUE ESTE Y NO UNO SOLO.** MEDIDO al abrir B36: siete
+    `scripts/mutate_*.py` siguen con
+
+        subprocess.run(["git", "checkout", "--", ...], cwd=RAIZ, check=True)
+
+    que es exactamente el antipatron. El guard de estado no lo veria nunca
+    porque solo mira el arbol, no el codigo que lo puede romper.
+
+    **EL CONJUNTO SE DERIVA, NO SE ESCRIBE.** Sale de `scripts/`, que es donde
+    viven los instrumentos; la lista de ficheros seria una fuente de verdad mas
+    —la trampa de WI-99— y ademas dejaria fuera cualquier harness nuevo.
+
+    **Y EL CONTRA SALTO, SIN EL CUAL ESTA GUARDA ES VERDE EN EL VACIO:** el
+    derivado tiene que traer AL MENOS veinte modulos. Una derivacion que
+    devolviera la lista vacia daria verde con los siete problemas puestos.
+    """
+
+    MINIMO_INSTRUMENTOS = 20
+    VERBOS = frozenset({"checkout", "restore", "reset", "clean", "stash"})
+    BINARIOS = frozenset({"git"})
+
+    @staticmethod
+    def _instrumentos() -> list[Path]:
+        raiz = Path(__file__).resolve().parent.parent
+        return sorted(
+            p
+            for p in (raiz / "scripts").rglob("*.py")
+            if not any(x in {"__pycache__", ".venv", "node_modules"} for x in p.parts)
+        )
+
+    @classmethod
+    def _destructivos(cls, fichero: Path) -> list[str]:
+        """Llamadas `git <verbo>`, por AST y por POSICION del argumento.
+
+        **MEDIDO, Y LA PRIMERA VERSION DE ESTE RASTREO MENTIA DOS VECES.**
+        (1) Buscaba la palabra suelta en cualquier literal y contaba
+        `print("... git checkout ...")` —que es prosa. (2) Peor: exigia que el
+        primer argumento fuera una cadena, luego
+        `subprocess.run(["git", "checkout", ...])` —una lista— nunca se miraba,
+        y los siete problemas reales quedaron en cero.
+
+        Es la quinta vez que sale este defecto en el repo. Aqui se exige la
+        FORMA: una lista de argumentos donde el binario va seguido del verbo.
+        """
+        import ast
+
+        arbol = ast.parse(fichero.read_text(encoding="utf-8"))
+        hallados: list[str] = []
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Call) or not nodo.args:
+                continue
+            lista = nodo.args[0]
+            if not isinstance(lista, (ast.List, ast.Tuple)):
+                continue
+            elementos = [
+                e.value
+                for e in lista.elts
+                if isinstance(e, ast.Constant) and isinstance(e.value, str)
+            ]
+            if not (cls.BINARIOS & set(elementos)):
+                continue
+            for indice, palabra in enumerate(elementos):
+                if palabra in cls.VERBOS and any(b in cls.BINARIOS for b in elementos[:indice]):
+                    hallados.append(
+                        f"{fichero.name}:{nodo.lineno}  {' '.join(elementos[: indice + 1])}"
+                    )
+                    break
+        return hallados
+
+    def test_el_derivado_NO_sale_vacio(self) -> None:
+        """El contrasalto: sin esto, una derivacion rota daria verde."""
+        assert len(self._instrumentos()) >= self.MINIMO_INSTRUMENTOS, (
+            f"el derivado trae {len(self._instrumentos())} instrumentos y se "
+            f"esperan al menos {self.MINIMO_INSTRUMENTOS}: si baja, el conjunto "
+            "se esta deixando de medir y este guard pasaria en verde sin mirar"
+        )
+
+    def test_ningun_instrumento_llama_a_un_git_DESTRUCTIVO(self) -> None:
+        problemas: list[str] = []
+        for fichero in self._instrumentos():
+            problemas.extend(self._destructivos(fichero))
+        assert not problemas, (
+            "hay instrumentos que pueden devolver ficheros a otro estado:\n  "
+            + "\n  ".join(problemas)
+            + "\n\n`git checkout --` restaura DEL INDICE: se lleva el trabajo "
+            "sin stagear. Se restaura ESCRIBIENDO el contenido original, como "
+            "ya hacen nueve harnesses de este repo."
+        )
+
+    def test_la_prosa_NO_cuenta_como_llamada(self) -> None:
+        """**EL DEFECTO DE FONDO DEL REPO, Y EL QUE MAS CARO SALE.**
+
+         Si este guard buscara palabras en vez de formas, contaria su propio
+         docstring y el del propio bloque, y se pondria en rojo solo. MEDIDO: la
+         primera version del rastreo hacia exactamente eso, y devolvia 4
+        strumentos de `scripts/` — todos prosa.
+
+         El contraejemplo se construye aqui, con el fichero que HABLA del
+         comando presente en el arbol: si el guard lo contara, este test falla.
+        """
+        raiz = Path(__file__).resolve().parent.parent
+        propio = raiz / "scripts" / "measure_b36_commit_gate.py"
+        assert propio.exists(), "el instrumento de medicion deberia estar en el arbol"
+        texto = propio.read_text(encoding="utf-8")
+        assert "git checkout --" in texto, (
+            "el fichero deberia hablar del comando: si ya no lo hace, este "
+            "contrajemplo ha dejado de probarlo"
+        )
+        assert self._destructivos(propio) == [], (
+            "el guard se esta contando a si mismo: su prosa menciona el comando y no lo ejecuta"
         )
 
 

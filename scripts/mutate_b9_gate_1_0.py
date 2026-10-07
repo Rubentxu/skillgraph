@@ -130,12 +130,32 @@ def _pytest(objetivos: tuple[str, ...]) -> tuple[int, set[str]]:
     return proc.returncode, caidos
 
 
+#: El contenido de los ficheros mutables ANTES de que este harness toque nada.
+ORIGINALES: dict[str, str] = {}
+
+
+def _congela() -> None:
+    """Lee los ficheros mutables una vez, antes de que el harness escriba."""
+    for ruta in MUTABLES:
+        ORIGINALES[str(ruta.relative_to(RAIZ))] = ruta.read_text(encoding="utf-8")
+
+
 def _restaura() -> None:
-    subprocess.run(
-        ["git", "checkout", "--", *[str(p.relative_to(RAIZ)) for p in MUTABLES]],
-        cwd=RAIZ,
-        check=True,
-    )
+    """Vuelve a lo que habia, ESCRIBIENDO. No pidiendo a git que lo haga.
+
+    **B36: MEDIDO AL ABRIR EL BLOQUE, ESTO ERA `git checkout --`** con
+    `cwd=RAIZ`, que restaura **del indice**. Con trabajo sin stagear debajo, el
+    checkout devuelve el fichero a la ultima version commiteada y no a la que
+    habia: es decir, se lo lleva. El docstring de este harness ya explicaba que
+    asi perdio el arreglo de B9 entero, y su unica defensa era negarse a
+    empezar cuando habia trabajo sin commitear.
+
+    **La defensa correcta no es negarse a empezar: es no destruir.** Escribir lo
+    que se leyo antes de mutar no puede perder nada, y deja que el harness se
+    pueda usar con un arbol sucio —que es como se trabaja entre bloques.
+    """
+    for relativo, texto in ORIGINALES.items():
+        (RAIZ / relativo).write_text(texto, encoding="utf-8")
     _limpia_cache()
 
 
@@ -228,9 +248,17 @@ def main() -> int:
 
     pendientes = _sin_trabajo_sin_commitar()
     if pendientes:
+        # **B36: ESTE MOTIVO CAMBIO, Y ANTES MENTIA.** Decia que
+        # `git checkout --` «BORRARIA el trabajo». Ya no restoration por checkout:
+        # `_restaura()` escribe lo que leyo, luego no se pierde nada. Lo que
+        # queda de este aviso es otro, mas pequeno: las sondas deforman el
+        # texto REAL de estos ficheros, asi que con trabajo sin commitear
+        # debajo el resultado mezcla tu cambio con el de la sonda y no sabes
+        # que ha cazado. Se avisa igual, pero por el motivo que queda.
         print("ABORTO: hay cambios SIN COMMITAR en ficheros que este harness restaura.")
-        print("        `git checkout --` restaura del indice, luego restaurarlos")
-        print("        BORRARIA el trabajo en vez de volver atras. Commitea antes.")
+        print("        Las sondas deforman el texto REAL de estos ficheros, luego")
+        print("        con trabajo debajo el resultado mezcla tu cambio con el de")
+        print("        la sonda. Commitea antes de medir.")
         for linea in pendientes:
             print(f"        {linea}")
         return 2
@@ -241,6 +269,8 @@ def main() -> int:
         print(f"ABORTO: la suite NO esta verde antes de mutar (rc={rc}).")
         return 2
     print("Base verificada: suite verde sin tocar nada.\n")
+
+    _congela()  # antes del primer `_restaura()`: sin foto, no hay a que volver
 
     sondas = _sondas()
     causas: set[frozenset[str]] = set()

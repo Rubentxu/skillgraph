@@ -135,12 +135,30 @@ def _sucios() -> tuple[str, ...]:
     return tuple(linea for linea in proc.stdout.splitlines() if linea.strip())
 
 
+#: El contenido de los ficheros mutables ANTES de que este harness toque nada.
+ORIGINALES: dict[str, str] = {}
+
+
+def _congela() -> None:
+    """Lee los ficheros mutables una vez, antes de que el harness escriba."""
+    for ruta in MUTABLES:
+        ORIGINALES[str(ruta.relative_to(RAIZ))] = ruta.read_text(encoding="utf-8")
+
+
 def _restaura() -> None:
-    subprocess.run(
-        ["git", "checkout", "--", *[str(p.relative_to(RAIZ)) for p in MUTABLES]],
-        cwd=RAIZ,
-        check=True,
-    )
+    """Vuelve a lo que habia, ESCRIBIENDO. No pidiendo a git que lo haga.
+
+    **B36: MEDIDO AL ABRIR EL BLOQUE, ESTO ERA `git checkout --`** con
+    `cwd=RAIZ`, que restaura **del indice**. Con trabajo sin stagear debajo, el
+    checkout devuelve el fichero a la ultima version commiteada y no a la que
+    habia: es decir, se lo lleva.
+
+    **La defensa correcta no es negarse a empezar: es no destruir.** Escribir lo
+    que se leyo antes de mutar no puede perder nada, y deja que el harness se
+    pueda usar con un arbol sucio —que es como se trabaja entre bloques.
+    """
+    for relativo, texto in ORIGINALES.items():
+        (RAIZ / relativo).write_text(texto, encoding="utf-8")
     _limpia_cache()
 
 
@@ -241,6 +259,8 @@ def main() -> int:
         print(f"ABORTO: la suite NO esta verde antes de mutar (rc={rc}).")
         return 2
     print("Base verificada: suite verde sin tocar nada.\n")
+
+    _congela()  # antes del primer `_restaura()`: sin foto, no hay a que volver
 
     sondas = _sondas()
     causas: set[frozenset[str]] = set()

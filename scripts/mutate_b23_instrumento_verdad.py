@@ -166,8 +166,29 @@ def _corre(args: list[str], timeout: int = 900) -> subprocess.CompletedProcess[s
     )
 
 
+#: El contenido de los ficheros mutables ANTES de que este harness toque nada.
+#: **B36: MEDIDO AL ABRIR EL BLOQUE, `_restaura` era `git checkout --`**, que
+#: restaura DEL INDICE. Aqui no hay un `original` en el punto de llamada —este
+#: harness restaura ANTES de cada sonda, para partir de una linea base limpia—,
+#: luego hace falta la foto: se toma una vez, antes del primer `_restaura`.
+ORIGINALES: dict[str, str] = {}
+
+
+def _congela() -> None:
+    """Lee los ficheros mutables una vez, antes de que el harness escriba."""
+    for ruta in MUTABLES:
+        ORIGINALES[str(ruta.relative_to(RAIZ))] = ruta.read_text(encoding="utf-8")
+
+
 def _restaura() -> None:
-    _corre(["git", "checkout", "--", *[str(m.relative_to(RAIZ)) for m in MUTABLES]])
+    """Vuelve a lo que habia, ESCRIBIENDO. No pidiendo a git que lo haga.
+
+    `git checkout --` restaura del indice, luego con trabajo sin stagear debajo
+    devuelve el fichero a la ultima version commiteada y no a la que habia:
+    es decir, lo borra. Escribir lo leido antes no puede perder nada.
+    """
+    for relativo, texto in ORIGINALES.items():
+        (RAIZ / relativo).write_text(texto, encoding="utf-8")
 
 
 def _anclas_validas() -> list[str]:
@@ -241,6 +262,7 @@ def main() -> int:
         return 2
     print(f"autocomprobacion: {len(SONDAS)} sondas, anclas unicas, nombres existen")
 
+    _congela()  # antes del primer `_restaura()`: sin foto, no hay a que volver
     _restaura()
     rc, caidos, no_colecto = _corre_suite()
     if rc != 0 or no_colecto:

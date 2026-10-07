@@ -341,9 +341,11 @@ def main() -> int:
         ruta.write_text(texto.replace(sonda.antes, sonda.despues, 1), encoding="utf-8")
         _limpia_cache()
         rc, caidos = _pytest(SUITES)
-        subprocess.run(
-            ["git", "checkout", "--", sonda.fichero], cwd=RAIZ, check=True, capture_output=True
-        )
+        # **B36: MEDIDO AL ABRIR EL BLOQUE, ESTO ERA `git checkout --`.**
+        # Restaura DEL INDICE, luego con la mutacion sin stagear se lleva el
+        # fichero entero. Se restaura ESCRIBIENDO lo que se leyo, que es lo que
+        # ya hacen nueve harnesses de este repo.
+        ruta.write_text(texto, encoding="utf-8")
         _limpia_cache()
 
         if rc == 0:
