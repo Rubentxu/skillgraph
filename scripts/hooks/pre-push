@@ -53,6 +53,39 @@
 # tests decia «Defensa en profundidad 3 capas, ya implementado», y una de
 # las tres no existia. Instalar el hook es decision del operador:
 # `bash scripts/install-hooks.sh`.
+#
+# ---------------------------------------------------------------------------
+# MEDIDO AL ABRIR B38, con `scripts/measure_b38_pre_push.py` (9 rondas).
+#
+# Este hook DECIA que la receta dio SUCCESS sin que eso fuera verdad, y no
+# era el bypass el que mentia — era el hook entero:
+#
+#     R6  `ci.sh` = `exit 0` y NADA MAS
+#         [pre-push] OK: la receta canonica dio SUCCESS sobre 718b683
+#     R7  `ci.sh` = imprime el veredicto de la receta y sale 0
+#         [pre-push] OK: la receta canonica dio SUCCESS sobre 718b683
+#     R8  salida IDENTICA en los dos casos: True
+#
+# El hook DELEGA y solo sabe UNA cosa: que el delegado devolvio 0. Un exit
+# code de 0 no dice que la receta corriera, ni que hiciera nada — dice que
+# el proceso termino. El bypass (`HOOK_SKIP_PUSH_TESTS=1`) era UN caso de
+# ese defecto, no el defecto: imprimia el mismo `SUCCESS` sin correr nada.
+#
+# LO QUE SE ARREGLA, Y NO ES INVENTADO. `.pipeline.kts` imprime
+# `Pipeline finished with SUCCESS` — MEDIDO en los artefactos del repo: 169
+# apariciones de SUCCESS y 9 de FAILURE — y es la MISMA cadena que este hook
+# ya nombra en su mensaje de error de mas abajo. O sea que el hook ya tenia
+# en la mano todo lo que hacia falta: captura la salida del delegado en
+# `$_log` y despues la borra SIN HABERLA MIRADO. Ahora la exige.
+#
+# El `OK` deja de ser una copia del exit code y pasa a ser una afirmacion
+# verificada contra el propio delegado: si el delegado sale con 0 y no
+# emite su veredicto, el hook se pone rojo en vez de decir SUCCESS.
+#
+# MEDIDO TAMBIEN, y es del mismo tipo: este hook anunciaba «~4min» y el push
+# de `v0.42.2` del 2026-10-07 tardo 13 min 49 s (23:56:14 -> 00:10:03). Una
+# afirmacion del hook que nada mide.
+# ---------------------------------------------------------------------------
 
 set -e
 
@@ -69,32 +102,78 @@ cd "$REPO_ROOT"
 
 # -------------------------------------------------------------------
 # 1. La receta canonica, por el delegado.
+#
+# `VEREDICTO_RECETA` NO es una cadena inventada para que el hook tenga algo
+# que comprobar: es lo que `.pipeline.kts` imprime cuando su veredicto es
+# bueno, MEDIDO en los artefactos del repo, y es la MISMA que el mensaje de
+# error de mas abajo ya nombraba. Lo que cambia en B38 es que el hook pasa
+# de HEREDAR el exit code a EXIGIR el veredicto que el delegado ya emitio.
 # -------------------------------------------------------------------
+VEREDICTO_RECETA='Pipeline finished with SUCCESS'
+
 if [ "${HOOK_SKIP_PUSH_TESTS:-0}" != "1" ]; then
     echo "[pre-push] verificacion canonica (.pipeline.kts)..."
-    echo "[pre-push] puede tardar ~4min: es la misma corrida que hace la CI."
+    # MEDIDO (push de v0.42.2, 2026-10-07): 13 min 49 s, no los ~4min que
+    # este hook anunciaba. El numero va con su fecha porque es una medicion,
+    # no una promesa.
+    echo "[pre-push] puede tardar ~14min (medido: 13m49s el 2026-10-07): es la misma corrida que hace la CI."
     # NOTA: el comando va SIN pipe (| tail -N) porque con `set -e` el
     # exit code del pipe es el del ultimo comando (tail = 0) y la rama
     # de error NUNCA se ejecutaria. Mismo workaround que `.pipeline.kts`.
     # Capturamos el output a un tempfile para mostrar las ultimas 30 lineas.
     _log="$(mktemp)"
     # Trap para limpiar tempfile en EXIT (cubre exito, fallo, signal SIGTERM/SIGINT).
-    # Si la verificacion corre ~4min, el usuario podria Ctrl-C y dejar el tempfile
+    # Si la verificacion corre ~14min, el usuario podria Ctrl-C y dejar el tempfile
     # huerfano en /tmp. El trap EXIT garantiza limpieza en cualquier camino.
     trap 'rm -f "$_log"' EXIT
     if ! sh scripts/ci.sh >"$_log" 2>&1; then
         echo ""
         tail -30 "$_log"
         echo ""
-        echo "ERROR: la verificacion canonica fallo (Pipeline finished with SUCCESS no alcanzado)."
+        echo "ERROR: la verificacion canonica fallo (el delegado no dio '$VEREDICTO_RECETA')."
         echo "Bypass para ramas experimentales: HOOK_SKIP_PUSH_TESTS=1 git push"
         echo "Bypass siempre: git push --no-verify"
         exit 1
     fi
+    # --- LO QUE FALTAVA: el 0 DEL DELEGADO NO ES UN VEREDICTO --------------
+    #
+    # MEDIDO en B38 con dos `scripts/ci.sh`: uno que hace `exit 0` y nada mas,
+    # y otro que imprime el veredicto y sale 0. La salida de ESTE HOOK era
+    # identica en los dos casos —`OK: la receta canonica dio SUCCESS`— porque
+    # el hook no miraba lo que acababa de capturar en `$_log`, y luego lo
+    # borraba.
+    #
+    # Un exit code de 0 dice que el proceso termino, no que la receta corriera
+    # ni que hiciera nada. Aqui ya se tiene la salida del delegado, de modo
+    # que la afirmacion se puede comprobar en vez de heredarse.
+    #
+    # `grep -qxF` dentro de `if !` queda exento de errexit por ser parte de una
+    # condicion — la misma razon por la que el comando de arriba va sin pipe.
+    #
+    # LA `x` ES LO QUE HACE QUE ESTO SEA UNA EXIGENCIA Y NO UNA BUSQUEDA, y no
+    # es cosmetica. MEDIDO: la receta emite esa frase **sola en su linea** —20
+    # apariciones byte a byte iguales en los artefactos del repo—, luego
+    # `grep -qxF` no afloja nada y ademas cierra el agujero de que baste con
+    # que la frase este CONTENIDA en otra linea: un delegado que imprimiera
+    # «Pipeline finished with SUCCESS (rehecho)» no es la receta.
+    if ! grep -qxF "$VEREDICTO_RECETA" "$_log"; then
+        echo ""
+        tail -30 "$_log"
+        echo ""
+        echo "ERROR: scripts/ci.sh salio con 0 pero no imprimio '$VEREDICTO_RECETA'."
+        echo "Un exit code 0 dice que el proceso termino, no que la receta se haya"
+        echo "ejecutado. Este hook ya tiene la salida del delegado, asi que exige su"
+        echo "veredicto en vez de anunciarlo por su cuenta."
+        echo "Bypass siempre: git push --no-verify"
+        exit 1
+    fi
+    echo "[pre-push] OK: verificado — el delegado imprimio '$VEREDICTO_RECETA' sobre $(git rev-parse --short HEAD)"
     rm -f "$_log"
     trap - EXIT
 else
-    echo "[pre-push] HOOK_SKIP_PUSH_TESTS=1 -> saltando la verificacion canonica"
+    # El bypass se DECLARA, y no dice SUCCESS. Antes imprimia
+    # `OK: la receta canonica dio SUCCESS`, que era falso: la receta no se
+    # ejecuto. Es el mismo defecto de B37 en el pre-commit, aqui con una
+    # palabra mas fuerte — el `OK` de ahi era neutro y este `SUCCESS` no.
+    echo "[pre-push] tests: OMITIDOS por HOOK_SKIP_PUSH_TESTS=1 — este push NO ha sido verificado"
 fi
-
-echo "[pre-push] OK: la receta canonica dio SUCCESS sobre $(git rev-parse --short HEAD)"
