@@ -167,6 +167,39 @@ todavía no existía.
   `v0.40.0` y R0+R1 en `v0.41.0`, ambos verificados como ancestros de
   `main`.
 
+## R1 cerrado: las seis filas, verificadas sobre el arbol
+
+**MEDIDO, punto por punto, sobre `main` despues de R1.C y R1.E** (`c67e17c`):
+
+| Fila | Que pedia | Estado |
+|---|---|---|
+| R1.A | `RevisionRegistry` fuera del dominio | SI — puerto en `platform/ports/revisions.py` |
+| R1.B | god modules 0 y ratchet duro | SI — **5/5** en verde |
+| R1.C | ingesta fuera del modelo puro | SI — `observation_ingestion.py`, con guard por AST |
+| R1.D | referencias normativas resolubles | SI — 0 rotas |
+| R1.E | harness comun certificado | SI — 6 estados, 1 harness real migrado **sin cambiar su veredicto** |
+| R1.F | identidad de claim con ambito | SI — migracion `0005` |
+
+**Y LAS DOS MEDIDAS QUE ABRIERON R1.C y R1.E:**
+
+    scripts/mutate_*.py            27 ficheros, 8.554 lineas
+    restauran con `git checkout --`  15 de 27   <- restaura DEL INDICE
+
+`git checkout --` no restaura el trabajo sin commitear: lo borra. **Este
+trabajo lo sufrio en R1.F**, con la migracion `0005` y sus 13 tests
+desaparecidos del arbol a mitad de certificacion. De ahi que
+`Restaurador` lea bytes, escriba bytes y **pruebe** la restauracion, y que
+haya un test que lo demuestre contra un repo real.
+
+`mutate_b29_vigencia.py` se migro al harness comun y **sigue dando 5/5**:
+un modulo comun que nadie usa es un fichero mas, y el guard exige que al
+menos uno lo consuma.
+
+### Suite sobre `main` con R1 cerrado
+
+**3773 passed, 3 skips declarados, 0 failed** (513 s), con
+`tests.total = 3776` medido con `pytest --collect-only`.
+
 ## Cómo reproducir estas comprobaciones
 
 ```bash
