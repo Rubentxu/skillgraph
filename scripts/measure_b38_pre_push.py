@@ -7,20 +7,34 @@ con el pre-commit: no se lee el fuente, se ejecuta y se mira lo que imprime.
 Rondas:
 
     R1  el camino del bypass, con `HOOK_SKIP_PUSH_TESTS=1`
-    R2  el camino normal, con `scripts/ci.sh` sustituido por un dobble que dice
-        SUCCESS — para ver si el hook distingue una receta que corrio de una
-        que no
+    R2  el camino normal, con `scripts/ci.sh` sustituido por un dobble que falla
     R3  si el hook esta instalado en `.git/hooks/`, y si es el versionado
-    R4  los hooks que existen de verdad, y los que el docstring declara
+    R4  los tests que nombran el pre-push
+    R5  que exige el guard que YA existe sobre el bypass
 
-Nada de esto modifica el repo: el dobble de `scripts/ci.sh` se inyecta por
-PATH y el `git push` no llega a salir nunca — el hook corre con
-`--dry-run` apuntando a un remoto de `/dev/null`.
+    R6  `ci.sh` = `exit 0` y NADA MAS: que dice el hook?
+    R7  `ci.sh` = imprime el veredicto de la receta y sale 0
+    R8  R6 y R7 son distinguibles por el hook?
+    R9  la prosa del tiempo: el hook anuncia «~4min»
+
+**POR QUE R6 A R9 ESTAN, Y NO SOLO R1.** R1 encuentra que el bypass imprime
+`OK: la receta canonica dio SUCCESS` sin haber corrido nada. Eso deja abierta
+la pregunta que decide si el arreglo es un parche o una propiedad: el hook
+DELEGA y solo sabe UNA cosa, que el delegado devolvio 0. Un exit code de 0 no
+dice que la receta corriera, ni que hiciera nada. Si R6 —un `ci.sh` que no
+hace nada— produce el mismo `SUCCESS`, el defecto no es el bypass: es que el
+hook afirma una ejecucion que no puede comprobar.
+
+La cadena que puede exigirse no es inventada: `.pipeline.kts` imprime
+`Pipeline finished with SUCCESS`, que es la MISMA que el propio hook ya
+nombra en su mensaje de error, y el hook ya captura esa salida en `$_log`.
+O sea que el hook puede EXIGIR la cadena en vez de heredar un exit code.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -191,6 +205,110 @@ def r5_que_exige_el_guard_del_bypass() -> None:
     print()
 
 
+#: Lo que `.pipeline.kts` imprime cuando su veredicto es bueno. No es una
+#: cadena inventada para esta medicion: es la MISMA que el propio hook ya
+#: nombra en su mensaje de error ("Pipeline finished with SUCCESS no
+#: alcanzado"), luego las dos partes del hook ya la conocen.
+VEREDICTO_RECETA = "Pipeline finished with SUCCESS"
+
+
+def _corrida_con_ci(ci: str) -> str:
+    """Ejecuta el hook real contra un `ci.sh` con el cuerpo que se le pase."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = _doblar_ci(Path(tmp), ci)
+        return _sh("sh", "scripts/hooks/pre-push", cwd=repo, env=dict(os.environ))
+
+
+def _lineas_del_hook(salida: str) -> list[str]:
+    """SOLO las lineas que el hook imprime, y con el sha normalizado.
+
+    MEDIDO DOS VECES, y las dos por lo mismo. La primera version comparaba la
+    salida entera y daba `False`; lo unico que la diferenciaba era el sha del
+    commit del repo temporal, que cambia en cada corrida. La segunda
+    normalizo el sha y seguia dando `False`, porque el `rm -f "$_log"` del
+    hook lo intercepta `mavis-trash`, que imprime una linea con el nombre del
+    temporal: otro valor que cambia por construccion.
+
+    Dos veces es una tendencia: este bloque lleva tres verificadores debiles
+    quediedieron una lectura equivocada en lugar de ninguna. La leccion general es que comparar dos corridas exige normalizar **todo** lo que
+    varia por construccion, y que la lista de eso no se adivina a ojo: se ve
+    cuando el comparador dice `False` y el diff son dos lineas de ruido.
+    """
+    return [
+        re.sub(r"SOBRE [^ ]+$", "sobre <sha>", linea)
+        for linea in salida.splitlines()
+        if linea.startswith("[pre-push]")
+    ]
+
+
+def r6_r7_r8_el_success_es_estructural() -> None:
+    print("=" * 74)
+    print("R6/R7/R8 — un exit 0 sin hacer nada tambien dice SUCCESS?")
+    print("=" * 74)
+
+    r6 = _corrida_con_ci("#!/bin/sh\nexit 0\n")
+    print("R6 — `ci.sh` = `exit 0`, NO HACE NADA:")
+    for linea in r6.splitlines():
+        print(f"   {linea}")
+    print(f"   el hook dice SUCCESS: {'SUCCESS' in r6}")
+    print()
+
+    r7 = _corrida_con_ci(f"#!/bin/sh\necho '{VEREDICTO_RECETA}'\nexit 0\n")
+    print("R7 — `ci.sh` = imprime el veredicto de la receta y sale 0:")
+    for linea in r7.splitlines():
+        print(f"   {linea}")
+    print(f"   el hook dice SUCCESS: {'SUCCESS' in r7}")
+    print()
+
+    l6, l7 = _lineas_del_hook(r6), _lineas_del_hook(r7)
+    iguales = l6 == l7
+    if not iguales:
+        print("   solo difieren en:")
+        for a, b in zip(l6, l7, strict=False):
+            if a != b:
+                print(f"      R6: {a}\n      R7: {b}")
+    print(f"R8 — salida del hook con R6 IGUAL a la de R7: {iguales}")
+    print("   R6 no ejecuto nada. R7 si. El hook dice lo mismo en las dos.")
+    print()
+    print("   MEDIDO: la primera version de esta ronda comparaba las dos salidas")
+    print("   enteras y decia `False`. Era el sha del repo temporal, que cambia")
+    print("   en cada corrida: un instrumento que compara dos corridas sin")
+    print("   normalizar lo que varia por construccion no compara lo que cree")
+    print("   comparar. Es el tercer verificador debil de este bloque, y el")
+    print("   primero que moria en VERDE: R1, que decidia por `splitlines()[-1]`.")
+    print()
+    print("=" * 74)
+    print("VEREDICTO")
+    print("=" * 74)
+    print("  El bypass es UN caso de un defecto estructural: el hook dice que la")
+    print("  receta dio SUCCESS porque el delegado salio con 0, y un 0 no dice")
+    print("  que nada se haya ejecutado. Arreglar solo el bypass taparia R1 y")
+    print("  habria que repetirlo el dia que aparezca un cuarto camino.")
+    print()
+    print("  LO QUE SI SE PUEDE MEDIR: la receta imprime su veredicto y el hook")
+    print("  ya captura esa salida en `$_log`. Puede EXIGIR la cadena en vez de")
+    print("  heredar un exit code, y entonces su OK deja de ser una copia del")
+    print("  codigo de salida y pasa a ser una afirmacion verificada contra el")
+    print("  propio delegado.")
+    print()
+
+
+def r9_la_prosa_del_tiempo() -> None:
+    print("=" * 74)
+    print("R9 — la prosa del tiempo: el hook anuncia ~4min")
+    print("=" * 74)
+    texto = HOOK.read_text(encoding="utf-8")
+    for linea in texto.splitlines():
+        if "tardar" in linea:
+            print(f"   {linea.strip()}")
+    print()
+    print("   MEDIDO en el push de v0.42.2 (2026-10-07): 23:56:14 -> 00:10:03")
+    print("   son 13 min 49 s contra los ~4min que anuncia: el numero es falso,")
+    print("   y es del mismo tipo que el SUCCESS — una afirmacion del hook que")
+    print("   nada mide.")
+    print()
+
+
 if __name__ == "__main__":
     print(f"B38 — medicion del pre-push sobre {HOOK}\n")
     r1_bypass()
@@ -198,3 +316,5 @@ if __name__ == "__main__":
     r3_instalado()
     r4_declarado()
     r5_que_exige_el_guard_del_bypass()
+    r6_r7_r8_el_success_es_estructural()
+    r9_la_prosa_del_tiempo()
