@@ -64,12 +64,51 @@ arbol carga y el guard se pone rojo **por la propiedad**.
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+
+def _cargar_harness_comun() -> object:
+    """Carga `scripts/mutation_harness.py` por ruta.
+
+    R1.E: este harness deja de ser una copia mas. Los estados y el
+    restaurador vienen del modulo comun; lo que queda aqui es lo que es de
+    B29: las sondas, que son multi-fichero y con regex, y las preguntas.
+
+    Se registra en `sys.modules` porque `@dataclass(slots=True)` busca el
+    espacio de nombres del modulo ahi y sin registro falla con un
+    `AttributeError` en la importacion.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "mutation_harness", Path(__file__).resolve().parent / "mutation_harness.py"
+    )
+    assert spec is not None and spec.loader is not None
+    modulo = importlib.util.module_from_spec(spec)
+    sys.modules["mutation_harness"] = modulo
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+_h = _cargar_harness_comun()
+
+# La `Sonda` de este fichero es multi-fichero y con regex, y la del modulo
+# comun es de un solo fichero. Son dos cosas distintas con el mismo nombre de
+# dominio, asi que la del comun entra con otro nombre en vez de tapar esta.
+SondaSimple = _h.Sonda
+Restaurador = _h.Restaurador
+Veredicto = _h.Veredicto
+
+#: Lo que este harness llamaba `ROTA`: una sonda que no midio nada. En el
+#: modulo comun ese estado se llama `MUTACION_INVALIDA`, y el alias se queda
+#: porque el nombre viejo aparece en la salida y en los receipts.
+ROTA = Veredicto.MUTACION_INVALIDA
+
 RAIZ = Path(__file__).resolve().parent.parent
+
 SRC = RAIZ / "src" / "skillgraph"
 INSTRUMENTO = RAIZ / "scripts" / "measure_b29_vigencia.py"
 PY = RAIZ / ".venv" / "bin" / "python"

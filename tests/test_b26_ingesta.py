@@ -32,8 +32,13 @@ from skillgraph.knowledge.observation import (
     Observation,
     ObservationEnvelope,
     ObservationIngesta,
-    ingerir,
     normalizar,
+)
+
+# R1.C: `ingerir` es el EFECTO (escribe en un Storage), no el modelo. Vive
+# fuera del modulo puro a proposito, y el contrato es el mismo.
+from skillgraph.knowledge.observation_ingestion import (
+    ingerir,
 )
 from skillgraph.platform.ports.capabilities import CapabilitySpec
 from skillgraph.platform.storage import Storage

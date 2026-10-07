@@ -62,7 +62,7 @@ es B27/B29. Se dice ahora para que no se lea despues como un olvido.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from skillgraph.core.errors import EnvelopeInvalido, UnknownEnvelopeVersionError
@@ -80,7 +80,7 @@ from skillgraph.knowledge.knowledge_controller import make_claim_id
 from skillgraph.platform.ports.capabilities import CapabilitySpec
 
 if TYPE_CHECKING:  # pragma: no cover - solo para el type-checker
-    from skillgraph.platform.storage import Storage
+    pass
 
 __all__ = [
     "VERSION_ENVELOPE",
@@ -89,7 +89,6 @@ __all__ = [
     "ObservationEnvelope",
     "ObservationIngesta",
     "UnknownEnvelopeVersionError",
-    "ingerir",
     "normalizar",
 ]
 
@@ -306,59 +305,3 @@ def _claim_de(obs: Observation, env: ObservationEnvelope) -> Claim:
         assertion_origin="observed",
         checked_at_revision=env.revision,
     )
-
-
-def ingerir(
-    storage: Storage,
-    *,
-    tenant_id: str,
-    project_id: str,
-    env: ObservationEnvelope,
-) -> ObservationIngesta:
-    """Escribe lo que el envelope afirma. **IDEMPOTENTE por contenido.**
-
-    Reutiliza las APIs que ya son idempotentes (`register_source`,
-    `upsert_entity`, `record_claim`) en vez de reimplementar la garantia: el
-    envelope no duplica esa idempotencia, **la usa**.
-
-    Y el `claim_id` sale del contenido, no de un contador, luego reingerir el
-    mismo envelope reconstruye los mismos ids y las filas caen con
-    `INSERT OR IGNORE`: el numero de filas no crece.
-
-    **LO QUE ESTO NO GARANTIZA, DICHO.** Que el contenido sea el mismo. Si una
-    herramienta cambia lo que dice sin cambiar de `revision`, la ingesta escribe
-    una fila nueva y **las dos son validas**. Borrar la anterior seria destruir
-    historia para parecer consistente; lo que las resolvera son las ventanas de
-    vigencia de B29. Una «idempotencia» que limpiara seria peor que ninguna.
-
-    Returns:
-        La ingesta que se ha escrito, igual que `normalizar` la devuelve: el
-        mismo valor, ya persistido.
-    """
-    ingesta = normalizar(env)
-    storage.register_source(
-        tenant_id=tenant_id,
-        project_id=project_id,
-        source=ingesta.source,
-    )
-    storage.upsert_entity(
-        tenant_id=tenant_id,
-        project_id=project_id,
-        entity=ingesta.entity,
-    )
-    conflictos: tuple[ClaimID, ...] = ()
-    for claim in ingesta.claims:
-        # B27: el aviso se RECOGE, no se tira. Descartarlo seria volver a
-        # perderlo una capa mas arriba, y el `conflicts_for` de B27 daria lo
-        # mismo con una consulta: lo que se pierde es el aviso en el MOMENTO
-        # en que ocurre, que es el unico momento en que el que escribe sabe
-        # que ha dicho otra cosa.
-        registro = storage.record_claim(tenant_id=tenant_id, project_id=project_id, claim=claim)
-        if registro.conflicto:
-            conflictos = (*conflictos, registro.claim_id)
-    if conflictos:
-        return replace(
-            ingesta,
-            conflictos=conflictos,
-        )
-    return ingesta
