@@ -460,9 +460,47 @@ class TestLaSupersesion:
             assert z.supersedes_claim_id is None
 
     def test_la_misma_revision_misma_fuente_sigue_siendo_conflicto(self) -> None:
-        """**B27 NO SE REVIERTE.** Misma fuente, misma revision, otro valor: eso
-        no es un cambio en el tiempo, es una afirmacion que se pisa, y lo que
-        se pisa hay que seguir avisando."""
+        """**B27 NO SE REVIERTE.** Y `conflicto` NO se ha vuelto muerto.
+
+        **B35: QUE SIGNIFICA ESTE TEST CAMBIO, Y POR QUE.** Decia «misma fuente,
+        misma revision, otro valor: eso no es un cambio en el tiempo, es una
+        afirmacion que se pisa». MEDIDO: desde la migracion `0008` —que metio el
+        objeto en la identidad de `claims`— eso ya no se pisa, porque
+        `line_count = 137` y `line_count = 250` sobre el mismo fichero **caben
+        los dos** y son dos hechos ciertos. Un aviso ahi seria un aviso falso.
+
+        Y `conflicto` no se quedo muerto al arreglarlo: eso es lo que se
+        comprueba aqui. Con el mismo `claim_id`, la clave primaria rechaza el
+        INSERT, lo que se perdio es justo lo que se queria decir, y el aviso
+        sigue llegando. MEDIDO con `valor_previo` intacto, que es la mitad que
+        B27 pidio y que sin el el aviso no sirve de nada.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            s = _base(tmp)
+            try:
+                _registrar(s, "c-1", "psycopg", "revA")
+                r = s.record_claim(
+                    tenant_id="t", project_id="p", claim=_claim("c-1", "sqlite3", "revA")
+                )
+            finally:
+                s.close()
+        assert r.conflicto is True
+        assert r.valor_previo == "psycopg"
+
+    def test_otro_valor_misma_fuente_no_es_conflicto(self) -> None:
+        """EL HERMANO QUE DICE LO CONTRARIO, Y EL QUE CIERRA ESTA MITAD.
+
+        `ADR-0035` y la migracion `0008` dicen que un mismo sujeto, predicado,
+        fuente y revision puede tener VARIOS objetos, porque hay predicados que
+        son de varios valores por naturaleza. Antes la deteccion de conflicto
+        comparaba contra una consulta previa con la tupla ANTERIOR a `0008` —sin
+        el objeto—, luego avisaba de un conflicto falso en cuanto un fichero
+        tenia mas de un import.
+
+        Este test es el que hace que el anterior sea creible: sin el hermano
+        que dice «esto NO es conflicto», «esto SI» podria querer decir «casi
+        siempre».
+        """
         with tempfile.TemporaryDirectory() as tmp:
             s = _base(tmp)
             try:
@@ -470,10 +508,16 @@ class TestLaSupersesion:
                 r = s.record_claim(
                     tenant_id="t", project_id="p", claim=_claim("c-2", "sqlite3", "revA")
                 )
+                filas = s._conn.execute(
+                    "SELECT COUNT(*) FROM claims WHERE checked_at_revision = ?", ("revA",)
+                ).fetchone()[0]
             finally:
                 s.close()
-        assert r.conflicto is True
-        assert r.valor_previo == "psycopg"
+        assert r.conflicto is False, (
+            "dos hechos ciertos sobre el mismo sujeto se han reportado como "
+            "conflicto: es el caso que ADR-0035 vino a permitir"
+        )
+        assert filas == 2, f"las dos afirmaciones deberían estar: hay {filas}"
 
 
 # ---------------------------------------------------------------------------

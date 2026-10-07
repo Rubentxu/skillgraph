@@ -76,6 +76,8 @@ from skillgraph.knowledge.graph import (
     Source,
     SourceID,
     entity_id,
+    entity_ref,
+    source_id,
 )
 from skillgraph.knowledge.knowledge_controller import make_claim_id
 from skillgraph.platform.ports.capabilities import CapabilitySpec
@@ -91,6 +93,8 @@ __all__ = [
     "ObservationEnvelope",
     "ObservationIngesta",
     "UnknownEnvelopeVersionError",
+    "envelope_a_payload",
+    "envelope_de_payload",
     "normalizar",
 ]
 
@@ -280,6 +284,238 @@ class ObservationIngesta:
     def claim_ids(self) -> tuple[ClaimID, ...]:
         """Los ids derivados, en orden de observacion."""
         return tuple(c.claim_id for c in self.claims)
+
+
+# ---------------------------------------------------------------------------
+# B35 — el contrato de frontera, en las dos direcciones
+# ---------------------------------------------------------------------------
+#
+# MEDIDO antes de escribir esto (`scripts/measure_b35_vertical.py`):
+#
+#   serializadores en src/ : 2 definiciones de `envelope_a_payload` para 1
+#                            nombre —`code_analysis` y `telemetry_query`— y
+#                            EJECUTADOS sobre el mismo envelope dan claves
+#                            distintas y `observations` con forma distinta
+#                            (`list` una, `tuple` la otra).
+#   deserializadores       : 0 en `src/`.
+#
+# Y el inverso no es que faltara por descuido: **estaba escrito a mano en dos
+# ficheros de test** (`test_b31::envelope_real` y `test_b33::_envelope_de`),
+# porque `ingerir(...)` exige un `ObservationEnvelope` y la capability
+# devuelve un `dict`. Dos copias que ya habian divergido: una leia el
+# `producer` del payload y la otra `cap.spec` de la capability.
+#
+# Por eso el par vive AQUI, junto al ADT que define el contrato, y no en cada
+# capability. Un contrato de frontera con dos serializadores y ningun
+# deserializador no es un contrato: son tres piezas que nadie sostengo juntas.
+
+
+def envelope_a_payload(envelope: ObservationEnvelope) -> dict[str, Any]:
+    """``ObservationEnvelope`` -> el `dict` que viaja por `CapabilityResult`.
+
+    **UNA sola implementacion, y es la que usan todas las capabilities.**
+    MEDIDO: `code_analysis` y `telemetry_query` tenian cada una la suya, con el
+    mismo nombre, y no hacian lo mismo — una anadia `vocabulario` y
+    devolvia `observations` como `list`, la otra era `asdict` a pelo y la
+    devolvia como `tuple`. Dos funciones homonimas con contratos distintos no
+    son una redundancia: son una decision que ya se tomo dos veces y al reves.
+
+    `object_entity` se serializa a texto porque es un `EntityRef` (que en
+    runtime es `str`) y un `dict` que no sabe convertirlo revienta con un
+    `TypeError` en lugar de perder el dato en silencio.
+
+    Args:
+        envelope: lo que produce la capability.
+
+    Returns:
+        Un `dict` JSON-compatible. Las `observations` son SIEMPRE una `tuple`
+        de `dict`, en ese orden, para que la ida y la vuelta sean un
+       emparejamiento posicional y no dependa del orden de las claves.
+    """
+    return {
+        "producer": {
+            "type_name": envelope.producer.type_name,
+            # **LA `version` DEL SPEC, MEDIDO.** `CapabilitySpec` tiene tres
+            # campos y esta es la que se perdia: el `UNIQUE` de `CapabilityRegistry`
+            # es `(type_name, version)`, luego un payload que la tira permite
+            # registrar dos adapters que se solapan sin que nada lo diga.
+            "version": envelope.producer.version,
+            "summary": envelope.producer.summary,
+        },
+        "adapter": envelope.adapter,
+        "source_id": str(envelope.source_id),
+        "subject": str(envelope.subject),
+        "observed_at": envelope.observed_at,
+        "revision": envelope.revision,
+        "version": envelope.version,
+        "kind": envelope.kind,
+        "observed_from": envelope.observed_from,
+        "observed_to": envelope.observed_to,
+        "observations": tuple(
+            {
+                "predicate": o.predicate,
+                "object_literal": o.object_literal,
+                # **NO `str(o.object_entity)`, MEDIDO.** `EntityRef` es un
+                # dataclass, no un `NewType` sobre `str`: `str()` de el da su
+                # `repr` —`EntityRef(entity_id='module:os')`—, y un round-trip
+                # que degrada a `str` se nota, que es justo lo que el docstring
+                # de `EntityRef` (B25) escribe al principio. Lo que viaja es
+                # el `entity_id` de dentro, que si es un `EntityID`.
+                "object_entity": None
+                if o.object_entity is None
+                else str(o.object_entity.entity_id),
+                "extraction_method": o.extraction_method,
+            }
+            for o in envelope.observations
+        ),
+    }
+
+
+def envelope_de_payload(payload: dict[str, Any]) -> ObservationEnvelope:
+    """El `dict` del payload -> ``ObservationEnvelope``. El camino de vuelta.
+
+    **POR QUE ESTA EN `src/` Y NO EN LOS TESTS.** Porque es la mitad que
+    faltaba de un contrato, y estaba en los tests. `ingerir(...)` pide un
+    `ObservationEnvelope`; una capability devuelve un `dict`; el paso entre
+    ellos no existia en produccion y estaba escrito a mano en dos ficheros de
+    test —que ya divergian, porque una copiaba el `producer` del payload y la
+    otra lo tomaba de la capability—. Una copia que lee el `producer` de la
+    capability **no comprueba la ida y la vuelta**: comprueba que la capability
+    sepa su propio nombre.
+
+    **SE VALIDA CON LOS MISMOS ADTs, NO A MANO.** Se reconstruye por los
+    constructores —`ObservationEnvelope` y `Observation` validan en
+    `__post_init__`— y no con `ObservationEnvelope(**payload)`, porque el
+    `producer` llega como `dict` y el dataclass quiere un `CapabilitySpec`, y
+    porque las observaciones llegan como `dict` y quieren `Observation`. El
+    error de un payload mal formado sale de aqui, con el mensaje del dominio, y
+    no de un `TypeError` tres capas mas abajo, en el dato.
+
+    Args:
+        payload: lo que devuelve `CapabilityResult.payload["envelope"]`.
+
+    Returns:
+        El envelope, validado por sus propios constructores.
+
+    Raises:
+        EnvelopeInvalido: si el payload no trae las claves que el contrato
+            exige, o si lo que trae no puede ser un envelope valido. Es un
+            error de dominio y por tanto lleva `code` y se traduce a exit code.
+    """
+    if not isinstance(payload, dict):
+        raise EnvelopeInvalido(
+            f"envelope_de_payload espera un dict y recibio {type(payload).__name__}"
+        )
+
+    faltantes = [c for c in _CLAVES_OBLIGATORIAS if c not in payload]
+    if faltantes:
+        raise EnvelopeInvalido(
+            f"el payload del envelope no trae {faltantes}; el contrato es "
+            f"{sorted(_CLAVES_OBLIGATORIAS)} y lo que llega es {sorted(payload)}"
+        )
+
+    productor = payload["producer"]
+    if (
+        not isinstance(productor, dict)
+        or "type_name" not in productor
+        or "version" not in productor
+    ):
+        raise EnvelopeInvalido(
+            f"envelope_de_payload: 'producer' tiene que ser el dict con "
+            f"'type_name', 'version' y 'summary', y es {productor!r}. Un "
+            f"CapabilitySpec serializado es justamente eso, y si no lo es el "
+            f"payload no lo produjo envelope_a_payload"
+        )
+
+    return ObservationEnvelope(
+        producer=CapabilitySpec(
+            type_name=str(productor["type_name"]),
+            version=str(productor["version"]),
+            summary=str(productor.get("summary", "")),
+        ),
+        adapter=str(payload["adapter"]),
+        source_id=source_id(str(payload["source_id"])),
+        subject=entity_id(str(payload["subject"])),
+        observed_at=str(payload["observed_at"]),
+        revision=str(payload["revision"]),
+        observations=tuple(
+            _observacion_de(o, indice=i) for i, o in enumerate(payload["observations"])
+        ),
+        version=str(payload["version"]),
+        kind=payload["kind"],
+        observed_from=payload["observed_from"],
+        observed_to=payload["observed_to"],
+    )
+
+
+#: Lo que un payload de envelope NO puede no traer. Se declara una vez y lo
+#: usan `envelope_de_payload` y su test, para que anadir un campo al ADT no
+#: obligue a descubrir en produccion que nadie lo serializa.
+_CLAVES_OBLIGATORIAS: Final[frozenset[str]] = frozenset(
+    {
+        "producer",
+        "adapter",
+        "source_id",
+        "subject",
+        "observed_at",
+        "revision",
+        "version",
+        "kind",
+        "observed_from",
+        "observed_to",
+        "observations",
+    }
+)
+
+
+def _observacion_de(dato: Any, *, indice: int) -> Observation:
+    """Una observacion del payload, validada por su propio constructor.
+
+    `object_entity` vuelve como texto o como `None`, y se pasa por
+    `entity_ref` para que `Observation` lo valide igual que si hubiera
+    llegado entero. MEDIDO: la copia de B31 en los tests solo pasaba
+    `object_literal` y se comia el `object_entity` en silencio —que es el
+    mismo defecto que el bug latente de B31 en la reconstruccion del
+    `Claim`, y por la misma razon: una copia de una regla la aplica cuando le
+    place y calla cuando no.
+
+    **Y LA AUSENCIA NO ES EL `None`, QUE ES LO QUE CUESTA MEDIRLO.** El
+    `extraction_method` distingue tres cosas que a primera vista son dos:
+
+    ```
+    clave AUSENTE            -> METODO_EXTERNO   (el que no sabe de si mismo)
+    clave presente, None     -> None             (y se conserva)
+    clave presente, "regex"  -> "regex"
+    ```
+
+    MEDIDO: con `dato.get("extraction_method") or METODO_EXTERNO` la ida y la
+    vuelta NO era identidad — un envelope con `extraction_method=None` volvia
+    con `METODO_EXTERNO`—, porque `None` significa «metodo externo» pero no es
+    la misma cadena. Los dos son certainos para el `claim_id`, y aun asi un
+    test que compruebe `ida_y_vuelta == env` falla, y rightly: la propiedad que
+    ese test afirma es la IDENTIDAD, y `None` no es `'external_capability'`.
+
+    La distinction que si importa es la de una clave que no viene —que es un
+    adaptador viejo, o uno que no conoce el campo de B31— frente a una clave
+    que viene con `None`. La primera se rellena; la segunda se respeta.
+    """
+    if not isinstance(dato, dict):
+        raise EnvelopeInvalido(
+            f"envelope_de_payload: observations[{indice}] tiene que ser un dict "
+            f"y es {type(dato).__name__}"
+        )
+    entidad = dato.get("object_entity")
+    # `.get(k, POR_DEFECTO)` devuelve el defecto solo si la clave NO ESTA. Una
+    # clave presente con valor `None` devuelve `None`, que es lo que hay que
+    # conservar. Un `or` no sirve aqui: `None or X` es `X`, y con literales
+    # `False` y `0` pasaria lo mismo con el objeto.
+    metodo = dato.get("extraction_method", METODO_EXTERNO)
+    return Observation(
+        predicate=str(dato["predicate"]),
+        object_literal=dato.get("object_literal"),
+        object_entity=None if entidad is None else entity_ref(str(entidad)),
+        extraction_method=None if metodo is None else str(metodo),
+    )
 
 
 def normalizar(env: ObservationEnvelope) -> ObservationIngesta:

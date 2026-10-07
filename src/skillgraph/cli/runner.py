@@ -44,6 +44,7 @@ from skillgraph.cli.commands.knowledge import (
     cmd_knowledge_conflicts,
     cmd_knowledge_evidence,
     cmd_knowledge_impact,
+    cmd_knowledge_ingest_code,
     cmd_knowledge_invalidate,
     cmd_knowledge_refresh,
     cmd_knowledge_resolve,
@@ -505,6 +506,9 @@ _DISPATCH: Final[Mapping[str | tuple[str, str], Handler]] = MappingProxyType(
         ("knowledge", "changed"): cmd_knowledge_changed,
         ("knowledge", "conflicts"): cmd_knowledge_conflicts,
         ("knowledge", "evidence"): cmd_knowledge_evidence,
+        # --- B35: la puerta. Sin esto, `sg.code.analysis` solo se podia
+        # lanzar escribiendo Python ---
+        ("knowledge", "ingest-code"): cmd_knowledge_ingest_code,
         # --- expansion ---
         ("expansion", "propose"): cmd_expansion_propose,
         ("expansion", "apply"): cmd_expansion_apply,

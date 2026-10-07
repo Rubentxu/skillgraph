@@ -59,7 +59,7 @@ añade un import.
 
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import Final
 
 from skillgraph.core.errors import ValidationError
 from skillgraph.knowledge.file_signature import FileSignature, extract_file_signatures
@@ -68,6 +68,7 @@ from skillgraph.knowledge.observation import (
     VERSION_ENVELOPE,
     Observation,
     ObservationEnvelope,
+    envelope_a_payload,
 )
 from skillgraph.platform.ports.capabilities import (
     CapabilityRequest,
@@ -385,6 +386,18 @@ class CodeAnalysisCapability:
                 "source_id": self._source_id,
                 "revision": self._revision,
                 "envelope": envelope_a_payload(envelope),
+                # **B35, Y ESTA SE QUITA DE DENTRO DEL ENVELOPE.** Estaba en
+                # `envelope_a_payload`, y con ahi contaminaba el contrato: un
+                # campo que no es del envelope, dentro del dict que dice ser
+                # un envelope, que nadie que lo lea puede distinguir de un
+                # campo de verdad. MEDIDO: los dos serializadores con el
+                # mismo nombre hacian cosas distintas, y una de las
+                # diferencias era justo esta clave.
+                #
+                # Va al nivel del `payload`, que es donde puede vivir algo que
+                # describe ESTA capability y no el contrato del envelope.
+                # MEDIDO: ningun test lo pedia dentro.
+                "vocabulario": sorted(PREDICADOS_DERIVADOS),
             },
         )
 
@@ -410,32 +423,6 @@ class CodeAnalysisCapability:
             version=VERSION_ENVELOPE,
             kind=KIND_FICHERO,
         )
-
-
-def envelope_a_payload(envelope: ObservationEnvelope) -> dict[str, Any]:
-    """El envelope, en la forma que viaja por `CapabilityResult.payload`.
-
-    Se serializa con `asdict` por el motivo que ya se pago una vez con
-    `ObservationEnvelope`: un campo nuevo en el ADT y olvidado aqui es un
-    dato que sale del sistema sin que nadie lo note. Y se serializa con
-    `default=str` porque `object_entity` es un `EntityRef` y un `dict` que
-    no sabe convertirlo revienta con un `TypeError` en lugar de perder el
-    dato en silencio.
-    """
-    from dataclasses import asdict
-
-    datos = asdict(envelope)
-    datos["observations"] = [
-        {
-            "predicate": o.predicate,
-            "object_literal": o.object_literal,
-            "object_entity": str(o.object_entity) if o.object_entity is not None else None,
-            "extraction_method": o.extraction_method,
-        }
-        for o in envelope.observations
-    ]
-    datos["vocabulario"] = sorted(PREDICADOS_DERIVADOS)
-    return datos
 
 
 def _texto_obligatorio(request: CapabilityRequest, clave: str, capability: str) -> str:

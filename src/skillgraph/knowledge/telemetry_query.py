@@ -57,14 +57,15 @@ sería comprar una dependencia sin criterio para no medir nada.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from typing import Any, Final, Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import Final, Protocol, runtime_checkable
 
 from skillgraph.core.errors import ValidationError
 from skillgraph.knowledge.observation import (
     VERSION_ENVELOPE,
     Observation,
     ObservationEnvelope,
+    envelope_a_payload,
 )
 from skillgraph.platform.ports.capabilities import (
     CapabilityRequest,
@@ -321,15 +322,3 @@ def _instante_de(request: CapabilityRequest) -> str:
             "abierta no hay ningun instante que se pueda deducir"
         )
     return instante
-
-
-def envelope_a_payload(envelope: ObservationEnvelope) -> dict[str, Any]:
-    """El envelope, en la forma que viaja por `CapabilityResult.payload`.
-
-    Se hace con `asdict` y no a mano porque **la serialización es el punto
-    donde se pierde la fidelidad**: un campo añadido al envelope y olvidado
-    aquí es un dato que sale del sistema sin que nadie lo note. Ese es el
-    modo de fallo que `ADR-0027` cerró con `schemaRef`, y el que Justamente
-    evita repetir el mismo nombre de campo en dos sitios.
-    """
-    return asdict(envelope)

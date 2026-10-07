@@ -118,6 +118,51 @@ class TestElOverwriteAvisa:
         registrada cuando lo que se registro es **la que ya estaba**. El
         defecto no es que se pierda una fila: es que se pierda la verdad de lo
         que se afirmo, en silencio.
+
+        **B35: LA FORMA DE ESTE TEST CAMBIO, Y POR QUE NO ES DEGADARLO.**
+        Antes escribia `test_passes = True` con `ORIGEN_A` y luego
+        `test_passes = False` con `ORIGEN_A`: misma fuente, misma revision,
+        objeto distinto. `ADR-0035` (migracion `0008`) metio el objeto en la
+        identidad de `claims`, luego **las dos filas caben** y no hay nada que
+        se haya pisado. MEDIDO: `imports_module='os'` y
+        `imports_module='sys'` sobre el mismo fichero son dos hechos
+        ciertos, no una contradiccion, y por eso `0008` existe.
+
+        El conflicto que SIGUE existiendo, y que es el que este bloque
+        tempo que avisar, es **el mismo `claim_id` con otra afirmacion**: dos
+        afirmaciones distintas que escribe el mismo identificador, donde lo que
+        se registra es la primera y quien escribe creia haber registrado la
+        suya. Ese es el defecto original, y el `UNIQUE` que lo produce es la
+        clave primaria.
+        """
+        s = _storage(tmp_path)
+        _preparar(s)
+
+        s.record_claim(tenant_id="t", project_id="p", claim=_claim("c1", True))
+        # Mismo `claim_id`, otra afirmacion: la clave primaria rechaza el
+        # INSERT y lo que se perdio es justo lo que este bloque quiere que
+        # se avise.
+        r = s.record_claim(tenant_id="t", project_id="p", claim=_claim("c1", False, sid=ORIGEN_B))
+
+        assert r.conflicto is True, (
+            "la segunda afirmacion se piso y el llamante no se entero: "
+            "conflicto=False con la fila anterior intacta es una mentira"
+        )
+
+    def test_otro_objeto_no_es_conflicto(self, tmp_path: Path) -> None:
+        """EL HERMANO QUE DICE LO CONTRARIO, Y EL QUE CIERRA LA MEDIA MITAD.
+
+        `ADR-0035` permits que un mismo sujeto, predicado, fuente y revision
+        tengan **varios objetos**, porque hay predicados que son de varios
+        valores por naturaleza: un fichero importa varios modulos y define
+        varios simbolos, y `imports_module='os'` no contradice a
+        `imports_module='sys'`.
+
+        MEDIDO antes de B35: la deteccion de conflicto comparaba contra una
+        consulta previa que seguia con la tupla ANTERIOR a `0008` —sin el
+        objeto—, luego avisaba de un conflicto falso en cada fichero con mas
+        de un import, que es practicamente todos. Se vio por la puerta que
+        B35 abrio (`sg knowledge ingest-code`), no leyendo el codigo.
         """
         s = _storage(tmp_path)
         _preparar(s)
@@ -125,10 +170,15 @@ class TestElOverwriteAvisa:
         s.record_claim(tenant_id="t", project_id="p", claim=_claim("c1", True))
         r = s.record_claim(tenant_id="t", project_id="p", claim=_claim("c2", False))
 
-        assert r.conflicto is True, (
-            "la segunda afirmacion se piso y el llamante no se entero: "
-            "conflicto=False con la fila anterior intacta es una mentira"
+        assert r.conflicto is False, (
+            "dos hechos ciertos sobre el mismo sujeto y predicado se han "
+            "reportado como conflicto: es justo el caso que ADR-0035 vino a "
+            "permitir, y avisar aqui es un aviso falso"
         )
+        filas = s._conn.execute(
+            "SELECT COUNT(*) FROM claims WHERE subject_entity_id = ?", (SUJETO,)
+        ).fetchone()[0]
+        assert filas == 2, f"las dos afirmaciones deberían estar: hay {filas}"
 
     def test_el_aviso_dice_que_se_afirmo(self, tmp_path: Path) -> None:
         """«conflicto=True» sin decir que se queria decir, no sirve de nada.
@@ -141,11 +191,16 @@ class TestElOverwriteAvisa:
         _preparar(s)
 
         s.record_claim(tenant_id="t", project_id="p", claim=_claim("c1", True))
-        r = s.record_claim(tenant_id="t", project_id="p", claim=_claim("c2", False))
+        # **B35: el MISMO `claim_id`.** Con `c2` distinto, la migracion `0008`
+        # deja que las dos filas vivan y no hay conflicto que avisar —es el
+        # caso que `test_otro_objeto_no_es_conflicto` mide a proposito—. Lo que
+        # se pierde, y lo que este bloque vigila, es cuando dos afirmaciones
+        # distintas comparten `claim_id` y se queda la primera.
+        r = s.record_claim(tenant_id="t", project_id="p", claim=_claim("c1", False))
 
         assert r.valor_previo is not None, "el aviso no dice que habia antes"
         assert r.valor_previo != r.valor_intento, "el aviso no dice que se intentaba decir"
-        assert r.claim_id == "c2", "el aviso no dice que claim se solapa"
+        assert r.claim_id == "c1", "el aviso no dice que claim se solapa"
 
     def test_la_fila_anterior_no_se_toca(self, tmp_path: Path) -> None:
         """B27 AVISA, no RESUELVE. La fila que estaba se queda como estaba.
@@ -467,28 +522,31 @@ class TestLoQueB27NoDecide:
 
         Es lo que hace que B29 siga teniendo trabajo: si B27 resolviera,
         habria decidido con una regla que no tiene en cuenta al que pregunta.
+
+        **B35: `c2` PASA A SER EL MISMO `claim_id` QUE `c1`.** Con `c2` distinto
+        y la misma fuente, `ADR-0035` (migracion `0008`) lo que hay son dos
+        filas y NO hay nada pisado —que es justo lo que el comentario de B31 de
+        este mismo test ya reconocia hace un bloque—. El aviso solo tiene
+        sentido cuando de verdad se pierde una escritura, y eso lo produce el
+        `UNIQUE` de la clave primaria.
         """
         s = _storage(tmp_path)
         _preparar(s)
         s.record_claim(tenant_id="t", project_id="p", claim=_claim("c1", True, ORIGEN_A))
 
-        r = s.record_claim(tenant_id="t", project_id="p", claim=_claim("c2", False, ORIGEN_A))
+        r = s.record_claim(tenant_id="t", project_id="p", claim=_claim("c1", False, ORIGEN_A))
 
         assert r.conflicto is True
-        # B31: las dos filas conviven, y `ORDER BY` las pone en orden de
-        # `claim_id` (`c1` antes que `c2`), no de escritura. Antes la segunda
-        # pisaba a la primera y `fetchone()` devolvia exactamente la que
-        # habia que comprobar; ahora hay dos y hay que mirar las dos. Ver
-        # `TestElOverwriteAvisa::test_la_fila_anterior_no_se_toca`.
+        # B31/B35: lo que queda escrita es la PRIMERA, intacta. Y el aviso no
+        # ha decidido cual de las dos tiene razon: solo ha dicho que la
+        # segunda no llego a escribir, que es una pregunta distinta.
         guardados = [
             fila[0]
             for fila in s._conn.execute(
                 "SELECT object_literal_json FROM claims ORDER BY claim_id"
             ).fetchall()
         ]
-        assert guardados == ["true", "false"], (
-            f"el aviso decidio cual de las dos tiene razon: hay {guardados}"
-        )
+        assert guardados == ["true"], f"la fila anterior deberia seguir intacta: hay {guardados}"
 
     def test_el_conflicto_sobre_entidades_no_solo_sobre_literals(self, tmp_path: Path) -> None:
         """«A usa B» frente a «A usa C» tambien es un conflicto.
@@ -594,10 +652,22 @@ class TestElAvisoLlega:
         _preparar(destino)
 
         # El DESTINO ya tiene su propia afirmacion, y es la contraria.
+        # **B35: EL `claim_id` TIENE QUE COINCIDIR.** Antes lo que se escribia
+        # aqui era OTRO `claim_id` con la misma fuente, la misma revision y el
+        # valor contrario, y `ADR-0035` (migracion `0008`) permitio que las dos
+        # filas coexistieran — porque el `UNIQUE` lleva el objeto y `True` y
+        # `False` no son el mismo hecho—. MEDIDO: con esta forma, la
+        # promocion ya no encuentra conflicto y el aviso sale legitimo: el
+        # destino tiene DOS afirmaciones sobre lo mismo, no UNA.
+        #
+        # Lo que este test debe seguir vigilando es lo que de verdad se pierde:
+        # dos afirmaciones distintas con el MISMO `claim_id`, donde lo que se
+        # registra es la primera y quien promovio creia haber registrado la
+        # suya. Para eso coincide el `claim_id`.
         destino.record_claim(
             tenant_id="t",
             project_id="p",
-            claim=_claim("ya-existe", False, ORIGEN_A),
+            claim=_claim("c-nuevo", False, ORIGEN_A),
         )
 
         claim = _claim("c-nuevo", True, ORIGEN_A)

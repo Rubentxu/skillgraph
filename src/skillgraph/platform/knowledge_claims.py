@@ -25,16 +25,54 @@ from skillgraph.platform.storage import Storage, StoredClaim
 from skillgraph.platform.translation import traduciendo_integridad
 
 
-def _registro(claim: Claim, previo: sqlite3.Row | None) -> ClaimRecorded:
-    """Traduce la fila previa a `ClaimRecorded`, y decide si hubo conflicto.
+def _registro(
+    claim: Claim,
+    previo: sqlite3.Row | None,
+    *,
+    insertado: bool,
+) -> ClaimRecorded:
+    """Traduce la fila previa a `ClaimRecorded`, y dice si hubo conflicto.
 
-    **LA DISTINCION QUE SOSTIENE TODO EL BLOQUE, Y ES DE TRES ESTADOS, NO DE
-    DOS.** Hay tres cosas que pueden pasar al escribir un claim, y confundirlas
-    es el defecto que B27 arregla:
+    **B35: `conflicto` YA NO SE DEDUCE DE LA COMPARACION, LO DICE EL MOTOR.**
+    La tabla de tres estados de abajo la sostengo B27, y el tercero lo declara
+    `ADR-0035` con la migracion `0008`: el `UNIQUE` de `claims` lleva el objeto,
+    luego dos hechos ciertos sobre el mismo sujeto, predicado, fuente y
+    revision **caben los dos** y el `UNIQUE` no rechaza ninguno. Antes esta
+    funcion contestaba «hubo conflicto» comparando valores, y contestaba bien
+    mientras el `UNIQUE` y la comparacion decian lo mismo — que es justo lo que
+    `0008` dejo de ser cierto.
+
+    **POR QUE NO SE ARREGLA AÑADIENDO EL OBJETO A LA CONSULTA PREVIA.** MEDIDO:
+    se hizo, y es PEOR. La consulta previa solo encuentra entonces filas con el
+    MISMO objeto, luego `previo_valor != intento_valor` es siempre `False` y
+    `conflicto` se queda **permanentemente en `False`**. Una señal muerta es
+    peor que una falsa: la falsa molesta y la muerta deja de avisar, y nadie lo
+    nota hasta que un conflicto real pasa sin decir nada. Es la quinta vez que
+    sale este defecto de fondo en el repo —un guard que mide la mitad de una
+    propiedad y da verde porque esa mitad esta bien— y por eso el test de B35
+    mide `conflictos`, y no filas.
+
+    **`insertado` es la respuesta del motor, no una reconstruccion.** Con
+    `INSERT OR IGNORE` no hay excepcion que capturar: se calla. `rowcount == 0`
+    es lo unico que dice si la fila entro.
+
+    **Y LA CONSULTA PREVIA SE QUEDA, porque B27 PIDIO ALGO MAS QUE EL SI O NO.**
+    Quien recibe el aviso necesita saber QUE habia antes y QUE se intento, para
+    poder decidir si lo que toca es resolver, superseder o nada. Esa pregunta no
+    la responde el `UNIQUE` y por eso la consulta no se borra: lo que cambia es
+    que ya no DECIDE, solo INFORMA.
+
+    **LA DISTINCION SIGUE SIENDO DE TRES ESTADOS, Y HAY UN CUARTO:**
 
         no habia nada        -> se escribe, NO es conflicto
         habia lo MISMO      -> idempotente, NO es conflicto
         habia OTRA COSA     -> el `UNIQUE` rechaza el INSERT: CONFLICTO
+
+    y el que `0008` creo:
+
+        habia OTRA COSA y el `UNIQUE` la ADMITE
+        (`imports_module='os'` y `imports_module='sys'`)
+                              -> se escribe, NO es conflicto
 
     El segundo estado es el que hace que esto **no rompa la idempotencia de
     B26**. Si reingerir lo mismo se reportara como conflicto, `ingerir` dos
@@ -43,12 +81,54 @@ def _registro(claim: Claim, previo: sqlite3.Row | None) -> ClaimRecorded:
     es el primer test que pasa en verde de este fichero, y pasa precisamente
     porque los tres estados estan separados.
 
+    **Y LAS DOS CONDICIONES JUNTAS, PORQUE CON UNA SOLA LA SEÑAL SE MUERE.**
+    MEDIDO, las dos formas de quedarse solo con una:
+
+    ```
+    solo `not insertado`          -> MEDIDO: el estado 2 (reingerir lo MISMO)
+                                      daba conflicto=True, y con eso B26
+                                      deja de ser idempotente
+    solo `previo_valor != intento`-> es el estado de antes de B35, que hacia
+                                      `imports_module='sys'` parecer un
+                                      conflicto con `'os'`
+    ```
+
+    Juntas dicen una sola frase, y es la que B27 queria: **tu escritura se
+    perdio, y se perdio porque estabas diciendo otra cosa**. Si se perdio y
+    decias lo mismo, no se perdio nada — hay fila, con el mismo contenido— y
+    no hay nada que avisar. Si no se perdio nada, no hay conflicto, por muy
+    distinta que sea la frase.
+
+    **Y LA SEÑAL NO MUERE.** Con `0008`, el `UNIQUE` rechaza el INSERT solo
+    cuando coincide la tupla natural COMPLETA —que incluye el objeto— y eso
+    implica que el valor era el mismo, luego la comparacion anula el aviso. Es
+    decir: tras `0008`, `conflicto` solo puede ser `True` cuando el `UNIQUE`
+    rechaza por la **clave primaria** —dos afirmaciones distintas con el mismo
+    `claim_id`—, que es la unica colision que significa «no se escribio lo
+    que dijiste». Se declara aqui porque es un caso al que nadie llega por
+    `normalizar` (que deriva el `claim_id` del contenido) y por eso no lo
+    cubre ningun camino de la ingesta: lo cubre quien construya el `Claim` a
+    mano.
+
     `valor_previo` se devuelve DESERIALIZADO, no como el string crudo de la
     base: quien recibe el aviso necesita comparar `true` con `false`, no
     `'true'` con `'false'`.
     """
+
+    # **NO HAY RETORTO TEMPRANO CUANDO NO HAY FILA PREVIA, Y ANTES SI LO HABIA.**
+    # MEDIDO: con `previo is None` se devolvia `conflicto=False` sin mirar
+    # `insertado`, y eso hacia que el `UNIQUE` que rechaza por la **clave
+    # primaria** —dos afirmaciones distintas con el mismo `claim_id`— pasara
+    # sin avisar. Es decir: se perdia una escritura y el que escribia no se
+    # enteraba, que es exactamente el defecto que B27 abrio en su primer test.
+    #
+    # Y es el caso que hace que la senal NO ESTE MUERTA. Con `0008`, el
+    # `UNIQUE` de la tupla natural —que ahora incluye el objeto— solo rechaza
+    # cuando el valor era el mismo, luego ahi no hay conflicto que avisar. La
+    # unica colision que significa «no se escribio lo que dijiste» es la clave
+    # primaria, y no la puede encontrar una consulta por tupla natural.
     if previo is None:
-        return ClaimRecorded(claim_id=claim.claim_id, conflicto=False)
+        return ClaimRecorded(claim_id=claim.claim_id, conflicto=not insertado)
 
     ref_previo = previo["object_entity_id"]
     if ref_previo:
@@ -64,10 +144,9 @@ def _registro(claim: Claim, previo: sqlite3.Row | None) -> ClaimRecorded:
     else:
         intento_valor = claim.object_literal
 
-    hubo_conflicto = previo_valor != intento_valor
     return ClaimRecorded(
         claim_id=claim.claim_id,
-        conflicto=hubo_conflicto,
+        conflicto=(not insertado) and previo_valor != intento_valor,
         valor_previo=previo_valor,
         valor_intento=intento_valor,
     )
@@ -135,9 +214,49 @@ class SqliteClaimRepository:
             # B27: se mide QUE se va a escribir ANTES de escribir, porque un
             # `INSERT OR IGNORE` que colisiona no dice nada por si mismo. La
             # fila anterior se lee de la tupla natural —NO del `claim_id`—,
-            # porque la colisiona la produce el `UNIQUE`
-            # `(subject_entity_id, predicate, source_id, checked_at_revision)`
-            # y no la clave primaria: dos `claim_id` distintos se solapan igual.
+            # porque la colisiona la produce el `UNIQUE` y no la clave
+            # primaria: dos `claim_id` distintos se solapan igual.
+            #
+            # **Y LA CONSULTA TIENE QUE SER LA MISMA TUPLA QUE EL `UNIQUE`,
+            # MEDIDO, Y NO LO ERA.** `ADR-0035` metio el objeto en la
+            # identidad de `claims` (migracion `0008`) y esta busqueda seguia
+            # con la tupla de ANTES, sin `object_literal_json` ni
+            # `object_entity_id`. Es decir: el `UNIQUE` y su pregunta no
+            # decian lo mismo, y el que no lo decia era el que AVISA.
+            #
+            # MEDIDO con la puerta de B35 (`sg knowledge ingest-code`) sobre un
+            # fichero que importa dos modulos:
+            #
+            #     line_count     = 8         conflicto=False
+            #     function_count = 1         conflicto=False
+            #     file_exists    = True      conflicto=False
+            #     imports_module = 'os'      conflicto=False
+            #     imports_module = 'sys'     conflicto=True   <-- FALSO
+            #     defines_symbol = 'saluda'  conflicto=False
+            #
+            # `sys` no contradice a `os`: son dos hechos ciertos sobre el mismo
+            # sujeto y el mismo predicado, que es justo el caso que `0008` vino
+            # a PERMITIR. Y las filas eran las 6 correctas, luego el defecto no
+            # estaba en la escritura sino en el aviso — y por eso B31 no lo
+            # vio: su test miraba FILAS, y las filas estaban bien.
+            #
+            # Es la quinta vez que sale el mismo defecto de fondo: un guard que
+            # mide la mitad de una propiedad y da verde porque esa mitad esta
+            # bien. Por eso el test de B35 mide `conflictos`, y no filas.
+            #
+            # **Y POR QUE BUSCA POR LAS DOS COSAS, MEDIDO.** Con la consulta anterior
+            # —sujeto, predicado, fuente y revision, SIN el objeto— la fila
+            # previa era **ambigua**: un fichero que importa dos modulos tiene
+            # DOS filas que encajan en esa tupla, y `fetchone()` devolvia una
+            # cualquiera. MEDIDO por el test de B35: reingerir un fichero ya
+            # ingerido devolvia `1 conflicto(s)`, y ese conflicto era entre
+            # `imports_module='sys'` y `'os'`. Un aviso que sale de una fila
+            # elegida al azar no es un aviso: es una moneda.
+            #
+            # Ahora pregunta por lo que el `UNIQUE` pregunta de verdad —la
+            # clave primaria y la tupla natural COMPLETA, que desde `0008`
+            # incluye el objeto—, y `ORDER BY (claim_id = ?) DESC` da prioridad
+            # a la colision de clave primaria, que es la que se pierde.
             #
             # Se lee DENTRO de la transaccion y no antes, porque fuera de ella
             # la lectura y el INSERT no son atomicos y dos escritores concurrentes
@@ -146,17 +265,27 @@ class SqliteClaimRepository:
                 """
                 SELECT claim_id, object_literal_json, object_entity_id
                 FROM claims
-                WHERE subject_entity_id = ? AND predicate = ?
-                  AND source_id = ? AND checked_at_revision = ?
-                  AND tenant_id = ? AND project_id = ?
+                WHERE tenant_id = ? AND project_id = ?
+                  AND (
+                        claim_id = ?
+                     OR (subject_entity_id = ? AND predicate = ?
+                         AND object_literal_json = ? AND object_entity_id = ?
+                         AND source_id = ? AND checked_at_revision = ?)
+                  )
+                ORDER BY (claim_id = ?) DESC
+                LIMIT 1
                 """,
                 (
-                    claim.subject_entity_id,
-                    claim.predicate,
-                    claim.source_id,
-                    claim.checked_at_revision,
                     tenant_id,
                     project_id,
+                    claim.claim_id,
+                    claim.subject_entity_id,
+                    claim.predicate,
+                    obj_json,
+                    ref,
+                    claim.source_id,
+                    claim.checked_at_revision,
+                    claim.claim_id,
                 ),
             ).fetchone()
 
@@ -306,6 +435,35 @@ class SqliteClaimRepository:
                     claim.supersedes_claim_id or encadenado,
                 ),
             )
+            # **B35: EL AVISO LO DECIDE LA CONSTRAINT, NO UNA ADIVINANZA.**
+            # `INSERT OR IGNORE` no lanza; se calla. `rowcount == 0` es la unica
+            # manera de saber si la fila entro, y es la respuesta del motor, no
+            # una reconstruccion de lo que la constraint haria.
+            #
+            # MEDIDO, Y EL MOTIVO POR EL QUE ESTA LINEA EXISTE. Antes el aviso
+            # salia de comparar contra una consulta previa, y la migration
+            # `0008` que B31 escribio habia puesto el objeto en la identidad
+            # sin que esa consulta se enterara. MEDIDO por las dos mitades, en
+            # un fichero que importa `os` y `sys`:
+            #
+            #     imports_module = 'os'   -> la consulta previa veia la fila
+            #     imports_module = 'sys'  -> 'sys' NO contradice a 'os': son
+            #                                    dos hechos ciertos
+            #
+            # Y MEDIDO TAMBIEN QUE EL ARREGLO DE ESA CONSULTA ERA PEOR: al
+            # anadirle el objeto, `previo` solo encontraba filas con el MISMO
+            # objeto, luego `previo_valor != intento_valor` era SIEMPRE falso y
+            # `conflicto` se quedaba **permanentemente en `False`**. Una señal
+            # muerta es peor que una falsa: la falsa molesta, la muerta deja
+            # de avisar y nadie lo nota.
+            #
+            # DECIDIDO CON EL USUARIO, y es un cambio de contrato de un bloque
+            # ya certificado: `conflicto` significa **el UNIQUE rechazo mi
+            # escritura**. El `UNIQUE` es el contrato, luego el aviso lo decide
+            # el `UNIQUE`. La consulta previa se queda —sirve para decir QUE
+            # habia antes y cual se intento, que es lo que B27 pidio— pero ya
+            # no decide si hay conflicto.
+            insertado = cur.rowcount == 1
 
             # B29: cerrar la ventana de TODO lo que este reemplaza. Va DENTRO
             # de la misma transaccion que el INSERT, porque si cerrara fuera
@@ -328,7 +486,7 @@ class SqliteClaimRepository:
                     "INSERT OR IGNORE INTO claim_evidence (claim_id, evidence_id) VALUES (?, ?)",
                     (claim.claim_id, evidence_id),
                 )
-        return _registro(claim, previo)
+        return _registro(claim, previo, insertado=insertado)
 
     def _exige_que_exista_la_entidad(
         self, *, tenant_id: str, project_id: str, entity_id: str

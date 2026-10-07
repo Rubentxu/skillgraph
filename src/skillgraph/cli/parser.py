@@ -575,6 +575,27 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # ----- B35: la puerta de la ingesta de codigo -----
+    # Un unico comando y no uno por capability, porque aqui no se elige la
+    # capability: la elige lo que se pide. Anadir `ingest-runtime` cuando haya
+    # un `LectorTelemetria` de verdad es anadir un subparser, no un modulo.
+    kic = kn_sub.add_parser(
+        "ingest-code",
+        help="Analiza un fichero y convierte el analisis en afirmaciones.",
+    )
+    kic.add_argument("project", help="Proyecto destino.")
+    kic.add_argument("file", help="Ruta del fichero a analizar.")
+    kic.add_argument(
+        "--revision",
+        default=None,
+        help=(
+            "Revision contra la que se registra. Por defecto es el sha256 del "
+            "contenido: lo que cambia en un fichero local es su contenido, y "
+            "asi lo anterior queda en su propia revision en vez de "
+            "contradecir al nuevo."
+        ),
+    )
+
     # ----- B34: las seis preguntas de la superficie -----
     # Todas comparten los mismos TRES flags opcionales y ninguno es
     # obligatorio salvo donde la pregunta lo necesita: `--claim-id` solo lo

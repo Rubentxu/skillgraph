@@ -327,10 +327,37 @@ class TestLaIngestaRecogeElConflicto:
         assert ingested.conflictos == ()
 
         # La misma afirmacion, otro valor, misma revision y misma fuente.
-        segunda = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(250))
+        ingerible = ingerir(s, tenant_id="t", project_id="p", env=self._envelope(250))
 
-        assert segunda.conflictos, (
-            "la ingesta se trago el aviso de que se acababa de decir otra "
-            "cosa. Descartarlo seria volver a perderlo una capa mas arriba, "
-            "donde solo se podria descubrir consultando despues."
+        # **B35: ESTE TEST CAMBIO DE SIGNIFICADO, Y NO SE DISFRAZA.**
+        #
+        # Decia «la misma afirmacion con otro valor tiene que volver con el
+        # conflicto recogido». MEDIDO: desde `ADR-0035` y su migracion `0008`,
+        # esa forma **no pisa nada**: `line_count=137` y `line_count=250`
+        # sobre el mismo fichero son dos hechos ciertos y las dos filas caben.
+        # `0008` existe precisamente para eso.
+        #
+        # Y por la via de la ingesta un conflicto es ahora **INALCANZABLE**,
+        # y el motivo es estructural, no una coincidencia: `normalizar` deriva
+        # el `claim_id` de (sujeto, predicado, objeto, fuente, revision), luego
+        # dos claims distintos tienen `claim_id` distinto, luego el `UNIQUE`
+        # de la clave primaria no puede rechazar, y el de la tupla natural
+        # —que ahora incluye el objeto— tampoco.
+        #
+        # Que `conflictos` salga vacio **no es que el aviso se haya tragado**:
+        # es que no hay nada que avisar. Y quien aun puede necesitar el aviso
+        # es quien construye `Claim` A MANO, donde el `claim_id` no lo deriva
+        # nadie — la promocion, que es lo que mide
+        # `test_b27_conflictos.py::TestElAvisoLlega`.
+        #
+        # La fila 250 tiene que ESTAR, que es la mitad que si se puede mirar.
+        assert not ingerible.conflictos, (
+            "la ingesta ha reportado un conflicto entre dos hechos ciertos: "
+            "es el aviso falso que ADR-0035 vino a cerrar"
+        )
+        filas = s._conn.execute(
+            "SELECT object_literal_json FROM claims ORDER BY object_literal_json"
+        ).fetchall()
+        assert [f[0] for f in filas] == ["137", "250"], (
+            f"los dos valores deberían convivir: hay {[f[0] for f in filas]}"
         )

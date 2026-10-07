@@ -9,6 +9,7 @@ en `cli.support`.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections.abc import Iterator
@@ -18,14 +19,21 @@ from pathlib import Path
 from skillgraph.cli.support import EXIT_OK, exit_para, resolve_project
 from skillgraph.core.errors import ParseError, SkillGraphError
 from skillgraph.core.recipe import ContextRecipe
+from skillgraph.knowledge.assembly import registro_de_conocimiento
 from skillgraph.knowledge.authority import Resolution
+from skillgraph.knowledge.code_analysis import CODE_ANALYSIS, KIND_FICHERO
 from skillgraph.knowledge.context_controller import (
     ContextController,
     OutcomeTracer,
 )
+from skillgraph.knowledge.graph import Source, source_id
 from skillgraph.knowledge.knowledge_controller import KnowledgeController
+from skillgraph.knowledge.observation import envelope_de_payload
+from skillgraph.knowledge.observation_ingestion import ingerir
 from skillgraph.platform.paths import DEFAULT_TENANT, resolve_data_root
+from skillgraph.platform.ports.capabilities import CapabilityRequest
 from skillgraph.platform.storage import Storage
+from skillgraph.runtime.engine import now_iso
 
 
 @contextmanager
@@ -483,3 +491,94 @@ def _objeto_de(claim: object) -> str:
     if entidad:
         return f"-> {entidad}"
     return repr(getattr(claim, "object_literal", None))
+
+
+# ---------------------------------------------------------------------------
+# B35 — la puerta: el operador llega a la capability por la CLI
+# ---------------------------------------------------------------------------
+#
+# MEDIDO antes de escribir esto (`scripts/measure_b35_vertical.py`, ronda 4):
+# por AST sobre los imports de `cli/`, NINGUNO. Ni `code_analysis`, ni
+# `telemetry_query`, ni `knowledge_query`, ni `CapabilityRegistry`. Y el texto
+# de la CLI SI contiene `KnowledgeQueryCapability` —dentro de un docstring que
+# lo describe en pasado—, que es exactamente como un instrumento que busca por
+# texto dice que una puerta existe porque alguien escribio una frase sobre ella.
+
+
+def cmd_knowledge_ingest_code(args: argparse.Namespace) -> int:
+    """Analiza un fichero y convierte el analisis en afirmaciones.
+
+    **ESTA ES LA VERTICAL COMPLETA, Y ANTES NO HABIA NINGUNA.** Antes de
+    B35, `sg.code.analysis` solo se podia lanzar escribiendo Python: leer el
+    fichero, construir la `Source`, montar la capability, invocar, deserializar
+    el envelope e ingerirlo. Seis pasos, ninguno con puerta.
+
+    Returns:
+        `EXIT_OK` si el analisis se ingirio.
+    """
+    ruta = Path(args.file)
+    contenido = ruta.read_text(encoding="utf-8")
+    # **POR QUE LA REVISION ES EL HASH DEL CONTENIDO.** `revision` es el reloj
+    # epistemico de `checked_at_revision`, y para un fichero local lo que
+    # cambia es su contenido: si el fichero cambia, cambia el hash, luego la
+    # revision cambia y lo anterior queda en la suya en vez de contradecir al
+    # nuevo. Un `--revision` explicito lo deja forzar, para cuando el
+    # contenido no es lo que define la version.
+    huella = hashlib.sha256(contenido.encode("utf-8")).hexdigest()
+    revision = args.revision or huella
+    # El instante SI se lee aqui y no en la capability, y NO rompe la
+    # idempotencia: MEDIDO, el `claim_id` se deriva de (sujeto, predicado,
+    # objeto, fuente, revision) y `observed_at` NO esta dentro. La capability no
+    # puede leerlo porque es codigo externo al repo (AGENTS 1.3); el operador
+    # si, porque el operador es el que esta ejecutando.
+    observado_en = now_iso()
+
+    with _open_known_project(args, args.project) as (tenant_id, project_id, storage):
+        fuente = Source(
+            source_id=source_id(f"local:{ruta}"),
+            kind=KIND_FICHERO,
+            content_hash=huella,
+            locator={"path": str(ruta)},
+            git_commit_sha=None,
+            git_tree_sha=None,
+            working_tree_status=None,
+            checked_at=observado_en,
+            freshness="current",
+        )
+        storage.register_source(tenant_id=tenant_id, project_id=project_id, source=fuente)
+
+        registro = registro_de_conocimiento(
+            storage,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            source_id=str(fuente.source_id),
+            revision=revision,
+        )
+        # `resolve` y no la clase: este comando no sabe QUE capability hay,
+        # sabe que pide UNA por nombre. Y si el registro no la tiene, el error
+        # dice que hay, que es lo unico que evita el `ls` a mano.
+        capability = registro.resolve(CODE_ANALYSIS)
+        resultado = capability.invoke(
+            CapabilityRequest(
+                spec=capability.spec,
+                subject=str(ruta),
+                arguments={
+                    "path": str(ruta),
+                    "content": contenido,
+                    "observed_at": observado_en,
+                },
+            )
+        )
+        # **Y AQUI ESTA EL PASO QUE FALTABA.** El `dict` del payload -> el
+        # `ObservationEnvelope` que `ingerir` exige. MEDIDO: esa traduccion
+        # estaba escrita a mano en DOS ficheros de test, y ya divergian.
+        envelope = envelope_de_payload(resultado.payload["envelope"])
+        ingesta = ingerir(storage, tenant_id=tenant_id, project_id=project_id, env=envelope)
+
+        print(f"analizado {ruta}  revision={revision}")
+        for claim in ingesta.claims:
+            print(f"  - {claim.predicate} = {claim.object_literal!r}")
+        if ingesta.conflictos:
+            print(f"  {len(ingesta.conflictos)} conflicto(s): ya habia otra afirmacion")
+        print(f"{len(ingesta.claims)} afirmacion(es) escritas")
+        return EXIT_OK
